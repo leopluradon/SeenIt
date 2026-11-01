@@ -95,6 +95,17 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<ShowProgressDto>> ProgressAsync() => GetAsync<List<ShowProgressDto>>("api/progress");
     public Task<List<CalendarEntry>> CalendarAsync(DateOnly from, int days) => GetAsync<List<CalendarEntry>>($"api/calendar?from={from:yyyy-MM-dd}&days={days}");
     public Task<DashboardDto> DashboardAsync() => GetAsync<DashboardDto>("api/dashboard");
+    public Task<int> StartRewatchAsync(int showId) => SendAsync<int>(HttpMethod.Post, $"api/shows/{showId}/rewatch")!;
+    public Task StopRewatchAsync(int showId) => SendAsync(HttpMethod.Delete, $"api/shows/{showId}/rewatch");
+    public Task<List<OnThisDayItem>> OnThisDayAsync() => GetAsync<List<OnThisDayItem>>($"api/onthisday?tz={Tz}");
+
+    /// <summary>A random pick, or null when nothing matches the filters.</summary>
+    public Task<PickDto?> PickAsync(PickKind kind, PickSource source, int? maxMinutes, bool streaming, IEnumerable<string> exclude) =>
+        SendAsync<PickDto>(HttpMethod.Get,
+            $"api/pick?kind={kind}&source={source}&streaming={(streaming ? "true" : "false")}&region={DeviceRegion}"
+            + (maxMinutes is { } m ? $"&maxMinutes={m}" : "")
+            + $"&exclude={Uri.EscapeDataString(string.Join(',', exclude))}");
+
     public Task SetShowStatusAsync(int showId, ShowTrackStatus status) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/status", new ShowStatusRequest(status));
 
     public Task<NowWatchingDto?> CheckInAsync() => SendAsync<NowWatchingDto>(HttpMethod.Get, "api/checkin");

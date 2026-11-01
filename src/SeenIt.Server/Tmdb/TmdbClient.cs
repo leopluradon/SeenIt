@@ -89,6 +89,9 @@ public class TmdbClient
     }
 
     /// <summary>kind: movie|tv. Streaming/rent/buy offers per country (data from JustWatch).</summary>
+    public Task<TmdbCollection?> GetCollectionAsync(int id, CancellationToken ct = default) =>
+        GetAsync<TmdbCollection>($"collection/{id}", TimeSpan.FromHours(6), ct);
+
     public Task<TmdbProvidersResult?> GetWatchProvidersAsync(string kind, int id, CancellationToken ct = default) =>
         GetAsync<TmdbProvidersResult>($"{kind}/{id}/watch/providers", TimeSpan.FromHours(6), ct);
 

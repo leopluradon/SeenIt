@@ -107,6 +107,24 @@ public static class ApiEndpoints
         });
 
         g.MapGet("/progress", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetProgressAsync(p.UserId(), ct));
+        g.MapGet("/pick", async (PickKind? kind, PickSource? source, int? maxMinutes, bool? streaming, string? region, string? exclude,
+            ClaimsPrincipal p, AppDbContext db, PickService picks, CancellationToken ct) =>
+        {
+            var uid = p.UserId();
+            var saved = await db.Users.Where(u => u.Id == uid).Select(u => u.Region).FirstOrDefaultAsync(ct);
+            var code = saved ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r : "US");
+            var skip = (exclude ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var pick = await picks.PickAsync(uid, kind ?? PickKind.Any, source ?? PickSource.Both, maxMinutes is > 0 ? maxMinutes : null,
+                streaming ?? false, code, skip, ct);
+            return pick is null ? Results.NoContent() : Results.Ok(pick);
+        });
+        g.MapGet("/onthisday", (string? tz, ClaimsPrincipal p, OnThisDayService s, CancellationToken ct) => s.GetAsync(p.UserId(), tz, ct));
+
+        g.MapPost("/shows/{id:int}/rewatch", async (int id, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+            Results.Ok(await t.StartRewatchAsync(p.UserId(), id, ct)));
+        g.MapDelete("/shows/{id:int}/rewatch", async (int id, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+            await t.StopRewatchAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
+
         g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
         {
             await t.SetShowStatusAsync(p.UserId(), id, req.Status, ct);

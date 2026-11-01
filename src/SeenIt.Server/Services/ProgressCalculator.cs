@@ -26,13 +26,18 @@ public class ProgressCalculator(AppDbContext db)
         var episodesByShow = episodes.ToLookup(e => e.ShowTmdbId);
         var states = await db.ShowStates.Where(x => x.UserId == userId && ids.Contains(x.ShowTmdbId))
             .ToDictionaryAsync(x => x.ShowTmdbId, x => x.Status, ct);
+        var rewatches = await db.Rewatches.Where(x => x.UserId == userId && ids.Contains(x.ShowTmdbId)).ToListAsync(ct);
+        var active = rewatches.Where(x => x.CompletedAt == null).GroupBy(x => x.ShowTmdbId).ToDictionary(g => g.Key, g => g.First());
+        var completedRewatches = rewatches.Where(x => x.CompletedAt != null).GroupBy(x => x.ShowTmdbId).ToDictionary(g => g.Key, g => g.Count());
 
         var result = new List<ShowProgressDto>();
         foreach (var group in watches.GroupBy(w => w.TmdbId))
         {
             if (!shows.TryGetValue(group.Key, out var show)) continue;
 
-            var watched = group.Where(w => w.SeasonNumber > 0)
+            // During a rewatch only plays since it started count.
+            var rewatch = active.GetValueOrDefault(group.Key);
+            var watched = group.Where(w => w.SeasonNumber > 0 && (rewatch is null || w.WatchedAt >= rewatch.StartedAt))
                 .Select(w => (S: w.SeasonNumber!.Value, E: w.EpisodeNumber!.Value)).ToHashSet();
             var aired = episodesByShow[group.Key]
                 .Where(e => e.AirDate is { } d && d <= today)
@@ -53,7 +58,9 @@ public class ProgressCalculator(AppDbContext db)
                 group.Max(w => w.WatchedAt),
                 next is null ? null : new EpisodeRef(next.SeasonNumber, next.EpisodeNumber, next.Name, next.AirDate),
                 aired.Count > 0 && watchedAired >= aired.Count,
-                states.GetValueOrDefault(group.Key, ShowTrackStatus.Watching)));
+                states.GetValueOrDefault(group.Key, ShowTrackStatus.Watching),
+                rewatch?.Number,
+                completedRewatches.GetValueOrDefault(group.Key)));
         }
 
         return result.OrderByDescending(p => p.LastWatchedAt).ToList();

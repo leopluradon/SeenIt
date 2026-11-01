@@ -52,7 +52,11 @@ public record TmdbMovie(
     TmdbRecommendations? Recommendations,
     string? OriginalLanguage = null,
     List<TmdbCountry>? ProductionCountries = null,
-    List<TmdbCompany>? ProductionCompanies = null);
+    List<TmdbCompany>? ProductionCompanies = null,
+    TmdbCollectionRef? BelongsToCollection = null);
+
+public record TmdbCollectionRef(int Id, string Name, string? PosterPath, string? BackdropPath);
+public record TmdbCollection(int Id, string Name, string? PosterPath, string? BackdropPath, List<TmdbListItem>? Parts);
 
 public record TmdbNetwork(int Id, string Name);
 public record TmdbCountry([property: System.Text.Json.Serialization.JsonPropertyName("iso_3166_1")] string? Iso31661, string Name);

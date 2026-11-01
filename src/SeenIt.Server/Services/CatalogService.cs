@@ -253,6 +253,12 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         }
 
         var user = userId is { } uid ? await GetUserStateAsync(uid, MediaType.Movie, id, ct) : null;
+        CollectionDto? collection = null;
+        if (m.BelongsToCollection is { } belongs)
+        {
+            try { collection = await GetCollectionAsync(belongs.Id, userId, ct); }
+            catch (HttpRequestException ex) { log.LogInformation(ex, "Couldn't load collection {Id}", belongs.Id); }
+        }
 
         return new MovieDetail(
             m.Id, m.Title, NullIfEmpty(m.Tagline), m.Overview, TmdbDates.Parse(m.ReleaseDate), m.Runtime,
@@ -263,7 +269,26 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 .Take(12).Select(c => new CrewMember(c.Id, c.Name, c.Job, c.ProfilePath)).ToList(),
             PickVideos(m.Videos),
             (m.Recommendations?.Results ?? []).Take(18).Select(r => ToSummary(r, MediaType.Movie)).ToList(),
-            user);
+            user,
+            collection);
+    }
+
+    /// <summary>A franchise's movies in release order (unreleased ones last), marking which the user has seen.</summary>
+    public async Task<CollectionDto?> GetCollectionAsync(int id, Guid? userId, CancellationToken ct)
+    {
+        var c = await tmdb.GetCollectionAsync(id, ct);
+        if (c?.Parts is not { Count: > 1 } parts) return null; // a "collection" of one isn't worth showing
+        var ids = parts.Select(p => p.Id).ToList();
+        var seen = userId is { } uid
+            ? (await db.WatchEvents.Where(w => w.UserId == uid && w.Type == MediaType.Movie && ids.Contains(w.TmdbId))
+                .Select(w => w.TmdbId).Distinct().ToListAsync(ct)).ToHashSet()
+            : [];
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return new CollectionDto(c.Id, c.Name, c.PosterPath, c.BackdropPath,
+            parts.Select(p => (Part: p, Date: TmdbDates.Parse(p.ReleaseDate)))
+                .OrderBy(x => x.Date is null).ThenBy(x => x.Date)
+                .Select(x => new CollectionPart(ToSummary(x.Part, MediaType.Movie), x.Date, x.Date is { } d && d <= today, seen.Contains(x.Part.Id)))
+                .ToList());
     }
 
     public async Task<ShowDetail?> GetShowAsync(int id, Guid? userId, CancellationToken ct)
@@ -351,8 +376,15 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
 
         Dictionary<int, int> plays = [];
         Dictionary<int, int> ratings = [];
+        HashSet<int> rewatched = [];
+        ShowRewatch? rewatch = null;
         if (userId is { } uid)
         {
+            rewatch = await db.Rewatches.AsNoTracking().FirstOrDefaultAsync(r => r.UserId == uid && r.ShowTmdbId == showId && r.CompletedAt == null, ct);
+            if (rewatch is not null)
+                rewatched = (await db.WatchEvents
+                    .Where(w => w.UserId == uid && w.Type == MediaType.Episode && w.TmdbId == showId && w.SeasonNumber == seasonNumber && w.WatchedAt >= rewatch.StartedAt)
+                    .Select(w => w.EpisodeNumber!.Value).ToListAsync(ct)).ToHashSet();
             plays = await db.WatchEvents
                 .Where(w => w.UserId == uid && w.Type == MediaType.Episode && w.TmdbId == showId && w.SeasonNumber == seasonNumber)
                 .GroupBy(w => w.EpisodeNumber!.Value)
@@ -366,8 +398,10 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         return new SeasonDetail(showId, show.Name, seasonNumber, season.Name ?? $"Season {seasonNumber}", NullIfEmpty(season.Overview), season.PosterPath,
             (season.Episodes ?? []).Select(e => new EpisodeDto(e.Id, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Overview,
                 TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage,
-                plays.GetValueOrDefault(e.EpisodeNumber), ratings.TryGetValue(e.EpisodeNumber, out var r) ? r : null)).ToList(),
-            Cast(seasonCredits?.Cast));
+                plays.GetValueOrDefault(e.EpisodeNumber), ratings.TryGetValue(e.EpisodeNumber, out var r) ? r : null,
+                rewatched.Contains(e.EpisodeNumber))).ToList(),
+            Cast(seasonCredits?.Cast),
+            rewatch?.Number);
     }
 
     public async Task<EpisodeDetail?> GetEpisodeAsync(int showId, int seasonNumber, int episodeNumber, Guid? userId, CancellationToken ct)

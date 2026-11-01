@@ -58,11 +58,25 @@ else if (s is not null)
             @if (s.Progress is { } p)
             {
                 <div class="panel progress-panel">
+                    @if (p.Rewatch is { } rw)
+                    {
+                        <div class="inline spread rewatch-head">
+                            <span class="pill rewatch-pill"><Icon Name="repeat" Size="14" /> @RewatchLabel(rw)</span>
+                            <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="StopRewatch">Stop rewatch</button>
+                        </div>
+                    }
                     <div class="inline spread">
-                        <b>@p.Watched of @p.Aired episodes watched</b>
+                        <b>@p.Watched of @p.Aired episodes @(p.Rewatch is null ? "watched" : "rewatched")</b>
                         <span class="muted small">@(p.Aired == 0 ? 0 : 100 * p.Watched / p.Aired)%</span>
                     </div>
                     <ProgressBar Value="p.Watched" Max="p.Aired" />
+                    @if (p.Rewatch is null && (p.Completed || p.RewatchesCompleted > 0))
+                    {
+                        <div class="inline spread next-ep">
+                            <span class="muted small">@(p.RewatchesCompleted > 0 ? $"You've been through it {p.RewatchesCompleted + 1} times." : "Fancy going through it again?")</span>
+                            <button class="btn btn-sm" disabled="@busy" @onclick="StartRewatch"><Icon Name="repeat" Size="14" /> Start a rewatch</button>
+                        </div>
+                    }
                     @if (p.NextEpisode is { } n)
                     {
                         <div class="inline spread next-ep">
@@ -134,6 +148,34 @@ else if (s is not null)
         ShowTrackStatus.Dropped => "Hidden from Up next and the calendar.",
         _ => "",
     };
+
+    public static string RewatchLabel(int number) => number == 2 ? "Rewatching" : $"Rewatch #{number - 1}";
+
+    private async Task StartRewatch()
+    {
+        busy = true;
+        try
+        {
+            await Api.StartRewatchAsync(Id);
+            Toasts.Show($"Rewatching {s?.Name}. Up next starts from the first episode.");
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task StopRewatch()
+    {
+        busy = true;
+        try
+        {
+            await Api.StopRewatchAsync(Id);
+            Toasts.Show("Rewatch stopped. Its plays stay in your history.");
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
 
     private async Task SetStatus(ShowTrackStatus st)
     {

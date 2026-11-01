@@ -210,6 +210,21 @@ public class ShowState
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// Going through a show again. While CompletedAt is null, progress and Up Next count only plays
+/// from StartedAt on. It completes itself once every aired episode has been played again.
+/// </summary>
+public class ShowRewatch
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public int ShowTmdbId { get; set; }
+    /// <summary>2 for the second time through, and so on.</summary>
+    public int Number { get; set; }
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+}
+
 /// <summary>What the user is watching right now (at most one per user).</summary>
 public class CheckIn
 {

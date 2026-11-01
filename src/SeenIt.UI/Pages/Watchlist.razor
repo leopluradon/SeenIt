@@ -5,6 +5,7 @@
 
 <div class="page-head">
     <h1>Watchlist</h1>
+    <a class="btn btn-sm" href="pick"><Icon Name="shuffle" Size="16" /> Pick for me</a>
     <div class="segmented">
         <button class="@(filter is null ? "on" : "")" @onclick="() => filter = null">All</button>
         <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => filter = MediaType.Movie">Movies</button>

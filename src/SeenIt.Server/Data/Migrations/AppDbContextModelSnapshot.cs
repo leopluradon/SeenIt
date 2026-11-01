@@ -616,6 +616,34 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Shows");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.ShowRewatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ShowTmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ShowTmdbId");
+
+                    b.ToTable("Rewatches");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.ShowState", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -995,6 +1023,15 @@ namespace SeenIt.Server.Data.Migrations
                     b.Navigation("Cast");
 
                     b.Navigation("Creators");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ShowRewatch", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.ShowState", b =>

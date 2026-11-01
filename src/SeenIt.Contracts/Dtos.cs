@@ -34,6 +34,7 @@ public static class UiPrefs
     public static readonly (string Key, string Label)[] HomeSections =
     [
         ("now", "Watching now"),
+        ("onthisday", "On this day"),
         ("review", "Month / year in review banner"),
         ("upnext", "Up next"),
         ("upcoming", "Coming up"),
@@ -117,7 +118,16 @@ public record MovieDetail(
     IReadOnlyList<CrewMember> Crew,
     IReadOnlyList<Video> Videos,
     IReadOnlyList<MediaSummary> Recommendations,
-    UserMediaState? User);
+    UserMediaState? User,
+    CollectionDto? Collection = null);
+
+/// <summary>A TMDB movie collection (franchise), with which parts the user has seen.</summary>
+public record CollectionDto(int Id, string Name, string? PosterPath, string? BackdropPath, IReadOnlyList<CollectionPart> Parts)
+{
+    public int Released => Parts.Count(p => p.Released);
+    public int Seen => Parts.Count(p => p.Watched);
+}
+public record CollectionPart(MediaSummary Media, DateOnly? ReleaseDate, bool Released, bool Watched);
 
 public record SeasonSummary(int SeasonNumber, string Name, int EpisodeCount, DateOnly? AirDate, string? PosterPath, int Watched);
 
@@ -164,7 +174,8 @@ public record EpisodeDto(
     string? StillPath,
     double? VoteAverage,
     int Plays,
-    int? Rating);
+    int? Rating,
+    bool Rewatched = false);   // played since the current rewatch started
 
 public record SeasonDetail(
     int ShowTmdbId,
@@ -174,7 +185,8 @@ public record SeasonDetail(
     string? Overview,
     string? PosterPath,
     IReadOnlyList<EpisodeDto> Episodes,
-    IReadOnlyList<CastMember>? Cast = null);
+    IReadOnlyList<CastMember>? Cast = null,
+    int? Rewatch = null);      // number of the rewatch in progress (2 = second time through)
 
 // ---------- Tracking ----------
 
@@ -319,7 +331,9 @@ public record ShowProgressDto(
     DateTimeOffset? LastWatchedAt,
     EpisodeRef? NextEpisode,
     bool Completed,
-    ShowTrackStatus Status = ShowTrackStatus.Watching);
+    ShowTrackStatus Status = ShowTrackStatus.Watching,
+    int? Rewatch = null,       // rewatch in progress: Watched/NextEpisode count only plays since it started
+    int RewatchesCompleted = 0);
 
 /// <summary>Paused and dropped shows are kept out of Up Next and the widget until you resume them.</summary>
 public enum ShowTrackStatus { Watching, Paused, Dropped }
@@ -511,3 +525,19 @@ public record CompareDto(
     IReadOnlyList<MediaSummary> BothMovies, IReadOnlyList<MediaSummary> BothShows,
     IReadOnlyList<RatingPair> RatedBoth,
     IReadOnlyList<MediaSummary> TheyLoved);   // rated 8+ by them, not watched by you
+
+// ---------- Pick for me ----------
+
+public enum PickSource { Watchlist, Paused, Both }
+public enum PickKind { Any, Movie, Show }
+public record PickDto(
+    MediaSummary Media,
+    string Reason,                         // "On your watchlist" / "Paused show"
+    int? Minutes,                          // movie runtime or episode length
+    EpisodeRef? NextEpisode,
+    IReadOnlyList<ProviderDto> Streaming,  // flatrate/free/ads in the user's region
+    int Candidates);                       // how many titles matched the filters
+
+// ---------- On this day ----------
+
+public record OnThisDayItem(int YearsAgo, DateOnly Date, MediaType Type, int TmdbId, string Title, string? PosterPath, string Text);

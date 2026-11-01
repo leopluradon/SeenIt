@@ -4,7 +4,7 @@
     <a href="@(Progress.NextEpisode is { } ne ? Fmt.EpisodeHref(Progress.ShowTmdbId, ne.SeasonNumber, ne.EpisodeNumber) : $"show/{Progress.ShowTmdbId}")" class="upnext-art" style="@(Img.Backdrop(Progress.BackdropPath, "w780") is { } b ? $"background-image:url('{b}')" : "")">
         <div class="upnext-shade"></div>
         <div class="upnext-text">
-            <div class="upnext-show">@Progress.Name</div>
+            <div class="upnext-show">@Progress.Name @if (Progress.Rewatch is { } rw) { <span class="rewatch-tag" title="@SeenIt.UI.Pages.Show.RewatchLabel(rw)"><Icon Name="repeat" Size="12" /></span> }</div>
             @if (Progress.NextEpisode is { } n)
             {
                 <div class="upnext-ep">@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber) · <Spoiler>@n.Name</Spoiler></div>

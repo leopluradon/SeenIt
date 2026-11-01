@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Invite> Invites => Set<Invite>();
+    public DbSet<ShowRewatch> Rewatches => Set<ShowRewatch>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -97,6 +98,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.FolloweeId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        b.Entity<ShowRewatch>(e => e.HasIndex(x => new { x.UserId, x.ShowTmdbId }));
         b.Entity<Invite>(e =>
         {
             e.HasKey(x => x.Code);
@@ -107,7 +109,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

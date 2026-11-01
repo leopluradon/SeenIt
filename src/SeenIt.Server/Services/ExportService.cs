@@ -49,6 +49,9 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
             });
         }
 
+        var rewatches = await db.Rewatches.AsNoTracking().Where(r => r.UserId == userId)
+            .Join(db.Shows, r => r.ShowTmdbId, sh => sh.TmdbId, (r, sh) => new { show = sh.Name, tmdbId = r.ShowTmdbId, number = r.Number, startedAt = r.StartedAt, completedAt = r.CompletedAt })
+            .ToListAsync(ct);
         var showStatus = await db.ShowStates.AsNoTracking().Where(s => s.UserId == userId)
             .Join(db.Shows, s => s.ShowTmdbId, m => m.TmdbId, (s, m) => new { TmdbId = s.ShowTmdbId, m.Name, Status = s.Status.ToString(), s.UpdatedAt })
             .ToListAsync(ct);
@@ -91,6 +94,7 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
             AddJson("watchlist.json", watchlist);
             AddJson("lists.json", myLists);
             AddJson("show-status.json", showStatus);
+            AddJson("rewatches.json", rewatches);
         }
         return ms.ToArray();
     }

@@ -1,0 +1,120 @@
+@page "/pick"
+@attribute [Authorize]
+@inject ApiClient Api
+<PageTitle>Pick for me · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Pick something for me</h1>
+</div>
+
+<div class="pick-filters">
+    <div class="segmented">
+        <button class="@(kind == PickKind.Any ? "on" : "")" @onclick="() => Set(() => kind = PickKind.Any)">Anything</button>
+        <button class="@(kind == PickKind.Movie ? "on" : "")" @onclick="() => Set(() => kind = PickKind.Movie)">Movie</button>
+        <button class="@(kind == PickKind.Show ? "on" : "")" @onclick="() => Set(() => kind = PickKind.Show)">Show</button>
+    </div>
+    <div class="chips">
+        @foreach (var (mins, label) in Lengths)
+        {
+            <button class="chip @(maxMinutes == mins ? "on" : "")" @onclick="() => Set(() => maxMinutes = mins)" @key="label">@label</button>
+        }
+    </div>
+    <div class="chips">
+        <button class="chip @(source == PickSource.Both ? "on" : "")" @onclick="() => Set(() => source = PickSource.Both)">Watchlist + paused</button>
+        <button class="chip @(source == PickSource.Watchlist ? "on" : "")" @onclick="() => Set(() => source = PickSource.Watchlist)">Watchlist</button>
+        <button class="chip @(source == PickSource.Paused ? "on" : "")" @onclick="() => Set(() => source = PickSource.Paused)">Paused shows</button>
+        <label class="check small"><input type="checkbox" checked="@streaming" @onchange="e => Set(() => streaming = e.Value is true)" /> Streaming now</label>
+    </div>
+</div>
+
+<ErrorBox Message="@error" OnRetry="Roll" />
+@if (busy && pick is null) { <Spinner /> }
+else if (nothing)
+{
+    <Empty Title="Nothing matches.">
+        <span>Loosen the filters, or add things to your <a href="watchlist">watchlist</a>.</span>
+    </Empty>
+}
+else if (pick is { } p)
+{
+    var m = p.Media;
+    <article class="pick-card @(busy ? "rolling" : "")">
+        <div class="pick-art" style="@(Img.Backdrop(m.BackdropPath, "w1280") is { } b ? $"background-image:url('{b}')" : "")"><div class="upnext-shade"></div></div>
+        <div class="pick-body">
+            <a class="pick-poster" href="@Fmt.Href(m.Type, m.TmdbId)">
+                @if (Img.Poster(m.PosterPath) is { } src) { <img src="@src" alt="" /> }
+            </a>
+            <div class="pick-info">
+                <span class="muted small">@p.Reason</span>
+                <h2><a href="@Fmt.Href(m.Type, m.TmdbId)">@m.Title</a></h2>
+                <div class="muted small">
+                    @(m.Year?.ToString() ?? "")<span class="dot-sep">@(m.Type == MediaType.Movie ? "Movie" : "TV")</span>
+                    @if (p.Minutes is > 0) { <span class="dot-sep">@(m.Type == MediaType.Show ? $"{Fmt.Runtime(p.Minutes)} episodes" : Fmt.Runtime(p.Minutes))</span> }
+                </div>
+                @if (p.NextEpisode is { } n)
+                {
+                    <div class="small">Up next: <a href="@Fmt.EpisodeHref(m.TmdbId, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> <Spoiler>@n.Name</Spoiler></a></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(m.Overview)) { <p class="pick-overview">@m.Overview</p> }
+                @if (p.Streaming.Count > 0)
+                {
+                    <div class="provider-logos">
+                        @foreach (var s in p.Streaming.Take(6))
+                        {
+                            <span title="@s.Name" @key="s.Id">
+                                @if (s.LogoPath is not null) { <img src="@Img.Poster(s.LogoPath, "w92")" alt="@s.Name" /> }
+                                else { <span class="chip">@s.Name</span> }
+                            </span>
+                        }
+                    </div>
+                }
+                <div class="inline pick-actions">
+                    <button class="btn btn-primary" disabled="@busy" @onclick="Roll"><Icon Name="shuffle" Size="16" /> Pick again</button>
+                    <CheckInButton Request="@(m.Type == MediaType.Movie ? new CheckInRequest(MediaType.Movie, m.TmdbId)
+                                              : p.NextEpisode is { } ne ? new CheckInRequest(MediaType.Episode, m.TmdbId, ne.SeasonNumber, ne.EpisodeNumber)
+                                              : new CheckInRequest(MediaType.Movie, m.TmdbId))" />
+                    <a class="btn btn-ghost" href="@Fmt.Href(m.Type, m.TmdbId)">Details</a>
+                </div>
+                <p class="muted tiny">Picked from @p.Candidates title@(p.Candidates == 1 ? "" : "s")@(streaming ? " (only ones streaming now count)" : "").</p>
+            </div>
+        </div>
+    </article>
+}
+
+@code {
+    private static readonly (int? Minutes, string Label)[] Lengths =
+        [(null, "Any length"), (30, "Under 30 min"), (60, "Under 1 hour"), (100, "Under 1h 40"), (130, "Under 2h 10")];
+
+    private PickKind kind = PickKind.Any;
+    private PickSource source = PickSource.Both;
+    private int? maxMinutes;
+    private bool streaming, busy, nothing;
+    private PickDto? pick;
+    private string? error;
+    private readonly List<string> seen = [];
+
+    protected override Task OnInitializedAsync() => Roll();
+
+    private Task Set(Action change)
+    {
+        change();
+        seen.Clear();
+        return Roll();
+    }
+
+    private async Task Roll()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            if (pick is not null) seen.Add($"{pick.Media.Type}:{pick.Media.TmdbId}");
+            // Don't let the "already shown" list grow without end; old picks can come round again.
+            if (seen.Count > 25) seen.RemoveAt(0);
+            pick = await Api.PickAsync(kind, source, maxMinutes, streaming, seen);
+            nothing = pick is null;
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

@@ -16,6 +16,29 @@
             </section>
         }
 
+        @if (Visible("onthisday") && onThisDay is { Count: > 0 })
+        {
+            <section class="row-section">
+                <div class="section-head">
+                    <h2>On this day</h2>
+                    <div class="section-tools"><HideButton OnHide='() => Hide("onthisday")' /></div>
+                </div>
+                <div class="otd-list">
+                    @foreach (var o in onThisDay)
+                    {
+                        <a class="otd-item" href="@Fmt.Href(o.Type, o.TmdbId)" @key="(o.Type, o.TmdbId, o.YearsAgo)">
+                            @if (Img.Poster(o.PosterPath, "w154") is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                            <span class="otd-text">
+                                <span class="otd-when">@(o.YearsAgo == 1 ? "A year ago" : $"{o.YearsAgo} years ago") · @o.Date.Year</span>
+                                <b>@o.Title</b>
+                                <span class="muted small">@o.Text</span>
+                            </span>
+                        </a>
+                    }
+                </div>
+            </section>
+        }
+
         @if (Visible("review") && reviewLinks.Count > 0)
         {
             <section class="review-banner">
@@ -173,6 +196,7 @@
     private HashSet<string> hidden = [];
     private List<(string Href, string Text)> reviewLinks = [];
     private ServerFeatures? features;
+    private List<OnThisDayItem>? onThisDay;
 
     private bool Visible(string key) => !signedIn || !hidden.Contains(key);
 
@@ -204,6 +228,7 @@
     {
         try { if (!hidden.Contains("now")) now = await Api.CheckInAsync(); } catch { }
         try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(18); } catch { }
+        try { if (!hidden.Contains("onthisday")) onThisDay = await Api.OnThisDayAsync(); } catch { }
     }
 
     private async Task CancelCheckIn()

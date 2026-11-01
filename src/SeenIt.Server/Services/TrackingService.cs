@@ -40,6 +40,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                     && await db.ShowStates.FirstOrDefaultAsync(x => x.UserId == userId && x.ShowTmdbId == req.TmdbId && x.Status == ShowTrackStatus.Paused, ct) is { } paused)
                     db.ShowStates.Remove(paused);
                 await db.SaveChangesAsync(ct);
+                await CompleteRewatchIfDoneAsync(userId, req.TmdbId, ct);
                 return 1;
 
             case MediaType.Show:
@@ -62,9 +63,11 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             .Select(e => new { e.SeasonNumber, e.EpisodeNumber, e.AirDate })
             .ToListAsync(ct);
 
+        // During a rewatch, "unwatched" means not played again yet.
+        var since = await ActiveRewatchStartAsync(userId, req.ShowTmdbId, ct) ?? DateTimeOffset.MinValue;
         var watched = req.OnlyUnwatched
             ? (await db.WatchEvents
-                .Where(w => w.UserId == userId && w.Type == MediaType.Episode && w.TmdbId == req.ShowTmdbId)
+                .Where(w => w.UserId == userId && w.Type == MediaType.Episode && w.TmdbId == req.ShowTmdbId && w.WatchedAt >= since)
                 .Select(w => new { S = w.SeasonNumber!.Value, E = w.EpisodeNumber!.Value }).ToListAsync(ct))
                 .Select(w => (w.S, w.E)).ToHashSet()
             : [];
@@ -83,7 +86,49 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         }
         if (added > 0) await RemoveFromWatchlistAsync(userId, MediaType.Show, req.ShowTmdbId, ct);
         await db.SaveChangesAsync(ct);
+        if (added > 0) await CompleteRewatchIfDoneAsync(userId, req.ShowTmdbId, ct);
         return added;
+    }
+
+    // ---------- Rewatches ----------
+
+    private Task<DateTimeOffset?> ActiveRewatchStartAsync(Guid userId, int showId, CancellationToken ct) =>
+        db.Rewatches.Where(r => r.UserId == userId && r.ShowTmdbId == showId && r.CompletedAt == null)
+            .Select(r => (DateTimeOffset?)r.StartedAt).FirstOrDefaultAsync(ct);
+
+    /// <summary>Starts going through a show again; progress and Up Next restart from the first episode.</summary>
+    public async Task<int> StartRewatchAsync(Guid userId, int showId, CancellationToken ct)
+    {
+        if (await ActiveRewatchStartAsync(userId, showId, ct) is not null) throw new TrackingException("You're already rewatching this show.");
+        if (!await db.WatchEvents.AnyAsync(w => w.UserId == userId && w.Type == MediaType.Episode && w.TmdbId == showId && w.SeasonNumber > 0, ct))
+            throw new TrackingException("Watch the show before starting a rewatch.");
+        var number = await db.Rewatches.CountAsync(r => r.UserId == userId && r.ShowTmdbId == showId, ct) + 2;
+        db.Rewatches.Add(new ShowRewatch { UserId = userId, ShowTmdbId = showId, Number = number, StartedAt = DateTimeOffset.UtcNow });
+        // A rewatch is something you're watching, so un-pause/un-drop it.
+        await db.ShowStates.Where(x => x.UserId == userId && x.ShowTmdbId == showId).ExecuteDeleteAsync(ct);
+        await db.SaveChangesAsync(ct);
+        return number;
+    }
+
+    /// <summary>Abandons the rewatch in progress. Its plays stay in your history.</summary>
+    public async Task<bool> StopRewatchAsync(Guid userId, int showId, CancellationToken ct) =>
+        await db.Rewatches.Where(r => r.UserId == userId && r.ShowTmdbId == showId && r.CompletedAt == null).ExecuteDeleteAsync(ct) > 0;
+
+    /// <summary>Marks the rewatch finished once every aired regular episode has been played since it started.</summary>
+    private async Task CompleteRewatchIfDoneAsync(Guid userId, int showId, CancellationToken ct)
+    {
+        var rewatch = await db.Rewatches.FirstOrDefaultAsync(r => r.UserId == userId && r.ShowTmdbId == showId && r.CompletedAt == null, ct);
+        if (rewatch is null) return;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var aired = await db.Episodes.CountAsync(e => e.ShowTmdbId == showId && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today, ct);
+        var seen = await db.WatchEvents
+            .Where(w => w.UserId == userId && w.Type == MediaType.Episode && w.TmdbId == showId && w.SeasonNumber > 0 && w.WatchedAt >= rewatch.StartedAt)
+            .Join(db.Episodes.Where(e => e.ShowTmdbId == showId && e.AirDate != null && e.AirDate <= today),
+                w => new { S = w.SeasonNumber!.Value, E = w.EpisodeNumber!.Value }, e => new { S = e.SeasonNumber, E = e.EpisodeNumber }, (w, e) => e)
+            .Select(e => new { e.SeasonNumber, e.EpisodeNumber }).Distinct().CountAsync(ct);
+        if (aired == 0 || seen < aired) return;
+        rewatch.CompletedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<bool> DeleteHistoryAsync(Guid userId, Guid id, CancellationToken ct) =>

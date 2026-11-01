@@ -12,12 +12,13 @@ else if (season is not null)
         <h1>@season.Name</h1>
         <AuthorizeView>
             <div class="inline">
-                <span class="muted">@Watched/@Aired watched</span>
+                @if (season.Rewatch is { } rw) { <span class="pill rewatch-pill"><Icon Name="repeat" Size="14" /> @Show.RewatchLabel(rw)</span> }
+                <span class="muted">@Watched/@Aired @(Rewatching ? "rewatched" : "watched")</span>
                 @if (Watched < Aired)
                 {
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => watchAllOpen = true"><Icon Name="check" Size="16" /> Mark season watched</button>
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => watchAllOpen = true"><Icon Name="check" Size="16" /> Mark season @(Rewatching ? "rewatched" : "watched")</button>
                 }
-                else if (Watched > 0)
+                else if (Watched > 0 && !Rewatching)
                 {
                     <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="UnwatchSeason">Unwatch season</button>
                 }
@@ -46,7 +47,7 @@ else if (season is not null)
         @foreach (var e in season.Episodes)
         {
             var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
-            <article class="episode @(e.Plays > 0 ? "watched" : "")" @key="e.EpisodeNumber">
+            <article class="episode @(Done(e) ? "watched" : "")" @key="e.EpisodeNumber">
                 <a class="episode-still" href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)">
                     @if (Img.Still(e.StillPath) is { } src) { <Spoiler Watched="e.Plays > 0" Image="true"><img src="@src" alt="" loading="lazy" /></Spoiler> }
                     <span class="episode-num">@e.EpisodeNumber</span>
@@ -59,7 +60,12 @@ else if (season is not null)
                     @if (!string.IsNullOrWhiteSpace(e.Overview)) { <Spoiler Watched="e.Plays > 0" Block="true"><p class="episode-overview">@e.Overview</p></Spoiler> }
                     <AuthorizeView>
                         <div class="episode-actions">
-                            @if (e.Plays > 0)
+                            @if (Rewatching && !e.Rewatched && aired)
+                            {
+                                <button class="btn btn-sm" disabled="@busy" @onclick="() => pending = e"><Icon Name="repeat" Size="14" /> Mark rewatched</button>
+                                @if (e.Plays > 0) { <span class="muted small">@(e.Plays == 1 ? "Seen once" : $"Seen {e.Plays} times")</span> }
+                            }
+                            else if (e.Plays > 0)
                             {
                                 <button class="btn btn-sm btn-watched" disabled="@busy" @onclick="() => pending = e" title="Watch again"><Icon Name="check" Size="14" /> @(e.Plays > 1 ? $"{e.Plays} plays" : "Watched")</button>
                                 <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Unwatch(e)" aria-label="Remove plays"><Icon Name="x" Size="14" /></button>
@@ -95,7 +101,10 @@ else if (season is not null)
     private EpisodeDto? pending;
 
     private int Aired => season?.Episodes.Count(e => e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today)) ?? 0;
-    private int Watched => season?.Episodes.Count(e => e.Plays > 0) ?? 0;
+    private int Watched => season?.Episodes.Count(Done) ?? 0;
+    private bool Rewatching => season?.Rewatch is not null;
+    /// <summary>Watched at all, or during a rewatch, watched again since it started.</summary>
+    private bool Done(EpisodeDto e) => Rewatching ? e.Rewatched : e.Plays > 0;
 
     protected override Task OnParametersSetAsync() => Load();
 

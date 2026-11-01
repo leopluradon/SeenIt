@@ -45,6 +45,7 @@ else if (items is not null)
                     <a href="@($"show/{p.ShowTmdbId}")"><img src="@Img.Poster(p.PosterPath, "w154")" alt="" loading="lazy" /></a>
                     <div class="progress-body">
                         <a href="@($"show/{p.ShowTmdbId}")" class="mini-title">@p.Name</a>
+                        @if (p.Rewatch is { } rw) { <span class="pill rewatch-pill small"><Icon Name="repeat" Size="12" /> @Show.RewatchLabel(rw)</span> }
                         <div class="inline">
                             <ProgressBar Value="p.Watched" Max="p.Aired" />
                             <span class="muted small nowrap">@p.Watched/@p.Aired</span>

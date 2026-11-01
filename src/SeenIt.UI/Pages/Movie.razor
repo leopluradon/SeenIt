@@ -67,6 +67,43 @@ else if (m is not null)
         </div>
     </div>
 
+    @if (m.Collection is { } col)
+    {
+        var signedIn = m.User is not null;
+        var missing = col.Parts.Where(x => x.Released && !x.Watched).ToList();
+        <section class="row-section collection">
+            <div class="section-head">
+                <h2>@col.Name</h2>
+                @if (signedIn) { <span class="muted small">You've seen @col.Seen of @col.Released</span> }
+                else { <span class="muted small">@col.Parts.Count movies</span> }
+            </div>
+            @if (signedIn)
+            {
+                <ProgressBar Value="col.Seen" Max="col.Released" />
+                @if (missing.Count is > 0 and <= 3 && col.Seen > 0)
+                {
+                    <p class="muted small collection-missing">Still to see:
+                        @for (var i = 0; i < missing.Count; i++)
+                        {
+                            var x = missing[i];
+                            <a href="@Fmt.Href(MediaType.Movie, x.Media.TmdbId)" @key="x.Media.TmdbId">@x.Media.Title</a>@(i < missing.Count - 1 ? ", " : "")
+                        }
+                    </p>
+                }
+                else if (missing.Count == 0 && col.Released > 0) { <p class="small ok collection-missing">You've seen every one.</p> }
+            }
+            <div class="poster-scroller">
+                @foreach (var part in col.Parts)
+                {
+                    <div class="collection-part @(signedIn && part.Released && !part.Watched ? "unseen" : "") @(part.Media.TmdbId == Id ? "current" : "")" @key="part.Media.TmdbId">
+                        <PosterCard Media="part.Media" ShowScore="false"
+                                    Badge="@(!part.Released ? "Coming" : signedIn && part.Watched ? "✓ Seen" : null)"
+                                    Sub="@(part.ReleaseDate is { } rd ? (part.Released ? rd.Year.ToString() : Fmt.Day(rd)) : "TBA")" />
+                    </div>
+                }
+            </div>
+        </section>
+    }
     <CastRow Cast="m.Cast" />
     <Trailers Videos="m.Videos" />
     <PosterRow Title="You might also like" Items="m.Recommendations" EmptyText="No recommendations yet." />
