@@ -44,10 +44,7 @@ else if (p is not null)
             }
             else
             {
-                <p class="muted small">
-                    @Plural(p.WatchedMovies, "movie")@(p.WatchedEpisodes > 0 ? $"{(p.WatchedMovies > 0 ? " and " : "")}{Plural(p.WatchedEpisodes, "episode")} across {Plural(p.WatchedShows, "show")}" : "")
-                    · @Fmt.Duration(p.WatchedMinutes) together
-                </p>
+                <p class="muted small">@WatchedSummary(p)</p>
                 <div class="watched-with">
                     @foreach (var w in watched)
                     {
@@ -172,4 +169,12 @@ else if (p is not null)
 
     private static int Age(DateOnly born, DateOnly at) => at.Year - born.Year - (at < born.AddYears(at.Year - born.Year) ? 1 : 0);
     private static string Plural(int n, string word) => $"{n:N0} {word}{(n == 1 ? "" : "s")}";
+
+    private static string WatchedSummary(PersonDetail p)
+    {
+        var parts = new List<string>();
+        if (p.WatchedMovies > 0) parts.Add(Plural(p.WatchedMovies, "movie"));
+        if (p.WatchedEpisodes > 0) parts.Add($"{Plural(p.WatchedEpisodes, "episode")} across {Plural(p.WatchedShows, "show")}");
+        return $"{string.Join(" and ", parts)} · {Fmt.Duration(p.WatchedMinutes)} together";
+    }
 }

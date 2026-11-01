@@ -340,7 +340,12 @@ a.cast { color: var(--text); }
 .appearances { margin-top: 16px; }
 .appearances summary { cursor: pointer; color: var(--text-2); font-weight: 600; margin-bottom: 8px; }
 @media (max-width: 760px) {
-    .person-head { grid-template-columns: 110px 1fr; gap: 16px; }
+    /* Photo beside the name; facts and bio run full width underneath. */
+    .person-head { grid-template-columns: 96px 1fr; gap: 0 16px; align-items: center; }
+    .person-info { display: contents; }
+    .person-info > *:not(h1) { grid-column: 1 / -1; }
+    .person-info h1 { margin: 0; font-size: 1.5rem; }
+    .person-info .detail-stats { margin-top: 16px; }
     .person-info .detail-stats > div { padding: 6px 10px; }
 }
 
