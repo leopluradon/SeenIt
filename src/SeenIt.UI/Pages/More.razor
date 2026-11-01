@@ -5,6 +5,8 @@
 <PageTitle>More · SeenIt</PageTitle>
 <h1>More</h1>
 <nav class="more-list">
+    @if (Session.Me is { } me) { <a href="@Fmt.UserHref(me.UserName)"><Icon Name="users" /> My profile</a> }
+    <a href="friends"><Icon Name="users" /> Friends</a>
     <a href="watchlist"><Icon Name="bookmark" /> Watchlist</a>
     <a href="history"><Icon Name="history" /> History</a>
     <a href="lists"><Icon Name="list" /> Lists</a>

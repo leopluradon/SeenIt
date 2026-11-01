@@ -1,0 +1,44 @@
+@* A live "watching now" item with how far through it is. *@
+@implements IDisposable
+<div class="now-card">
+    <a href="@Href"><img src="@Img.Poster(Item.PosterPath, "w154")" alt="" /></a>
+    <div class="now-body">
+        <span class="now-kicker"><Icon Name="radio" Size="14" /> @(Who is null ? "Watching now" : $"{Who} is watching")@(Item.Source == WatchSource.Jellyfin ? " on Jellyfin" : "")</span>
+        <a href="@Href" class="mini-title">@Item.Title</a>
+        @if (Item.Type == MediaType.Episode)
+        {
+            <div class="small">@Fmt.Ep(Item.SeasonNumber, Item.EpisodeNumber)@if (Item.EpisodeTitle is not null) { <span class="dot-sep"></span><Spoiler>@Item.EpisodeTitle</Spoiler> }</div>
+        }
+        <div class="inline">
+            <ProgressBar Value="@((int)Elapsed.TotalMinutes)" Max="@((int)Math.Max(1, (Item.EndsAt - Item.StartedAt).TotalMinutes))" />
+            <span class="muted small nowrap">@Left</span>
+        </div>
+    </div>
+    @if (OnCancel.HasDelegate)
+    {
+        <button class="icon-btn" @onclick="OnCancel" aria-label="Cancel check-in" title="Cancel check-in"><Icon Name="x" Size="18" /></button>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public NowWatchingDto Item { get; set; } = default!;
+    /// <summary>Whose check-in this is, for friends'; null for your own.</summary>
+    [Parameter] public string? Who { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    private Timer? timer;
+
+    private string Href => Item.Type == MediaType.Movie ? Fmt.Href(MediaType.Movie, Item.TmdbId) : Fmt.EpisodeHref(Item.TmdbId, Item.SeasonNumber, Item.EpisodeNumber);
+    private TimeSpan Elapsed => DateTimeOffset.UtcNow - Item.StartedAt;
+    private string Left
+    {
+        get
+        {
+            var left = Item.EndsAt - DateTimeOffset.UtcNow;
+            return left.TotalMinutes < 1 ? "finishing" : $"{Fmt.Runtime((int)Math.Ceiling(left.TotalMinutes))} left";
+        }
+    }
+
+    protected override void OnInitialized() =>
+        timer = new Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+
+    public void Dispose() => timer?.Dispose();
+}

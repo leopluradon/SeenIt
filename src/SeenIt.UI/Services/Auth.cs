@@ -109,7 +109,7 @@ public class TokenManager(ITokenStore store)
 }
 
 /// <summary>Signed-in user state for the UI. The server is the source of truth; this just mirrors /me.</summary>
-public class SessionState(ApiClient api, TokenManager tokens) : AuthenticationStateProvider
+public class SessionState(ApiClient api, TokenManager tokens, IOfflineStore offline) : AuthenticationStateProvider
 {
     private static readonly AuthenticationState Anonymous = new(new ClaimsPrincipal(new ClaimsIdentity()));
     private MeDto? _me;
@@ -152,13 +152,25 @@ public class SessionState(ApiClient api, TokenManager tokens) : AuthenticationSt
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 
-    public async Task LoginAsync(string userOrEmail, string password) =>
-        await tokens.SaveAsync(await api.LoginAsync(new LoginRequest(userOrEmail, password)));
+    public async Task LoginAsync(string userOrEmail, string password)
+    {
+        var t = await api.LoginAsync(new LoginRequest(userOrEmail, password));
+        await offline.ClearAsync(); // don't show the previous account's saved pages
+        await tokens.SaveAsync(t);
+    }
 
-    public async Task RegisterAsync(string userName, string email, string password) =>
-        await tokens.SaveAsync(await api.RegisterAsync(new RegisterRequest(userName, email, password)));
+    public async Task RegisterAsync(string userName, string email, string password)
+    {
+        var t = await api.RegisterAsync(new RegisterRequest(userName, email, password));
+        await offline.ClearAsync();
+        await tokens.SaveAsync(t);
+    }
 
-    public Task LogoutAsync() => tokens.SignedOutAsync();
+    public async Task LogoutAsync()
+    {
+        await offline.ClearAsync();
+        await tokens.SignedOutAsync();
+    }
 
     /// <summary>
     /// Re-reads the profile, then notifies with an already-finished task. Notifying with a pending

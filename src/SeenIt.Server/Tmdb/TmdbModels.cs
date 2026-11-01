@@ -173,3 +173,9 @@ public static class TmdbDates
     public static DateOnly? Parse(string? s) =>
         DateOnly.TryParseExact(s, "yyyy-MM-dd", out var d) ? d : null;
 }
+
+public record TmdbProvidersResult(Dictionary<string, TmdbRegionProviders>? Results);
+public record TmdbRegionProviders(string? Link, List<TmdbProvider>? Flatrate, List<TmdbProvider>? Free, List<TmdbProvider>? Ads, List<TmdbProvider>? Rent, List<TmdbProvider>? Buy);
+public record TmdbProvider(int ProviderId, string ProviderName, string? LogoPath, int DisplayPriority);
+public record TmdbRegions(List<TmdbRegionEntry>? Results);
+public record TmdbRegionEntry([property: JsonPropertyName("iso_3166_1")] string Iso31661, string EnglishName);

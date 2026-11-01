@@ -278,9 +278,12 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         UserMediaState? user = null;
         ShowProgressDto? progress = null;
         Dictionary<int, int> watchedPerSeason = [];
+        var trackStatus = ShowTrackStatus.Watching;
         if (userId is { } uid)
         {
             user = await GetUserStateAsync(uid, MediaType.Show, id, ct);
+            trackStatus = await db.ShowStates.Where(x => x.UserId == uid && x.ShowTmdbId == id)
+                .Select(x => (ShowTrackStatus?)x.Status).FirstOrDefaultAsync(ct) ?? ShowTrackStatus.Watching;
             var watched = await db.WatchEvents
                 .Where(w => w.UserId == uid && w.Type == MediaType.Episode && w.TmdbId == id)
                 .Select(w => new { w.SeasonNumber, w.EpisodeNumber, w.WatchedAt })
@@ -306,7 +309,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             s.NextEpisodeToAir is { } n ? new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, TmdbDates.Parse(n.AirDate)) : null,
             user,
             progress,
-            totals.Total, totals.Aired, totals.Watched, totals.Remaining);
+            totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus);
     }
 
     /// <summary>Running time of the whole show from the cached episode list (regular seasons only).</summary>
@@ -463,6 +466,22 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             db.ChangeTracker.Clear();
         }
     }
+    // ---------- Where to watch ----------
+
+    public async Task<WatchProvidersDto> GetProvidersAsync(MediaType type, int id, string region, CancellationToken ct)
+    {
+        region = region.ToUpperInvariant();
+        var all = await tmdb.GetWatchProvidersAsync(type == MediaType.Movie ? "movie" : "tv", id, ct);
+        var r = all?.Results?.GetValueOrDefault(region);
+        static List<ProviderDto> Map(List<TmdbProvider>? list) =>
+            (list ?? []).OrderBy(p => p.DisplayPriority).DistinctBy(p => p.ProviderId)
+                .Select(p => new ProviderDto(p.ProviderId, p.ProviderName, p.LogoPath)).ToList();
+        return new WatchProvidersDto(region, r?.Link, Map(r?.Flatrate), Map(r?.Free), Map(r?.Ads), Map(r?.Rent), Map(r?.Buy));
+    }
+
+    public async Task<List<RegionDto>> GetRegionsAsync(CancellationToken ct) =>
+        ((await tmdb.GetProviderRegionsAsync(ct))?.Results ?? [])
+            .Select(r => new RegionDto(r.Iso31661, r.EnglishName)).OrderBy(r => r.Name).ToList();
 }
 
 internal static class EfExtensions
@@ -472,4 +491,5 @@ internal static class EfExtensions
         if (entry.State is not EntityState.Detached and not EntityState.Added)
             await entry.ReloadAsync(ct);
     }
+
 }

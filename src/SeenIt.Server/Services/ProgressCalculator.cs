@@ -24,6 +24,8 @@ public class ProgressCalculator(AppDbContext db)
             .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name, e.AirDate })
             .ToListAsync(ct);
         var episodesByShow = episodes.ToLookup(e => e.ShowTmdbId);
+        var states = await db.ShowStates.Where(x => x.UserId == userId && ids.Contains(x.ShowTmdbId))
+            .ToDictionaryAsync(x => x.ShowTmdbId, x => x.Status, ct);
 
         var result = new List<ShowProgressDto>();
         foreach (var group in watches.GroupBy(w => w.TmdbId))
@@ -50,7 +52,8 @@ public class ProgressCalculator(AppDbContext db)
                 aired.Count, watchedAired,
                 group.Max(w => w.WatchedAt),
                 next is null ? null : new EpisodeRef(next.SeasonNumber, next.EpisodeNumber, next.Name, next.AirDate),
-                aired.Count > 0 && watchedAired >= aired.Count));
+                aired.Count > 0 && watchedAired >= aired.Count,
+                states.GetValueOrDefault(group.Key, ShowTrackStatus.Watching)));
         }
 
         return result.OrderByDescending(p => p.LastWatchedAt).ToList();

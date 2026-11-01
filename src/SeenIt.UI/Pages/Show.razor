@@ -42,6 +42,19 @@ else if (s is not null)
                     <RatingPicker Value="u.Rating" ValueChanged="Rate" />
                 </div>
             }
+            @if (s.User is not null && (s.Progress is not null || s.TrackStatus != ShowTrackStatus.Watching))
+            {
+                <div class="panel status-panel">
+                    <span>Status</span>
+                    <div class="segmented">
+                        @foreach (var (st, label) in StatusLabels)
+                        {
+                            <button class="@(s.TrackStatus == st ? "on" : "")" disabled="@busy" @onclick="() => SetStatus(st)">@label</button>
+                        }
+                    </div>
+                    <span class="muted small">@StatusHint(s.TrackStatus)</span>
+                </div>
+            }
             @if (s.Progress is { } p)
             {
                 <div class="panel progress-panel">
@@ -63,6 +76,7 @@ else if (s is not null)
             {
                 <p class="muted">Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> <Spoiler>@next.Name</Spoiler></a> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }</p>
             }
+            <WhereToWatch Type="MediaType.Show" TmdbId="Id" />
             <DetailStats Items="@([
                 ("Seasons", s.Seasons.Count(x => x.SeasonNumber > 0).ToString()),
                 ("Episodes", s.AiredEpisodes > 0 && s.AiredEpisodes < s.NumberOfEpisodes ? $"{s.AiredEpisodes} aired of {s.NumberOfEpisodes}" : s.NumberOfEpisodes.ToString()),
@@ -111,6 +125,30 @@ else if (s is not null)
 }
 
 @code {
+    private static readonly (ShowTrackStatus, string)[] StatusLabels =
+        [(ShowTrackStatus.Watching, "Watching"), (ShowTrackStatus.Paused, "Paused"), (ShowTrackStatus.Dropped, "Dropped")];
+
+    private static string StatusHint(ShowTrackStatus st) => st switch
+    {
+        ShowTrackStatus.Paused => "Hidden from Up next until you watch another episode.",
+        ShowTrackStatus.Dropped => "Hidden from Up next and the calendar.",
+        _ => "",
+    };
+
+    private async Task SetStatus(ShowTrackStatus st)
+    {
+        if (s is null || s.TrackStatus == st) return;
+        busy = true;
+        try
+        {
+            await Api.SetShowStatusAsync(Id, st);
+            s = s with { TrackStatus = st };
+            Toasts.Show(st switch { ShowTrackStatus.Paused => $"Paused {s.Name}", ShowTrackStatus.Dropped => $"Dropped {s.Name}", _ => $"Watching {s.Name} again" });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
     [Parameter] public int Id { get; set; }
     private ShowDetail? s;
     private string? error;

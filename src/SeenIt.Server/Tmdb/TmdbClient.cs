@@ -88,6 +88,13 @@ public class TmdbClient
         return GetAsync<TmdbPage<TmdbListItem>>(path, TimeSpan.FromHours(1), ct);
     }
 
+    /// <summary>kind: movie|tv. Streaming/rent/buy offers per country (data from JustWatch).</summary>
+    public Task<TmdbProvidersResult?> GetWatchProvidersAsync(string kind, int id, CancellationToken ct = default) =>
+        GetAsync<TmdbProvidersResult>($"{kind}/{id}/watch/providers", TimeSpan.FromHours(6), ct);
+
+    public Task<TmdbRegions?> GetProviderRegionsAsync(CancellationToken ct = default) =>
+        GetAsync<TmdbRegions>("watch/providers/regions", TimeSpan.FromDays(1), ct);
+
     /// <summary>source: imdb_id | tvdb_id.</summary>
     public Task<TmdbFindResult?> FindAsync(string externalId, string source, CancellationToken ct = default) =>
         GetAsync<TmdbFindResult>($"find/{Uri.EscapeDataString(externalId)}?external_source={source}", TimeSpan.FromHours(6), ct);

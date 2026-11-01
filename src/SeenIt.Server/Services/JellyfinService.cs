@@ -24,7 +24,8 @@ public record JellyfinPayload(
     bool? PlayedToCompletion,
     string? SaveReason,
     bool? Played,
-    DateTimeOffset? Timestamp)
+    DateTimeOffset? Timestamp,
+    bool? IsPaused = null)
 {
     /// <summary>
     /// Accepts both the recommended template and "Send All Properties": keys match case-insensitively
@@ -72,7 +73,8 @@ public record JellyfinPayload(
             Bool("PlayedToCompletion"),
             Str("SaveReason"),
             Bool("Played"),
-            DateTimeOffset.TryParse(Str("UtcTimestamp", "Timestamp"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var ts) ? ts : null);
+            DateTimeOffset.TryParse(Str("UtcTimestamp", "Timestamp"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var ts) ? ts : null,
+            Bool("IsPaused"));
     }
 
     public string DisplayName => ItemType == "Episode"
@@ -107,7 +109,7 @@ public record JellyfinPayload(
     }
 }
 
-public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService tracking, ILogger<JellyfinService> log)
+public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService tracking, CheckInService checkIns, ILogger<JellyfinService> log)
 {
     private static readonly TimeSpan DuplicateWindow = TimeSpan.FromHours(3);
 
@@ -146,6 +148,11 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
 
     private async Task<string> ProcessAsync(AppUser user, JellyfinPayload p, CancellationToken ct)
     {
+        if (p.NotificationType is "PlaybackStart" or "PlaybackProgress" && p.ItemType is "Movie" or "Episode")
+            return await NowPlayingAsync(user, p, ct);
+        if (p.NotificationType == "PlaybackStop")
+            await checkIns.CancelAsync(user.Id, ct, WatchSource.Jellyfin);
+
         var (scrobble, reason) = p.Decide(user.JellyfinThresholdPercent);
         if (!scrobble) return reason;
 
@@ -160,6 +167,29 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
 
         await tracking.WatchAsync(user.Id, req with { WatchedAt = DateTimeOffset.UtcNow }, WatchSource.Jellyfin, ct);
         return $"{reason} → scrobbled";
+    }
+
+    /// <summary>Playback start/progress pings keep the user's "watching now" status current.</summary>
+    private async Task<string> NowPlayingAsync(AppUser user, JellyfinPayload p, CancellationToken ct)
+    {
+        var current = await db.CheckIns.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == user.Id, ct);
+        DateTimeOffset? endsAt = p.RunTimeTicks is { } run and > 0
+            ? DateTimeOffset.UtcNow + TimeSpan.FromTicks(Math.Max(0, run - (p.PositionTicks ?? 0)))
+            : null;
+
+        // Progress pings arrive every few seconds; only touch the database when something changed.
+        if (p.NotificationType == "PlaybackProgress" && current is { Source: WatchSource.Jellyfin } && CheckInService.IsLive(current)
+            && (endsAt is null || p.IsPaused == true || Math.Abs((current.EndsAt - endsAt.Value).TotalMinutes) < 2))
+            return "Still watching";
+
+        var req = await ResolveAsync(p, ct);
+        if (req is null) return "Now playing, but couldn't match it on TMDB";
+        try
+        {
+            await checkIns.StartAsync(user.Id, new CheckInRequest(req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber), WatchSource.Jellyfin, endsAt, ct);
+        }
+        catch (TrackingException ex) { return ex.Message; }
+        return "Now watching";
     }
 
     /// <summary>Maps a Jellyfin item to TMDB using provider ids first, then a title search.</summary>

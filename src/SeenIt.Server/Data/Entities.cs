@@ -22,6 +22,10 @@ public class AppUser : IdentityUser<Guid>
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
     public List<string> Tabs { get; set; } = [];
 
+    /// <summary>ISO 3166-1 country for "where to watch"; null means use the device's region.</summary>
+    public string? Region { get; set; }
+    public ProfileVisibility Visibility { get; set; } = ProfileVisibility.Friends;
+
     public static string NewToken() =>
         Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
 }
@@ -195,4 +199,35 @@ public class JellyfinEvent
     public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.UtcNow;
     public string? ItemName { get; set; }
     public string Outcome { get; set; } = "";
+}
+
+/// <summary>A show the user has paused or dropped. No row means "watching".</summary>
+public class ShowState
+{
+    public Guid UserId { get; set; }
+    public int ShowTmdbId { get; set; }
+    public ShowTrackStatus Status { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>What the user is watching right now (at most one per user).</summary>
+public class CheckIn
+{
+    public Guid UserId { get; set; }
+    /// <summary>Movie or Episode.</summary>
+    public MediaType Type { get; set; }
+    public int TmdbId { get; set; }
+    public int? SeasonNumber { get; set; }
+    public int? EpisodeNumber { get; set; }
+    public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset EndsAt { get; set; }
+    /// <summary>Manual check-ins become a play at EndsAt; Jellyfin ones are scrobbled by the webhook.</summary>
+    public WatchSource Source { get; set; }
+}
+
+public class Follow
+{
+    public Guid FollowerId { get; set; }
+    public Guid FolloweeId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

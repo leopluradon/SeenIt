@@ -2,7 +2,7 @@
 @inject ApiClient Api
 @inject Toasts Toasts
 @inject NavigationManager Nav
-@inject IServerConfig Server
+@inject IPlatform Platform
 <PageTitle>@(list?.Name ?? "List") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" />
@@ -13,12 +13,14 @@ else if (list is not null)
     <div class="page-head">
         <div>
             <h1>@list.Name</h1>
-            <p class="muted small">by @list.OwnerUserName · @list.Items.Count items · @(list.IsPublic ? "Public" : "Private")</p>
+            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items · @(list.IsPublic ? "Public" : "Private")</p>
         </div>
+        @if (list.IsPublic && !list.IsOwner) { <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
         @if (list.IsOwner)
         {
             <div class="inline">
-                @if (list.IsPublic) { <button class="btn btn-sm" @onclick="CopyLink"><Icon Name="copy" Size="16" /> Copy link</button> }
+                @if (list.IsPublic) { <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
+                else { <span class="muted small" title="Make the list public in Edit to share it">Private: only you can see it</span> }
                 <button class="btn btn-sm" @onclick="() => editOpen = true">Edit</button>
                 <button class="btn btn-sm btn-danger" @onclick="Delete">Delete</button>
             </div>
@@ -78,10 +80,13 @@ else if (list is not null)
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    private async Task CopyLink()
+    private async Task Share()
     {
-        var url = new Uri(new Uri(Server.Url), $"lists/{Id}").ToString();
-        try { await Js.InvokeVoidAsync("navigator.clipboard.writeText", url); Toasts.Show("Link copied"); }
-        catch { Toasts.Show(url); }
+        var url = Platform.PublicUrl($"lists/{Id}");
+        switch (await Platform.ShareLinkAsync(list?.Name ?? "SeenIt list", url))
+        {
+            case "copied": Toasts.Show("Link copied"); break;
+            case "failed": Toasts.Show(url); break;
+        }
     }
 }

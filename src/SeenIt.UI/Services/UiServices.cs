@@ -17,6 +17,11 @@ public static class UiServices
         services.AddScoped<SessionState>();
         services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<SessionState>());
         services.AddScoped<Toasts>();
+        services.AddScoped<ConnectivityState>();
+        if (services.All(s => s.ServiceType != typeof(IOfflineStore)))
+            services.AddSingleton<IOfflineStore, NoOfflineStore>();
+        if (services.All(s => s.ServiceType != typeof(IPlatform)))
+            services.AddScoped<IPlatform, BrowserPlatform>();
         if (services.All(s => s.ServiceType != typeof(IServerConfig)))
             services.AddSingleton<IServerConfig>(new FixedServerConfig(apiBase.ToString()));
         if (services.All(s => s.ServiceType != typeof(ITokenStore)))
@@ -37,6 +42,7 @@ public static class Img
 public static class Fmt
 {
     public static string Href(MediaType type, int id) => type == MediaType.Movie ? $"movie/{id}" : $"show/{id}";
+    public static string UserHref(string userName) => $"u/{Uri.EscapeDataString(userName)}";
     public static string EpisodeHref(int showId, int? season, int? episode) => $"show/{showId}/season/{season}/episode/{episode}";
 
     /// <summary>Request body for a single play from a dialog choice.</summary>

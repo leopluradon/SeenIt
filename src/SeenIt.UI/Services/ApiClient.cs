@@ -13,7 +13,7 @@ public class ApiException(string message, HttpStatusCode status) : Exception(mes
 }
 
 /// <summary>Typed client for the SeenIt API. Used unchanged by the website and the mobile app.</summary>
-public class ApiClient(HttpClient http, TokenManager tokens)
+public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offline, ConnectivityState connectivity)
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -44,8 +44,11 @@ public class ApiClient(HttpClient http, TokenManager tokens)
 
     // ---------- Tracking ----------
 
-    public Task WatchAsync(WatchRequest r) => SendAsync(HttpMethod.Post, "api/watch", r);
-    public Task BulkWatchAsync(BulkWatchRequest r) => SendAsync(HttpMethod.Post, "api/watch/bulk", r);
+    // "Now" is pinned to the moment of the tap, so a play queued offline keeps its real time.
+    public Task WatchAsync(WatchRequest r) => SendQueueableAsync(HttpMethod.Post, "api/watch",
+        r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
+    public Task BulkWatchAsync(BulkWatchRequest r) => SendQueueableAsync(HttpMethod.Post, "api/watch/bulk",
+        r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
     public Task UnwatchAsync(MediaType type, int tmdbId, int? season = null, int? episode = null) =>
         SendAsync(HttpMethod.Delete, $"api/watch?type={type}&tmdbId={tmdbId}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"));
     public Task<HistoryPage> HistoryAsync(HistoryQuery f)
@@ -64,17 +67,58 @@ public class ApiClient(HttpClient http, TokenManager tokens)
     public Task DeleteHistoryAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/history/{id}");
 
     public Task<List<WatchlistEntry>> WatchlistAsync() => GetAsync<List<WatchlistEntry>>("api/watchlist");
-    public Task AddToWatchlistAsync(MediaType type, int id) => SendAsync(HttpMethod.Post, "api/watchlist", new WatchlistRequest(type, id));
+    public Task AddToWatchlistAsync(MediaType type, int id) => SendQueueableAsync(HttpMethod.Post, "api/watchlist", new WatchlistRequest(type, id));
     public Task RemoveFromWatchlistAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/watchlist?type={type}&tmdbId={id}");
 
     public Task<List<RatingEntry>> RatingsAsync(MediaType? type = null) => GetAsync<List<RatingEntry>>("api/ratings" + (type is null ? "" : $"?type={type}"));
-    public Task RateAsync(RatingRequest r) => SendAsync(HttpMethod.Post, "api/ratings", r);
+    public Task RateAsync(RatingRequest r) => SendQueueableAsync(HttpMethod.Post, "api/ratings", r);
     public Task UnrateAsync(MediaType type, int id, int? season = null, int? episode = null) =>
         SendAsync(HttpMethod.Delete, $"api/ratings?type={type}&tmdbId={id}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"));
 
     public Task<List<ShowProgressDto>> ProgressAsync() => GetAsync<List<ShowProgressDto>>("api/progress");
     public Task<List<CalendarEntry>> CalendarAsync(DateOnly from, int days) => GetAsync<List<CalendarEntry>>($"api/calendar?from={from:yyyy-MM-dd}&days={days}");
     public Task<DashboardDto> DashboardAsync() => GetAsync<DashboardDto>("api/dashboard");
+    public Task SetShowStatusAsync(int showId, ShowTrackStatus status) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/status", new ShowStatusRequest(status));
+
+    public Task<NowWatchingDto?> CheckInAsync() => SendAsync<NowWatchingDto>(HttpMethod.Get, "api/checkin");
+    public Task<NowWatchingDto?> StartCheckInAsync(CheckInRequest r) => SendAsync<NowWatchingDto>(HttpMethod.Post, "api/checkin", r);
+    public Task CancelCheckInAsync() => SendAsync(HttpMethod.Delete, "api/checkin");
+
+    public Task<WatchProvidersDto> ProvidersAsync(MediaType type, int id) => GetAsync<WatchProvidersDto>($"api/catalog/providers/{type}/{id}?region={DeviceRegion}");
+    public Task<List<RegionDto>> RegionsAsync() => GetAsync<List<RegionDto>>("api/catalog/regions");
+
+    /// <summary>The device's country, used for "where to watch" until the user picks one.</summary>
+    public static string DeviceRegion
+    {
+        get
+        {
+            try
+            {
+                var name = System.Globalization.CultureInfo.CurrentCulture.Name;
+                if (name.Length > 0 && new System.Globalization.RegionInfo(name).TwoLetterISORegionName is { Length: 2 } r) return r;
+            }
+            catch (ArgumentException) { }
+            return "US";
+        }
+    }
+
+    public async Task<byte[]> ExportAsync()
+    {
+        using var resp = await SendRawAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/export"), auth: true);
+        await EnsureOkAsync(resp);
+        return await resp.Content.ReadAsByteArrayAsync();
+    }
+
+    // ---------- Social ----------
+
+    public Task<ProfileDto> ProfileAsync(string userName) => GetAsync<ProfileDto>($"api/users/{Uri.EscapeDataString(userName)}");
+    public Task<FeedDto> FeedAsync(int take = 40) => GetAsync<FeedDto>($"api/social/feed?take={take}");
+    public Task<List<UserCard>> SearchUsersAsync(string q) => GetAsync<List<UserCard>>($"api/social/search?q={Uri.EscapeDataString(q)}");
+    public Task<List<UserCard>> FollowingAsync() => GetAsync<List<UserCard>>("api/social/following");
+    public Task<List<UserCard>> FollowersAsync() => GetAsync<List<UserCard>>("api/social/followers");
+    public Task FollowAsync(string userName, bool follow) =>
+        SendAsync(follow ? HttpMethod.Post : HttpMethod.Delete, $"api/social/follow/{Uri.EscapeDataString(userName)}");
+    public Task<CompareDto> CompareAsync(string userName) => GetAsync<CompareDto>($"api/social/compare/{Uri.EscapeDataString(userName)}");
     public Task<StatsDto> StatsAsync() => GetAsync<StatsDto>("api/stats");
     public Task<List<ReviewYear>> ReviewPeriodsAsync() => GetAsync<List<ReviewYear>>($"api/review/periods?tz={Tz}");
     public Task<ReviewDto> ReviewAsync(int year, int? month) =>
@@ -116,7 +160,81 @@ public class ApiClient(HttpClient http, TokenManager tokens)
 
     private record IdResult(Guid Id);
 
-    private async Task<T> GetAsync<T>(string url) => (await SendAsync<T>(HttpMethod.Get, url))!;
+    /// <summary>GETs go through the offline cache on the app: fresh copies are saved, and used when the server can't be reached.</summary>
+    private async Task<T> GetAsync<T>(string url)
+    {
+        string json;
+        try
+        {
+            using var resp = await SendRawAsync(() => Build(HttpMethod.Get, url, null), auth: true);
+            await EnsureOkAsync(resp);
+            json = await resp.Content.ReadAsStringAsync();
+        }
+        catch (ApiException ex) when (ex.Status == 0 && offline.Enabled)
+        {
+            if (await offline.GetAsync(url) is not { } cached) throw;
+            connectivity.Set(offline: true);
+            return JsonSerializer.Deserialize<T>(cached, Json)!;
+        }
+        if (offline.Enabled) await offline.SetAsync(url, json);
+        return JsonSerializer.Deserialize<T>(json, Json)!;
+    }
+
+    /// <summary>Changes that can wait: when offline on the app they're queued and sent once the server is back.</summary>
+    private async Task SendQueueableAsync(HttpMethod method, string url, object body)
+    {
+        try { await SendAsync(method, url, body); }
+        catch (ApiException ex) when (ex.Status == 0 && offline.Enabled)
+        {
+            var queue = await offline.GetQueueAsync();
+            queue.Add(new QueuedRequest(method.Method, url, JsonSerializer.Serialize(body, body.GetType(), Json), DateTimeOffset.UtcNow));
+            await offline.SetQueueAsync(queue);
+            connectivity.Set(offline: true, queue.Count);
+        }
+    }
+
+    private readonly SemaphoreSlim _flushGate = new(1, 1);
+
+    /// <summary>Sends changes made offline, oldest first. Returns true if the server was reachable.</summary>
+    public async Task<bool> SyncAsync()
+    {
+        if (!offline.Enabled) return true;
+        if (!await _flushGate.WaitAsync(0)) return !connectivity.Offline;
+        try
+        {
+            var queue = await offline.GetQueueAsync();
+            while (queue.Count > 0)
+            {
+                var q = queue[0];
+                using var resp = await SendRawAsync(() => new HttpRequestMessage(new HttpMethod(q.Method), q.Url)
+                {
+                    Content = q.Body is null ? null : new StringContent(q.Body, System.Text.Encoding.UTF8, "application/json"),
+                }, auth: true);
+                // Server errors are retried later; a rejected change (e.g. the title is gone) is dropped.
+                if ((int)resp.StatusCode >= 500) break;
+                queue.RemoveAt(0);
+                await offline.SetQueueAsync(queue);
+            }
+            connectivity.Set(offline: false, queue.Count);
+            return true;
+        }
+        catch (ApiException ex) when (ex.Status == 0)
+        {
+            connectivity.Set(offline: true);
+            return false;
+        }
+        finally { _flushGate.Release(); }
+    }
+
+    public async Task<bool> PingAsync()
+    {
+        try
+        {
+            using var resp = await http.GetAsync("healthz");
+            return resp.IsSuccessStatusCode;
+        }
+        catch (HttpRequestException) { return false; }
+    }
 
     private async Task SendAsync(HttpMethod method, string url, object? body = null)
     {
@@ -128,6 +246,7 @@ public class ApiClient(HttpClient http, TokenManager tokens)
     {
         using var resp = await SendRawAsync(() => Build(method, url, body), auth);
         await EnsureOkAsync(resp);
+        if (resp.StatusCode == HttpStatusCode.NoContent) return default;
         return await resp.Content.ReadFromJsonAsync<T>(Json);
     }
 
@@ -143,7 +262,16 @@ public class ApiClient(HttpClient http, TokenManager tokens)
 
         HttpResponseMessage resp;
         try { resp = await http.SendAsync(req); }
-        catch (HttpRequestException) { throw new ApiException("Can't reach the SeenIt server. Check your connection.", 0); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            connectivity.Set(offline: true);
+            throw new ApiException("Can't reach the SeenIt server. Check your connection.", 0);
+        }
+        if (connectivity.Offline)
+        {
+            connectivity.Set(offline: false);
+            if (connectivity.Pending > 0) _ = SyncAsync();
+        }
 
         if (auth && resp.StatusCode == HttpStatusCode.Unauthorized && req.Content is not MultipartFormDataContent
             && await tokens.RefreshAsync(http) is { } fresh)

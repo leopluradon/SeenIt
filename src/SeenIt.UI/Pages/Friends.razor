@@ -1,0 +1,144 @@
+@page "/friends"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject SessionState Session
+<PageTitle>Friends · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Friends</h1>
+    <div class="segmented">
+        <button class="@(tab == "feed" ? "on" : "")" @onclick='() => Show("feed")'>Activity</button>
+        <button class="@(tab == "following" ? "on" : "")" @onclick='() => Show("following")'>Following</button>
+        <button class="@(tab == "followers" ? "on" : "")" @onclick='() => Show("followers")'>Followers</button>
+        <button class="@(tab == "find" ? "on" : "")" @onclick='() => Show("find")'>Find</button>
+    </div>
+</div>
+@if (Session.Me is { } me)
+{
+    <p class="muted small">
+        Your profile: <a href="@Fmt.UserHref(me.UserName)">@@@me.UserName</a> · visible to <b>@VisibilityText(me.Visibility)</b> (<a href="settings#privacy">change</a>)
+    </p>
+}
+<ErrorBox Message="@error" OnRetry="Load" />
+
+@switch (tab)
+{
+    case "feed":
+        @if (feed is null && error is null) { <Spinner /> }
+        else if (feed is not null)
+        {
+            @if (feed.WatchingNow.Count == 0 && feed.Activity.Count == 0)
+            {
+                <Empty Title="Nothing from friends yet.">Follow people to see what they're watching. <a href="" @onclick='() => Show("find")' @onclick:preventDefault>Find people</a>.</Empty>
+            }
+            @foreach (var w in feed.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
+            <div class="history-list">
+                @foreach (var a in feed.Activity)
+                {
+                    var h = a.Entry;
+                    <div class="history-item" @key="h.Id">
+                        <a href="@Href(h)"><img src="@Img.Poster(h.PosterPath, "w92")" alt="" loading="lazy" /></a>
+                        <div class="history-body">
+                            <div class="small"><a href="@Fmt.UserHref(a.User.UserName)"><b>@a.User.Name</b></a> watched</div>
+                            <a href="@Href(h)" class="mini-title">@h.Title</a>
+                            @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)</div> }
+                            <div class="muted small">@Fmt.Relative(h.WatchedAt)</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        break;
+
+    case "following":
+    case "followers":
+        @if (people is null && error is null) { <Spinner /> }
+        else if (people is { Count: 0 })
+        {
+            <Empty Title="@(tab == "following" ? "You're not following anyone yet." : "No followers yet.")">
+                @if (tab == "following") { <a href="" @onclick='() => Show("find")' @onclick:preventDefault>Find people to follow</a> }
+                else { <span>Share your profile link so friends can find you.</span> }
+            </Empty>
+        }
+        else if (people is not null)
+        {
+            <div class="user-list">
+                @for (var i = 0; i < people.Count; i++)
+                {
+                    var idx = i;
+                    <UserRow User="people[idx]" UserChanged="u => people[idx] = u" @key="people[idx].UserName" />
+                }
+            </div>
+        }
+        break;
+
+    case "find":
+        <form class="inline find-form" @onsubmit="Search" role="search">
+            <input type="search" placeholder="Username or display name" @bind="query" @bind:event="oninput" aria-label="Find people" />
+            <button class="btn" type="submit">Search</button>
+        </form>
+        @if (results is { Count: 0 }) { <p class="muted">No one found.</p> }
+        else if (results is not null)
+        {
+            <div class="user-list">
+                @for (var i = 0; i < results.Count; i++)
+                {
+                    var idx = i;
+                    <UserRow User="results[idx]" UserChanged="u => results[idx] = u" @key="results[idx].UserName" />
+                }
+            </div>
+        }
+        break;
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+    private string tab = "feed";
+    private FeedDto? feed;
+    private List<UserCard>? people, results;
+    private string? error, query;
+
+    protected override Task OnInitializedAsync()
+    {
+        tab = Tab is "following" or "followers" or "find" ? Tab : "feed";
+        return Load();
+    }
+
+    private Task Show(string t)
+    {
+        tab = t;
+        return Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        try
+        {
+            switch (tab)
+            {
+                case "feed": feed = await Api.FeedAsync(60); break;
+                case "following": people = null; people = await Api.FollowingAsync(); break;
+                case "followers": people = null; people = await Api.FollowersAsync(); break;
+            }
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Search()
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2) return;
+        error = null;
+        try { results = await Api.SearchUsersAsync(query); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static string Href(HistoryEntry h) => h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : Fmt.Href(h.Type, h.TmdbId);
+
+    public static string VisibilityText(ProfileVisibility v) => v switch
+    {
+        ProfileVisibility.Public => "everyone",
+        ProfileVisibility.Friends => "friends (people you follow who follow you back)",
+        _ => "only you",
+    };
+}

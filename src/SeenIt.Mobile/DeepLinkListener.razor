@@ -1,0 +1,20 @@
+@* A second root component that navigates the app when a widget (or other native code) asks to open a page. *@
+@implements IDisposable
+@inject NavigationManager Nav
+@code {
+    protected override void OnInitialized() => DeepLinks.Requested += OnRequested;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) Go();
+    }
+
+    private void OnRequested() => _ = InvokeAsync(Go);
+
+    private void Go()
+    {
+        if (DeepLinks.Take() is { } path) Nav.NavigateTo(path);
+    }
+
+    public void Dispose() => DeepLinks.Requested -= OnRequested;
+}

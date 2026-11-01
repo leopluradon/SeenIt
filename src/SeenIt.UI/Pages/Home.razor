@@ -9,6 +9,13 @@
         <h1 class="visually-hidden">Home</h1>
         <ErrorBox Message="@error" OnRetry="LoadDashboard" />
 
+        @if (Visible("now") && now is not null)
+        {
+            <section class="row-section">
+                <NowWatchingCard Item="now" OnCancel="CancelCheckIn" />
+            </section>
+        }
+
         @if (Visible("review") && reviewLinks.Count > 0)
         {
             <section class="review-banner">
@@ -61,6 +68,27 @@
                                 </div>
                                 <span class="mini-date">@Fmt.Day(c.Date)</span>
                             </a>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (Visible("friends") && feed is { } f && (f.Activity.Count > 0 || f.WatchingNow.Count > 0))
+            {
+                <section class="row-section">
+                    <div class="section-head">
+                        <h2>Friends' activity</h2>
+                        <div class="section-tools"><a href="friends" class="section-more">Friends <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("friends")' /></div>
+                    </div>
+                    @foreach (var w in f.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
+                    <div class="poster-scroller">
+                        @foreach (var a in f.Activity)
+                        {
+                            var h = a.Entry;
+                            <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
+                                        Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
+                                        Sub="@($"{a.User.Name} · " + (h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))"
+                                        ShowScore="false" @key="h.Id" />
                         }
                     </div>
                 </section>
@@ -136,6 +164,8 @@
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     private DashboardDto? dash;
+    private NowWatchingDto? now;
+    private FeedDto? feed;
     private string? error;
     private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows;
     private bool signedIn, customizeOpen;
@@ -152,8 +182,10 @@
         if (signedIn)
         {
             var reviewTask = LoadReviewLinks();
+            var extrasTask = LoadExtras();
             await LoadDashboard();
             await reviewTask;
+            await extrasTask;
         }
         await trendingTask;
     }
@@ -163,6 +195,23 @@
         error = null;
         try { dash = await Api.DashboardAsync(); }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task LoadExtras()
+    {
+        try { if (!hidden.Contains("now")) now = await Api.CheckInAsync(); } catch { }
+        try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(18); } catch { }
+    }
+
+    private async Task CancelCheckIn()
+    {
+        try
+        {
+            await Api.CancelCheckInAsync();
+            now = null;
+            Toasts.Show("Check-in cancelled");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
     }
 
     private async Task LoadTrending()
@@ -211,6 +260,7 @@
             if (!visible) Toasts.Show("Section hidden. Bring it back with “Customize home”.");
             if (visible && key.StartsWith("trending") && trendingMovies is null) await LoadTrending();
             if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
+            if (visible && key is "now" or "friends") await LoadExtras();
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

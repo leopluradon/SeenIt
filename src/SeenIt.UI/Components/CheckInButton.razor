@@ -1,0 +1,28 @@
+@* "Check in": marks this as what you're watching now; it's added to your history when it finishes. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+<button class="btn @Class" @onclick="CheckIn" disabled="@busy" title="Show friends you're watching this; it's added to your history when it finishes">
+    <Icon Name="radio" Size="16" /> Check in
+</button>
+@code {
+    [Parameter, EditorRequired] public CheckInRequest Request { get; set; } = default!;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback<NowWatchingDto> OnCheckedIn { get; set; }
+    private bool busy;
+
+    private async Task CheckIn()
+    {
+        busy = true;
+        try
+        {
+            var now = await Api.StartCheckInAsync(Request);
+            if (now is not null)
+            {
+                Toasts.Show($"Checked in · added to history at {now.EndsAt.ToLocalTime():HH:mm}");
+                await OnCheckedIn.InvokeAsync(now);
+            }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

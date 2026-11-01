@@ -1,4 +1,5 @@
 using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using AndroidX.Core.View;
@@ -9,9 +10,26 @@ namespace SeenIt.Mobile;
     ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
 {
+    /// <summary>Intent extra with an app page to open, e.g. "show/1396/season/1/episode/2".</summary>
+    public const string PathExtra = "seenit.path";
+
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        DeepLinks.Open(intent?.GetStringExtra(PathExtra));
+    }
+
+    protected override void OnPause()
+    {
+        base.OnPause();
+        // Whatever was just marked watched in the app should show on the widget too.
+        UpNextWidget.RequestUpdate(this);
+    }
+
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+        DeepLinks.Open(Intent?.GetStringExtra(PathExtra));
         if (Window is not { } window) return;
 
         // Android 15+ draws apps edge-to-edge, and the WebView doesn't report safe-area insets to

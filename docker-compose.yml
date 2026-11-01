@@ -32,6 +32,33 @@ services:
       timeout: 5s
       retries: 20
 
+  # Nightly pg_dump to the NAS (data/backups/seenit), 14 days kept. See scripts/backup.sh and restore.sh.
+  seenit-backup:
+    image: postgres:17-alpine
+    container_name: seenit-backup
+    restart: unless-stopped
+    depends_on:
+      seenit-db:
+        condition: service_healthy
+    environment:
+      PGHOST: seenit-db
+      PGDATABASE: seenit
+      PGUSER: seenit
+      PGPASSWORD: "${POSTGRES_PASSWORD}"
+      TZ: "${TZ:-America/New_York}"
+      BACKUP_HOUR: "3"
+      BACKUP_KEEP_DAYS: "14"
+    volumes:
+      - seenit-backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+
 volumes:
   seenit-keys:
   seenit-db:
+  seenit-backups:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=${NAS_ADDR:-192.168.1.61},nfsvers=4.1,rw,soft,timeo=150"
+      device: ":${NAS_BACKUP_PATH:-/volume1/data/backups/seenit}"

@@ -1,0 +1,25 @@
+@inject ApiClient Api
+@inject Toasts Toasts
+<button class="btn btn-sm @(User.Following ? "btn-on" : "btn-primary")" disabled="@busy" @onclick="Toggle" @onclick:stopPropagation @onclick:preventDefault>
+    @if (User.Following) { <Icon Name="check" Size="14" /> <span>Following</span> }
+    else { <Icon Name="user-plus" Size="14" /> <span>@(User.FollowsYou ? "Follow back" : "Follow")</span> }
+</button>
+@code {
+    [Parameter, EditorRequired] public UserCard User { get; set; } = default!;
+    [Parameter] public EventCallback<UserCard> UserChanged { get; set; }
+    private bool busy;
+
+    private async Task Toggle()
+    {
+        busy = true;
+        try
+        {
+            await Api.FollowAsync(User.UserName, !User.Following);
+            var updated = User with { Following = !User.Following };
+            if (updated.Following) Toasts.Show($"Following {User.Name}");
+            await UserChanged.InvokeAsync(updated);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

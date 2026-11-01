@@ -1,0 +1,14 @@
+<div class="user-row">
+    <a href="@Fmt.UserHref(User.UserName)" class="user-link">
+        <span class="avatar">@User.Name[..1].ToUpperInvariant()</span>
+        <span class="user-names">
+            <b>@User.Name</b>
+            <span class="muted small">@@@User.UserName@(User.FollowsYou && User.Following ? " · friends" : User.FollowsYou ? " · follows you" : "")</span>
+        </span>
+    </a>
+    <FollowButton User="User" UserChanged="UserChanged" />
+</div>
+@code {
+    [Parameter, EditorRequired] public UserCard User { get; set; } = default!;
+    [Parameter] public EventCallback<UserCard> UserChanged { get; set; }
+}

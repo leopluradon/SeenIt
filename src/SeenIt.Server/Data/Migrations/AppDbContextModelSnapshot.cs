@@ -220,6 +220,10 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Region")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
@@ -234,6 +238,9 @@ namespace SeenIt.Server.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<int>("Visibility")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("JellyfinToken")
@@ -247,6 +254,39 @@ namespace SeenIt.Server.Data.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.CheckIn", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("EpisodeNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SeasonNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("EndsAt");
+
+                    b.ToTable("CheckIns");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.EpisodeMeta", b =>
@@ -286,6 +326,24 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasIndex("AirDate");
 
                     b.ToTable("Episodes");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Follow", b =>
+                {
+                    b.Property<Guid>("FollowerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FolloweeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("FollowerId", "FolloweeId");
+
+                    b.HasIndex("FolloweeId");
+
+                    b.ToTable("Follows");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.ImportJob", b =>
@@ -528,6 +586,25 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Shows");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.ShowState", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ShowTmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "ShowTmdbId");
+
+                    b.ToTable("ShowStates");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.UserList", b =>
                 {
                     b.Property<Guid>("Id")
@@ -707,6 +784,30 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.CheckIn", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Follow", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("FolloweeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("FollowerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.ImportJob", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
@@ -850,6 +951,15 @@ namespace SeenIt.Server.Data.Migrations
                     b.Navigation("Cast");
 
                     b.Navigation("Creators");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ShowState", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.UserList", b =>

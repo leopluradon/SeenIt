@@ -23,6 +23,9 @@
         <a href="settings#jellyfin">Jellyfin</a>
         <a href="settings#spoilers">Spoilers</a>
         <a href="settings#layout">Layout</a>
+        <a href="settings#privacy">Privacy</a>
+        <a href="settings#region">Where to watch</a>
+        <a href="settings#export">Export</a>
         <a href="settings#profile">Profile</a>
         <a href="settings#account">Account</a>
     </nav>
@@ -100,7 +103,7 @@
                         </div>
                         <span class="muted small">Keep it private: anyone with it can add plays to your history.</span>
                     </li>
-                    <li>Under <b>Notification Type</b> tick <b>Playback Stop</b> (and <b>User Data Saved</b> if you want "mark played" in Jellyfin to count).</li>
+                    <li>Under <b>Notification Type</b> tick <b>Playback Stop</b> (and <b>User Data Saved</b> if you want "mark played" in Jellyfin to count). Also tick <b>Playback Start</b> and <b>Playback Progress</b> to show what you're watching live as “Watching now”.</li>
                     <li>Under <b>User Filter</b> tick only your own Jellyfin user.</li>
                     <li>Under <b>Item Type</b> tick <b>Movies</b> and <b>Episodes</b>, and turn on <b>Send All Properties</b>. If your plugin version doesn't have that option, paste this into <b>Template</b> instead:
                         <div class="copy-field block">
@@ -193,6 +196,39 @@
             </div>
         </section>
 
+        <section class="panel" id="privacy">
+            <h2>Privacy</h2>
+            <p class="muted small">Who can see your profile, history, ratings, stats and what you're watching now. Lists have their own public/private setting.</p>
+            <div class="stack">
+                @foreach (var (v, label, hint) in VisibilityOptions)
+                {
+                    <label class="check" @key="v">
+                        <input type="radio" name="visibility" checked="@(visibility == v)" @onchange="() => SaveVisibility(v)" />
+                        <span><b>@label</b> <span class="muted small">@hint</span></span>
+                    </label>
+                }
+            </div>
+            @if (Session.Me is { } who) { <p class="small"><a href="@Fmt.UserHref(who.UserName)">View your profile</a> · <a href="friends">Friends</a></p> }
+        </section>
+
+        <section class="panel" id="region">
+            <h2>Where to watch</h2>
+            <p class="muted small">Streaming, rental and purchase options on movie and show pages are for this country.</p>
+            <div class="field inline">
+                <label for="region">Country</label>
+                <select id="region" value="@(region ?? "")" @onchange="SaveRegion">
+                    <option value="">Automatic (@ApiClient.DeviceRegion)</option>
+                    @foreach (var r in regions ?? []) { <option value="@r.Code" @key="r.Code">@r.Name</option> }
+                </select>
+            </div>
+        </section>
+
+        <section class="panel" id="export">
+            <h2>Export your data</h2>
+            <p class="muted small">Download everything you've put into SeenIt (history, ratings, watchlist, lists, show status and settings) as a .zip of JSON and CSV files.</p>
+            <button class="btn" @onclick="Export" disabled="@exporting"><Icon Name="download" Size="16" /> @(exporting ? "Preparing…" : "Download my data")</button>
+        </section>
+
         <section class="panel" id="profile">
             <h2>Profile</h2>
             @if (Session.Me is { } me)
@@ -249,7 +285,8 @@
           "PlayedToCompletion": "{{PlayedToCompletion}}",
           "SaveReason": "{{SaveReason}}",
           "Played": "{{Played}}",
-          "UtcTimestamp": "{{UtcTimestamp}}"
+          "UtcTimestamp": "{{UtcTimestamp}}",
+          "IsPaused": "{{IsPaused}}"
         }
         """;
 
@@ -261,6 +298,59 @@
     private List<string> tabs = [];
     private HashSet<string> hiddenSections = [];
     private CancellationTokenSource? poll;
+    private ProfileVisibility visibility;
+    private string? region;
+    private List<RegionDto>? regions;
+    private bool exporting;
+    [Inject] private IPlatform Platform { get; set; } = default!;
+
+    private static readonly (ProfileVisibility, string, string)[] VisibilityOptions =
+    [
+        (ProfileVisibility.Public, "Everyone", "anyone with your profile link"),
+        (ProfileVisibility.Friends, "Friends", "people you follow who also follow you"),
+        (ProfileVisibility.Private, "Only me", "nobody else, though they can still follow you"),
+    ];
+
+    private async Task SaveVisibility(ProfileVisibility v)
+    {
+        visibility = v;
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(Visibility: v));
+            Session.Update(me => me with { Visibility = v });
+            Toasts.Show("Privacy updated");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task LoadRegions()
+    {
+        try { regions = await Api.RegionsAsync(); } catch { regions = []; }
+    }
+
+    private async Task SaveRegion(ChangeEventArgs e)
+    {
+        region = e.Value as string is { Length: 2 } r ? r : null;
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(Region: region ?? ""));
+            Session.Update(me => me with { Region = region });
+            Toasts.Show("Country saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Export()
+    {
+        exporting = true;
+        try
+        {
+            var data = await Api.ExportAsync();
+            await Platform.SaveFileAsync($"seenit-export-{DateTime.Today:yyyy-MM-dd}.zip", "application/zip", data);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { exporting = false; }
+    }
 
     private string WebhookUrl => jf is null ? "" : new Uri(new Uri(Server.Url), jf.WebhookUrlPath.TrimStart('/')).ToString();
 
@@ -271,7 +361,9 @@
         blurImages = Session.Me?.BlurSpoilerImages ?? false;
         tabs = UiLayout.Tabs(Session.Me).Select(t => t.Key).ToList();
         hiddenSections = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
-        await Task.WhenAll(LoadJellyfin(), LoadImports());
+        visibility = Session.Me?.Visibility ?? ProfileVisibility.Friends;
+        region = Session.Me?.Region;
+        await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions());
         StartPolling();
     }
 

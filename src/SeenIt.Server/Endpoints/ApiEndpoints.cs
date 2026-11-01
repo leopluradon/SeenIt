@@ -19,6 +19,10 @@ public static class ApiEndpoints
         MapLists(app);
         MapJellyfin(app);
         MapImports(api.MapGroup("/imports"));
+        MapSocial(app);
+
+        api.MapGet("/export", async (ClaimsPrincipal p, ExportService export, CancellationToken ct) =>
+            Results.File(await export.BuildAsync(p.UserId(), ct), "application/zip", $"seenit-export-{DateTime.UtcNow:yyyy-MM-dd}.zip"));
     }
 
     // ---------- Catalogue: public, with your own state when signed in ----------
@@ -44,6 +48,14 @@ public static class ApiEndpoints
 
         g.MapGet("/person/{id:int}", async (int id, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
             await people.GetAsync(id, p.OptionalUserId(), ct) is { } person ? Results.Ok(person) : Results.NotFound());
+
+        g.MapGet("/providers/{type}/{id:int}", async (MediaType type, int id, string? region, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
+        {
+            var saved = p.OptionalUserId() is { } uid ? await db.Users.Where(u => u.Id == uid).Select(u => u.Region).FirstOrDefaultAsync(ct) : null;
+            var code = saved ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r : "US");
+            return await c.GetProvidersAsync(type, id, code, ct);
+        });
+        g.MapGet("/regions", (CatalogService c, CancellationToken ct) => c.GetRegionsAsync(ct));
 
         g.MapGet("/show/{id:int}/season/{season:int}/episode/{episode:int}", async (int id, int season, int episode, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
             await c.GetEpisodeAsync(id, season, episode, p.OptionalUserId(), ct) is { } e ? Results.Ok(e) : Results.NotFound());
@@ -95,6 +107,21 @@ public static class ApiEndpoints
         });
 
         g.MapGet("/progress", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetProgressAsync(p.UserId(), ct));
+        g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+        {
+            await t.SetShowStatusAsync(p.UserId(), id, req.Status, ct);
+            return Results.NoContent();
+        });
+
+        g.MapGet("/checkin", async (ClaimsPrincipal p, CheckInService c, CancellationToken ct) =>
+            await c.GetAsync(p.UserId(), ct) is { } now ? Results.Ok(now) : Results.NoContent());
+        g.MapPost("/checkin", (CheckInRequest req, ClaimsPrincipal p, CheckInService c, CancellationToken ct) =>
+            c.StartAsync(p.UserId(), req, WatchSource.Manual, null, ct));
+        g.MapDelete("/checkin", async (ClaimsPrincipal p, CheckInService c, CancellationToken ct) =>
+        {
+            await c.CancelAsync(p.UserId(), ct);
+            return Results.NoContent();
+        });
         g.MapGet("/calendar", (DateOnly? from, int? days, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.GetCalendarAsync(p.UserId(), from ?? DateOnly.FromDateTime(DateTime.UtcNow), days ?? 30, ct));
         g.MapGet("/dashboard", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetDashboardAsync(p.UserId(), ct));
@@ -203,5 +230,26 @@ public static class ApiEndpoints
             await db.SaveChangesAsync(ct);
             return Results.Ok(new { job.Id });
         }).DisableAntiforgery();
+    }
+
+    // ---------- Social ----------
+
+    private static void MapSocial(IEndpointRouteBuilder app)
+    {
+        // Profiles respect the owner's visibility setting; signed-out visitors see public ones only.
+        app.MapGet("/api/users/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.GetProfileAsync(name, p.OptionalUserId(), ct) is { } profile ? Results.Ok(profile) : Results.NotFound());
+
+        var g = app.MapGroup("/api/social").RequireAuthorization();
+        g.MapGet("/feed", (int? take, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.FeedAsync(p.UserId(), take ?? 40, ct));
+        g.MapGet("/search", (string q, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.SearchAsync(p.UserId(), q, ct));
+        g.MapGet("/following", async (ClaimsPrincipal p, SocialService s, CancellationToken ct) => (await s.ConnectionsAsync(p.UserId(), ct)).Following);
+        g.MapGet("/followers", async (ClaimsPrincipal p, SocialService s, CancellationToken ct) => (await s.ConnectionsAsync(p.UserId(), ct)).Followers);
+        g.MapPost("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.FollowAsync(p.UserId(), name, true, ct) ? Results.NoContent() : Results.NotFound());
+        g.MapDelete("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.FollowAsync(p.UserId(), name, false, ct) ? Results.NoContent() : Results.NotFound());
+        g.MapGet("/compare/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.CompareAsync(p.UserId(), name, ct) is { } c ? Results.Ok(c) : Results.NotFound());
     }
 }

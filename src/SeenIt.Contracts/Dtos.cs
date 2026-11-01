@@ -15,22 +15,30 @@ public record ProblemInfo(string Title, Dictionary<string, string[]>? Errors = n
 public record MeDto(
     Guid Id, string UserName, string Email, string? DisplayName, DateTimeOffset CreatedAt,
     bool HideSpoilers = false, bool BlurSpoilerImages = false,
-    IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null);
+    IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
+    string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends);
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(
     bool? HideSpoilers = null, bool? BlurSpoilerImages = null,
-    IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null);
+    IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
+    string? Region = null,          // "" clears it (back to the device's region)
+    ProfileVisibility? Visibility = null);
+
+/// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
+public enum ProfileVisibility { Public, Friends, Private }
 
 /// <summary>The customisable bits of the UI and their allowed keys.</summary>
 public static class UiPrefs
 {
     public static readonly (string Key, string Label)[] HomeSections =
     [
+        ("now", "Watching now"),
         ("review", "Month / year in review banner"),
         ("upnext", "Up next"),
         ("upcoming", "Coming up"),
         ("recent", "Recently watched"),
+        ("friends", "Friends' activity"),
         ("trending-movies", "Trending movies"),
         ("trending-shows", "Trending shows"),
     ];
@@ -46,6 +54,7 @@ public static class UiPrefs
         ("lists", "Lists", "list", "lists"),
         ("stats", "Stats", "chart", "stats"),
         ("ratings", "Ratings", "star", "ratings"),
+        ("friends", "Friends", "users", "friends"),
         ("search", "Search", "search", "search"),
     ];
 
@@ -132,7 +141,8 @@ public record ShowDetail(
     long TotalRuntime = 0,        // minutes, every cached regular-season episode
     int AiredEpisodes = 0,
     long WatchedMinutes = 0,
-    long RemainingMinutes = 0);   // aired episodes you haven't watched
+    long RemainingMinutes = 0,    // aired episodes you haven't watched
+    ShowTrackStatus TrackStatus = ShowTrackStatus.Watching);
 
 public record EpisodeRef(int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate, bool Watched = false);
 
@@ -301,7 +311,12 @@ public record ShowProgressDto(
     int Watched,
     DateTimeOffset? LastWatchedAt,
     EpisodeRef? NextEpisode,
-    bool Completed);
+    bool Completed,
+    ShowTrackStatus Status = ShowTrackStatus.Watching);
+
+/// <summary>Paused and dropped shows are kept out of Up Next and the widget until you resume them.</summary>
+public enum ShowTrackStatus { Watching, Paused, Dropped }
+public record ShowStatusRequest(ShowTrackStatus Status);
 
 public record CalendarEntry(
     DateOnly Date,
@@ -440,3 +455,52 @@ public record ReviewDto(
 
 public record ReviewMonth(int Month, int Plays, long Minutes);
 public record ReviewYear(int Year, int Plays, long Minutes, IReadOnlyList<ReviewMonth> Months);
+
+// ---------- Where to watch ----------
+
+public record ProviderDto(int Id, string Name, string? LogoPath);
+public record WatchProvidersDto(
+    string Region, string? Link,
+    IReadOnlyList<ProviderDto> Stream, IReadOnlyList<ProviderDto> Free, IReadOnlyList<ProviderDto> Ads,
+    IReadOnlyList<ProviderDto> Rent, IReadOnlyList<ProviderDto> Buy)
+{
+    public bool IsEmpty => Stream.Count + Free.Count + Ads.Count + Rent.Count + Buy.Count == 0;
+}
+public record RegionDto(string Code, string Name);
+
+// ---------- Check-ins ("watching now") ----------
+
+public record CheckInRequest(MediaType Type, int TmdbId, int? SeasonNumber = null, int? EpisodeNumber = null);
+
+/// <summary>Type is Movie or Episode. Manual check-ins are recorded as a play when EndsAt passes; Jellyfin ones on stop.</summary>
+public record NowWatchingDto(
+    MediaType Type, int TmdbId, string Title, int? SeasonNumber, int? EpisodeNumber, string? EpisodeTitle,
+    string? PosterPath, string? BackdropPath, DateTimeOffset StartedAt, DateTimeOffset EndsAt, WatchSource Source);
+
+// ---------- Social ----------
+
+public record UserCard(string UserName, string? DisplayName, bool Following, bool FollowsYou)
+{
+    public string Name => DisplayName ?? UserName;
+}
+
+public record ProfileStats(int Movies, int Shows, int Episodes, long Minutes, int Ratings);
+
+public record ProfileDto(
+    UserCard User, DateTimeOffset JoinedAt, bool IsMe, ProfileVisibility Visibility, bool CanView,
+    int Followers, int Following,
+    NowWatchingDto? NowWatching, ProfileStats? Stats,
+    IReadOnlyList<HistoryEntry> Recent, IReadOnlyList<RatingEntry> Favourites, IReadOnlyList<ListSummary> Lists);
+
+public record ActivityItem(UserCard User, HistoryEntry Entry);
+public record FriendWatching(UserCard User, NowWatchingDto Item);
+public record FeedDto(IReadOnlyList<FriendWatching> WatchingNow, IReadOnlyList<ActivityItem> Activity);
+
+public record RatingPair(MediaSummary Media, int You, int Them);
+public record CompareDto(
+    UserCard Them, ProfileStats You, ProfileStats TheirStats,
+    int? Compatibility,            // 0–100 from titles you both rated; null when there are too few
+    int SharedMovies, int SharedShows,
+    IReadOnlyList<MediaSummary> BothMovies, IReadOnlyList<MediaSummary> BothShows,
+    IReadOnlyList<RatingPair> RatedBoth,
+    IReadOnlyList<MediaSummary> TheyLoved);   // rated 8+ by them, not watched by you

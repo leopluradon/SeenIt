@@ -606,3 +606,68 @@ a.cast { color: var(--text); }
     .modal { top: auto; bottom: 0; transform: translateX(-50%); width: 100vw; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
     .auth-card { margin: 8px auto; padding: 22px; border: 0; background: transparent; }
 }
+
+/* ---------- Offline ---------- */
+.offline-banner {
+    position: sticky; top: var(--topbar-h); z-index: 30; display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 6px 16px; background: #3a2f12; color: var(--warn); font-size: .85rem; border-bottom: 1px solid #5a4818; flex-wrap: wrap;
+}
+.offline-banner .btn { color: var(--warn); }
+
+/* ---------- Where to watch ---------- */
+.where-to-watch { margin: 16px 0; }
+.where-to-watch .section-head { margin-bottom: 8px; }
+.where-to-watch h2 { font-size: 1.05rem; margin: 0; }
+.provider-group { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.provider-label { width: 70px; flex-shrink: 0; color: var(--muted); font-size: .85rem; }
+.provider-logos { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.provider-logos img { width: 40px; height: 40px; border-radius: 9px; object-fit: cover; background: var(--surface-2); }
+.tiny { font-size: .75rem; margin: 8px 0 0; }
+
+/* ---------- Watching now ---------- */
+.now-card {
+    display: flex; gap: 14px; align-items: center; padding: 10px; margin-bottom: 10px; min-width: 0;
+    background: linear-gradient(90deg, var(--accent-soft), var(--surface) 60%); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.now-card img { width: 56px; height: 84px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-2); }
+.now-body { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.now-body .inline { flex-wrap: nowrap; }
+.now-body .progress { flex: 1; }
+.now-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-hover); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+
+/* ---------- Show status ---------- */
+.status-panel { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.status-panel > span:first-child { font-weight: 650; }
+.progress-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
+.progress-menu { margin-top: 6px; }
+.progress-menu .chip { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+
+/* ---------- Social ---------- */
+.user-list { display: grid; gap: 6px; max-width: 640px; }
+.user-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.user-link { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.user-link .avatar { display: grid; place-items: center; flex-shrink: 0; cursor: inherit; }
+.user-names { display: grid; min-width: 0; }
+.user-names > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.find-form { margin-bottom: 14px; max-width: 640px; }
+.find-form input { flex: 1; min-width: 0; }
+.profile-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin: 8px 0 18px; }
+.avatar-lg { width: 72px; height: 72px; font-size: 2rem; display: grid; place-items: center; cursor: default; flex-shrink: 0; }
+.profile-info { flex: 1; min-width: 200px; }
+.profile-info h1 { margin: 0; }
+.profile-counts { display: flex; gap: 16px; margin-top: 4px; }
+.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.compare-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.compare-head h1 a { color: var(--accent-hover); }
+.compat { display: flex; align-items: baseline; gap: 10px; }
+.compat-value { font-size: 2.2rem; font-weight: 800; color: var(--ok); }
+.compare-table { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; max-width: 640px; margin: 16px 0; }
+.compare-table .lead { color: var(--ok); font-weight: 700; }
+.compare-table .span2 { grid-column: span 2; }
+
+@media (max-width: 760px) {
+    .page-head .segmented { overflow-x: auto; scrollbar-width: none; }
+    .page-head .segmented button { flex: 1 0 auto; }
+    .provider-label { width: 58px; }
+    .profile-actions { width: 100%; }
+}

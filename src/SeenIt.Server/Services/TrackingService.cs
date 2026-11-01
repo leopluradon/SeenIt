@@ -35,6 +35,10 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                     WatchedAt = PlayTime(when, req.WatchedAt, ep.AirDate), Source = source,
                 });
                 await RemoveFromWatchlistAsync(userId, MediaType.Show, req.TmdbId, ct);
+                // Watching a new episode of a paused show picks it back up.
+                if (source is WatchSource.Manual or WatchSource.Jellyfin
+                    && await db.ShowStates.FirstOrDefaultAsync(x => x.UserId == userId && x.ShowTmdbId == req.TmdbId && x.Status == ShowTrackStatus.Paused, ct) is { } paused)
+                    db.ShowStates.Remove(paused);
                 await db.SaveChangesAsync(ct);
                 return 1;
 
@@ -340,7 +344,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         // Shows you've watched any of, or have on your watchlist.
         var watchedShows = db.WatchEvents.Where(w => w.UserId == userId && w.Type == MediaType.Episode).Select(w => w.TmdbId);
         var watchlistShows = db.Watchlist.Where(w => w.UserId == userId && w.Type == MediaType.Show).Select(w => w.TmdbId);
-        var showIds = await watchedShows.Union(watchlistShows).ToListAsync(ct);
+        var dropped = db.ShowStates.Where(x => x.UserId == userId && x.Status == ShowTrackStatus.Dropped).Select(x => x.ShowTmdbId);
+        var showIds = await watchedShows.Union(watchlistShows).Where(id => !dropped.Contains(id)).ToListAsync(ct);
 
         var episodes = await db.Episodes
             .Where(e => showIds.Contains(e.ShowTmdbId) && e.AirDate >= from && e.AirDate < to)
@@ -365,10 +370,30 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         return entries.OrderBy(e => e.Date).ThenBy(e => e.Title).ThenBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).ToList();
     }
 
+    public async Task SetShowStatusAsync(Guid userId, int showId, ShowTrackStatus status, CancellationToken ct)
+    {
+        var row = await db.ShowStates.FirstOrDefaultAsync(x => x.UserId == userId && x.ShowTmdbId == showId, ct);
+        if (status == ShowTrackStatus.Watching)
+        {
+            if (row is not null) db.ShowStates.Remove(row);
+        }
+        else
+        {
+            if (await catalog.EnsureShowAsync(showId, ct) is null) throw new TrackingException("Show not found.");
+            if (row is null) db.ShowStates.Add(new ShowState { UserId = userId, ShowTmdbId = showId, Status = status });
+            else { row.Status = status; row.UpdatedAt = DateTimeOffset.UtcNow; }
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<ShowTrackStatus> GetShowStatusAsync(Guid userId, int showId, CancellationToken ct) =>
+        await db.ShowStates.Where(x => x.UserId == userId && x.ShowTmdbId == showId).Select(x => (ShowTrackStatus?)x.Status).FirstOrDefaultAsync(ct)
+        ?? ShowTrackStatus.Watching;
+
     public async Task<DashboardDto> GetDashboardAsync(Guid userId, CancellationToken ct)
     {
         var progress = await GetProgressAsync(userId, ct);
-        var upNext = progress.Where(p => p.NextEpisode is not null).Take(12).ToList();
+        var upNext = progress.Where(p => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching).Take(12).ToList();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var upcoming = (await GetCalendarAsync(userId, today, 14, ct)).Take(12).ToList();
         var recent = await db.WatchEvents.Where(w => w.UserId == userId)

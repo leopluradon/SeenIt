@@ -39,6 +39,7 @@ else if (e is not null)
                     <button class="btn @(plays.Count > 0 ? "btn-watched" : "btn-primary")" disabled="@(busy || !aired)" @onclick="() => watchOpen = true">
                         <Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })
                     </button>
+                    @if (aired) { <CheckInButton Request="@(new CheckInRequest(MediaType.Episode, Id, Season, Number))" /> }
                 }
                 else
                 {

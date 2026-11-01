@@ -142,3 +142,23 @@ public class ShowRefreshWorker(IServiceScopeFactory scopes, ILogger<ShowRefreshW
         if (movies.Count > 0) log.LogInformation("Backfilled metadata for {Count} movies", movies.Count);
     }
 }
+
+/// <summary>Turns finished manual check-ins into plays, once a minute.</summary>
+public class CheckInWorker(IServiceScopeFactory scopes, ILogger<CheckInWorker> log) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                var done = await scope.ServiceProvider.GetRequiredService<CheckInService>().CompleteDueAsync(stoppingToken);
+                if (done > 0) log.LogInformation("Recorded {Count} finished check-ins", done);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+            catch (Exception ex) { log.LogError(ex, "Check-in pass failed"); }
+            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+        }
+    }
+}

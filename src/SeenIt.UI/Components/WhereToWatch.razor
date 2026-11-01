@@ -1,0 +1,55 @@
+@* Streaming / rent / buy options for the viewer's country, from TMDB (data by JustWatch). *@
+@inject ApiClient Api
+@if (data is { IsEmpty: false } d)
+{
+    <section class="panel where-to-watch">
+        <div class="section-head">
+            <h2>Where to watch</h2>
+            <a class="muted small" href="settings#region" title="Change country">@Flag(d.Region) @d.Region</a>
+        </div>
+        @foreach (var (label, items) in Groups(d))
+        {
+            <div class="provider-group">
+                <span class="provider-label">@label</span>
+                <div class="provider-logos">
+                    @foreach (var p in items)
+                    {
+                        <a href="@(d.Link ?? "#")" target="_blank" rel="noopener" title="@p.Name" @key="p.Id">
+                            @if (p.LogoPath is not null) { <img src="@Img.Poster(p.LogoPath, "w92")" alt="@p.Name" loading="lazy" /> }
+                            else { <span class="chip">@p.Name</span> }
+                        </a>
+                    }
+                </div>
+            </div>
+        }
+        <p class="muted tiny">Availability from <a href="https://www.justwatch.com" target="_blank" rel="noopener">JustWatch</a> via TMDB. Tap a service for links.</p>
+    </section>
+}
+else if (data is { IsEmpty: true } && ShowEmpty)
+{
+    <p class="muted small">Not streaming in @data.Region right now.</p>
+}
+@code {
+    [Parameter, EditorRequired] public MediaType Type { get; set; }
+    [Parameter, EditorRequired] public int TmdbId { get; set; }
+    [Parameter] public bool ShowEmpty { get; set; }
+    private WatchProvidersDto? data;
+    private (MediaType, int)? loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded == (Type, TmdbId)) return;
+        loaded = (Type, TmdbId);
+        data = null;
+        try { data = await Api.ProvidersAsync(Type, TmdbId); }
+        catch { /* optional extra; leave it out if TMDB is slow */ }
+    }
+
+    private static IEnumerable<(string, IReadOnlyList<ProviderDto>)> Groups(WatchProvidersDto d) =>
+        new (string, IReadOnlyList<ProviderDto>)[] { ("Stream", d.Stream), ("Free", d.Free), ("With ads", d.Ads), ("Rent", d.Rent), ("Buy", d.Buy) }
+            .Where(g => g.Item2.Count > 0);
+
+    private static string Flag(string region) => region.Length == 2
+        ? string.Concat(region.ToUpperInvariant().Select(c => char.ConvertFromUtf32(0x1F1E6 + c - 'A')))
+        : "";
+}

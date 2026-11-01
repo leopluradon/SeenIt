@@ -25,6 +25,10 @@ else if (m is not null)
                     <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
                 </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
+                @if (m.ReleaseDate is null || m.ReleaseDate <= DateOnly.FromDateTime(DateTime.Today))
+                {
+                    <CheckInButton Request="@(new CheckInRequest(MediaType.Movie, Id))" />
+                }
             }
             else
             {
@@ -46,6 +50,7 @@ else if (m is not null)
             }
             <DetailStats Items="@([("Runtime", Fmt.Runtime(m.Runtime)), ("Released", m.ReleaseDate?.ToString("d MMM yyyy")), ("Status", m.Status), ("Genres", m.Genres.Count > 0 ? string.Join(", ", m.Genres) : null), ("Your plays", m.User is { Plays: > 0 } u2 ? $"{u2.Plays} · {Fmt.Duration((long)(m.Runtime ?? 0) * u2.Plays)}" : null)])" />
             @if (m.Overview is not null) { <p class="overview">@m.Overview</p> }
+            <WhereToWatch Type="MediaType.Movie" TmdbId="Id" />
             @if (m.Crew.Count > 0)
             {
                 <dl class="crew">

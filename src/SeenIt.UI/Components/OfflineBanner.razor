@@ -1,0 +1,49 @@
+@* Shown on the app when the server can't be reached: saved pages are displayed and changes are queued. *@
+@implements IDisposable
+@inject ConnectivityState Connectivity
+@inject ApiClient Api
+@inject IOfflineStore Offline
+@if (Offline.Enabled && (Connectivity.Offline || Connectivity.Pending > 0))
+{
+    <div class="offline-banner" role="status">
+        <Icon Name="cloud-off" Size="16" />
+        @if (Connectivity.Offline)
+        {
+            <span>Offline: showing saved data@(Connectivity.Pending > 0 ? $" · {Connectivity.Pending} change{(Connectivity.Pending == 1 ? "" : "s")} waiting to sync" : "")</span>
+            <button class="btn btn-sm btn-ghost" @onclick="Retry" disabled="@busy">Retry</button>
+        }
+        else
+        {
+            <span>Syncing @Connectivity.Pending change@(Connectivity.Pending == 1 ? "" : "s")…</span>
+        }
+    </div>
+}
+@code {
+    private Timer? timer;
+    private bool busy;
+
+    protected override void OnInitialized()
+    {
+        Connectivity.Changed += OnChanged;
+        if (!Offline.Enabled) return;
+        // Send anything left over from last time, then keep checking while offline.
+        _ = InvokeAsync(Api.SyncAsync);
+        timer = new Timer(_ => { if (Connectivity.Offline) _ = InvokeAsync(Retry); }, null, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task Retry()
+    {
+        if (busy) return;
+        busy = true;
+        try { if (await Api.PingAsync()) await Api.SyncAsync(); }
+        finally { busy = false; }
+    }
+
+    public void Dispose()
+    {
+        Connectivity.Changed -= OnChanged;
+        timer?.Dispose();
+    }
+}

@@ -76,7 +76,7 @@ public static partial class AuthEndpoints
 
         me.MapGet("/me", async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> (ClaimsPrincipal p, UserManager<AppUser> users) =>
             await users.FindByIdAsync(p.UserId().ToString()) is { } u
-                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages, u.HiddenHomeSections, u.Tabs))
+                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages, u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility))
                 : TypedResults.Unauthorized());
 
         me.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
@@ -99,6 +99,14 @@ public static partial class AuthEndpoints
                 u.HiddenHomeSections = hidden.Where(k => UiPrefs.HomeSections.Any(s => s.Key == k)).Distinct().ToList();
             if (req.Tabs is { } tabs)
                 u.Tabs = tabs.Where(k => UiPrefs.Tabs.Any(t => t.Key == k)).Distinct().Take(UiPrefs.MaxTabs).ToList();
+            if (req.Region is { } region)
+            {
+                region = region.Trim().ToUpperInvariant();
+                if (region.Length == 0) u.Region = null;
+                else if (region.Length == 2 && region.All(char.IsAsciiLetterUpper)) u.Region = region;
+                else return Results.BadRequest(new ProblemInfo("Pick a country from the list."));
+            }
+            if (req.Visibility is { } vis && Enum.IsDefined(vis)) u.Visibility = vis;
             await users.UpdateAsync(u);
             return Results.NoContent();
         });

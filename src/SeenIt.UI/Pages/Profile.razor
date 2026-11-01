@@ -1,0 +1,134 @@
+@page "/u/{Name}"
+@inject ApiClient Api
+@inject IPlatform Platform
+@inject Toasts Toasts
+<PageTitle>@(p?.User.Name ?? Name) · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (p is null && error is null) { <Spinner /> }
+else if (p is not null)
+{
+    <div class="profile-head">
+        <span class="avatar avatar-lg">@p.User.Name[..1].ToUpperInvariant()</span>
+        <div class="profile-info">
+            <h1>@p.User.Name</h1>
+            <div class="muted small">
+                @@@p.User.UserName · joined @p.JoinedAt.ToLocalTime().ToString("MMMM yyyy")
+                @if (p.User.FollowsYou) { <span> · follows you</span> }
+            </div>
+            <div class="small profile-counts">
+                <a href="@(p.IsMe ? "friends?tab=followers" : null)"><b>@p.Followers</b> follower@(p.Followers == 1 ? "" : "s")</a>
+                <a href="@(p.IsMe ? "friends?tab=following" : null)"><b>@p.Following</b> following</a>
+            </div>
+        </div>
+        <div class="profile-actions">
+            <AuthorizeView>
+                <Authorized>
+                    @if (!p.IsMe)
+                    {
+                        <FollowButton User="p.User" UserChanged="u => p = p with { User = u }" />
+                        @if (p.CanView) { <a class="btn btn-sm" href="@($"{Fmt.UserHref(p.User.UserName)}/compare")">Compare</a> }
+                    }
+                    else { <a class="btn btn-sm" href="settings#privacy">Privacy</a> }
+                </Authorized>
+            </AuthorizeView>
+            <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="14" /> Share</button>
+        </div>
+    </div>
+
+    @if (!p.CanView)
+    {
+        <div class="panel">
+            <b>@(p.Visibility == ProfileVisibility.Private ? "This profile is private." : $"Only {p.User.Name}'s friends can see their activity.")</b>
+            @if (p.Visibility == ProfileVisibility.Friends) { <p class="muted small">Follow each other to see what they watch.</p> }
+        </div>
+    }
+    else
+    {
+        @if (p.IsMe) { <p class="muted small">Visible to @Friends.VisibilityText(p.Visibility).</p> }
+        @if (p.NowWatching is { } nw) { <NowWatchingCard Item="nw" Who="@(p.IsMe ? null : p.User.Name)" /> }
+        @if (p.Stats is { } st)
+        {
+            <section class="stat-tiles">
+                <div class="stat"><span class="stat-value">@Fmt.Duration(st.Minutes)</span><span class="stat-label">watched</span></div>
+                <div class="stat"><span class="stat-value">@st.Movies.ToString("N0")</span><span class="stat-label">movies</span></div>
+                <div class="stat"><span class="stat-value">@st.Episodes.ToString("N0")</span><span class="stat-label">episodes of @st.Shows.ToString("N0") shows</span></div>
+                <div class="stat"><span class="stat-value">@st.Ratings.ToString("N0")</span><span class="stat-label">ratings</span></div>
+            </section>
+        }
+        @if (p.Recent.Count > 0)
+        {
+            <section class="row-section">
+                <div class="section-head"><h2>Recently watched</h2></div>
+                <div class="poster-scroller">
+                    @foreach (var h in p.Recent)
+                    {
+                        <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
+                                    Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
+                                    Sub="@((h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))"
+                                    ShowScore="false" @key="h.Id" />
+                    }
+                </div>
+            </section>
+        }
+        @if (p.Favourites.Count > 0)
+        {
+            <section class="row-section">
+                <div class="section-head"><h2>Top rated</h2></div>
+                <div class="poster-scroller">
+                    @foreach (var r in p.Favourites)
+                    {
+                        <PosterCard Media="@(new MediaSummary(r.Type, r.TmdbId, r.Title, null, r.PosterPath, null, null, null))" Badge="@($"★ {r.Rating}")" ShowScore="false" @key="(r.Type, r.TmdbId)" />
+                    }
+                </div>
+            </section>
+        }
+    }
+
+    @if (p.Lists.Count > 0)
+    {
+        <section class="row-section">
+            <div class="section-head"><h2>@(p.IsMe ? "Your lists" : "Lists")</h2></div>
+            <div class="list-grid">
+                @foreach (var l in p.Lists)
+                {
+                    <a class="list-card" href="@($"lists/{l.Id}")" @key="l.Id">
+                        <div class="list-posters">@foreach (var poster in l.Posters) { <img src="@Img.Poster(poster, "w154")" alt="" loading="lazy" /> }</div>
+                        <div class="list-meta">
+                            <b>@l.Name</b>
+                            <span class="muted small">@l.ItemCount item@(l.ItemCount == 1 ? "" : "s")@(l.IsPublic ? "" : " · private")</span>
+                        </div>
+                    </a>
+                }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    private ProfileDto? p;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (p is not null && !string.Equals(p.User.UserName, Name, StringComparison.OrdinalIgnoreCase)) p = null;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        try { p = await Api.ProfileAsync(Name); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no one with that username."; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Share()
+    {
+        if (p is null) return;
+        var result = await Platform.ShareLinkAsync($"{p.User.Name} on SeenIt", Platform.PublicUrl(Fmt.UserHref(p.User.UserName)));
+        if (result == "copied") Toasts.Show("Profile link copied");
+        else if (result == "failed") Toasts.Show("Couldn't share the link.", error: true);
+    }
+}
