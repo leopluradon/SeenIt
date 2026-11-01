@@ -37,8 +37,21 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
         {
             var paused = await db.ShowStates.Where(x => x.UserId == userId && x.Status == ShowTrackStatus.Paused)
                 .Join(db.Shows, x => x.ShowTmdbId, s => s.TmdbId, (x, s) => new { s, x.UpdatedAt }).ToListAsync(ct);
-            candidates.AddRange(paused.Select(p => new Candidate(MediaType.Show, p.s.TmdbId, CatalogService.ToSummary(p.s), p.s.EpisodeRuntime,
+            // Only paused shows with something left to watch.
+            var unfinished = (await new ProgressCalculator(db).ForUserAsync(userId, paused.Select(p => p.s.TmdbId).ToList(), ct))
+                .Where(p => p.NextEpisode is not null).Select(p => p.ShowTmdbId).ToHashSet();
+            candidates.AddRange(paused.Where(p => unfinished.Contains(p.s.TmdbId)).Select(p => new Candidate(MediaType.Show, p.s.TmdbId, CatalogService.ToSummary(p.s), p.s.EpisodeRuntime,
                 $"You paused this in {p.UpdatedAt:MMMM yyyy}")));
+        }
+
+        // TMDB often leaves a show's episode length empty; use the average of its cached episodes instead.
+        var noLength = candidates.Where(c => c.Type == MediaType.Show && c.Minutes is null).Select(c => c.TmdbId).ToList();
+        if (noLength.Count > 0)
+        {
+            var avg = await db.Episodes.Where(e => noLength.Contains(e.ShowTmdbId) && e.SeasonNumber > 0 && e.Runtime > 0)
+                .GroupBy(e => e.ShowTmdbId).Select(g => new { g.Key, Avg = g.Average(e => e.Runtime!.Value) })
+                .ToDictionaryAsync(x => x.Key, x => (int)Math.Round(x.Avg), ct);
+            candidates = candidates.Select(c => c.Minutes is null && avg.TryGetValue(c.TmdbId, out var m) && c.Type == MediaType.Show ? c with { Minutes = m } : c).ToList();
         }
 
         if (maxMinutes is { } max) candidates = candidates.Where(c => c.Minutes is { } m && m <= max).ToList();
