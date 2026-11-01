@@ -142,7 +142,10 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 else
                 {
                     var row = new UserListItem { ListId = list.Id, Type = item.Item.Type, TmdbId = id, AddedAt = item.AddedAt, Position = position++ };
-                    list.Items.Add(row);
+                    // Add through the DbSet: a client-set Guid key found only via the navigation
+                    // would be treated as an existing row and UPDATEd instead of inserted.
+                    db.ListItems.Add(row);
+                    if (!list.Items.Contains(row)) list.Items.Add(row);
                     job.Imported++;
                 }
             }

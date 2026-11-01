@@ -60,7 +60,17 @@ public class ImportWorker(IServiceScopeFactory scopes, ILogger<ImportWorker> log
                 : "The import stopped unexpectedly: " + ex.Message;
         }
 
-        job.FinishedAt = DateTimeOffset.UtcNow;
+        var (status, message, finished) = (job.Status, job.Message, DateTimeOffset.UtcNow);
+        if (status == ImportStatus.Failed)
+        {
+            // Whatever broke may still be pending in the change tracker; start clean so the
+            // failure itself can be recorded (otherwise the job would sit at "Running" forever).
+            db.ChangeTracker.Clear();
+            job = await db.ImportJobs.FirstAsync(j => j.Id == job.Id, CancellationToken.None);
+            job.Status = status;
+            job.Message = message;
+        }
+        job.FinishedAt = finished;
         job.Payload = null; // Don't keep people's exports around once processed.
         await db.SaveChangesAsync(CancellationToken.None);
         return true;
