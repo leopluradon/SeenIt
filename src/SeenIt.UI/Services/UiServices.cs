@@ -11,7 +11,7 @@ public static class UiServices
     {
         services.AddAuthorizationCore();
         services.AddCascadingAuthenticationState();
-        services.AddScoped(_ => handler is null ? new HttpClient { BaseAddress = apiBase } : new HttpClient(handler) { BaseAddress = apiBase });
+        services.AddScoped(_ => handler is null ? new HttpClient { BaseAddress = apiBase } : new HttpClient(handler, disposeHandler: false) { BaseAddress = apiBase });
         services.AddScoped<TokenManager>();
         services.AddScoped<ApiClient>();
         services.AddScoped<SessionState>();
