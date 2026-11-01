@@ -118,18 +118,78 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     // ---------- History ----------
 
-    public async Task<PagedResult<HistoryEntry>> GetHistoryAsync(Guid userId, MediaType? type, int page, int pageSize, CancellationToken ct)
+    public async Task<HistoryPage> GetHistoryAsync(Guid userId, HistoryQuery f, CancellationToken ct)
     {
-        pageSize = Math.Clamp(pageSize, 1, 100);
-        page = Math.Max(page, 1);
-        var q = db.WatchEvents.Where(w => w.UserId == userId);
-        if (type == MediaType.Movie) q = q.Where(w => w.Type == MediaType.Movie);
-        else if (type is MediaType.Show or MediaType.Episode) q = q.Where(w => w.Type == MediaType.Episode);
+        var pageSize = Math.Clamp(f.PageSize, 1, 100);
+        var page = Math.Max(f.Page, 1);
+        var q = FilterHistory(db.WatchEvents.Where(w => w.UserId == userId), f);
 
         var total = await q.CountAsync(ct);
-        var rows = await q.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt)
-            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-        return new(await ToHistoryAsync(rows, ct), page, (total + pageSize - 1) / pageSize, total);
+        var ordered = f.Oldest
+            ? q.OrderBy(w => w.WatchedAt).ThenBy(w => w.CreatedAt)
+            : q.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt);
+        var rows = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+
+        // Total running time of everything matched, not just this page.
+        var minutes = 0L;
+        if (total > 0)
+        {
+            var movieMinutes = await q.Where(w => w.Type == MediaType.Movie)
+                .Join(db.Movies, w => w.TmdbId, m => m.TmdbId, (w, m) => (long?)m.Runtime).SumAsync(ct) ?? 0;
+            var episodeMinutes = await q.Where(w => w.Type == MediaType.Episode)
+                .Join(db.Episodes, w => new { S = w.TmdbId, N = w.SeasonNumber ?? 0, E = w.EpisodeNumber ?? 0 },
+                    e => new { S = e.ShowTmdbId, N = e.SeasonNumber, E = e.EpisodeNumber }, (w, e) => (long?)e.Runtime).SumAsync(ct) ?? 0;
+            minutes = movieMinutes + episodeMinutes;
+        }
+        return new(await ToHistoryAsync(rows, ct), page, (total + pageSize - 1) / pageSize, total, minutes);
+    }
+
+    private IQueryable<WatchEvent> FilterHistory(IQueryable<WatchEvent> q, HistoryQuery f)
+    {
+        if (f.Type == MediaType.Movie) q = q.Where(w => w.Type == MediaType.Movie);
+        else if (f.Type is MediaType.Show or MediaType.Episode) q = q.Where(w => w.Type == MediaType.Episode);
+
+        if (f.Source is { } source) q = q.Where(w => w.Source == source);
+
+        // Any date bound leaves out plays whose date is unknown.
+        if (f.From is not null || f.To is not null) q = q.Where(w => w.WatchedAt != WatchDates.Unknown);
+        if (f.From is { } from) q = q.Where(w => w.WatchedAt >= from.ToUniversalTime());
+        if (f.To is { } to) q = q.Where(w => w.WatchedAt < to.ToUniversalTime());
+
+        if (!string.IsNullOrWhiteSpace(f.Genre))
+        {
+            var genre = f.Genre.Trim();
+            var movies = db.Movies.Where(m => m.Genres.Contains(genre)).Select(m => m.TmdbId);
+            var shows = db.Shows.Where(s => s.Genres.Contains(genre)).Select(s => s.TmdbId);
+            q = q.Where(w => w.Type == MediaType.Movie ? movies.Contains(w.TmdbId) : shows.Contains(w.TmdbId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(f.Q))
+        {
+            var term = f.Q.Trim().ToLower();
+            var movies = db.Movies.Where(m => m.Title.ToLower().Contains(term)).Select(m => m.TmdbId);
+            var shows = db.Shows.Where(s => s.Name.ToLower().Contains(term)).Select(s => s.TmdbId);
+            var episodes = db.Episodes.Where(e => e.Name != null && e.Name.ToLower().Contains(term));
+            q = q.Where(w => w.Type == MediaType.Movie
+                ? movies.Contains(w.TmdbId)
+                : shows.Contains(w.TmdbId) || episodes.Any(e => e.ShowTmdbId == w.TmdbId && e.SeasonNumber == w.SeasonNumber && e.EpisodeNumber == w.EpisodeNumber));
+        }
+        return q;
+    }
+
+    /// <summary>Genres across everything the user has watched, most-watched first, for the history filter.</summary>
+    public async Task<List<string>> GetHistoryGenresAsync(Guid userId, CancellationToken ct)
+    {
+        var watched = await db.WatchEvents.Where(w => w.UserId == userId)
+            .GroupBy(w => new { w.Type, w.TmdbId }).Select(g => new { g.Key.Type, g.Key.TmdbId, Plays = g.Count() }).ToListAsync(ct);
+        var (movies, shows) = await LoadMetaAsync(watched.Select(w => (w.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, w.TmdbId)), ct);
+        var counts = new Dictionary<string, int>();
+        foreach (var w in watched)
+        {
+            var genres = w.Type == MediaType.Movie ? movies.GetValueOrDefault(w.TmdbId)?.Genres : shows.GetValueOrDefault(w.TmdbId)?.Genres;
+            foreach (var g in genres ?? []) counts[g] = counts.GetValueOrDefault(g) + w.Plays;
+        }
+        return counts.OrderByDescending(c => c.Value).Select(c => c.Key).ToList();
     }
 
     public async Task<List<HistoryEntry>> ToHistoryAsync(List<WatchEvent> rows, CancellationToken ct)

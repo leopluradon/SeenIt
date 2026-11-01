@@ -376,6 +376,14 @@ label.check.disabled { opacity: .5; cursor: default; }
 .progress-item img { width: 64px; height: 96px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-2); }
 .progress-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 
+/* ---------- History filters ---------- */
+.filter-toggle { flex-shrink: 0; }
+.history-filters { display: none; grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr)); gap: 0 12px; align-items: end;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 14px 2px; margin: -4px 0 16px; }
+.history-filters.open { display: grid; }
+.history-filters select, .history-filters input { width: 100%; }
+.clear-filters { margin-bottom: 14px; justify-self: start; }
+
 /* ---------- Lists ---------- */
 .list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 16px; }
 .list-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }

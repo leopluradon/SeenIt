@@ -47,8 +47,19 @@ public class ApiClient(HttpClient http, TokenManager tokens)
     public Task BulkWatchAsync(BulkWatchRequest r) => SendAsync(HttpMethod.Post, "api/watch/bulk", r);
     public Task UnwatchAsync(MediaType type, int tmdbId, int? season = null, int? episode = null) =>
         SendAsync(HttpMethod.Delete, $"api/watch?type={type}&tmdbId={tmdbId}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"));
-    public Task<PagedResult<HistoryEntry>> HistoryAsync(MediaType? type, int page) =>
-        GetAsync<PagedResult<HistoryEntry>>($"api/history?page={page}" + (type is null ? "" : $"&type={type}"));
+    public Task<HistoryPage> HistoryAsync(HistoryQuery f)
+    {
+        var qs = new List<string> { $"page={f.Page}", $"pageSize={f.PageSize}" };
+        if (f.Type is { } t) qs.Add($"type={t}");
+        if (!string.IsNullOrWhiteSpace(f.Q)) qs.Add($"q={Uri.EscapeDataString(f.Q)}");
+        if (f.Source is { } s) qs.Add($"source={s}");
+        if (!string.IsNullOrWhiteSpace(f.Genre)) qs.Add($"genre={Uri.EscapeDataString(f.Genre)}");
+        if (f.From is { } from) qs.Add($"from={Uri.EscapeDataString(from.ToString("O"))}");
+        if (f.To is { } to) qs.Add($"to={Uri.EscapeDataString(to.ToString("O"))}");
+        if (f.Oldest) qs.Add("sort=oldest");
+        return GetAsync<HistoryPage>("api/history?" + string.Join('&', qs));
+    }
+    public Task<List<string>> HistoryGenresAsync() => GetAsync<List<string>>("api/history/genres");
     public Task DeleteHistoryAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/history/{id}");
 
     public Task<List<WatchlistEntry>> WatchlistAsync() => GetAsync<List<WatchlistEntry>>("api/watchlist");

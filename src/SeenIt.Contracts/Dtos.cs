@@ -216,6 +216,20 @@ public record HistoryEntry(
     DateTimeOffset WatchedAt,
     WatchSource Source);
 
+/// <summary>History filters. From is inclusive, To exclusive; both are absolute instants computed by the client in its own time zone.</summary>
+public record HistoryQuery(
+    MediaType? Type = null,
+    string? Q = null,
+    WatchSource? Source = null,
+    string? Genre = null,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null,
+    bool Oldest = false,
+    int Page = 1,
+    int PageSize = 50);
+
+public record HistoryPage(IReadOnlyList<HistoryEntry> Items, int Page, int TotalPages, int TotalResults, long TotalMinutes);
+
 public record WatchlistEntry(MediaSummary Media, DateTimeOffset AddedAt, DateOnly? ReleaseDate);
 public record WatchlistRequest(MediaType Type, int TmdbId);
 

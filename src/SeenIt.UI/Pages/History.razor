@@ -8,19 +8,93 @@
 <div class="page-head">
     <h1>History</h1>
     <div class="segmented">
-        <button class="@(Type is null ? "on" : "")" @onclick='() => Go(null, 1)'>All</button>
-        <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick='() => Go(MediaType.Movie, 1)'>Movies</button>
-        <button class="@(Type == MediaType.Episode ? "on" : "")" @onclick='() => Go(MediaType.Episode, 1)'>Episodes</button>
+        <button class="@(Type is null ? "on" : "")" @onclick='() => Go(type: "")'>All</button>
+        <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick='() => Go(type: "Movie")'>Movies</button>
+        <button class="@(Type == MediaType.Episode ? "on" : "")" @onclick='() => Go(type: "Episode")'>Episodes</button>
     </div>
 </div>
+
+<form class="searchbar" @onsubmit="Submit" role="search">
+    <Icon Name="search" Size="18" />
+    <input type="search" @bind="search" @bind:event="oninput" @bind:after="Debounce" placeholder="Search your history: movies, shows, episode titles" aria-label="Search history" />
+    <button type="button" class="btn btn-sm filter-toggle @(ActiveFilters > 0 ? "btn-on" : "")" @onclick="() => filtersOpen = !filtersOpen" aria-expanded="@filtersOpen">
+        Filters@(ActiveFilters > 0 ? $" · {ActiveFilters}" : "")
+    </button>
+</form>
+
+<div class="history-filters @(filtersOpen ? "open" : "")">
+    <div class="field">
+        <label for="hf-when">When</label>
+        <select id="hf-when" value="@(Period ?? "")" @onchange='e => Go(period: e.Value?.ToString() ?? "")'>
+            <option value="">Any time</option>
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="month">This month</option>
+            <option value="lastmonth">Last month</option>
+            <option value="year">This year</option>
+            <option value="lastyear">Last year</option>
+            <option value="custom">Custom dates…</option>
+        </select>
+    </div>
+    @if (Period == "custom")
+    {
+        <div class="field">
+            <label for="hf-from">From</label>
+            <input id="hf-from" type="date" value="@FromParam" @onchange='e => Go(from: e.Value?.ToString() ?? "")' />
+        </div>
+        <div class="field">
+            <label for="hf-to">To</label>
+            <input id="hf-to" type="date" value="@ToParam" @onchange='e => Go(to: e.Value?.ToString() ?? "")' />
+        </div>
+    }
+    <div class="field">
+        <label for="hf-genre">Genre</label>
+        <select id="hf-genre" value="@(Genre ?? "")" @onchange='e => Go(genre: e.Value?.ToString() ?? "")'>
+            <option value="">All genres</option>
+            @foreach (var g in genres) { <option value="@g">@g</option> }
+        </select>
+    </div>
+    <div class="field">
+        <label for="hf-source">Tracked by</label>
+        <select id="hf-source" value="@(SourceParam ?? "")" @onchange='e => Go(source: e.Value?.ToString() ?? "")'>
+            <option value="">Anything</option>
+            <option value="Manual">Marked in SeenIt</option>
+            <option value="Jellyfin">Jellyfin</option>
+            <option value="TraktImport">Trakt import</option>
+            <option value="LetterboxdImport">Letterboxd import</option>
+        </select>
+    </div>
+    <div class="field">
+        <label for="hf-sort">Order</label>
+        <select id="hf-sort" value="@(Sort ?? "")" @onchange='e => Go(sort: e.Value?.ToString() ?? "")'>
+            <option value="">Newest first</option>
+            <option value="oldest">Oldest first</option>
+        </select>
+    </div>
+    @if (ActiveFilters > 0 || !string.IsNullOrEmpty(Q))
+    {
+        <button class="btn btn-sm btn-ghost clear-filters" @onclick="Clear"><Icon Name="x" Size="14" /> Clear all</button>
+    }
+</div>
+
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (data is null && error is null) { <Spinner /> }
 else if (data is not null)
 {
-    @if (data.Items.Count == 0) { <Empty Title="Nothing watched yet.">Mark something watched, connect Jellyfin, or import from Trakt or Letterboxd in <a href="settings">Settings</a>.</Empty> }
+    @if (data.Items.Count == 0)
+    {
+        @if (ActiveFilters > 0 || !string.IsNullOrEmpty(Q) || Type is not null)
+        {
+            <Empty Title="No plays match these filters."><button class="btn btn-sm" @onclick="Clear">Clear filters</button></Empty>
+        }
+        else
+        {
+            <Empty Title="Nothing watched yet.">Mark something watched, connect Jellyfin, or import from Trakt or Letterboxd in <a href="settings">Settings</a>.</Empty>
+        }
+    }
     else
     {
-        <p class="muted small">@data.TotalResults.ToString("N0") plays</p>
+        <p class="muted small">@data.TotalResults.ToString("N0") play@(data.TotalResults == 1 ? "" : "s")@(data.TotalMinutes > 0 ? $" · {Fmt.Duration(data.TotalMinutes)}" : "")@(Summary is { } sm ? $" · {sm}" : "")</p>
         <div class="history">
             @foreach (var day in data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
             {
@@ -44,28 +118,116 @@ else if (data is not null)
                 }
             }
         </div>
-        <Pager Page="data.Page" TotalPages="data.TotalPages" OnPage="p => Go(Type, p)" />
+        <Pager Page="data.Page" TotalPages="data.TotalPages" OnPage="p => Go(page: p)" />
     }
 }
 
 @code {
     [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+    [SupplyParameterFromQuery(Name = "source")] public string? SourceParam { get; set; }
+    [SupplyParameterFromQuery(Name = "genre")] public string? Genre { get; set; }
+    [SupplyParameterFromQuery(Name = "period")] public string? Period { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? FromParam { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public string? ToParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
     [SupplyParameterFromQuery(Name = "page")] public int? PageParam { get; set; }
-    private MediaType? Type => Enum.TryParse<MediaType>(TypeParam, out var t) ? t : null;
-    private PagedResult<HistoryEntry>? data;
-    private string? error;
 
-    protected override Task OnParametersSetAsync() => Load();
+    private MediaType? Type => Enum.TryParse<MediaType>(TypeParam, out var t) ? t : null;
+    private WatchSource? Source => Enum.TryParse<WatchSource>(SourceParam, out var s) ? s : null;
+    private int ActiveFilters => new[] { Period, Genre, SourceParam, Sort }.Count(v => !string.IsNullOrEmpty(v));
+
+    private HistoryPage? data;
+    private List<string> genres = [];
+    private string? error;
+    private string search = "";
+    private bool filtersOpen;
+    private CancellationTokenSource? debounce;
+
+    protected override async Task OnInitializedAsync()
+    {
+        filtersOpen = ActiveFilters > 0;
+        try { genres = await Api.HistoryGenresAsync(); } catch { /* the filter just stays empty */ }
+    }
+
+    protected override Task OnParametersSetAsync()
+    {
+        search = Q ?? "";
+        return Load();
+    }
 
     private async Task Load()
     {
         error = null;
-        try { data = await Api.HistoryAsync(Type, PageParam ?? 1); }
+        var (from, to) = Range();
+        try { data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", PageParam ?? 1)); }
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private void Go(MediaType? type, int page) =>
-        Nav.NavigateTo($"history?page={page}" + (type is null ? "" : $"&type={type}"));
+    /// <summary>Turns the "when" choice into local-time bounds (from inclusive, to exclusive).</summary>
+    private (DateTimeOffset? From, DateTimeOffset? To) Range()
+    {
+        var today = DateTime.Today;
+        DateTimeOffset At(DateTime d) => new(d, TimeZoneInfo.Local.GetUtcOffset(d));
+        var month = new DateTime(today.Year, today.Month, 1);
+        return Period switch
+        {
+            "today" => (At(today), At(today.AddDays(1))),
+            "week" => (At(today.AddDays(-6)), At(today.AddDays(1))),
+            "month" => (At(month), At(month.AddMonths(1))),
+            "lastmonth" => (At(month.AddMonths(-1)), At(month)),
+            "year" => (At(new DateTime(today.Year, 1, 1)), At(new DateTime(today.Year + 1, 1, 1))),
+            "lastyear" => (At(new DateTime(today.Year - 1, 1, 1)), At(new DateTime(today.Year, 1, 1))),
+            "custom" => (DateTime.TryParse(FromParam, out var f) ? At(f.Date) : null,
+                         DateTime.TryParse(ToParam, out var t) ? At(t.Date.AddDays(1)) : null),
+            _ => (null, null),
+        };
+    }
+
+    private string? Summary => Period switch
+    {
+        "custom" when FromParam is not null || ToParam is not null => $"{FromParam ?? "start"} to {ToParam ?? "now"}",
+        _ => null,
+    };
+
+    /// <summary>Updates one or more filters in the URL; any change goes back to page 1.</summary>
+    private void Go(string? type = null, string? q = null, string? source = null, string? genre = null,
+        string? period = null, string? from = null, string? to = null, string? sort = null, int? page = null)
+    {
+        var p = new Dictionary<string, object?>
+        {
+            ["type"] = Blank(type ?? TypeParam),
+            ["q"] = Blank(q ?? Q),
+            ["source"] = Blank(source ?? SourceParam),
+            ["genre"] = Blank(genre ?? Genre),
+            ["period"] = Blank(period ?? Period),
+            ["from"] = Blank(from ?? FromParam),
+            ["to"] = Blank(to ?? ToParam),
+            ["sort"] = Blank(sort ?? Sort),
+            ["page"] = page is > 1 ? page : null,
+        };
+        if (p["period"] as string != "custom") { p["from"] = null; p["to"] = null; }
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(Nav.ToAbsoluteUri("history").ToString(), p));
+    }
+
+    private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    private void Submit() => Go(q: search.Trim() is { Length: > 0 } t ? t : "");
+
+    private async Task Debounce()
+    {
+        debounce?.Cancel();
+        debounce = new CancellationTokenSource();
+        try { await Task.Delay(400, debounce.Token); }
+        catch (TaskCanceledException) { return; }
+        if ((search.Trim()) != (Q ?? "")) Submit();
+    }
+
+    private void Clear()
+    {
+        search = "";
+        Nav.NavigateTo(Type is null ? "history" : $"history?type={Type}");
+    }
 
     private async Task Delete(HistoryEntry h)
     {
