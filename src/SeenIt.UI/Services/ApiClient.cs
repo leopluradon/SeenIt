@@ -39,6 +39,7 @@ public class ApiClient(HttpClient http, TokenManager tokens)
     public Task<MovieDetail> MovieAsync(int id) => GetAsync<MovieDetail>($"api/catalog/movie/{id}");
     public Task<ShowDetail> ShowAsync(int id) => GetAsync<ShowDetail>($"api/catalog/show/{id}");
     public Task<SeasonDetail> SeasonAsync(int id, int season) => GetAsync<SeasonDetail>($"api/catalog/show/{id}/season/{season}");
+    public Task<PersonDetail> PersonAsync(int id) => GetAsync<PersonDetail>($"api/catalog/person/{id}");
     public Task<EpisodeDetail> EpisodeAsync(int id, int season, int episode) => GetAsync<EpisodeDetail>($"api/catalog/show/{id}/season/{season}/episode/{episode}");
 
     // ---------- Tracking ----------

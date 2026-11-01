@@ -258,7 +258,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             m.Id, m.Title, NullIfEmpty(m.Tagline), m.Overview, TmdbDates.Parse(m.ReleaseDate), m.Runtime,
             m.Genres?.Select(g => g.Name).ToList() ?? [],
             m.PosterPath, m.BackdropPath, m.VoteAverage, m.VoteCount, m.ImdbId, m.Status,
-            (m.Credits?.Cast ?? []).OrderBy(c => c.Order).Take(20).Select(c => new CastMember(c.Id, c.Name, c.AnyCharacter, c.ProfilePath)).ToList(),
+            Cast(m.Credits?.Cast),
             (m.Credits?.Crew ?? []).Where(c => c.Job is "Director" or "Screenplay" or "Writer" or "Original Music Composer" or "Director of Photography")
                 .Take(12).Select(c => new CrewMember(c.Id, c.Name, c.Job, c.ProfilePath)).ToList(),
             PickVideos(m.Videos),
@@ -274,6 +274,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         // The page shows per-season progress, which needs the episode list cached.
         await EnsureShowAsync(id, ct);
 
+        var totals = await ShowTotalsAsync(id, userId, ct);
         UserMediaState? user = null;
         ShowProgressDto? progress = null;
         Dictionary<int, int> watchedPerSeason = [];
@@ -299,20 +300,51 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             (s.Seasons ?? []).OrderBy(x => x.SeasonNumber == 0 ? int.MaxValue : x.SeasonNumber)
                 .Select(x => new SeasonSummary(x.SeasonNumber, x.Name ?? $"Season {x.SeasonNumber}", x.EpisodeCount, TmdbDates.Parse(x.AirDate), x.PosterPath,
                     watchedPerSeason.GetValueOrDefault(x.SeasonNumber))).ToList(),
-            (s.AggregateCredits?.Cast ?? s.Credits?.Cast ?? []).OrderBy(c => c.Order).Take(20)
-                .Select(c => new CastMember(c.Id, c.Name, c.AnyCharacter, c.ProfilePath)).ToList(),
+            Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast),
             PickVideos(s.Videos),
             (s.Recommendations?.Results ?? []).Take(18).Select(x => ToSummary(x, MediaType.Show)).ToList(),
             s.NextEpisodeToAir is { } n ? new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, TmdbDates.Parse(n.AirDate)) : null,
             user,
-            progress);
+            progress,
+            totals.Total, totals.Aired, totals.Watched, totals.Remaining);
     }
+
+    /// <summary>Running time of the whole show from the cached episode list (regular seasons only).</summary>
+    private async Task<(long Total, int Aired, long Watched, long Remaining)> ShowTotalsAsync(int showId, Guid? userId, CancellationToken ct)
+    {
+        var meta = await db.Shows.AsNoTracking().FirstOrDefaultAsync(x => x.TmdbId == showId, ct);
+        var typical = meta?.EpisodeRuntime ?? 0;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var eps = await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == showId && e.SeasonNumber > 0)
+            .Select(e => new { e.SeasonNumber, e.EpisodeNumber, e.Runtime, e.AirDate }).ToListAsync(ct);
+        var watched = userId is { } uid
+            ? (await db.WatchEvents.Where(w => w.UserId == uid && w.Type == MediaType.Episode && w.TmdbId == showId)
+                .Select(w => new { w.SeasonNumber, w.EpisodeNumber }).ToListAsync(ct)).Select(w => (w.SeasonNumber ?? -1, w.EpisodeNumber ?? -1)).ToHashSet()
+            : [];
+        long Len(int? r) => r is > 0 ? r.Value : typical;
+        var aired = eps.Where(e => e.AirDate is { } d && d <= today).ToList();
+        return (eps.Sum(e => Len(e.Runtime)), aired.Count,
+            eps.Where(e => watched.Contains((e.SeasonNumber, e.EpisodeNumber))).Sum(e => Len(e.Runtime)),
+            aired.Where(e => !watched.Contains((e.SeasonNumber, e.EpisodeNumber))).Sum(e => Len(e.Runtime)));
+    }
+
+    /// <summary>The whole cast, in billing order, with episode counts where TMDB gives them.</summary>
+    private static List<CastMember> Cast(IEnumerable<TmdbCast>? cast) =>
+        (cast ?? []).OrderBy(c => c.Order).DistinctBy(c => c.Id)
+            .Select(c => new CastMember(c.Id, c.Name, c.AnyCharacter, c.ProfilePath,
+                c.TotalEpisodeCount ?? (c.Roles is { Count: > 0 } r ? r.Sum(x => x.EpisodeCount) : null)))
+            .ToList();
 
     public async Task<SeasonDetail?> GetSeasonAsync(int showId, int seasonNumber, Guid? userId, CancellationToken ct)
     {
         var show = await EnsureShowAsync(showId, ct);
-        var season = await tmdb.GetSeasonAsync(showId, seasonNumber, ct);
+        var seasonTask = tmdb.GetSeasonAsync(showId, seasonNumber, ct);
+        var creditsTask = tmdb.GetSeasonCreditsAsync(showId, seasonNumber, ct);
+        var season = await seasonTask;
         if (show is null || season is null) return null;
+        TmdbCredits? seasonCredits = null;
+        try { seasonCredits = await creditsTask; }
+        catch (HttpRequestException ex) { log.LogInformation(ex, "No season credits for {Show} S{Season}", showId, seasonNumber); }
 
         Dictionary<int, int> plays = [];
         Dictionary<int, int> ratings = [];
@@ -331,7 +363,8 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         return new SeasonDetail(showId, show.Name, seasonNumber, season.Name ?? $"Season {seasonNumber}", NullIfEmpty(season.Overview), season.PosterPath,
             (season.Episodes ?? []).Select(e => new EpisodeDto(e.Id, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Overview,
                 TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage,
-                plays.GetValueOrDefault(e.EpisodeNumber), ratings.TryGetValue(e.EpisodeNumber, out var r) ? r : null)).ToList());
+                plays.GetValueOrDefault(e.EpisodeNumber), ratings.TryGetValue(e.EpisodeNumber, out var r) ? r : null)).ToList(),
+            Cast(seasonCredits?.Cast));
     }
 
     public async Task<EpisodeDetail?> GetEpisodeAsync(int showId, int seasonNumber, int episodeNumber, Guid? userId, CancellationToken ct)
@@ -386,14 +419,15 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         return new EpisodeDetail(
             showId, show.Name, show.PosterPath, show.BackdropPath, e.SeasonNumber, e.EpisodeNumber, e.Id,
             e.Name, NullIfEmpty(e.Overview), TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage, e.VoteCount,
-            (e.GuestStars ?? []).OrderBy(c => c.Order).Take(20).Select(c => new CastMember(c.Id, c.Name, c.AnyCharacter, c.ProfilePath)).ToList(),
+            Cast(e.GuestStars),
             (e.Crew ?? []).Where(c => c.Job is "Director" or "Writer" or "Teleplay" or "Story" or "Screenplay")
                 .DistinctBy(c => (c.Id, c.Job)).Select(c => new CrewMember(c.Id, c.Name, c.Job, c.ProfilePath)).ToList(),
             index < 0 ? null : Ref(index - 1),
             index < 0 ? null : Ref(index + 1),
             rating,
             plays,
-            seasons);
+            seasons,
+            Cast(e.Credits?.Cast).Where(c => e.GuestStars?.All(g => g.Id != c.Id) != false).ToList());
     }
 
     private async Task<UserMediaState> GetUserStateAsync(Guid userId, MediaType type, int id, CancellationToken ct)

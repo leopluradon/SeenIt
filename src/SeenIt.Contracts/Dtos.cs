@@ -71,7 +71,7 @@ public record MediaSummary(
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int TotalPages, int TotalResults);
 
-public record CastMember(int Id, string Name, string? Character, string? ProfilePath);
+public record CastMember(int Id, string Name, string? Character, string? ProfilePath, int? EpisodeCount = null);
 public record CrewMember(int Id, string Name, string Job, string? ProfilePath);
 public record Video(string Key, string Name, string Site, string Type);
 
@@ -128,7 +128,11 @@ public record ShowDetail(
     IReadOnlyList<MediaSummary> Recommendations,
     EpisodeRef? NextEpisodeToAir,
     UserMediaState? User,
-    ShowProgressDto? Progress);
+    ShowProgressDto? Progress,
+    long TotalRuntime = 0,        // minutes, every cached regular-season episode
+    int AiredEpisodes = 0,
+    long WatchedMinutes = 0,
+    long RemainingMinutes = 0);   // aired episodes you haven't watched
 
 public record EpisodeRef(int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate, bool Watched = false);
 
@@ -152,7 +156,8 @@ public record SeasonDetail(
     string Name,
     string? Overview,
     string? PosterPath,
-    IReadOnlyList<EpisodeDto> Episodes);
+    IReadOnlyList<EpisodeDto> Episodes,
+    IReadOnlyList<CastMember>? Cast = null);
 
 // ---------- Tracking ----------
 
@@ -203,7 +208,52 @@ public record EpisodeDetail(
     EpisodeRef? Next,
     int? Rating,
     IReadOnlyList<PlayDto>? Plays,    // null when signed out
-    IReadOnlyList<SeasonSummary>? Seasons = null);
+    IReadOnlyList<SeasonSummary>? Seasons = null,
+    IReadOnlyList<CastMember>? Cast = null);   // regulars in this episode; guests are in GuestStars
+
+// ---------- People ----------
+
+public record PersonCreditDto(
+    MediaType Type,
+    int TmdbId,
+    string Title,
+    DateOnly? Date,
+    string? Role,              // character, or job for crew
+    int? EpisodeCount,
+    string? PosterPath,
+    int VoteCount,
+    bool Watched,
+    bool Appearance = false);   // talk shows, news, "Self" roles: listed separately
+
+/// <summary>A title the viewer has watched this person in.</summary>
+public record WatchedWith(
+    MediaType Type,
+    int TmdbId,
+    string Title,
+    string? PosterPath,
+    string? Character,
+    int Plays,                  // movie plays, or episode plays
+    long Minutes,
+    bool GuestRole,             // true: Episodes lists exactly the episodes they're in
+    IReadOnlyList<EpisodeRef> Episodes);
+
+public record PersonDetail(
+    int Id,
+    string Name,
+    string? Biography,
+    DateOnly? Birthday,
+    DateOnly? Deathday,
+    string? PlaceOfBirth,
+    string? ProfilePath,
+    string? KnownFor,
+    string? ImdbId,
+    IReadOnlyList<PersonCreditDto> Cast,
+    IReadOnlyList<PersonCreditDto> Crew,
+    IReadOnlyList<WatchedWith>? Watched,   // null when signed out
+    int WatchedMovies,
+    int WatchedEpisodes,
+    int WatchedShows,
+    long WatchedMinutes);
 
 public record HistoryEntry(
     Guid Id,

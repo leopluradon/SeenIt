@@ -42,6 +42,9 @@ public static class ApiEndpoints
         g.MapGet("/show/{id:int}/season/{season:int}", async (int id, int season, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
             await c.GetSeasonAsync(id, season, p.OptionalUserId(), ct) is { } s ? Results.Ok(s) : Results.NotFound());
 
+        g.MapGet("/person/{id:int}", async (int id, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
+            await people.GetAsync(id, p.OptionalUserId(), ct) is { } person ? Results.Ok(person) : Results.NotFound());
+
         g.MapGet("/show/{id:int}/season/{season:int}/episode/{episode:int}", async (int id, int season, int episode, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
             await c.GetEpisodeAsync(id, season, episode, p.OptionalUserId(), ct) is { } e ? Results.Ok(e) : Results.NotFound());
     }

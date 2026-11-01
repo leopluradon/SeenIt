@@ -3,12 +3,12 @@
     <div class="cast-scroller">
         @foreach (var p in People)
         {
-            <div class="cast" @key="p.Id">
+            <a class="cast" href="@($"person/{p.Id}")" @key="p.Id">
                 @if (Img.Profile(p.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
                 else { <div class="cast-fallback">@p.Name[..1]</div> }
                 <div class="cast-name">@p.Name</div>
                 <div class="cast-role muted small">@p.Titles title@(p.Titles == 1 ? "" : "s") · @p.Plays play@(p.Plays == 1 ? "" : "s")</div>
-            </div>
+            </a>
         }
     </div>
 </section>

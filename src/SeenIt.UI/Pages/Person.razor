@@ -1,0 +1,175 @@
+@page "/person/{Id:int}"
+@inject ApiClient Api
+<PageTitle>@(p?.Name ?? "Person") · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (p is null && error is null) { <Spinner /> }
+else if (p is not null)
+{
+    <div class="person-head">
+        <div class="person-photo">
+            @if (Img.Poster(p.ProfilePath, "w342") is { } src) { <img src="@src" alt="" /> }
+            else { <div class="cast-fallback">@p.Name[..1]</div> }
+        </div>
+        <div class="person-info">
+            <h1>@p.Name</h1>
+            <DetailStats Items="@([
+                ("Known for", p.KnownFor),
+                ("Born", p.Birthday is { } b ? $"{b:d MMMM yyyy}" + (p.Deathday is null ? $" (age {Age(b, DateOnly.FromDateTime(DateTime.Today))})" : "") : null),
+                ("Died", p.Deathday is { } d ? $"{d:d MMMM yyyy}" + (p.Birthday is { } b2 ? $" (aged {Age(b2, d)})" : "") : null),
+                ("From", p.PlaceOfBirth),
+                ("Credits", $"{p.Cast.Count(c => !c.Appearance)} acting" + (p.Crew.Count > 0 ? $" · {p.Crew.Count} crew" : "")),
+            ])" />
+            @if (p.Biography is { } bio)
+            {
+                <div class="bio @(bioOpen ? "open" : "")">
+                    @foreach (var para in bio.Split('\n', StringSplitOptions.RemoveEmptyEntries)) { <p>@para</p> }
+                </div>
+                @if (bio.Length > 420) { <button class="btn btn-sm btn-ghost" @onclick="() => bioOpen = !bioOpen">@(bioOpen ? "Show less" : "Read more")</button> }
+            }
+            <div class="links">
+                @if (p.ImdbId is not null) { <a href="@($"https://www.imdb.com/name/{p.ImdbId}")" target="_blank" rel="noopener">IMDb</a> }
+                <a href="@($"https://www.themoviedb.org/person/{p.Id}")" target="_blank" rel="noopener">TMDB</a>
+            </div>
+        </div>
+    </div>
+
+    @if (p.Watched is { } watched)
+    {
+        <section class="row-section">
+            <div class="section-head"><h2>You've watched them in</h2></div>
+            @if (watched.Count == 0)
+            {
+                <p class="muted">Nothing yet.</p>
+            }
+            else
+            {
+                <p class="muted small">
+                    @Plural(p.WatchedMovies, "movie")@(p.WatchedEpisodes > 0 ? $"{(p.WatchedMovies > 0 ? " and " : "")}{Plural(p.WatchedEpisodes, "episode")} across {Plural(p.WatchedShows, "show")}" : "")
+                    · @Fmt.Duration(p.WatchedMinutes) together
+                </p>
+                <div class="watched-with">
+                    @foreach (var w in watched)
+                    {
+                        <div class="ww-item" @key="(w.Type, w.TmdbId)">
+                            <a href="@Fmt.Href(w.Type, w.TmdbId)"><img src="@Img.Poster(w.PosterPath, "w154")" alt="" loading="lazy" /></a>
+                            <div class="ww-body">
+                                <a href="@Fmt.Href(w.Type, w.TmdbId)" class="mini-title">@w.Title</a>
+                                @if (w.Character is not null) { <div class="small">as @w.Character</div> }
+                                <div class="muted small">
+                                    @(w.Type == MediaType.Movie
+                                        ? (w.Plays > 1 ? $"Watched {w.Plays}× · " : "Watched · ") + Fmt.Duration(w.Minutes)
+                                        : (w.GuestRole ? $"{Plural(w.Episodes.Count, "episode")} you watched" : $"{Plural(w.Plays, "episode")} watched") + " · " + Fmt.Duration(w.Minutes))
+                                </div>
+                                @if (w.GuestRole && w.Episodes.Count > 0)
+                                {
+                                    <div class="ww-episodes">
+                                        @foreach (var ep in w.Episodes)
+                                        {
+                                            <a class="chip" href="@Fmt.EpisodeHref(w.TmdbId, ep.SeasonNumber, ep.EpisodeNumber)" title="@ep.Name">@Fmt.Ep(ep.SeasonNumber, ep.EpisodeNumber)</a>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
+
+    @if (KnownFor.Count > 0)
+    {
+        <section class="row-section">
+            <div class="section-head"><h2>Known for</h2></div>
+            <div class="poster-scroller">
+                @foreach (var c in KnownFor)
+                {
+                    <PosterCard Media="@(new MediaSummary(c.Type, c.TmdbId, c.Title, c.Date?.Year, c.PosterPath, null, null, null))"
+                                Badge="@(c.Watched ? "✓ Seen" : null)" ShowScore="false" Sub="@c.Role" @key="(c.Type, c.TmdbId)" />
+                }
+            </div>
+        </section>
+    }
+
+    <section class="row-section">
+        <div class="section-head">
+            <h2>Filmography</h2>
+            <div class="segmented">
+                <button class="@(tab == "all" ? "on" : "")" @onclick='() => tab = "all"'>All</button>
+                <button class="@(tab == "movies" ? "on" : "")" @onclick='() => tab = "movies"'>Movies</button>
+                <button class="@(tab == "tv" ? "on" : "")" @onclick='() => tab = "tv"'>TV</button>
+                @if (p.Crew.Count > 0) { <button class="@(tab == "crew" ? "on" : "")" @onclick='() => tab = "crew"'>Crew</button> }
+            </div>
+        </div>
+        <label class="check small seen-only"><input type="checkbox" @bind="seenOnly" /> Only show what I've watched</label>
+        @{
+            var rows = (tab == "crew" ? p.Crew : p.Cast.Where(c => !c.Appearance))
+                .Where(c => tab switch { "movies" => c.Type == MediaType.Movie, "tv" => c.Type == MediaType.Show, _ => true })
+                .Where(c => !seenOnly || c.Watched).ToList();
+        }
+        @if (rows.Count == 0) { <p class="muted">Nothing here.</p> }
+        <ol class="filmography">
+            @foreach (var c in rows)
+            {
+                <li @key="(c.Type, c.TmdbId)">
+                    <a class="film-row @(c.Watched ? "watched" : "")" href="@Fmt.Href(c.Type, c.TmdbId)">
+                        <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
+                        <span class="film-main">
+                            <b>@c.Title</b>
+                            <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")@(c.Role is { Length: > 0 } r ? " · " + r : "")@(c.EpisodeCount is > 0 ? $" · {Plural(c.EpisodeCount.Value, "episode")}" : "")</span>
+                        </span>
+                        @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
+                    </a>
+                </li>
+            }
+        </ol>
+        @{ var appearances = p.Cast.Where(c => c.Appearance && (!seenOnly || c.Watched)).ToList(); }
+        @if (tab != "crew" && tab != "movies" && appearances.Count > 0)
+        {
+            <details class="appearances">
+                <summary>@Plural(appearances.Count, "talk show or TV appearance") as themself</summary>
+                <ol class="filmography">
+                    @foreach (var c in appearances)
+                    {
+                        <li @key="(c.Type, c.TmdbId)">
+                            <a class="film-row" href="@Fmt.Href(c.Type, c.TmdbId)">
+                                <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
+                                <span class="film-main"><b>@c.Title</b><span class="muted small">@c.Role@(c.EpisodeCount is > 0 ? $" · {Plural(c.EpisodeCount.Value, "episode")}" : "")</span></span>
+                            </a>
+                        </li>
+                    }
+                </ol>
+            </details>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private PersonDetail? p;
+    private string? error;
+    private bool bioOpen, seenOnly;
+    private string tab = "all";
+
+    /// <summary>Their most popular work on TMDB (not talk-show appearances).</summary>
+    private List<PersonCreditDto> KnownFor => p?.Cast.Where(c => !c.Appearance && c.PosterPath is not null)
+        .Concat(p.Crew.Where(c => c.PosterPath is not null))
+        .DistinctBy(c => (c.Type, c.TmdbId)).OrderByDescending(c => c.VoteCount).Take(12).ToList() ?? [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; }
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        try { p = await Api.PersonAsync(Id); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static int Age(DateOnly born, DateOnly at) => at.Year - born.Year - (at < born.AddYears(at.Year - born.Year) ? 1 : 0);
+    private static string Plural(int n, string word) => $"{n:N0} {word}{(n == 1 ? "" : "s")}";
+}

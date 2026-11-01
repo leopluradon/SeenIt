@@ -1,0 +1,10 @@
+@* A row of labelled facts, e.g. Runtime 2h 16m · Episodes 19. Empty values are skipped. *@
+<dl class="detail-stats">
+    @foreach (var (label, value) in Items.Where(i => !string.IsNullOrEmpty(i.Value)))
+    {
+        <div><dt>@label</dt><dd>@value</dd></div>
+    }
+</dl>
+@code {
+    [Parameter] public IReadOnlyList<(string Label, string? Value)> Items { get; set; } = [];
+}

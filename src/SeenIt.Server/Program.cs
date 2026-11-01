@@ -69,6 +69,7 @@ builder.Services.AddScoped<CatalogService>();
 builder.Services.AddScoped<TrackingService>();
 builder.Services.AddScoped<ListService>();
 builder.Services.AddScoped<ReviewService>();
+builder.Services.AddScoped<PersonService>();
 builder.Services.AddScoped<JellyfinService>();
 builder.Services.AddScoped<ImportRunner>();
 builder.Services.AddHostedService<ImportWorker>();

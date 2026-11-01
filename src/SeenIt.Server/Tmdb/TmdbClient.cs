@@ -58,7 +58,17 @@ public class TmdbClient
         GetAsync<TmdbSeason>($"tv/{showId}/season/{season}", TimeSpan.FromMinutes(30), ct);
 
     public Task<TmdbEpisodeDetail?> GetEpisodeAsync(int showId, int season, int episode, CancellationToken ct = default) =>
-        GetAsync<TmdbEpisodeDetail>($"tv/{showId}/season/{season}/episode/{episode}", TimeSpan.FromMinutes(30), ct);
+        GetAsync<TmdbEpisodeDetail>($"tv/{showId}/season/{season}/episode/{episode}?append_to_response=credits", TimeSpan.FromMinutes(30), ct);
+
+    /// <summary>Everyone who appeared in a season, with how many episodes each.</summary>
+    public Task<TmdbCredits?> GetSeasonCreditsAsync(int showId, int season, CancellationToken ct = default) =>
+        GetAsync<TmdbCredits>($"tv/{showId}/season/{season}/aggregate_credits", TimeSpan.FromHours(6), ct);
+
+    public Task<TmdbPerson?> GetPersonAsync(int id, CancellationToken ct = default) =>
+        GetAsync<TmdbPerson>($"person/{id}?append_to_response=combined_credits,external_ids", TimeSpan.FromHours(1), ct);
+
+    public Task<TmdbCreditDetail?> GetCreditAsync(string creditId, CancellationToken ct = default) =>
+        GetAsync<TmdbCreditDetail>($"credit/{Uri.EscapeDataString(creditId)}", TimeSpan.FromHours(12), ct);
 
     public Task<TmdbPage<TmdbListItem>?> SearchMultiAsync(string query, int page, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbListItem>>($"search/multi?query={Uri.EscapeDataString(query)}&page={page}&include_adult=false", TimeSpan.FromMinutes(30), ct);

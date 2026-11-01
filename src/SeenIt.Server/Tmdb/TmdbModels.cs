@@ -23,7 +23,7 @@ public record TmdbListItem(
 public record TmdbGenre(int Id, string Name);
 public record TmdbRole(string? Character, int EpisodeCount);
 /// <summary>Movie credits carry Character; TV aggregate credits carry Roles instead.</summary>
-public record TmdbCast(int Id, string Name, string? Character, string? ProfilePath, int Order, List<TmdbRole>? Roles)
+public record TmdbCast(int Id, string Name, string? Character, string? ProfilePath, int Order, List<TmdbRole>? Roles, int? TotalEpisodeCount = null)
 {
     public string? AnyCharacter => Character ?? Roles?.FirstOrDefault()?.Character;
 }
@@ -119,7 +119,45 @@ public record TmdbEpisodeDetail(
     double? VoteAverage,
     int? VoteCount,
     List<TmdbCast>? GuestStars,
-    List<TmdbCrew>? Crew);
+    List<TmdbCrew>? Crew,
+    TmdbCredits? Credits = null);
+
+// ----- People -----
+
+public record TmdbPersonCredit(
+    int Id,
+    string? MediaType,
+    string? Title,
+    string? Name,
+    string? ReleaseDate,
+    string? FirstAirDate,
+    string? Character,
+    string? Job,
+    string? Department,
+    int? EpisodeCount,
+    string? PosterPath,
+    int? VoteCount,
+    string? CreditId,
+    List<int>? GenreIds = null);
+
+public record TmdbPersonCredits(List<TmdbPersonCredit>? Cast, List<TmdbPersonCredit>? Crew);
+public record TmdbExternalIds(string? ImdbId);
+
+public record TmdbPerson(
+    int Id,
+    string Name,
+    string? Biography,
+    string? Birthday,
+    string? Deathday,
+    string? PlaceOfBirth,
+    string? ProfilePath,
+    string? KnownForDepartment,
+    TmdbPersonCredits? CombinedCredits,
+    TmdbExternalIds? ExternalIds);
+
+/// <summary>/credit/{id}: for a TV credit, the specific episodes (guest roles) and seasons it covers.</summary>
+public record TmdbCreditMedia(List<TmdbEpisodeRef>? Episodes, List<TmdbSeasonSummary>? Seasons);
+public record TmdbCreditDetail(string? Id, string? MediaType, TmdbCreditMedia? Media);
 
 public record TmdbSeason(int Id, int SeasonNumber, string? Name, string? Overview, string? PosterPath, string? AirDate, List<TmdbEpisode>? Episodes);
 

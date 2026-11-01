@@ -24,6 +24,22 @@ else if (season is not null)
             </div>
         </AuthorizeView>
     </div>
+    var eps = season.Episodes;
+    var today = DateOnly.FromDateTime(DateTime.Today);
+    var runtimes = eps.Where(x => x.Runtime is > 0).ToList();
+    var total = runtimes.Sum(x => (long)x.Runtime!.Value);
+    var watchedMinutes = eps.Where(x => x.Plays > 0).Sum(x => (long)(x.Runtime ?? 0));
+    var airedCount = eps.Count(x => x.AirDate is { } d && d <= today);
+    var first = eps.Where(x => x.AirDate is not null).MinBy(x => x.AirDate)?.AirDate;
+    var last = eps.Where(x => x.AirDate is not null).MaxBy(x => x.AirDate)?.AirDate;
+    <DetailStats Items="@([
+        ("Episodes", airedCount < eps.Count ? $"{airedCount} aired of {eps.Count}" : eps.Count.ToString()),
+        ("Total runtime", total > 0 ? Fmt.Duration(total) : null),
+        ("Per episode", runtimes.Count > 0 ? "~" + Fmt.Runtime((int)Math.Round(runtimes.Average(x => x.Runtime!.Value))) : null),
+        ("Aired", first is { } f ? (last is { } l && l != f ? $"{f:d MMM yyyy} – {l:d MMM yyyy}" : $"{f:d MMM yyyy}") : null),
+        ("You've watched", watchedMinutes > 0 ? Fmt.Duration(watchedMinutes) : null),
+        ("Left to watch", watchedMinutes > 0 ? Fmt.Duration(eps.Where(x => x.Plays == 0 && x.AirDate is { } d && d <= today).Sum(x => (long)(x.Runtime ?? 0))) : null),
+    ])" />
     @if (season.Overview is not null) { <p class="overview">@season.Overview</p> }
 
     <div class="episodes">
@@ -63,6 +79,8 @@ else if (season is not null)
             </article>
         }
     </div>
+    <CastRow Cast="@(season.Cast ?? [])" Title="Cast this season" />
+
     <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason" />
     <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
                  What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch" />

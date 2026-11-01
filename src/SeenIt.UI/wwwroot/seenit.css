@@ -303,6 +303,47 @@ label.check.disabled { opacity: .5; cursor: default; }
 .season-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px 14px; }
 .season-card .progress { margin-top: 6px; }
 
+/* ---------- Detail stats strip ---------- */
+.detail-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
+.detail-stats > div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; min-width: 0; }
+.detail-stats dt { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+.detail-stats dd { margin: 2px 0 0; font-weight: 650; }
+a.cast:hover .cast-name { color: var(--accent-hover); }
+a.cast { color: var(--text); }
+.crew dd a { color: var(--text); }
+.crew dd a:hover { color: var(--accent-hover); }
+
+/* ---------- Person page ---------- */
+.person-head { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; margin-bottom: 8px; }
+.person-photo img, .person-photo .cast-fallback { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: var(--radius); box-shadow: var(--shadow); }
+.person-photo .cast-fallback { height: auto; font-size: 4rem; }
+.person-info h1 { margin-bottom: 12px; }
+.bio { color: var(--text-2); max-height: 9.5em; overflow: hidden; position: relative; max-width: 75ch; }
+.bio::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3em; background: linear-gradient(transparent, var(--bg)); }
+.bio.open { max-height: none; }
+.bio.open::after { display: none; }
+.bio p { margin: 0 0 .8em; }
+.watched-with { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 10px; }
+.ww-item { display: flex; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-width: 0; }
+.ww-item img { width: 60px; height: 90px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-2); }
+.ww-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ww-episodes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.ww-episodes .chip { padding: 2px 8px; font-size: .74rem; }
+.seen-only { margin: -4px 0 10px; color: var(--text-2); }
+.filmography { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.film-row { display: flex; align-items: center; gap: 14px; padding: 9px 6px; border-bottom: 1px solid var(--border); color: var(--text); min-width: 0; }
+.film-row:hover { background: var(--surface); color: var(--text); }
+.film-year { width: 3.2em; flex-shrink: 0; color: var(--muted); font-variant-numeric: tabular-nums; font-size: .88rem; }
+.film-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.film-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.film-row.watched .film-year { color: var(--ok); }
+.appearances { margin-top: 16px; }
+.appearances summary { cursor: pointer; color: var(--text-2); font-weight: 600; margin-bottom: 8px; }
+@media (max-width: 760px) {
+    .person-head { grid-template-columns: 110px 1fr; gap: 16px; }
+    .person-info .detail-stats > div { padding: 6px 10px; }
+}
+
 /* ---------- Rating ---------- */
 .rating-picker { display: inline-flex; align-items: center; gap: 4px; }
 .pip { width: 18px; height: 18px; border-radius: 4px; border: 0; background: var(--surface-3); cursor: pointer; padding: 0; transition: background .1s, transform .1s; }

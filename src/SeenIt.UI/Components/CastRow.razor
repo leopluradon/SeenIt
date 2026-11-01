@@ -1,16 +1,17 @@
 @if (Cast.Count > 0)
 {
     <section class="row-section">
-        <div class="section-head"><h2>@Title</h2></div>
+        <div class="section-head"><h2>@Title <span class="muted small">@Cast.Count</span></h2></div>
         <div class="cast-scroller">
             @foreach (var c in Cast)
             {
-                <div class="cast" @key="c.Id">
+                <a class="cast" href="@($"person/{c.Id}")" @key="c.Id">
                     @if (Img.Profile(c.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
                     else { <div class="cast-fallback">@c.Name[..1]</div> }
                     <div class="cast-name">@c.Name</div>
                     <div class="cast-role muted small">@c.Character</div>
-                </div>
+                    @if (c.EpisodeCount is > 0) { <div class="cast-role muted small">@c.EpisodeCount episode@(c.EpisodeCount == 1 ? "" : "s")</div> }
+                </a>
             }
         </div>
     </section>
