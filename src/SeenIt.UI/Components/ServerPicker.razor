@@ -1,5 +1,6 @@
 @inject IServerConfig Server
 @inject Toasts Toasts
+@inject SessionState Session
 @if (Server.Configurable)
 {
     <details class="server-picker">
@@ -23,6 +24,8 @@
             return;
         }
         await Server.SetAsync(u.ToString());
+        // Tokens belong to the old server.
+        await Session.LogoutAsync();
         Toasts.Show($"Using {u.Host}");
     }
 }

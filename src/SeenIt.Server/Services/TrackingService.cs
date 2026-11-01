@@ -304,7 +304,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             AverageRating: ratings.Count > 0 ? Math.Round(ratings.Average(), 2) : null,
             Genres: genres.OrderByDescending(g => g.Value).Take(12).Select(g => new CountBucket(g.Key, g.Value)).ToList(),
             PlaysByMonth: months.Select(m => new CountBucket(
-                new DateTime(m.Year, m.Month, 1).ToString("MMM yy", CultureInfo.InvariantCulture), byMonth.GetValueOrDefault(m))).ToList(),
+                new DateTime(m.Year, m.Month, 1).ToString("MMM", CultureInfo.InvariantCulture), byMonth.GetValueOrDefault(m))).ToList(),
             RatingDistribution: Enumerable.Range(1, 10).Select(i => new CountBucket(i.ToString(), ratings.Count(r => r == i))).ToList(),
             PlaysByWeekday: Enum.GetValues<DayOfWeek>().Select(d => new CountBucket(d.ToString()[..3], weekdays.GetValueOrDefault(d))).ToList());
     }

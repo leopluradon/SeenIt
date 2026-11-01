@@ -88,7 +88,7 @@ p.center { display: block; }
     padding: 0 14px; height: 38px; width: 260px; color: var(--muted);
 }
 .topsearch:focus-within { border-color: var(--accent); }
-.topsearch input { background: none; border: 0; outline: 0; width: 100%; color: var(--text); }
+.topsearch input { background: none !important; border: 0 !important; outline: 0; width: 100%; color: var(--text); min-height: 0 !important; padding: 0 !important; }
 .usermenu { position: relative; }
 .avatar {
     width: 36px; height: 36px; border-radius: 50%; border: 0; cursor: pointer;
@@ -275,7 +275,7 @@ label.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 .hero-poster { width: 230px; flex-shrink: 0; }
 .hero-poster img { border-radius: var(--radius); box-shadow: var(--shadow); }
 .hero-info h1 { font-size: clamp(1.7rem, 4vw, 2.6rem); margin-bottom: .2em; }
-.hero-year { color: var(--text-2); font-weight: 400; }
+.hero-year { color: var(--text-2); font-weight: 400; margin-left: .3em; }
 .tagline { color: var(--text-2); font-style: italic; margin: 0 0 10px; }
 .facts { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--text-2); font-size: .9rem; margin-bottom: 10px; align-items: center; }
 .score { display: flex; align-items: center; gap: 6px; color: var(--warn); margin-bottom: 16px; }
@@ -358,7 +358,7 @@ label.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 .vbar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; min-width: 0; }
 .vbar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--surface-2); border-radius: 4px 4px 0 0; }
 .vbar-fill { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; }
-.vbar-label { font-size: .7rem; color: var(--muted); white-space: nowrap; }
+.vbar-label { font-size: .7rem; color: var(--muted); white-space: nowrap; overflow: hidden; max-width: 100%; }
 
 /* ---------- Auth ---------- */
 .auth-card { max-width: 400px; margin: 32px auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; }
