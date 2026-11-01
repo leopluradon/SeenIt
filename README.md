@@ -42,6 +42,16 @@ Locally: `dotnet run --project src/SeenIt.Server` with `ConnectionStrings__Defau
 Postgres and `Tmdb__ReadAccessToken` set. Migrations apply on startup.
 `dotnet test` runs the tests (no database needed).
 
+## Backups
+
+The `seenit-backup` container dumps the database nightly at 03:00 (New York time) to the NAS
+(`192.168.1.61:/volume1/data/backups/seenit`), keeping 14 days. Restore with `scripts/restore.sh <file>`.
+
+Off-site: with `OFFSITE_TARGET=user@host:dir` in `.env`, the newest dump is copied there once a week
+with rsync over ssh, keeping the last `OFFSITE_KEEP` (8) weekly copies. The key and the pinned host
+key live in `homelab:~/seenit/offsite/` (`id_ed25519`, `known_hosts`); on the remote, restrict the key
+to that folder with `command="rrsync -wo ~/seenit-backups",restrict` in `authorized_keys`.
+
 ## Jellyfin
 
 Each user gets a private webhook URL under **Settings → Jellyfin**, with step-by-step setup for the
