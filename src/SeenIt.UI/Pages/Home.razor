@@ -127,7 +127,7 @@
             <p>Track movies and TV, see what's next in every show, follow what's airing, and scrobble automatically from Jellyfin.</p>
             <div class="inline">
                 @if (features?.OpenRegistration != false) { <a href="register" class="btn btn-primary">Create a free account</a> }
-                <a href="login" class="btn">Sign in</a>
+                <a href="login" class="btn @(features?.OpenRegistration == false ? "btn-primary" : "")">Sign in</a>
             </div>
             @if (features?.OpenRegistration == false) { <p class="muted small">SeenIt is invite-only. Got an invite link? Open it to create your account.</p> }
         </section>
