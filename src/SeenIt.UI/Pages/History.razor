@@ -16,7 +16,7 @@
 
 <form class="searchbar" @onsubmit="Submit" role="search">
     <Icon Name="search" Size="18" />
-    <input type="search" @bind="search" @bind:event="oninput" @bind:after="Debounce" placeholder="Search your history: movies, shows, episode titles" aria-label="Search history" />
+    <input type="search" @bind="search" @bind:event="oninput" @bind:after="Debounce" placeholder="Search your history" aria-label="Search history" />
     <button type="button" class="btn btn-sm filter-toggle @(ActiveFilters > 0 ? "btn-on" : "")" @onclick="() => filtersOpen = !filtersOpen" aria-expanded="@filtersOpen">
         Filters@(ActiveFilters > 0 ? $" · {ActiveFilters}" : "")
     </button>
