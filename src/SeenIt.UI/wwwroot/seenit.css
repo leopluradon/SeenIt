@@ -366,7 +366,7 @@ label.check.disabled { opacity: .5; cursor: default; }
 .season-select select { min-height: 36px; padding: 6px 34px 6px 12px; font-weight: 600; }
 .ep-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; transition: opacity .15s; }
 .ep-list.is-loading { opacity: .5; }
-.ep-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
+.ep-row { color: var(--text); display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
 .ep-row:hover { background: var(--surface-2); color: var(--text); }
 .ep-row.current { border-color: var(--accent); background: var(--accent-soft); }
 .ep-row.unaired { opacity: .65; }
