@@ -362,6 +362,21 @@ label.check.disabled { opacity: .5; cursor: default; }
 .episode-nav-link > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .episode-title a:hover b { color: var(--accent-hover); }
 
+/* ---------- Season episode list (episode page) ---------- */
+.season-select select { min-height: 36px; padding: 6px 34px 6px 12px; font-weight: 600; }
+.ep-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; transition: opacity .15s; }
+.ep-list.is-loading { opacity: .5; }
+.ep-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
+.ep-row:hover { background: var(--surface-2); color: var(--text); }
+.ep-row.current { border-color: var(--accent); background: var(--accent-soft); }
+.ep-row.unaired { opacity: .65; }
+.ep-num { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); font-weight: 700; font-size: .85rem; }
+.ep-row.watched .ep-num { background: var(--ok-soft); color: var(--ok); }
+.ep-row.current .ep-num { background: var(--accent); color: #fff; }
+.ep-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ep-name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ep-check { color: var(--ok); flex-shrink: 0; }
+
 /* ---------- History / progress lists ---------- */
 .history-item { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--radius); }
 .history-item:hover { background: var(--surface); }

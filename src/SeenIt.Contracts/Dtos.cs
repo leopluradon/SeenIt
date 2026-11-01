@@ -202,7 +202,8 @@ public record EpisodeDetail(
     EpisodeRef? Previous,
     EpisodeRef? Next,
     int? Rating,
-    IReadOnlyList<PlayDto>? Plays);   // null when signed out
+    IReadOnlyList<PlayDto>? Plays,    // null when signed out
+    IReadOnlyList<SeasonSummary>? Seasons = null);
 
 public record HistoryEntry(
     Guid Id,

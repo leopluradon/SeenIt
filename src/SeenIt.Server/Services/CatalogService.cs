@@ -356,6 +356,17 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             : new EpisodeRef(siblings[i].SeasonNumber, siblings[i].EpisodeNumber, siblings[i].Name, siblings[i].AirDate,
                 watchedSet.Contains((siblings[i].SeasonNumber, siblings[i].EpisodeNumber)));
 
+        // Every season of the show, for the episode page's season picker.
+        var seasonRows = await db.Episodes.Where(x => x.ShowTmdbId == showId)
+            .GroupBy(x => x.SeasonNumber)
+            .Select(g => new { Season = g.Key, Count = g.Count(), FirstAir = g.Min(x => x.AirDate) })
+            .ToListAsync(ct);
+        var seasons = seasonRows
+            .OrderBy(x => x.Season == 0 ? int.MaxValue : x.Season)
+            .Select(x => new SeasonSummary(x.Season, x.Season == 0 ? "Specials" : $"Season {x.Season}", x.Count, x.FirstAir, null,
+                watchedSet.Count(w => w.Item1 == x.Season)))
+            .ToList();
+
         int? rating = null;
         List<PlayDto>? plays = null;
         if (userId is { } uid)
@@ -381,7 +392,8 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             index < 0 ? null : Ref(index - 1),
             index < 0 ? null : Ref(index + 1),
             rating,
-            plays);
+            plays,
+            seasons);
     }
 
     private async Task<UserMediaState> GetUserStateAsync(Guid userId, MediaType type, int id, CancellationToken ct)

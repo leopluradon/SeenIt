@@ -1,0 +1,78 @@
+@* Every episode of a season, with a picker to browse the show's other seasons in place. *@
+@inject ApiClient Api
+<section class="row-section season-episodes">
+    <div class="section-head">
+        <h2>Episodes</h2>
+        @if (Seasons.Count > 1)
+        {
+            <label class="season-select">
+                <span class="visually-hidden">Season</span>
+                <select value="@selected" @onchange="Pick">
+                    @foreach (var s in Seasons)
+                    {
+                        <option value="@s.SeasonNumber">@s.Name@(s.EpisodeCount > 0 ? $" · {s.Watched}/{s.EpisodeCount}" : "")</option>
+                    }
+                </select>
+            </label>
+        }
+    </div>
+    @if (loading && season is null) { <Spinner /> }
+    else if (season is not null)
+    {
+        <ol class="ep-list @(loading ? "is-loading" : "")">
+            @foreach (var e in season.Episodes)
+            {
+                var current = e.SeasonNumber == CurrentSeason && e.EpisodeNumber == CurrentEpisode;
+                var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
+                <li @key="(e.SeasonNumber, e.EpisodeNumber)">
+                    <a class="ep-row @(current ? "current" : "") @(e.Plays > 0 ? "watched" : "") @(aired ? "" : "unaired")"
+                       href="@Fmt.EpisodeHref(ShowId, e.SeasonNumber, e.EpisodeNumber)" aria-current="@(current ? "page" : null)">
+                        <span class="ep-num">@e.EpisodeNumber</span>
+                        <span class="ep-main">
+                            <span class="ep-name"><Spoiler Watched="e.Plays > 0">@(e.Name ?? $"Episode {e.EpisodeNumber}")</Spoiler></span>
+                            <span class="muted small">@(e.AirDate?.ToString("d MMM yyyy") ?? "TBA")@(e.Runtime is > 0 ? " · " + Fmt.Runtime(e.Runtime) : "")@(current ? " · you're here" : "")</span>
+                        </span>
+                        @if (e.Plays > 0) { <span class="ep-check" title="@($"Watched{(e.Plays > 1 ? $" {e.Plays}×" : "")}")"><Icon Name="check" Size="16" /></span> }
+                        else if (!aired) { <span class="pill pill-sm">Upcoming</span> }
+                    </a>
+                </li>
+            }
+        </ol>
+        <a class="small" href="@($"show/{ShowId}/season/{selected}")">Open @(selected == 0 ? "Specials" : $"Season {selected}") <Icon Name="chevron-right" Size="14" /></a>
+    }
+</section>
+@code {
+    [Parameter, EditorRequired] public int ShowId { get; set; }
+    [Parameter] public int CurrentSeason { get; set; }
+    [Parameter] public int CurrentEpisode { get; set; }
+    [Parameter] public IReadOnlyList<SeasonSummary> Seasons { get; set; } = [];
+    private int selected = -1;
+    private SeasonDetail? season;
+    private bool loading;
+    private (int, int) shownFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Moving to another episode jumps the list to that episode's season.
+        if (shownFor != (ShowId, CurrentSeason) || season is null)
+        {
+            shownFor = (ShowId, CurrentSeason);
+            await Load(CurrentSeason);
+        }
+        else if (season.SeasonNumber == CurrentSeason)
+        {
+            await Load(CurrentSeason); // refresh watched ticks after marking something
+        }
+    }
+
+    private Task Pick(ChangeEventArgs e) => int.TryParse(e.Value?.ToString(), out var n) ? Load(n) : Task.CompletedTask;
+
+    private async Task Load(int number)
+    {
+        selected = number;
+        loading = true;
+        try { season = await Api.SeasonAsync(ShowId, number); }
+        catch { season = null; }
+        loading = false;
+    }
+}

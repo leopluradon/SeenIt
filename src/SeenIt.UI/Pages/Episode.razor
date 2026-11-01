@@ -103,6 +103,8 @@ else if (e is not null)
         }
     </nav>
 
+    <SeasonEpisodes ShowId="Id" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" />
+
     <CastRow Cast="e.GuestStars" Title="Guest stars" />
 
     <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch" />
