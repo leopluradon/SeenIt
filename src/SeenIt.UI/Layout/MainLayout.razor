@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject IJSRuntime Js
 @inject NavigationManager Nav
 @inject SessionState Session
 @inject ApiClient Api
@@ -62,7 +64,8 @@
     </header>
 
     <OfflineBanner />
-    <main class="main">@Body</main>
+    @* Pull to refresh bumps the key, which rebuilds the current page so it loads everything again. *@
+    <main class="main" @key="refreshKey">@Body</main>
 
     <AuthorizeView>
         <Authorized>
@@ -89,6 +92,25 @@
     private string query = "";
     private bool menuOpen;
     private ServerFeatures? features;
+    private int refreshKey;
+    private DotNetObjectReference<MainLayout>? self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        self = DotNetObjectReference.Create(this);
+        try { await Js.InvokeVoidAsync("seenit.pullToRefresh", self); } catch (JSException) { }
+    }
+
+    [JSInvokable]
+    public async Task Refresh()
+    {
+        try { await Api.SyncAsync(); } catch { /* still offline: the page will show its saved copy */ }
+        refreshKey++;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => self?.Dispose();
 
     protected override async Task OnInitializedAsync()
     {

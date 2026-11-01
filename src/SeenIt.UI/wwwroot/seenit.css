@@ -161,6 +161,18 @@ label.check.disabled { opacity: .5; cursor: default; }
 .spinner-wrap { display: flex; justify-content: center; padding: 48px 0; }
 .spinner { width: 32px; height: 32px; border: 3px solid var(--surface-3); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Pull to refresh (touch screens): replaces the browser's own pull-to-reload, which would restart the whole app. */
+html.has-ptr, html.has-ptr body { overscroll-behavior-y: contain; }
+.ptr {
+    position: fixed; z-index: 60; left: 50%; top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) - 40px);
+    width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); box-shadow: var(--shadow);
+    opacity: 0; transform: translate(-50%, 0); pointer-events: none;
+}
+.ptr.ready { color: var(--accent); }
+.ptr.spinning { color: var(--accent); opacity: 1; }
+.ptr.spinning svg { animation: spin .8s linear infinite; }
 .error-box {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     background: var(--accent-soft); border: 1px solid rgba(236, 63, 79, .4); color: #ffb3ba;

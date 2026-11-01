@@ -1,8 +1,13 @@
 #!/bin/sh
 # Runs inside the seenit-backup container: dumps the database to /backups every night at
 # BACKUP_HOUR (local time, TZ), keeping BACKUP_KEEP_DAYS days of dumps. Restore with scripts/restore.sh.
+#
+# Off-site: if OFFSITE_TARGET (user@host:dir) is set, once a week the newest dump is added to
+# /backups/offsite (the last OFFSITE_KEEP weekly copies) and that folder is mirrored there with rsync
+# over ssh, using the key and known_hosts in /offsite (homelab:~/seenit/offsite). A failed copy is
+# retried after the next nightly dump.
 set -eu
-: "${BACKUP_HOUR:=3}" "${BACKUP_KEEP_DAYS:=14}"
+: "${BACKUP_HOUR:=3}" "${BACKUP_KEEP_DAYS:=14}" "${OFFSITE_TARGET:=}" "${OFFSITE_KEEP:=8}"
 
 dump() {
     stamp=$(date +%Y-%m-%d_%H%M)
@@ -17,10 +22,38 @@ dump() {
     fi
 }
 
+offsite() {
+    [ -n "$OFFSITE_TARGET" ] || return 0
+    dir=/backups/offsite
+    mkdir -p "$dir"
+    # Done within the last week? (-mtime -7 = modified less than 7 days ago)
+    [ -n "$(find "$dir" -maxdepth 1 -name .pushed -mtime -7 2>/dev/null)" ] && return 0
+
+    latest=$(ls -1 /backups/seenit-*.dump 2>/dev/null | sort | tail -1)
+    [ -n "$latest" ] || return 0
+    [ -f "$dir/$(basename "$latest")" ] || cp "$latest" "$dir/"
+    # Keep the newest OFFSITE_KEEP weekly copies; rsync --delete removes the rest remotely too.
+    ls -1 "$dir"/seenit-*.dump | sort -r | tail -n "+$((OFFSITE_KEEP + 1))" | xargs -r rm -f
+
+    if rsync -a --delete --timeout=120 --exclude=.pushed \
+        -e "ssh -i /offsite/id_ed25519 -o UserKnownHostsFile=/offsite/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=30" \
+        "$dir/" "$OFFSITE_TARGET/"; then
+        touch "$dir/.pushed"
+        echo "$(date -Iseconds) off-site copy ok: $(basename "$latest") -> $OFFSITE_TARGET ($(ls -1 "$dir"/seenit-*.dump | wc -l) weekly copies)"
+    else
+        echo "$(date -Iseconds) off-site copy FAILED (will retry after the next backup)" >&2
+    fi
+}
+
+if [ -n "$OFFSITE_TARGET" ] && ! command -v rsync >/dev/null; then
+    apk add --no-cache --quiet rsync openssh-client || echo "couldn't install rsync/ssh; off-site copies disabled" >&2
+fi
+
 until pg_isready -q; do sleep 5; done
 
 # Take one straight away if there's nothing from the last day (first start, or the box was off overnight).
 if [ -z "$(find /backups -maxdepth 1 -name 'seenit-*.dump' -mtime -1 2>/dev/null)" ]; then dump; fi
+offsite || true
 
 while true; do
     now=$(date +%s)
@@ -28,4 +61,5 @@ while true; do
     [ "$next" -le "$now" ] && next=$((next + 86400))
     sleep $((next - now))
     dump
+    offsite || true
 done

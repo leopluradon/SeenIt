@@ -58,9 +58,13 @@ services:
       TZ: "${TZ:-America/New_York}"
       BACKUP_HOUR: "3"
       BACKUP_KEEP_DAYS: "14"
+      # Weekly off-site copy (user@host:dir); empty disables it. Key + known_hosts live in ./offsite.
+      OFFSITE_TARGET: "${OFFSITE_TARGET:-}"
+      OFFSITE_KEEP: "${OFFSITE_KEEP:-8}"
     volumes:
       - seenit-backups:/backups
       - ./scripts/backup.sh:/backup.sh:ro
+      - ./offsite:/offsite:ro
     entrypoint: ["/bin/sh", "/backup.sh"]
 
 volumes:
