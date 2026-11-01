@@ -38,7 +38,7 @@
                     </ol>
                     <p class="muted small">Imports watch history, ratings, watchlist and custom lists.</p>
                     <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Trakt export
-                        <InputFile OnChange="e => Upload(ImportKind.Trakt, e)" accept=".zip,.json" class="visually-hidden" disabled="@uploading" />
+                        <InputFile OnChange="e => Upload(ImportKind.Trakt, e)" accept=".zip,.json,application/zip,application/x-zip-compressed,application/json" class="visually-hidden" disabled="@uploading" />
                     </label>
                 </div>
                 <div class="import-card">
@@ -49,7 +49,7 @@
                     </ol>
                     <p class="muted small">Imports your diary, watched films, ratings (★ × 2), watchlist and lists. Films are matched by title and year.</p>
                     <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Letterboxd export
-                        <InputFile OnChange="e => Upload(ImportKind.Letterboxd, e)" accept=".zip,.csv" class="visually-hidden" disabled="@uploading" />
+                        <InputFile OnChange="e => Upload(ImportKind.Letterboxd, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv,text/comma-separated-values" class="visually-hidden" disabled="@uploading" />
                     </label>
                 </div>
             </div>
