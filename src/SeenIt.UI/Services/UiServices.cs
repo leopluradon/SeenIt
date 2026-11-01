@@ -81,7 +81,7 @@ public static class Fmt
         if (d == today) return "Today";
         if (d == today.AddDays(1)) return "Tomorrow";
         if (d == today.AddDays(-1)) return "Yesterday";
-        return d.ToString("dddd, d MMM");
+        return d.Year == today.Year ? d.ToString("dddd, d MMM") : d.ToString("dddd, d MMM yyyy");
     }
 }
 
