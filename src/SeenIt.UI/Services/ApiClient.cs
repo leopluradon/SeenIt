@@ -49,7 +49,7 @@ public class ApiClient(HttpClient http, TokenManager tokens)
         SendAsync(HttpMethod.Delete, $"api/watch?type={type}&tmdbId={tmdbId}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"));
     public Task<HistoryPage> HistoryAsync(HistoryQuery f)
     {
-        var qs = new List<string> { $"page={f.Page}", $"pageSize={f.PageSize}" };
+        var qs = new List<string> { $"page={f.Page}", $"pageSize={f.PageSize}", $"tz={Tz}" };
         if (f.Type is { } t) qs.Add($"type={t}");
         if (!string.IsNullOrWhiteSpace(f.Q)) qs.Add($"q={Uri.EscapeDataString(f.Q)}");
         if (f.Source is { } s) qs.Add($"source={s}");

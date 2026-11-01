@@ -214,7 +214,8 @@ public record HistoryEntry(
     string? EpisodeTitle,
     string? PosterPath,
     DateTimeOffset WatchedAt,
-    WatchSource Source);
+    WatchSource Source,
+    int? Runtime = null);
 
 /// <summary>History filters. From is inclusive, To exclusive; both are absolute instants computed by the client in its own time zone.</summary>
 public record HistoryQuery(
@@ -226,9 +227,13 @@ public record HistoryQuery(
     DateTimeOffset? To = null,
     bool Oldest = false,
     int Page = 1,
-    int PageSize = 50);
+    int PageSize = 50,
+    string? TimeZone = null);   // IANA id; decides where one day ends and the next begins
 
-public record HistoryPage(IReadOnlyList<HistoryEntry> Items, int Page, int TotalPages, int TotalResults, long TotalMinutes);
+/// <summary>Totals for one day (null = unknown date) across every matching play, not just the visible page.</summary>
+public record HistoryDay(DateOnly? Date, int Plays, long Minutes);
+
+public record HistoryPage(IReadOnlyList<HistoryEntry> Items, int Page, int TotalPages, int TotalResults, long TotalMinutes, IReadOnlyList<HistoryDay>? Days = null);
 
 public record WatchlistEntry(MediaSummary Media, DateTimeOffset AddedAt, DateOnly? ReleaseDate);
 public record WatchlistRequest(MediaType Type, int TmdbId);

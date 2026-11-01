@@ -98,7 +98,13 @@ else if (data is not null)
         <div class="history">
             @foreach (var day in data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
             {
-                <h3 class="day-head">@(day.Key is { } dk ? Fmt.Day(dk) : "Date unknown")</h3>
+                var totals = data.Days?.FirstOrDefault(d => d.Date == day.Key)
+                             ?? new HistoryDay(day.Key, day.Count(), day.Sum(e => (long)(e.Runtime ?? 0)));
+                <div class="day-divider">
+                    <h3>@(day.Key is { } dk ? Fmt.Day(dk) : "Date unknown")</h3>
+                    <span class="day-line" aria-hidden="true"></span>
+                    <span class="day-total">@totals.Plays play@(totals.Plays == 1 ? "" : "s")@(totals.Minutes > 0 ? " · " + Fmt.Duration(totals.Minutes) : "")</span>
+                </div>
                 @foreach (var h in day)
                 {
                     <div class="history-item" @key="h.Id">
@@ -108,7 +114,7 @@ else if (data is not null)
                                 <div class="mini-title">@h.Title</div>
                                 @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · @h.EpisodeTitle</div> }
                                 <div class="muted small">
-                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString("HH:mm"))
+                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString("HH:mm"))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
                                     @if (h.Source != WatchSource.Manual) { <span class="pill pill-sm">@SourceLabel(h.Source)</span> }
                                 </div>
                             </div>

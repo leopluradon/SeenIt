@@ -60,8 +60,8 @@ public static class ApiEndpoints
             Results.Ok(new { removed = await t.UnwatchAsync(p.UserId(), type, tmdbId, season, episode, ct) }));
 
         g.MapGet("/history", (MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
-                string? sort, int? page, int? pageSize, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
-            t.GetHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, pageSize ?? 50), ct));
+                string? sort, int? page, int? pageSize, string? tz, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+            t.GetHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, pageSize ?? 50, tz), ct));
         g.MapGet("/history/genres", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetHistoryGenresAsync(p.UserId(), ct));
 
         g.MapDelete("/history/{id:guid}", async (Guid id, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>

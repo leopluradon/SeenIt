@@ -137,11 +137,48 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             var movieMinutes = await q.Where(w => w.Type == MediaType.Movie)
                 .Join(db.Movies, w => w.TmdbId, m => m.TmdbId, (w, m) => (long?)m.Runtime).SumAsync(ct) ?? 0;
             var episodeMinutes = await q.Where(w => w.Type == MediaType.Episode)
-                .Join(db.Episodes, w => new { S = w.TmdbId, N = w.SeasonNumber ?? 0, E = w.EpisodeNumber ?? 0 },
-                    e => new { S = e.ShowTmdbId, N = e.SeasonNumber, E = e.EpisodeNumber }, (w, e) => (long?)e.Runtime).SumAsync(ct) ?? 0;
+                .Join(db.Shows, w => w.TmdbId, s => s.TmdbId, (w, s) => new { w.TmdbId, w.SeasonNumber, w.EpisodeNumber, s.EpisodeRuntime })
+                .Select(x => (long?)(db.Episodes
+                    .Where(e => e.ShowTmdbId == x.TmdbId && e.SeasonNumber == x.SeasonNumber && e.EpisodeNumber == x.EpisodeNumber)
+                    .Select(e => e.Runtime).FirstOrDefault() ?? x.EpisodeRuntime))
+                .SumAsync(ct) ?? 0;
             minutes = movieMinutes + episodeMinutes;
         }
-        return new(await ToHistoryAsync(rows, ct), page, (total + pageSize - 1) / pageSize, total, minutes);
+
+        var entries = await ToHistoryAsync(rows, ct);
+        return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct));
+    }
+
+    /// <summary>
+    /// Totals for each day shown on this page, counting every matching play that day, so a day
+    /// split across two pages still shows its full total.
+    /// </summary>
+    private async Task<List<HistoryDay>> DayTotalsAsync(IQueryable<WatchEvent> q, List<HistoryEntry> page, string? tzId, CancellationToken ct)
+    {
+        if (page.Count == 0) return [];
+        var tz = ReviewService.Zone(tzId);
+        DateOnly LocalDay(DateTimeOffset at) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, tz).DateTime);
+        DateTimeOffset Start(DateOnly d) { var local = d.ToDateTime(TimeOnly.MinValue); return new DateTimeOffset(local, tz.GetUtcOffset(local)); }
+
+        var days = page.Where(e => !WatchDates.IsUnknown(e.WatchedAt)).Select(e => LocalDay(e.WatchedAt)).Distinct().ToList();
+        var result = new List<HistoryDay>();
+        if (days.Count > 0)
+        {
+            var from = Start(days.Min()).ToUniversalTime();
+            var to = Start(days.Max().AddDays(1)).ToUniversalTime();
+            var plays = await q.Where(w => w.WatchedAt >= from && w.WatchedAt < to).ToListAsync(ct);
+            var withRuntime = await ToHistoryAsync(plays, ct);
+            var wanted = days.ToHashSet();
+            result.AddRange(withRuntime.GroupBy(e => LocalDay(e.WatchedAt)).Where(g => wanted.Contains(g.Key))
+                .Select(g => new HistoryDay(g.Key, g.Count(), g.Sum(e => (long)(e.Runtime ?? 0))))
+                .OrderBy(d => days.IndexOf(d.Date!.Value)));   // same order as the page
+        }
+        if (page.Any(e => WatchDates.IsUnknown(e.WatchedAt)))
+        {
+            var unknown = await ToHistoryAsync(await q.Where(w => w.WatchedAt == WatchDates.Unknown).ToListAsync(ct), ct);
+            result.Add(new HistoryDay(null, unknown.Count, unknown.Sum(e => (long)(e.Runtime ?? 0))));
+        }
+        return result;
     }
 
     private IQueryable<WatchEvent> FilterHistory(IQueryable<WatchEvent> q, HistoryQuery f)
@@ -199,16 +236,22 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var movies = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, ct);
         var shows = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
         var eps = (await db.Episodes.Where(e => showIds.Contains(e.ShowTmdbId))
-                .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name }).ToListAsync(ct))
-            .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber), e => e.Name);
+                .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Runtime }).ToListAsync(ct))
+            .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber));
 
-        return rows.Select(r => r.Type == MediaType.Movie
-            ? new HistoryEntry(r.Id, MediaType.Movie, r.TmdbId, movies.GetValueOrDefault(r.TmdbId)?.Title ?? $"Movie {r.TmdbId}",
-                null, null, null, movies.GetValueOrDefault(r.TmdbId)?.PosterPath, r.WatchedAt, r.Source)
-            : new HistoryEntry(r.Id, MediaType.Episode, r.TmdbId, shows.GetValueOrDefault(r.TmdbId)?.Name ?? $"Show {r.TmdbId}",
-                r.SeasonNumber, r.EpisodeNumber,
-                eps.GetValueOrDefault((r.TmdbId, r.SeasonNumber ?? 0, r.EpisodeNumber ?? 0)),
-                shows.GetValueOrDefault(r.TmdbId)?.PosterPath, r.WatchedAt, r.Source)).ToList();
+        return rows.Select(r =>
+        {
+            if (r.Type == MediaType.Movie)
+            {
+                var m = movies.GetValueOrDefault(r.TmdbId);
+                return new HistoryEntry(r.Id, MediaType.Movie, r.TmdbId, m?.Title ?? $"Movie {r.TmdbId}",
+                    null, null, null, m?.PosterPath, r.WatchedAt, r.Source, m?.Runtime);
+            }
+            var s = shows.GetValueOrDefault(r.TmdbId);
+            var e = eps.GetValueOrDefault((r.TmdbId, r.SeasonNumber ?? 0, r.EpisodeNumber ?? 0));
+            return new HistoryEntry(r.Id, MediaType.Episode, r.TmdbId, s?.Name ?? $"Show {r.TmdbId}",
+                r.SeasonNumber, r.EpisodeNumber, e?.Name, s?.PosterPath, r.WatchedAt, r.Source, e?.Runtime ?? s?.EpisodeRuntime);
+        }).ToList();
     }
 
     // ---------- Watchlist ----------

@@ -23,6 +23,7 @@ public class HistoryFilterTests
         W(MediaType.Movie, 2, "2026-03-01T20:00:00Z");
         W(MediaType.Episode, 3, "2026-03-02T20:00:00Z", WatchSource.Jellyfin, 1, 1);
         W(MediaType.Episode, 3, "2026-03-03T20:00:00Z", WatchSource.Jellyfin, 1, 2);
+        W(MediaType.Movie, 2, "2026-03-03T21:00:00Z");   // same UTC day as S01E02, different type
         db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Movie, TmdbId = 1, WatchedAt = WatchDates.Unknown });
         await db.SaveChangesAsync();
         return new TrackingService(db, null!);
@@ -45,12 +46,23 @@ public class HistoryFilterTests
         var t = await Setup();
         Assert.Equal(4, (await t.GetHistoryAsync(User, new HistoryQuery(Genre: "Drama"), default)).TotalResults);       // Heat ×2 + both Severance episodes
         Assert.Equal(2, (await t.GetHistoryAsync(User, new HistoryQuery(Source: WatchSource.Jellyfin), default)).TotalResults);
-        Assert.Equal(1, (await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Movie, From: DateTimeOffset.Parse("2026-01-01T00:00:00Z")), default)).TotalResults);
+        Assert.Equal(2, (await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Movie, From: DateTimeOffset.Parse("2026-01-01T00:00:00Z")), default)).TotalResults);
 
         var march = await t.GetHistoryAsync(User, new HistoryQuery(From: DateTimeOffset.Parse("2026-03-01T00:00:00Z"), To: DateTimeOffset.Parse("2026-04-01T00:00:00Z"), Oldest: true), default);
-        Assert.Equal(3, march.TotalResults);
+        Assert.Equal(4, march.TotalResults);
         Assert.Equal("Paddington 2", march.Items[0].Title);   // oldest first
-        Assert.Equal(104 + 57 + 55, march.TotalMinutes);
+        Assert.Equal(104 + 57 + 55 + 104, march.TotalMinutes);
+        Assert.Contains(march.Days!, d => d.Date == new DateOnly(2026, 3, 3) && d.Plays == 2 && d.Minutes == 55 + 104);
+
+        // Day totals cover the whole day even when the page shows only part of it.
+        var paged = await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Episode, PageSize: 1, TimeZone: "UTC"), default);
+        Assert.Single(paged.Items);
+        Assert.Equal(new HistoryDay(new DateOnly(2026, 3, 3), 1, 55), Assert.Single(paged.Days!));
+        Assert.Equal(55, paged.Items[0].Runtime);
+
+        // In Los Angeles, 20:00 UTC on the 2nd and 3rd are still the 2nd and 3rd; in Tokyo they're the 3rd and 4th.
+        var tokyo = await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Episode, TimeZone: "Asia/Tokyo"), default);
+        Assert.Equal([new DateOnly(2026, 3, 4), new DateOnly(2026, 3, 3)], tokyo.Days!.Select(d => d.Date!.Value));
 
         // An end bound alone must not sweep in plays with an unknown date.
         Assert.Equal(1, (await t.GetHistoryAsync(User, new HistoryQuery(To: DateTimeOffset.Parse("2026-01-01T00:00:00Z")), default)).TotalResults);
