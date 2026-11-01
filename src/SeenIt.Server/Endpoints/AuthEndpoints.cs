@@ -76,7 +76,7 @@ public static partial class AuthEndpoints
 
         me.MapGet("/me", async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> (ClaimsPrincipal p, UserManager<AppUser> users) =>
             await users.FindByIdAsync(p.UserId().ToString()) is { } u
-                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt))
+                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages))
                 : TypedResults.Unauthorized());
 
         me.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
@@ -85,6 +85,16 @@ public static partial class AuthEndpoints
             if (u is null) return Results.Unauthorized();
             var name = req.DisplayName?.Trim();
             u.DisplayName = string.IsNullOrEmpty(name) ? null : name.Length > 64 ? name[..64] : name;
+            await users.UpdateAsync(u);
+            return Results.NoContent();
+        });
+
+        me.MapPut("/preferences", async (PreferencesRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
+        {
+            var u = await users.FindByIdAsync(p.UserId().ToString());
+            if (u is null) return Results.Unauthorized();
+            u.HideSpoilers = req.HideSpoilers;
+            u.BlurSpoilerImages = req.BlurSpoilerImages;
             await users.UpdateAsync(u);
             return Results.NoContent();
         });

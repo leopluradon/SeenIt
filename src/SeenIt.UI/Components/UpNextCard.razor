@@ -7,7 +7,7 @@
             <div class="upnext-show">@Progress.Name</div>
             @if (Progress.NextEpisode is { } n)
             {
-                <div class="upnext-ep">@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber) · @n.Name</div>
+                <div class="upnext-ep">@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber) · <Spoiler>@n.Name</Spoiler></div>
             }
         </div>
     </a>

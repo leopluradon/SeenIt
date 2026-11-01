@@ -1,0 +1,39 @@
+@* Blurs an unwatched episode's title, description or image when the user's spoiler setting is on.
+   Tapping reveals just this item; marking the episode watched reveals it for good. *@
+@inject SessionState Session
+@if (Hidden)
+{
+    @if (Block || Image)
+    {
+        <div class="spoiler @(Image ? "spoiler-img" : "spoiler-block") is-hidden" role="button" tabindex="0"
+             aria-label="Hidden to avoid spoilers. Tap to reveal." title="Hidden to avoid spoilers. Tap to reveal."
+             @onclick="Reveal" @onclick:preventDefault @onclick:stopPropagation @onkeydown="Key">
+            <div class="spoiler-content" aria-hidden="true">@ChildContent</div>
+            <span class="spoiler-hint"><Icon Name="eye" Size="14" /> Tap to reveal</span>
+        </div>
+    }
+    else
+    {
+        <span class="spoiler spoiler-inline is-hidden" role="button" tabindex="0"
+              aria-label="Hidden to avoid spoilers. Tap to reveal." title="Hidden to avoid spoilers. Tap to reveal."
+              @onclick="Reveal" @onclick:preventDefault @onclick:stopPropagation @onkeydown="Key"><span aria-hidden="true">@ChildContent</span></span>
+    }
+}
+else
+{
+    @ChildContent
+}
+@code {
+    [Parameter] public bool Watched { get; set; }
+    /// <summary>Paragraph-sized content: shows a "tap to reveal" label over the blur.</summary>
+    [Parameter] public bool Block { get; set; }
+    /// <summary>An image: only blurred when the "also blur images" setting is on.</summary>
+    [Parameter] public bool Image { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private bool revealed;
+
+    private bool Hidden => !revealed && !Watched && Session.Me is { HideSpoilers: true } me && (!Image || me.BlurSpoilerImages);
+
+    private void Reveal() => revealed = true;
+    private void Key(KeyboardEventArgs e) { if (e.Key is "Enter" or " ") revealed = true; }
+}

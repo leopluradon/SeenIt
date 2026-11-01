@@ -12,7 +12,8 @@ public record RefreshRequest(string RefreshToken);
 public record TokenResponse(string AccessToken, string RefreshToken, long ExpiresIn);
 public record ProblemInfo(string Title, Dictionary<string, string[]>? Errors = null);
 
-public record MeDto(Guid Id, string UserName, string Email, string? DisplayName, DateTimeOffset CreatedAt);
+public record MeDto(Guid Id, string UserName, string Email, string? DisplayName, DateTimeOffset CreatedAt, bool HideSpoilers = false, bool BlurSpoilerImages = false);
+public record PreferencesRequest(bool HideSpoilers, bool BlurSpoilerImages);
 public record UpdateProfileRequest(string? DisplayName);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public record DeleteAccountRequest(string Password);
@@ -91,7 +92,7 @@ public record ShowDetail(
     UserMediaState? User,
     ShowProgressDto? Progress);
 
-public record EpisodeRef(int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate);
+public record EpisodeRef(int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate, bool Watched = false);
 
 public record EpisodeDto(
     int TmdbId,

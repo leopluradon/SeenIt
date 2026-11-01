@@ -53,7 +53,7 @@ else if (s is not null)
                     @if (p.NextEpisode is { } n)
                     {
                         <div class="inline spread next-ep">
-                            <span>Next: <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> @n.Name</a></span>
+                            <span>Next: <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> <Spoiler>@n.Name</Spoiler></a></span>
                             <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => pendingEpisode = n"><Icon Name="check" Size="14" /> Watched</button>
                         </div>
                     }
@@ -61,7 +61,7 @@ else if (s is not null)
             }
             @if (s.NextEpisodeToAir is { } next)
             {
-                <p class="muted">Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> @next.Name</a> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }</p>
+                <p class="muted">Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> <Spoiler>@next.Name</Spoiler></a> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }</p>
             }
             @if (s.Overview is not null) { <p class="overview">@s.Overview</p> }
             <div class="links">

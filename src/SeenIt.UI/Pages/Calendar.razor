@@ -29,7 +29,7 @@ else if (items is not null)
                         <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
                         <div>
                             <div class="mini-title">@c.Title</div>
-                            <div class="muted small">@(c.Type == MediaType.Episode ? $"{Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)} · {c.EpisodeTitle}" : "Movie release")</div>
+                            <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }</div>
                         </div>
                         @if (c.Watched) { <span class="ok"><Icon Name="check" Size="18" /></span> }
                     </a>

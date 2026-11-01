@@ -325,8 +325,14 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             .Select(x => new { x.SeasonNumber, x.EpisodeNumber, x.Name, x.AirDate })
             .ToListAsync(ct);
         var index = siblings.FindIndex(x => x.SeasonNumber == seasonNumber && x.EpisodeNumber == episodeNumber);
+        var watchedSet = userId is { } viewer
+            ? (await db.WatchEvents.Where(w => w.UserId == viewer && w.Type == MediaType.Episode && w.TmdbId == showId)
+                .Select(w => new { w.SeasonNumber, w.EpisodeNumber }).ToListAsync(ct))
+                .Select(w => (w.SeasonNumber ?? -1, w.EpisodeNumber ?? -1)).ToHashSet()
+            : [];
         EpisodeRef? Ref(int i) => i < 0 || i >= siblings.Count ? null
-            : new EpisodeRef(siblings[i].SeasonNumber, siblings[i].EpisodeNumber, siblings[i].Name, siblings[i].AirDate);
+            : new EpisodeRef(siblings[i].SeasonNumber, siblings[i].EpisodeNumber, siblings[i].Name, siblings[i].AirDate,
+                watchedSet.Contains((siblings[i].SeasonNumber, siblings[i].EpisodeNumber)));
 
         int? rating = null;
         List<PlayDto>? plays = null;

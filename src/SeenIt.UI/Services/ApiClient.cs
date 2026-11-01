@@ -26,6 +26,7 @@ public class ApiClient(HttpClient http, TokenManager tokens)
     public Task<TokenResponse> LoginAsync(LoginRequest r) => SendAsync<TokenResponse>(HttpMethod.Post, "api/auth/login", r, auth: false)!;
     public Task<MeDto> MeAsync() => GetAsync<MeDto>("api/auth/me");
     public Task UpdateProfileAsync(UpdateProfileRequest r) => SendAsync(HttpMethod.Put, "api/auth/me", r);
+    public Task SetPreferencesAsync(PreferencesRequest r) => SendAsync(HttpMethod.Put, "api/auth/preferences", r);
     public Task ChangePasswordAsync(ChangePasswordRequest r) => SendAsync(HttpMethod.Post, "api/auth/password", r);
     public Task DeleteAccountAsync(DeleteAccountRequest r) => SendAsync(HttpMethod.Post, "api/auth/delete", r);
 

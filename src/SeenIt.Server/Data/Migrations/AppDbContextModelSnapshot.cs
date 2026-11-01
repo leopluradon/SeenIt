@@ -162,6 +162,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("BlurSpoilerImages")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("text");
@@ -178,6 +181,9 @@ namespace SeenIt.Server.Data.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HideSpoilers")
                         .HasColumnType("boolean");
 
                     b.Property<int>("JellyfinThresholdPercent")

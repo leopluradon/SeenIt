@@ -21,6 +21,7 @@
     <nav class="settings-nav">
         <a href="settings#imports">Import</a>
         <a href="settings#jellyfin">Jellyfin</a>
+        <a href="settings#spoilers">Spoilers</a>
         <a href="settings#profile">Profile</a>
         <a href="settings#account">Account</a>
     </nav>
@@ -134,6 +135,21 @@
             }
         </section>
 
+        <section class="panel" id="spoilers">
+            <h2>Spoilers</h2>
+            <p class="muted small">Applies everywhere you're signed in. Tap anything hidden to reveal it; episodes you've watched are never hidden.</p>
+            <div class="stack">
+                <label class="check">
+                    <input type="checkbox" checked="@hideSpoilers" @onchange="e => SavePreferences((bool)e.Value!, blurImages)" />
+                    Hide titles and descriptions of episodes I haven't watched
+                </label>
+                <label class="check @(hideSpoilers ? "" : "disabled")">
+                    <input type="checkbox" checked="@blurImages" disabled="@(!hideSpoilers)" @onchange="e => SavePreferences(hideSpoilers, (bool)e.Value!)" />
+                    Also blur their images
+                </label>
+            </div>
+        </section>
+
         <section class="panel" id="profile">
             <h2>Profile</h2>
             @if (Session.Me is { } me)
@@ -198,6 +214,7 @@
     private List<ImportJobDto>? imports;
     private bool uploading;
     private string? displayName, currentPassword, newPassword, deletePassword;
+    private bool hideSpoilers, blurImages;
     private CancellationTokenSource? poll;
 
     private string WebhookUrl => jf is null ? "" : new Uri(new Uri(Server.Url), jf.WebhookUrlPath.TrimStart('/')).ToString();
@@ -205,6 +222,8 @@
     protected override async Task OnInitializedAsync()
     {
         displayName = Session.Me?.DisplayName;
+        hideSpoilers = Session.Me?.HideSpoilers ?? false;
+        blurImages = Session.Me?.BlurSpoilerImages ?? false;
         await Task.WhenAll(LoadJellyfin(), LoadImports());
         StartPolling();
     }
@@ -276,6 +295,18 @@
     {
         try { await Js.InvokeVoidAsync("navigator.clipboard.writeText", text); Toasts.Show("Copied"); }
         catch { Toasts.Show("Couldn't copy; select and copy it manually.", error: true); }
+    }
+
+    private async Task SavePreferences(bool hide, bool blur)
+    {
+        (hideSpoilers, blurImages) = (hide, blur);
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(hide, blur));
+            Session.Refresh();
+            Toasts.Show(hide ? "Spoilers hidden" : "Spoilers shown");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
     }
 
     private async Task SaveProfile()

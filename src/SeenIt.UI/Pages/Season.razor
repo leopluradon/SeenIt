@@ -32,15 +32,15 @@ else if (season is not null)
             var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
             <article class="episode @(e.Plays > 0 ? "watched" : "")" @key="e.EpisodeNumber">
                 <a class="episode-still" href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)">
-                    @if (Img.Still(e.StillPath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                    @if (Img.Still(e.StillPath) is { } src) { <Spoiler Watched="e.Plays > 0" Image="true"><img src="@src" alt="" loading="lazy" /></Spoiler> }
                     <span class="episode-num">@e.EpisodeNumber</span>
                 </a>
                 <div class="episode-body">
                     <div class="episode-title">
-                        <a href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)"><b>@e.Name</b></a>
+                        <a href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)"><b><Spoiler Watched="e.Plays > 0">@e.Name</Spoiler></b></a>
                         <span class="muted small">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) @if (e.AirDate is { } ad) { <span class="dot-sep">@ad.ToString("d MMM yyyy")</span> } @if (e.Runtime is > 0) { <span class="dot-sep">@Fmt.Runtime(e.Runtime)</span> }</span>
                     </div>
-                    @if (!string.IsNullOrWhiteSpace(e.Overview)) { <p class="episode-overview">@e.Overview</p> }
+                    @if (!string.IsNullOrWhiteSpace(e.Overview)) { <Spoiler Watched="e.Plays > 0" Block="true"><p class="episode-overview">@e.Overview</p></Spoiler> }
                     <AuthorizeView>
                         <div class="episode-actions">
                             @if (e.Plays > 0)

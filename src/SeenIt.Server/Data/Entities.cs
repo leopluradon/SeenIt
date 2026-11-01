@@ -12,6 +12,11 @@ public class AppUser : IdentityUser<Guid>
     public string JellyfinToken { get; set; } = NewToken();
     public int JellyfinThresholdPercent { get; set; } = 90;
 
+    /// <summary>Blur titles and descriptions of episodes the user hasn't watched.</summary>
+    public bool HideSpoilers { get; set; }
+    /// <summary>Also blur those episodes' images.</summary>
+    public bool BlurSpoilerImages { get; set; }
+
     public static string NewToken() =>
         Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
 }
