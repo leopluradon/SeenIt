@@ -98,6 +98,20 @@ public record TmdbEpisode(
     string? StillPath,
     double? VoteAverage);
 
+public record TmdbEpisodeDetail(
+    int Id,
+    int SeasonNumber,
+    int EpisodeNumber,
+    string? Name,
+    string? Overview,
+    string? AirDate,
+    int? Runtime,
+    string? StillPath,
+    double? VoteAverage,
+    int? VoteCount,
+    List<TmdbCast>? GuestStars,
+    List<TmdbCrew>? Crew);
+
 public record TmdbSeason(int Id, int SeasonNumber, string? Name, string? Overview, string? PosterPath, string? AirDate, List<TmdbEpisode>? Episodes);
 
 public record TmdbFindEpisode(int Id, int ShowId, int SeasonNumber, int EpisodeNumber, string? Name);

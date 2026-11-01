@@ -37,6 +37,23 @@ public static class Img
 public static class Fmt
 {
     public static string Href(MediaType type, int id) => type == MediaType.Movie ? $"movie/{id}" : $"show/{id}";
+    public static string EpisodeHref(int showId, int? season, int? episode) => $"show/{showId}/season/{season}/episode/{episode}";
+
+    /// <summary>Request body for a single play from a dialog choice.</summary>
+    public static WatchRequest Watch(MediaType type, int id, WatchChoice c, int? season = null, int? episode = null) =>
+        new(type, id, season, episode, c.At, c.When);
+
+    /// <summary>Toast text for a watch choice, e.g. "on 3 Feb 2024".</summary>
+    public static string When(WatchChoice c) => c.When switch
+    {
+        WatchTime.ReleaseDate => " (release date)",
+        WatchTime.Unknown => " (date unknown)",
+        WatchTime.Custom when c.At is { } at => $" on {at.LocalDateTime:d MMM yyyy}",
+        _ => "",
+    };
+
+    public static string PlayedAt(DateTimeOffset d) =>
+        WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString("d MMM yyyy, HH:mm");
     public static string Ep(int? s, int? e) => $"S{s:00}E{e:00}";
     public static string Runtime(int? minutes) => minutes is null or 0 ? "" : minutes < 60 ? $"{minutes}m" : $"{minutes / 60}h {minutes % 60}m";
 
@@ -49,6 +66,7 @@ public static class Fmt
 
     public static string Relative(DateTimeOffset when)
     {
+        if (WatchDates.IsUnknown(when)) return "date unknown";
         var d = DateTimeOffset.Now - when;
         if (d.TotalMinutes < 1) return "just now";
         if (d.TotalHours < 1) return $"{(int)d.TotalMinutes}m ago";

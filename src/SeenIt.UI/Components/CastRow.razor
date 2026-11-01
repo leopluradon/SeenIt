@@ -1,7 +1,7 @@
 @if (Cast.Count > 0)
 {
     <section class="row-section">
-        <div class="section-head"><h2>Cast</h2></div>
+        <div class="section-head"><h2>@Title</h2></div>
         <div class="cast-scroller">
             @foreach (var c in Cast)
             {
@@ -17,4 +17,5 @@
 }
 @code {
     [Parameter] public IReadOnlyList<CastMember> Cast { get; set; } = [];
+    [Parameter] public string Title { get; set; } = "Cast";
 }

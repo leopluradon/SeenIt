@@ -1,16 +1,21 @@
-@* Asks when something was watched: now, on release, or a specific date/time. *@
+@* "When did you watch it?" Right now, on release, another date, or unknown. *@
 <Modal Open="Open" OpenChanged="OpenChanged" Title="@($"When did you watch {What}?")">
     <div class="stack">
-        <button class="btn btn-primary btn-block" @onclick="() => Pick(DateTimeOffset.Now)"><Icon Name="check" Size="16" /> Just now</button>
-        @if (ReleaseDate is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today))
+        <button class="btn btn-primary btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Now))"><Icon Name="check" Size="16" /> Right now</button>
+        @if (Bulk)
         {
-            <button class="btn btn-block" @onclick="() => Pick(new DateTimeOffset(rd.ToDateTime(new TimeOnly(20, 0))))">On release (@rd.ToString("d MMM yyyy"))</button>
+            <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release dates <span class="muted small">(each episode's air date)</span></button>
         }
+        else if (ReleaseDate is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today))
+        {
+            <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release date <span class="muted small">(@rd.ToString("d MMM yyyy"))</span></button>
+        }
+        <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Unknown))">Unknown date</button>
         <div class="field">
             <label for="watch-when">Other date</label>
             <div class="inline">
                 <input id="watch-when" type="datetime-local" @bind="custom" @bind:format="yyyy-MM-ddTHH:mm" max="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")" />
-                <button class="btn" @onclick="() => Pick(new DateTimeOffset(custom))">Save</button>
+                <button class="btn" @onclick="() => Pick(new WatchChoice(WatchTime.Custom, new DateTimeOffset(custom)))">Save</button>
             </div>
         </div>
     </div>
@@ -20,12 +25,17 @@
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
     [Parameter] public string What { get; set; } = "this";
     [Parameter] public DateOnly? ReleaseDate { get; set; }
-    [Parameter] public EventCallback<DateTimeOffset> OnPick { get; set; }
+    /// <summary>Marking a whole show/season: "release date" means each episode's own air date.</summary>
+    [Parameter] public bool Bulk { get; set; }
+    [Parameter] public EventCallback<WatchChoice> OnPick { get; set; }
     private DateTime custom = DateTime.Now;
 
-    private async Task Pick(DateTimeOffset when)
+    private async Task Pick(WatchChoice choice)
     {
+        // Start the pick before closing: handlers read which item was pending synchronously,
+        // and the parent may clear that when the dialog closes.
+        var picked = OnPick.InvokeAsync(choice);
         await OpenChanged.InvokeAsync(false);
-        await OnPick.InvokeAsync(when);
+        await picked;
     }
 }

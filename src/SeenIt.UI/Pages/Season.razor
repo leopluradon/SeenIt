@@ -31,13 +31,13 @@ else if (season is not null)
         {
             var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
             <article class="episode @(e.Plays > 0 ? "watched" : "")" @key="e.EpisodeNumber">
-                <div class="episode-still">
+                <a class="episode-still" href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)">
                     @if (Img.Still(e.StillPath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
                     <span class="episode-num">@e.EpisodeNumber</span>
-                </div>
+                </a>
                 <div class="episode-body">
                     <div class="episode-title">
-                        <b>@e.Name</b>
+                        <a href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)"><b>@e.Name</b></a>
                         <span class="muted small">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) @if (e.AirDate is { } ad) { <span>· @ad.ToString("d MMM yyyy")</span> } @if (e.Runtime is > 0) { <span>· @Fmt.Runtime(e.Runtime)</span> }</span>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(e.Overview)) { <p class="episode-overview">@e.Overview</p> }
@@ -45,12 +45,12 @@ else if (season is not null)
                         <div class="episode-actions">
                             @if (e.Plays > 0)
                             {
-                                <button class="btn btn-sm btn-watched" disabled="@busy" @onclick="() => Watch(e)" title="Watch again"><Icon Name="check" Size="14" /> @(e.Plays > 1 ? $"{e.Plays} plays" : "Watched")</button>
+                                <button class="btn btn-sm btn-watched" disabled="@busy" @onclick="() => pending = e" title="Watch again"><Icon Name="check" Size="14" /> @(e.Plays > 1 ? $"{e.Plays} plays" : "Watched")</button>
                                 <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Unwatch(e)" aria-label="Remove plays"><Icon Name="x" Size="14" /></button>
                             }
                             else if (aired)
                             {
-                                <button class="btn btn-sm" disabled="@busy" @onclick="() => Watch(e)"><Icon Name="check" Size="14" /> Mark watched</button>
+                                <button class="btn btn-sm" disabled="@busy" @onclick="() => pending = e"><Icon Name="check" Size="14" /> Mark watched</button>
                             }
                             else
                             {
@@ -63,7 +63,9 @@ else if (season is not null)
             </article>
         }
     </div>
-    <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" OnPick="WatchSeason" />
+    <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason" />
+    <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
+                 What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch" />
 }
 
 @code {
@@ -72,6 +74,7 @@ else if (season is not null)
     private SeasonDetail? season;
     private string? error;
     private bool busy, watchAllOpen;
+    private EpisodeDto? pending;
 
     private int Aired => season?.Episodes.Count(e => e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today)) ?? 0;
     private int Watched => season?.Episodes.Count(e => e.Plays > 0) ?? 0;
@@ -99,9 +102,15 @@ else if (season is not null)
         busy = false;
     }
 
-    private Task Watch(EpisodeDto e) => Act(() => Api.WatchAsync(new WatchRequest(MediaType.Episode, Id, e.SeasonNumber, e.EpisodeNumber)), $"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}");
+    private Task Watch(WatchChoice c)
+    {
+        if (pending is not { } e) return Task.CompletedTask;
+        pending = null;
+        return Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, e.SeasonNumber, e.EpisodeNumber)), $"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}{Fmt.When(c)}");
+    }
     private Task Unwatch(EpisodeDto e) => Act(() => Api.UnwatchAsync(MediaType.Episode, Id, e.SeasonNumber, e.EpisodeNumber), "Removed from history");
-    private Task WatchSeason(DateTimeOffset when) => Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, Number, when)), $"Marked {season!.Name} watched");
+    private Task WatchSeason(WatchChoice c) =>
+        Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, Number, c.At, When: c.When)), $"Marked {season!.Name} watched{Fmt.When(c)}");
     private Task UnwatchSeason() => Act(() => Api.UnwatchAsync(MediaType.Episode, Id, Number), "Season removed from history");
     private Task Rate(EpisodeDto e, int? v) => v is { } r
         ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, r, e.SeasonNumber, e.EpisodeNumber)), $"Rated {r}/10")

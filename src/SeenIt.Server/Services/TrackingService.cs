@@ -14,11 +14,12 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     /// <summary>Records one play. Shows/seasons expand to every aired, unwatched episode.</summary>
     public async Task<int> WatchAsync(Guid userId, WatchRequest req, WatchSource source, CancellationToken ct)
     {
-        var at = Clamp(req.WatchedAt);
+        var when = Resolve(req.When, req.WatchedAt);
         switch (req.Type)
         {
             case MediaType.Movie:
-                if (await catalog.EnsureMovieAsync(req.TmdbId, ct) is null) throw new TrackingException("Movie not found.");
+                if (await catalog.EnsureMovieAsync(req.TmdbId, ct) is not { } movie) throw new TrackingException("Movie not found.");
+                var at = PlayTime(when, req.WatchedAt, movie.ReleaseDate);
                 db.WatchEvents.Add(new WatchEvent { UserId = userId, Type = MediaType.Movie, TmdbId = req.TmdbId, WatchedAt = at, Source = source });
                 await RemoveFromWatchlistAsync(userId, MediaType.Movie, req.TmdbId, ct);
                 await db.SaveChangesAsync(ct);
@@ -26,15 +27,19 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
             case MediaType.Episode when req.SeasonNumber is { } s && req.EpisodeNumber is { } e:
                 if (await catalog.EnsureShowAsync(req.TmdbId, ct) is null) throw new TrackingException("Show not found.");
-                if (!await db.Episodes.AnyAsync(x => x.ShowTmdbId == req.TmdbId && x.SeasonNumber == s && x.EpisodeNumber == e, ct))
-                    throw new TrackingException($"S{s:00}E{e:00} isn't an episode of this show.");
-                db.WatchEvents.Add(new WatchEvent { UserId = userId, Type = MediaType.Episode, TmdbId = req.TmdbId, SeasonNumber = s, EpisodeNumber = e, WatchedAt = at, Source = source });
+                var ep = await db.Episodes.FirstOrDefaultAsync(x => x.ShowTmdbId == req.TmdbId && x.SeasonNumber == s && x.EpisodeNumber == e, ct)
+                         ?? throw new TrackingException($"S{s:00}E{e:00} isn't an episode of this show.");
+                db.WatchEvents.Add(new WatchEvent
+                {
+                    UserId = userId, Type = MediaType.Episode, TmdbId = req.TmdbId, SeasonNumber = s, EpisodeNumber = e,
+                    WatchedAt = PlayTime(when, req.WatchedAt, ep.AirDate), Source = source,
+                });
                 await RemoveFromWatchlistAsync(userId, MediaType.Show, req.TmdbId, ct);
                 await db.SaveChangesAsync(ct);
                 return 1;
 
             case MediaType.Show:
-                return await BulkWatchAsync(userId, new BulkWatchRequest(req.TmdbId, req.SeasonNumber, req.WatchedAt), ct);
+                return await BulkWatchAsync(userId, new BulkWatchRequest(req.TmdbId, req.SeasonNumber, req.WatchedAt, When: req.When), ct);
 
             default:
                 throw new TrackingException("Episodes need a season and episode number.");
@@ -45,12 +50,12 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     {
         if (await catalog.EnsureShowAsync(req.ShowTmdbId, ct) is null) throw new TrackingException("Show not found.");
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var at = Clamp(req.WatchedAt);
+        var when = Resolve(req.When, req.WatchedAt);
 
         var episodes = await db.Episodes
             .Where(e => e.ShowTmdbId == req.ShowTmdbId && e.AirDate != null && e.AirDate <= today)
             .Where(e => req.SeasonNumber == null ? e.SeasonNumber > 0 : e.SeasonNumber == req.SeasonNumber)
-            .Select(e => new { e.SeasonNumber, e.EpisodeNumber })
+            .Select(e => new { e.SeasonNumber, e.EpisodeNumber, e.AirDate })
             .ToListAsync(ct);
 
         var watched = req.OnlyUnwatched
@@ -66,7 +71,9 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             db.WatchEvents.Add(new WatchEvent
             {
                 UserId = userId, Type = MediaType.Episode, TmdbId = req.ShowTmdbId,
-                SeasonNumber = e.SeasonNumber, EpisodeNumber = e.EpisodeNumber, WatchedAt = at, Source = WatchSource.Manual,
+                SeasonNumber = e.SeasonNumber, EpisodeNumber = e.EpisodeNumber,
+                // "Release date" gives every episode its own air date.
+                WatchedAt = PlayTime(when, req.WatchedAt, e.AirDate), Source = WatchSource.Manual,
             });
             added++;
         }
@@ -87,6 +94,20 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         if (type != MediaType.Movie && episode is not null) q = q.Where(w => w.EpisodeNumber == episode);
         return await q.ExecuteDeleteAsync(ct);
     }
+
+    private static WatchTime Resolve(WatchTime? when, DateTimeOffset? at) =>
+        when ?? (at is null ? WatchTime.Now : WatchTime.Custom);
+
+    /// <summary>Turns a watch-time choice into the timestamp stored for one play.</summary>
+    public static DateTimeOffset PlayTime(WatchTime when, DateTimeOffset? at, DateOnly? released) => when switch
+    {
+        WatchTime.Unknown => WatchDates.Unknown,
+        // Noon UTC keeps the calendar day the same in every time zone. Unreleased → now.
+        WatchTime.ReleaseDate when released is { } d && d <= DateOnly.FromDateTime(DateTime.UtcNow)
+            => new DateTimeOffset(d.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero),
+        WatchTime.Custom => Clamp(at),
+        _ => DateTimeOffset.UtcNow,
+    };
 
     private static DateTimeOffset Clamp(DateTimeOffset? at)
     {
@@ -287,10 +308,11 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
         var now = DateTimeOffset.UtcNow;
         var months = Enumerable.Range(0, 12).Select(i => now.AddMonths(-11 + i)).Select(d => (d.Year, d.Month)).ToList();
-        var byMonth = watches.GroupBy(w => (w.WatchedAt.Year, w.WatchedAt.Month)).ToDictionary(g => g.Key, g => g.Count());
+        var dated = watches.Where(w => !WatchDates.IsUnknown(w.WatchedAt)).ToList();
+        var byMonth = dated.GroupBy(w => (w.WatchedAt.Year, w.WatchedAt.Month)).ToDictionary(g => g.Key, g => g.Count());
 
         var ratings = await db.Ratings.Where(r => r.UserId == userId).Select(r => r.Value).ToListAsync(ct);
-        var weekdays = watches.GroupBy(w => w.WatchedAt.DayOfWeek).ToDictionary(g => g.Key, g => g.Count());
+        var weekdays = dated.GroupBy(w => w.WatchedAt.DayOfWeek).ToDictionary(g => g.Key, g => g.Count());
 
         return new StatsDto(
             MoviesWatched: movieIds.Count,

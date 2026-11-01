@@ -57,6 +57,9 @@ public class TmdbClient
     public Task<TmdbSeason?> GetSeasonAsync(int showId, int season, CancellationToken ct = default) =>
         GetAsync<TmdbSeason>($"tv/{showId}/season/{season}", TimeSpan.FromMinutes(30), ct);
 
+    public Task<TmdbEpisodeDetail?> GetEpisodeAsync(int showId, int season, int episode, CancellationToken ct = default) =>
+        GetAsync<TmdbEpisodeDetail>($"tv/{showId}/season/{season}/episode/{episode}", TimeSpan.FromMinutes(30), ct);
+
     public Task<TmdbPage<TmdbListItem>?> SearchMultiAsync(string query, int page, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbListItem>>($"search/multi?query={Uri.EscapeDataString(query)}&page={page}&include_adult=false", TimeSpan.FromMinutes(30), ct);
 

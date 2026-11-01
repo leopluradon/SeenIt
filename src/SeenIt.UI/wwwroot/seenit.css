@@ -321,6 +321,23 @@ label.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 .episode-overview { margin: 0; color: var(--text-2); font-size: .9rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .episode-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: auto; }
 
+/* ---------- Episode page ---------- */
+.crumbs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.episode-hero { display: grid; grid-template-columns: minmax(0, 560px) 1fr; gap: 28px; align-items: end; margin: 8px 0 8px; }
+.episode-hero-art { position: relative; aspect-ratio: 16/9; border-radius: var(--radius); background: var(--surface-2) center/cover; box-shadow: var(--shadow); }
+.episode-hero-art .poster-badge { top: 12px; left: 12px; }
+.episode-hero-info h1 { margin: 2px 0 10px; }
+.plays { display: flex; flex-direction: column; }
+.play { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+.play:first-child { border-top: 0; }
+.play > span:first-of-type { flex: 1; }
+.episode-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.episode-nav-link { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; font-weight: 600; min-width: 0; }
+.episode-nav-link:hover { border-color: var(--surface-3); background: var(--surface-2); color: var(--text); }
+.episode-nav-link.next { justify-content: flex-end; text-align: right; grid-column: 2; }
+.episode-nav-link > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.episode-title a:hover b { color: var(--accent-hover); }
+
 /* ---------- History / progress lists ---------- */
 .history-item { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--radius); }
 .history-item:hover { background: var(--surface); }
@@ -428,6 +445,9 @@ label.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
     .hero-shade { background: linear-gradient(0deg, var(--bg) 10%, rgba(14, 16, 20, .6)); }
     .actions .btn { flex: 1 1 auto; }
     .episode { flex-direction: column; }
+    .episode-hero { grid-template-columns: 1fr; gap: 16px; }
+    .episode-nav { grid-template-columns: 1fr; }
+    .episode-nav-link.next { grid-column: 1; }
     .episode-still { width: 100%; }
     .progress-list, .mini-list { grid-template-columns: 1fr; }
     .stat-panels { grid-template-columns: 1fr; }

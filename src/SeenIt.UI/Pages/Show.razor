@@ -53,15 +53,15 @@ else if (s is not null)
                     @if (p.NextEpisode is { } n)
                     {
                         <div class="inline spread next-ep">
-                            <span>Next: <a href="@($"show/{Id}/season/{n.SeasonNumber}")"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> @n.Name</a></span>
-                            <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => WatchEpisode(n)"><Icon Name="check" Size="14" /> Watched</button>
+                            <span>Next: <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> @n.Name</a></span>
+                            <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => pendingEpisode = n"><Icon Name="check" Size="14" /> Watched</button>
                         </div>
                     }
                 </div>
             }
             @if (s.NextEpisodeToAir is { } next)
             {
-                <p class="muted">Next episode: <b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> @next.Name @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }</p>
+                <p class="muted">Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> @next.Name</a> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }</p>
             }
             @if (s.Overview is not null) { <p class="overview">@s.Overview</p> }
             <div class="links">
@@ -94,7 +94,9 @@ else if (s is not null)
 
     @if (s.User is { } user)
     {
-        <WatchDialog @bind-Open="watchAllOpen" What="every aired episode" OnPick="WatchAll" />
+        <WatchDialog @bind-Open="watchAllOpen" What="every aired episode" Bulk="true" OnPick="WatchAll" />
+        <WatchDialog Open="pendingEpisode is not null" OpenChanged="o => { if (!o) pendingEpisode = null; }"
+                     What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Selected="user.ListIds.ToList()" />
     }
 }
@@ -104,6 +106,7 @@ else if (s is not null)
     private ShowDetail? s;
     private string? error;
     private bool busy, watchAllOpen, listOpen;
+    private EpisodeRef? pendingEpisode;
 
     protected override Task OnParametersSetAsync() => Load();
 
@@ -128,9 +131,15 @@ else if (s is not null)
         busy = false;
     }
 
-    private Task WatchAll(DateTimeOffset when) => Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, null, when)), "Marked all aired episodes watched");
-    private Task WatchEpisode(EpisodeRef n) =>
-        Act(() => Api.WatchAsync(new WatchRequest(MediaType.Episode, Id, n.SeasonNumber, n.EpisodeNumber)), $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}");
+    private Task WatchAll(WatchChoice c) =>
+        Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, null, c.At, When: c.When)), $"Marked all aired episodes watched{Fmt.When(c)}");
+
+    private Task WatchEpisode(WatchChoice c)
+    {
+        if (pendingEpisode is not { } n) return Task.CompletedTask;
+        pendingEpisode = null;
+        return Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, n.SeasonNumber, n.EpisodeNumber)), $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
+    }
 
     private Task ToggleWatchlist() => s!.User!.InWatchlist
         ? Act(() => Api.RemoveFromWatchlistAsync(MediaType.Show, Id), "Removed from watchlist")

@@ -1,7 +1,7 @@
 @inject ApiClient Api
 @inject Toasts Toasts
 <div class="upnext-card">
-    <a href="@($"show/{Progress.ShowTmdbId}")" class="upnext-art" style="@(Img.Backdrop(Progress.BackdropPath, "w780") is { } b ? $"background-image:url('{b}')" : "")">
+    <a href="@(Progress.NextEpisode is { } ne ? Fmt.EpisodeHref(Progress.ShowTmdbId, ne.SeasonNumber, ne.EpisodeNumber) : $"show/{Progress.ShowTmdbId}")" class="upnext-art" style="@(Img.Backdrop(Progress.BackdropPath, "w780") is { } b ? $"background-image:url('{b}')" : "")">
         <div class="upnext-shade"></div>
         <div class="upnext-text">
             <div class="upnext-show">@Progress.Name</div>
@@ -16,24 +16,28 @@
         <span class="muted small">@Progress.Watched/@Progress.Aired</span>
         @if (Progress.NextEpisode is { } next)
         {
-            <button class="btn btn-sm btn-check" disabled="@busy" @onclick="() => Watch(next)" aria-label="Mark @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber) watched">
+            <button class="btn btn-sm btn-check" disabled="@busy" @onclick="() => dialogOpen = true" aria-label="Mark @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber) watched">
                 <Icon Name="check" Size="16" />
             </button>
         }
     </div>
 </div>
+@if (Progress.NextEpisode is { } pending)
+{
+    <WatchDialog @bind-Open="dialogOpen" What="@($"{Progress.Name} {Fmt.Ep(pending.SeasonNumber, pending.EpisodeNumber)}")" ReleaseDate="pending.AirDate" OnPick="c => Watch(pending, c)" />
+}
 @code {
     [Parameter, EditorRequired] public ShowProgressDto Progress { get; set; } = default!;
     [Parameter] public EventCallback OnWatched { get; set; }
-    private bool busy;
+    private bool busy, dialogOpen;
 
-    private async Task Watch(EpisodeRef ep)
+    private async Task Watch(EpisodeRef ep, WatchChoice c)
     {
         busy = true;
         try
         {
-            await Api.WatchAsync(new WatchRequest(MediaType.Episode, Progress.ShowTmdbId, ep.SeasonNumber, ep.EpisodeNumber));
-            Toasts.Show($"Watched {Progress.Name} {Fmt.Ep(ep.SeasonNumber, ep.EpisodeNumber)}");
+            await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Progress.ShowTmdbId, c, ep.SeasonNumber, ep.EpisodeNumber));
+            Toasts.Show($"Watched {Progress.Name} {Fmt.Ep(ep.SeasonNumber, ep.EpisodeNumber)}{Fmt.When(c)}");
             await OnWatched.InvokeAsync();
         }
         catch (Exception ex) { Toasts.Error(ex); }

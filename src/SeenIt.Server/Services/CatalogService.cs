@@ -312,6 +312,50 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 plays.GetValueOrDefault(e.EpisodeNumber), ratings.TryGetValue(e.EpisodeNumber, out var r) ? r : null)).ToList());
     }
 
+    public async Task<EpisodeDetail?> GetEpisodeAsync(int showId, int seasonNumber, int episodeNumber, Guid? userId, CancellationToken ct)
+    {
+        var show = await EnsureShowAsync(showId, ct);
+        var e = await tmdb.GetEpisodeAsync(showId, seasonNumber, episodeNumber, ct);
+        if (show is null || e is null) return null;
+
+        // Previous/next across season boundaries, from the cached episode list (specials stay within season 0).
+        var siblings = await db.Episodes
+            .Where(x => x.ShowTmdbId == showId && (seasonNumber == 0 ? x.SeasonNumber == 0 : x.SeasonNumber > 0))
+            .OrderBy(x => x.SeasonNumber).ThenBy(x => x.EpisodeNumber)
+            .Select(x => new { x.SeasonNumber, x.EpisodeNumber, x.Name, x.AirDate })
+            .ToListAsync(ct);
+        var index = siblings.FindIndex(x => x.SeasonNumber == seasonNumber && x.EpisodeNumber == episodeNumber);
+        EpisodeRef? Ref(int i) => i < 0 || i >= siblings.Count ? null
+            : new EpisodeRef(siblings[i].SeasonNumber, siblings[i].EpisodeNumber, siblings[i].Name, siblings[i].AirDate);
+
+        int? rating = null;
+        List<PlayDto>? plays = null;
+        if (userId is { } uid)
+        {
+            plays = await db.WatchEvents
+                .Where(w => w.UserId == uid && w.Type == MediaType.Episode && w.TmdbId == showId
+                            && w.SeasonNumber == seasonNumber && w.EpisodeNumber == episodeNumber)
+                .OrderByDescending(w => w.WatchedAt)
+                .Select(w => new PlayDto(w.Id, w.WatchedAt, w.Source))
+                .ToListAsync(ct);
+            rating = await db.Ratings
+                .Where(r => r.UserId == uid && r.Type == MediaType.Episode && r.TmdbId == showId
+                            && r.SeasonNumber == seasonNumber && r.EpisodeNumber == episodeNumber)
+                .Select(r => (int?)r.Value).FirstOrDefaultAsync(ct);
+        }
+
+        return new EpisodeDetail(
+            showId, show.Name, show.PosterPath, show.BackdropPath, e.SeasonNumber, e.EpisodeNumber, e.Id,
+            e.Name, NullIfEmpty(e.Overview), TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage, e.VoteCount,
+            (e.GuestStars ?? []).OrderBy(c => c.Order).Take(20).Select(c => new CastMember(c.Id, c.Name, c.AnyCharacter, c.ProfilePath)).ToList(),
+            (e.Crew ?? []).Where(c => c.Job is "Director" or "Writer" or "Teleplay" or "Story" or "Screenplay")
+                .DistinctBy(c => (c.Id, c.Job)).Select(c => new CrewMember(c.Id, c.Name, c.Job, c.ProfilePath)).ToList(),
+            index < 0 ? null : Ref(index - 1),
+            index < 0 ? null : Ref(index + 1),
+            rating,
+            plays);
+    }
+
     private async Task<UserMediaState> GetUserStateAsync(Guid userId, MediaType type, int id, CancellationToken ct)
     {
         var inWatchlist = await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == type && w.TmdbId == id, ct);

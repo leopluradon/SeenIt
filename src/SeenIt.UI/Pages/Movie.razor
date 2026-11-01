@@ -101,8 +101,8 @@ else if (m is not null)
         busy = false;
     }
 
-    private Task Watch(DateTimeOffset when) =>
-        Act(() => Api.WatchAsync(new WatchRequest(MediaType.Movie, Id, WatchedAt: when)), $"Watched {m!.Title}");
+    private Task Watch(WatchChoice c) =>
+        Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Movie, Id, c)), $"Watched {m!.Title}{Fmt.When(c)}");
 
     private Task UnwatchAll() => Act(() => Api.UnwatchAsync(MediaType.Movie, Id), "Removed from history");
 

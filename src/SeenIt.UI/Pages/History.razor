@@ -22,19 +22,19 @@ else if (data is not null)
     {
         <p class="muted small">@data.TotalResults.ToString("N0") plays</p>
         <div class="history">
-            @foreach (var day in data.Items.GroupBy(h => DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
+            @foreach (var day in data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
             {
-                <h3 class="day-head">@Fmt.Day(day.Key)</h3>
+                <h3 class="day-head">@(day.Key is { } dk ? Fmt.Day(dk) : "Date unknown")</h3>
                 @foreach (var h in day)
                 {
                     <div class="history-item" @key="h.Id">
-                        <a href="@(h.Type == MediaType.Movie ? $"movie/{h.TmdbId}" : $"show/{h.TmdbId}/season/{h.SeasonNumber}")" class="history-link">
+                        <a href="@(h.Type == MediaType.Movie ? $"movie/{h.TmdbId}" : Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber))" class="history-link">
                             <img src="@Img.Poster(h.PosterPath, "w92")" alt="" loading="lazy" />
                             <div>
                                 <div class="mini-title">@h.Title</div>
                                 @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · @h.EpisodeTitle</div> }
                                 <div class="muted small">
-                                    @h.WatchedAt.ToLocalTime().ToString("HH:mm")
+                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString("HH:mm"))
                                     @if (h.Source != WatchSource.Manual) { <span class="pill pill-sm">@SourceLabel(h.Source)</span> }
                                 </div>
                             </div>

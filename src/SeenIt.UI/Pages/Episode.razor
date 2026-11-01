@@ -1,0 +1,147 @@
+@page "/show/{Id:int}/season/{Season:int}/episode/{Number:int}"
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>@(e is null ? "Episode" : $"{e.ShowName} {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}") · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (e is null && error is null) { <Spinner /> }
+else if (e is not null)
+{
+    var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
+    <nav class="crumbs">
+        <a href="@($"show/{Id}")"><Icon Name="chevron-left" Size="16" /> @e.ShowName</a>
+        <span class="muted">/</span>
+        <a href="@($"show/{Id}/season/{Season}")">@(Season == 0 ? "Specials" : $"Season {Season}")</a>
+    </nav>
+
+    <div class="episode-hero">
+        <div class="episode-hero-art" style="@(Img.Backdrop(e.StillPath ?? e.ShowBackdropPath) is { } bg ? $"background-image:url('{bg}')" : "")">
+            @if (e.Plays is { Count: > 0 }) { <span class="poster-badge done"><Icon Name="check" Size="14" /></span> }
+        </div>
+        <div class="episode-hero-info">
+            <div class="muted">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)</div>
+            <h1>@(e.Name ?? $"Episode {e.EpisodeNumber}")</h1>
+            <div class="facts">
+                @if (e.AirDate is { } ad) { <span>@(aired ? "Aired" : "Airs") @ad.ToString("d MMM yyyy")</span> }
+                @if (e.Runtime is > 0) { <span>@Fmt.Runtime(e.Runtime)</span> }
+                @if (!aired) { <span class="pill">Not aired yet</span> }
+            </div>
+            @if (e.VoteAverage is > 0)
+            {
+                <div class="score"><Icon Name="star" Size="16" /> <b>@e.VoteAverage.Value.ToString("0.0")</b> <span class="muted small">TMDB · @e.VoteCount?.ToString("N0") votes</span></div>
+            }
+            <div class="actions">
+                @if (e.Plays is { } plays)
+                {
+                    <button class="btn @(plays.Count > 0 ? "btn-watched" : "btn-primary")" disabled="@(busy || !aired)" @onclick="() => watchOpen = true">
+                        <Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })
+                    </button>
+                }
+                else
+                {
+                    <a class="btn btn-primary" href="@($"login?returnUrl={Fmt.EpisodeHref(Id, Season, Number)}")">Sign in to track</a>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-body">
+        @if (e.Plays is { } myPlays)
+        {
+            <div class="panel rate-panel">
+                <span>Your rating</span>
+                <RatingPicker Value="e.Rating" ValueChanged="Rate" />
+            </div>
+            @if (myPlays.Count > 0)
+            {
+                <div class="panel">
+                    <h2>Your plays</h2>
+                    <div class="plays">
+                        @foreach (var p in myPlays)
+                        {
+                            <div class="play" @key="p.Id">
+                                <Icon Name="check" Size="16" Class="ok" />
+                                <span>@Fmt.PlayedAt(p.WatchedAt)</span>
+                                @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@(p.Source switch { WatchSource.Jellyfin => "Jellyfin", WatchSource.TraktImport => "Trakt", _ => "Letterboxd" })</span> }
+                                <button class="icon-btn" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+        @if (e.Overview is not null) { <p class="overview">@e.Overview</p> }
+        @if (e.Crew.Count > 0)
+        {
+            <dl class="crew">
+                @foreach (var g in e.Crew.GroupBy(c => c.Job))
+                {
+                    <div><dt>@g.Key</dt><dd>@string.Join(", ", g.Select(c => c.Name).Distinct())</dd></div>
+                }
+            </dl>
+        }
+    </div>
+
+    <nav class="episode-nav">
+        @if (e.Previous is { } prev)
+        {
+            <a class="episode-nav-link" href="@Fmt.EpisodeHref(Id, prev.SeasonNumber, prev.EpisodeNumber)">
+                <Icon Name="chevron-left" Size="18" />
+                <span><span class="muted small">Previous · @Fmt.Ep(prev.SeasonNumber, prev.EpisodeNumber)</span><br />@prev.Name</span>
+            </a>
+        }
+        else { <span></span> }
+        @if (e.Next is { } next)
+        {
+            <a class="episode-nav-link next" href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)">
+                <span><span class="muted small">Next · @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</span><br />@next.Name</span>
+                <Icon Name="chevron-right" Size="18" />
+            </a>
+        }
+    </nav>
+
+    <CastRow Cast="e.GuestStars" Title="Guest stars" />
+
+    <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    [Parameter] public int Season { get; set; }
+    [Parameter] public int Number { get; set; }
+    private EpisodeDetail? e;
+    private string? error;
+    private bool busy, watchOpen;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        if (e is not null && (e.ShowTmdbId != Id || e.SeasonNumber != Season || e.EpisodeNumber != Number)) e = null;
+        try { e = await Api.EpisodeAsync(Id, Season, Number); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Act(Func<Task> action, string? done = null)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            if (done is not null) Toasts.Show(done);
+            e = await Api.EpisodeAsync(Id, Season, Number);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+
+    private Task Watch(WatchChoice c) =>
+        Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
+
+    private Task RemovePlay(PlayDto p) => Act(() => Api.DeleteHistoryAsync(p.Id), "Play removed");
+
+    private Task Rate(int? value) => value is { } v
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, v, Season, Number)), $"Rated {v}/10")
+        : Act(() => Api.UnrateAsync(MediaType.Episode, Id, Season, Number), "Rating removed");
+}

@@ -117,15 +117,53 @@ public record SeasonDetail(
 
 // ---------- Tracking ----------
 
+/// <summary>When a play happened. Custom uses WatchedAt; ReleaseDate uses each item's own release/air date.</summary>
+public enum WatchTime { Now, ReleaseDate, Custom, Unknown }
+
+/// <summary>What the "when did you watch it?" dialog returns.</summary>
+public record WatchChoice(WatchTime When, DateTimeOffset? At = null);
+
 public record WatchRequest(
     MediaType Type,
     int TmdbId,                 // movie id, or show id for episodes/seasons/shows
     int? SeasonNumber = null,
     int? EpisodeNumber = null,
-    DateTimeOffset? WatchedAt = null);
+    DateTimeOffset? WatchedAt = null,
+    WatchTime? When = null);    // null: Custom if WatchedAt is set, otherwise Now
 
 /// <summary>Marks every aired episode of a show (or one season) watched.</summary>
-public record BulkWatchRequest(int ShowTmdbId, int? SeasonNumber = null, DateTimeOffset? WatchedAt = null, bool OnlyUnwatched = true);
+public record BulkWatchRequest(int ShowTmdbId, int? SeasonNumber = null, DateTimeOffset? WatchedAt = null, bool OnlyUnwatched = true, WatchTime? When = null);
+
+/// <summary>Plays recorded with "unknown date" are stored at the Unix epoch.</summary>
+public static class WatchDates
+{
+    public static readonly DateTimeOffset Unknown = DateTimeOffset.UnixEpoch;
+    public static bool IsUnknown(DateTimeOffset d) => d.UtcTicks == Unknown.UtcTicks;
+}
+
+public record PlayDto(Guid Id, DateTimeOffset WatchedAt, WatchSource Source);
+
+public record EpisodeDetail(
+    int ShowTmdbId,
+    string ShowName,
+    string? ShowPosterPath,
+    string? ShowBackdropPath,
+    int SeasonNumber,
+    int EpisodeNumber,
+    int TmdbId,
+    string? Name,
+    string? Overview,
+    DateOnly? AirDate,
+    int? Runtime,
+    string? StillPath,
+    double? VoteAverage,
+    int? VoteCount,
+    IReadOnlyList<CastMember> GuestStars,
+    IReadOnlyList<CrewMember> Crew,
+    EpisodeRef? Previous,
+    EpisodeRef? Next,
+    int? Rating,
+    IReadOnlyList<PlayDto>? Plays);   // null when signed out
 
 public record HistoryEntry(
     Guid Id,

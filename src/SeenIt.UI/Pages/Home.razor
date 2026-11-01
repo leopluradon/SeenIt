@@ -30,7 +30,7 @@
                     <div class="mini-list">
                         @foreach (var c in dash.Upcoming)
                         {
-                            <a class="mini-item" href="@Fmt.Href(c.Type, c.TmdbId)">
+                            <a class="mini-item" href="@(c.Type == MediaType.Episode ? Fmt.EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber) : Fmt.Href(c.Type, c.TmdbId))">
                                 <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
                                 <div>
                                     <div class="mini-title">@c.Title</div>

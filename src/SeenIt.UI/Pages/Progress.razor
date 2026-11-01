@@ -35,22 +35,28 @@ else if (items is not null)
                         </div>
                         @if (p.NextEpisode is { } n)
                         {
-                            <div class="small">Next: <a href="@($"show/{p.ShowTmdbId}/season/{n.SeasonNumber}")"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> @n.Name</a></div>
+                            <div class="small">Next: <a href="@Fmt.EpisodeHref(p.ShowTmdbId, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> @n.Name</a></div>
                         }
                         else if (p.Completed) { <div class="small ok">All caught up</div> }
                         @if (p.LastWatchedAt is { } lw) { <div class="muted small">Last watched @Fmt.Relative(lw)</div> }
                     </div>
                     @if (p.NextEpisode is { } next)
                     {
-                        <button class="btn btn-sm btn-check" @onclick="() => Watch(p, next)" aria-label="Mark next episode watched"><Icon Name="check" Size="16" /></button>
+                        <button class="btn btn-sm btn-check" @onclick="() => pending = (p, next)" aria-label="Mark next episode watched"><Icon Name="check" Size="16" /></button>
                     }
                 </div>
             }
         </div>
     }
 }
+@if (pending is var (ps, pe))
+{
+    <WatchDialog Open="true" OpenChanged="o => { if (!o) pending = null; }" What="@($"{ps.Name} {Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber)}")"
+                 ReleaseDate="pe.AirDate" OnPick="Watch" />
+}
 @code {
     [Inject] private Toasts Toasts { get; set; } = default!;
+    private (ShowProgressDto Show, EpisodeRef Episode)? pending;
     private List<ShowProgressDto>? items;
     private string? error;
     private string tab = "watching";
@@ -64,12 +70,14 @@ else if (items is not null)
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private async Task Watch(ShowProgressDto p, EpisodeRef n)
+    private async Task Watch(WatchChoice c)
     {
+        if (pending is not var (p, n)) return;
+        pending = null;
         try
         {
-            await Api.WatchAsync(new WatchRequest(MediaType.Episode, p.ShowTmdbId, n.SeasonNumber, n.EpisodeNumber));
-            Toasts.Show($"Watched {p.Name} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}");
+            await Api.WatchAsync(Fmt.Watch(MediaType.Episode, p.ShowTmdbId, c, n.SeasonNumber, n.EpisodeNumber));
+            Toasts.Show($"Watched {p.Name} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
             await Load();
         }
         catch (Exception ex) { Toasts.Error(ex); }

@@ -25,7 +25,7 @@ else if (items is not null)
             <div class="mini-list">
                 @foreach (var c in day)
                 {
-                    <a class="mini-item @(c.Watched ? "watched" : "")" href="@(c.Type == MediaType.Movie ? $"movie/{c.TmdbId}" : $"show/{c.TmdbId}/season/{c.SeasonNumber}")">
+                    <a class="mini-item @(c.Watched ? "watched" : "")" href="@(c.Type == MediaType.Movie ? $"movie/{c.TmdbId}" : Fmt.EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber))">
                         <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
                         <div>
                             <div class="mini-title">@c.Title</div>
