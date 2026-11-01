@@ -22,7 +22,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <MauiIcon Include="Resources\AppIcon\appicon.svg" Color="#EC3F4F" />
+    <!-- Adaptive icon: red background, eye scaled into the launcher mask's safe zone (~61% of the canvas). -->
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" ForegroundScale="0.65" Color="#EC3F4F" />
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#0E1014" BaseSize="128,128" />
   </ItemGroup>
 
