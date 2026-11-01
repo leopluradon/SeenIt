@@ -1,0 +1,56 @@
+@page "/register"
+@inject SessionState Session
+@inject NavigationManager Nav
+<PageTitle>Create account · SeenIt</PageTitle>
+
+<div class="auth-card">
+    <Logo />
+    <h1>Create your account</h1>
+    <EditForm Model="model" OnValidSubmit="Submit" FormName="register">
+        <div class="field">
+            <label for="reg-user">Username</label>
+            <InputText id="reg-user" @bind-Value="model.UserName" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]+" />
+            <small class="muted">3–32 letters, numbers, dots, dashes or underscores.</small>
+        </div>
+        <div class="field">
+            <label for="reg-email">Email</label>
+            <InputText id="reg-email" type="email" @bind-Value="model.Email" autocomplete="email" required />
+        </div>
+        <div class="field">
+            <label for="reg-pass">Password</label>
+            <InputText id="reg-pass" type="password" @bind-Value="model.Password" autocomplete="new-password" required minlength="8" />
+            <small class="muted">At least 8 characters, with a number and a lowercase letter.</small>
+        </div>
+        <ErrorBox Message="@error" />
+        <button class="btn btn-primary btn-block" type="submit" disabled="@busy">@(busy ? "Creating…" : "Create account")</button>
+    </EditForm>
+    <p class="muted center">Already have one? <a href="login">Sign in</a></p>
+    <ServerPicker />
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    private readonly Model model = new();
+    private string? error;
+    private bool busy;
+
+    private class Model
+    {
+        public string UserName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    private async Task Submit()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            await Session.RegisterAsync(model.UserName.Trim(), model.Email.Trim(), model.Password);
+            Nav.NavigateTo(Login.SafeReturn(ReturnUrl) is { Length: > 0 } r ? r : "settings?welcome=1");
+        }
+        catch (Exception ex) { error = ex.Message; }
+        busy = false;
+    }
+}

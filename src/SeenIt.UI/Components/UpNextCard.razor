@@ -1,0 +1,42 @@
+@inject ApiClient Api
+@inject Toasts Toasts
+<div class="upnext-card">
+    <a href="@($"show/{Progress.ShowTmdbId}")" class="upnext-art" style="@(Img.Backdrop(Progress.BackdropPath, "w780") is { } b ? $"background-image:url('{b}')" : "")">
+        <div class="upnext-shade"></div>
+        <div class="upnext-text">
+            <div class="upnext-show">@Progress.Name</div>
+            @if (Progress.NextEpisode is { } n)
+            {
+                <div class="upnext-ep">@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber) · @n.Name</div>
+            }
+        </div>
+    </a>
+    <div class="upnext-foot">
+        <ProgressBar Value="Progress.Watched" Max="Progress.Aired" />
+        <span class="muted small">@Progress.Watched/@Progress.Aired</span>
+        @if (Progress.NextEpisode is { } next)
+        {
+            <button class="btn btn-sm btn-check" disabled="@busy" @onclick="() => Watch(next)" aria-label="Mark @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber) watched">
+                <Icon Name="check" Size="16" />
+            </button>
+        }
+    </div>
+</div>
+@code {
+    [Parameter, EditorRequired] public ShowProgressDto Progress { get; set; } = default!;
+    [Parameter] public EventCallback OnWatched { get; set; }
+    private bool busy;
+
+    private async Task Watch(EpisodeRef ep)
+    {
+        busy = true;
+        try
+        {
+            await Api.WatchAsync(new WatchRequest(MediaType.Episode, Progress.ShowTmdbId, ep.SeasonNumber, ep.EpisodeNumber));
+            Toasts.Show($"Watched {Progress.Name} {Fmt.Ep(ep.SeasonNumber, ep.EpisodeNumber)}");
+            await OnWatched.InvokeAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+}

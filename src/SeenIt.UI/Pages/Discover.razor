@@ -1,0 +1,72 @@
+@page "/discover"
+@inject ApiClient Api
+@inject NavigationManager Nav
+<PageTitle>Discover · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Discover</h1>
+    <div class="segmented">
+        <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick="() => Go(MediaType.Movie, null)"><Icon Name="film" Size="16" /> Movies</button>
+        <button class="@(Type == MediaType.Show ? "on" : "")" @onclick="() => Go(MediaType.Show, null)"><Icon Name="tv" Size="16" /> Shows</button>
+    </div>
+</div>
+<div class="chips">
+    @foreach (var (key, label) in Lists)
+    {
+        <button class="chip @(CurrentList == key ? "on" : "")" @onclick="() => Go(Type, key)">@label</button>
+    }
+</div>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items.Count == 0 && loading) { <Spinner /> }
+<div class="poster-grid">
+    @foreach (var m in items) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
+</div>
+@if (page < totalPages)
+{
+    <div class="center"><button class="btn" disabled="@loading" @onclick="More">@(loading ? "Loading…" : "Load more")</button></div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    [SupplyParameterFromQuery(Name = "list")] public string? ListParam { get; set; }
+
+    private MediaType Type => TypeParam == "Show" ? MediaType.Show : MediaType.Movie;
+    private string CurrentList => ListParam ?? "trending/week";
+    private (string, string)[] Lists => Type == MediaType.Movie
+        ? [("trending/week", "Trending"), ("popular", "Popular"), ("now_playing", "In cinemas"), ("upcoming", "Upcoming"), ("top_rated", "Top rated")]
+        : [("trending/week", "Trending"), ("popular", "Popular"), ("airing_today", "Airing today"), ("on_the_air", "On the air"), ("top_rated", "Top rated")];
+
+    private readonly List<MediaSummary> items = [];
+    private int page, totalPages;
+    private bool loading;
+    private string? error;
+
+    protected override Task OnParametersSetAsync()
+    {
+        items.Clear();
+        page = 0;
+        return Load();
+    }
+
+    private void Go(MediaType type, string? list) =>
+        Nav.NavigateTo($"discover?type={type}" + (list is null ? "" : $"&list={Uri.EscapeDataString(list)}"));
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            var res = await Api.BrowseAsync(Type, CurrentList, page + 1);
+            var seen = items.Select(i => i.TmdbId).ToHashSet();
+            items.AddRange(res.Items.Where(i => seen.Add(i.TmdbId)));
+            page = res.Page;
+            totalPages = Math.Min(res.TotalPages, 20);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        loading = false;
+    }
+
+    private Task More() => Load();
+}

@@ -1,0 +1,8 @@
+<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="@Max" aria-valuenow="@Value">
+    <div class="progress-fill" style="width:@(Pct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+</div>
+@code {
+    [Parameter] public int Value { get; set; }
+    [Parameter] public int Max { get; set; }
+    private double Pct => Max <= 0 ? 0 : Math.Min(100, 100.0 * Value / Max);
+}

@@ -1,0 +1,31 @@
+@* Asks when something was watched: now, on release, or a specific date/time. *@
+<Modal Open="Open" OpenChanged="OpenChanged" Title="@($"When did you watch {What}?")">
+    <div class="stack">
+        <button class="btn btn-primary btn-block" @onclick="() => Pick(DateTimeOffset.Now)"><Icon Name="check" Size="16" /> Just now</button>
+        @if (ReleaseDate is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today))
+        {
+            <button class="btn btn-block" @onclick="() => Pick(new DateTimeOffset(rd.ToDateTime(new TimeOnly(20, 0))))">On release (@rd.ToString("d MMM yyyy"))</button>
+        }
+        <div class="field">
+            <label for="watch-when">Other date</label>
+            <div class="inline">
+                <input id="watch-when" type="datetime-local" @bind="custom" @bind:format="yyyy-MM-ddTHH:mm" max="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")" />
+                <button class="btn" @onclick="() => Pick(new DateTimeOffset(custom))">Save</button>
+            </div>
+        </div>
+    </div>
+</Modal>
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string What { get; set; } = "this";
+    [Parameter] public DateOnly? ReleaseDate { get; set; }
+    [Parameter] public EventCallback<DateTimeOffset> OnPick { get; set; }
+    private DateTime custom = DateTime.Now;
+
+    private async Task Pick(DateTimeOffset when)
+    {
+        await OpenChanged.InvokeAsync(false);
+        await OnPick.InvokeAsync(when);
+    }
+}

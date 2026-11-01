@@ -1,0 +1,48 @@
+@page "/stats"
+@attribute [Authorize]
+@inject ApiClient Api
+<PageTitle>Stats · SeenIt</PageTitle>
+
+<h1>Stats</h1>
+<ErrorBox Message="@error" />
+@if (s is null && error is null) { <Spinner /> }
+else if (s is not null)
+{
+    <div class="stat-tiles">
+        <div class="stat"><span class="stat-value">@Fmt.Duration(s.MinutesMovies + s.MinutesEpisodes)</span><span class="stat-label">Total time watched</span></div>
+        <div class="stat"><span class="stat-value">@s.MoviesWatched.ToString("N0")</span><span class="stat-label">Movies (@s.MoviePlays.ToString("N0") plays · @Fmt.Duration(s.MinutesMovies))</span></div>
+        <div class="stat"><span class="stat-value">@s.EpisodesWatched.ToString("N0")</span><span class="stat-label">Episodes (@s.EpisodePlays.ToString("N0") plays · @Fmt.Duration(s.MinutesEpisodes))</span></div>
+        <div class="stat"><span class="stat-value">@s.ShowsWatched.ToString("N0")</span><span class="stat-label">Shows</span></div>
+        <div class="stat"><span class="stat-value">@s.Ratings.ToString("N0")</span><span class="stat-label">Ratings @if (s.AverageRating is { } avg) { <span>· avg @avg.ToString("0.0")</span> }</span></div>
+    </div>
+
+    <div class="stat-panels">
+        <section class="panel">
+            <h2>Plays per month</h2>
+            <BarChart Data="s.PlaysByMonth" Vertical="true" Label="Plays per month, last 12 months" />
+        </section>
+        <section class="panel">
+            <h2>Top genres</h2>
+            @if (s.Genres.Count == 0) { <p class="muted">Watch something first.</p> }
+            <BarChart Data="s.Genres" Label="Plays by genre" />
+        </section>
+        <section class="panel">
+            <h2>Ratings</h2>
+            <BarChart Data="s.RatingDistribution" Vertical="true" Label="Number of ratings at each score" />
+        </section>
+        <section class="panel">
+            <h2>Day of week</h2>
+            <BarChart Data="s.PlaysByWeekday" Vertical="true" Label="Plays by day of week" />
+        </section>
+    </div>
+}
+@code {
+    private StatsDto? s;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { s = await Api.StatsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

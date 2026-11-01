@@ -1,0 +1,30 @@
+<form class="stack" @onsubmit="Save">
+    <div class="field">
+        <label for="list-name">Name</label>
+        <input id="list-name" @bind="name" maxlength="100" required />
+    </div>
+    <div class="field">
+        <label for="list-desc">Description</label>
+        <textarea id="list-desc" @bind="description" rows="3" maxlength="2000"></textarea>
+    </div>
+    <label class="check"><input type="checkbox" @bind="isPublic" /> Public: anyone with the link can view it</label>
+    <button class="btn btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(name)">Save</button>
+</form>
+@code {
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public bool IsPublic { get; set; }
+    [Parameter] public EventCallback<CreateListRequest> OnSave { get; set; }
+    private string name = "";
+    private string? description;
+    private bool isPublic;
+
+    protected override void OnInitialized()
+    {
+        name = Name ?? "";
+        description = Description;
+        isPublic = IsPublic;
+    }
+
+    private Task Save() => OnSave.InvokeAsync(new CreateListRequest(name.Trim(), description, isPublic));
+}

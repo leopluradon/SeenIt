@@ -1,0 +1,77 @@
+@page "/progress"
+@attribute [Authorize]
+@inject ApiClient Api
+<PageTitle>Progress · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Progress</h1>
+    <div class="segmented">
+        <button class="@(tab == "watching" ? "on" : "")" @onclick='() => tab = "watching"'>Watching</button>
+        <button class="@(tab == "waiting" ? "on" : "")" @onclick='() => tab = "waiting"'>Caught up</button>
+        <button class="@(tab == "all" ? "on" : "")" @onclick='() => tab = "all"'>All</button>
+    </div>
+</div>
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items is null && error is null) { <Spinner /> }
+else if (items is not null)
+{
+    var shown = items.Where(p => tab switch { "watching" => p.NextEpisode is not null, "waiting" => p.NextEpisode is null, _ => true }).ToList();
+    @if (shown.Count == 0)
+    {
+        <Empty Title="@(tab == "watching" ? "Nothing in progress." : "Nothing here.")">Mark episodes of a show watched to start tracking your progress.</Empty>
+    }
+    else
+    {
+        <div class="progress-list">
+            @foreach (var p in shown)
+            {
+                <div class="progress-item" @key="p.ShowTmdbId">
+                    <a href="@($"show/{p.ShowTmdbId}")"><img src="@Img.Poster(p.PosterPath, "w154")" alt="" loading="lazy" /></a>
+                    <div class="progress-body">
+                        <a href="@($"show/{p.ShowTmdbId}")" class="mini-title">@p.Name</a>
+                        <div class="inline">
+                            <ProgressBar Value="p.Watched" Max="p.Aired" />
+                            <span class="muted small nowrap">@p.Watched/@p.Aired</span>
+                        </div>
+                        @if (p.NextEpisode is { } n)
+                        {
+                            <div class="small">Next: <a href="@($"show/{p.ShowTmdbId}/season/{n.SeasonNumber}")"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> @n.Name</a></div>
+                        }
+                        else if (p.Completed) { <div class="small ok">All caught up</div> }
+                        @if (p.LastWatchedAt is { } lw) { <div class="muted small">Last watched @Fmt.Relative(lw)</div> }
+                    </div>
+                    @if (p.NextEpisode is { } next)
+                    {
+                        <button class="btn btn-sm btn-check" @onclick="() => Watch(p, next)" aria-label="Mark next episode watched"><Icon Name="check" Size="16" /></button>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+@code {
+    [Inject] private Toasts Toasts { get; set; } = default!;
+    private List<ShowProgressDto>? items;
+    private string? error;
+    private string tab = "watching";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { items = await Api.ProgressAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Watch(ShowProgressDto p, EpisodeRef n)
+    {
+        try
+        {
+            await Api.WatchAsync(new WatchRequest(MediaType.Episode, p.ShowTmdbId, n.SeasonNumber, n.EpisodeNumber));
+            Toasts.Show($"Watched {p.Name} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}");
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

@@ -1,0 +1,59 @@
+@page "/calendar"
+@attribute [Authorize]
+@inject ApiClient Api
+<PageTitle>Calendar · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Calendar</h1>
+    <div class="inline">
+        <button class="btn btn-sm" @onclick="() => Shift(-14)" aria-label="Earlier"><Icon Name="chevron-left" Size="16" /></button>
+        <button class="btn btn-sm" @onclick="Today">Today</button>
+        <button class="btn btn-sm" @onclick="() => Shift(14)" aria-label="Later"><Icon Name="chevron-right" Size="16" /></button>
+    </div>
+</div>
+<p class="muted small">@from.ToString("d MMM") – @from.AddDays(Days - 1).ToString("d MMM yyyy") · episodes of shows you watch or have on your watchlist, plus watchlist movie releases.</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items is null && error is null) { <Spinner /> }
+else if (items is not null)
+{
+    @if (items.Count == 0) { <Empty Title="Nothing airing in this window." /> }
+    @foreach (var day in items.GroupBy(i => i.Date))
+    {
+        <section class="cal-day @(day.Key == DateOnly.FromDateTime(DateTime.Today) ? "today" : "")">
+            <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString("d MMM")</span></h3>
+            <div class="mini-list">
+                @foreach (var c in day)
+                {
+                    <a class="mini-item @(c.Watched ? "watched" : "")" href="@(c.Type == MediaType.Movie ? $"movie/{c.TmdbId}" : $"show/{c.TmdbId}/season/{c.SeasonNumber}")">
+                        <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
+                        <div>
+                            <div class="mini-title">@c.Title</div>
+                            <div class="muted small">@(c.Type == MediaType.Episode ? $"{Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)} · {c.EpisodeTitle}" : "Movie release")</div>
+                        </div>
+                        @if (c.Watched) { <span class="ok"><Icon Name="check" Size="18" /></span> }
+                    </a>
+                }
+            </div>
+        </section>
+    }
+}
+@code {
+    private const int Days = 28;
+    private DateOnly from = DateOnly.FromDateTime(DateTime.Today).AddDays(-3);
+    private List<CalendarEntry>? items;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        items = null;
+        try { items = await Api.CalendarAsync(from, Days); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private Task Shift(int days) { from = from.AddDays(days); return Load(); }
+    private Task Today() { from = DateOnly.FromDateTime(DateTime.Today).AddDays(-3); return Load(); }
+}

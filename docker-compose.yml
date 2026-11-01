@@ -1,0 +1,37 @@
+# Secrets come from .env next to this file (not in git). See .env.example.
+services:
+  seenit:
+    build: .
+    image: seenit:latest
+    container_name: seenit
+    restart: unless-stopped
+    depends_on:
+      seenit-db:
+        condition: service_healthy
+    ports:
+      - "8082:8080"
+    environment:
+      ConnectionStrings__Default: "Host=seenit-db;Database=seenit;Username=seenit;Password=${POSTGRES_PASSWORD}"
+      Tmdb__ReadAccessToken: "${TMDB_READ_ACCESS_TOKEN}"
+    volumes:
+      - seenit-keys:/keys
+
+  seenit-db:
+    image: postgres:17-alpine
+    container_name: seenit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: seenit
+      POSTGRES_USER: seenit
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - seenit-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seenit -d seenit"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  seenit-keys:
+  seenit-db:

@@ -1,0 +1,109 @@
+@page "/"
+@inject ApiClient Api
+<PageTitle>SeenIt</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <h1 class="visually-hidden">Home</h1>
+        <ErrorBox Message="@error" OnRetry="LoadDashboard" />
+        @if (dash is null && error is null) { <Spinner /> }
+        else if (dash is not null)
+        {
+            <section class="row-section">
+                <div class="section-head"><h2>Up next</h2><a href="progress" class="section-more">All progress <Icon Name="chevron-right" Size="16" /></a></div>
+                @if (dash.UpNext.Count == 0)
+                {
+                    <p class="muted">Start watching a show and your next episode shows up here. <a href="discover">Find something to watch</a>.</p>
+                }
+                else
+                {
+                    <div class="card-scroller">
+                        @foreach (var p in dash.UpNext) { <UpNextCard Progress="p" OnWatched="LoadDashboard" @key="p.ShowTmdbId" /> }
+                    </div>
+                }
+            </section>
+
+            @if (dash.Upcoming.Count > 0)
+            {
+                <section class="row-section">
+                    <div class="section-head"><h2>Coming up</h2><a href="calendar" class="section-more">Calendar <Icon Name="chevron-right" Size="16" /></a></div>
+                    <div class="mini-list">
+                        @foreach (var c in dash.Upcoming)
+                        {
+                            <a class="mini-item" href="@Fmt.Href(c.Type, c.TmdbId)">
+                                <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
+                                <div>
+                                    <div class="mini-title">@c.Title</div>
+                                    <div class="muted small">@(c.Type == MediaType.Episode ? $"{Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)} · {c.EpisodeTitle}" : "Movie release")</div>
+                                </div>
+                                <span class="mini-date">@Fmt.Day(c.Date)</span>
+                            </a>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (dash.RecentHistory.Count > 0)
+            {
+                <section class="row-section">
+                    <div class="section-head"><h2>Recently watched</h2><a href="history" class="section-more">History <Icon Name="chevron-right" Size="16" /></a></div>
+                    <div class="poster-scroller">
+                        @foreach (var h in dash.RecentHistory)
+                        {
+                            <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
+                                        Sub="@(h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · {Fmt.Relative(h.WatchedAt)}" : Fmt.Relative(h.WatchedAt))"
+                                        ShowScore="false" @key="h.Id" />
+                        }
+                    </div>
+                </section>
+            }
+        }
+    </Authorized>
+    <NotAuthorized>
+        <section class="hero">
+            <h1>Remember everything you watch.</h1>
+            <p>Track movies and TV, see what's next in every show, follow what's airing, and scrobble automatically from Jellyfin.</p>
+            <div class="inline">
+                <a href="register" class="btn btn-primary">Create a free account</a>
+                <a href="login" class="btn">Sign in</a>
+            </div>
+        </section>
+    </NotAuthorized>
+</AuthorizeView>
+
+<PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" />
+<PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" />
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private DashboardDto? dash;
+    private string? error;
+    private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var trendingTask = LoadTrending();
+        if (AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated == true)
+            await LoadDashboard();
+        await trendingTask;
+    }
+
+    private async Task LoadDashboard()
+    {
+        error = null;
+        try { dash = await Api.DashboardAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task LoadTrending()
+    {
+        try
+        {
+            var m = Api.BrowseAsync(MediaType.Movie, "trending/week");
+            var s = Api.BrowseAsync(MediaType.Show, "trending/week");
+            trendingMovies = (await m).Items;
+            trendingShows = (await s).Items;
+        }
+        catch { trendingMovies ??= []; trendingShows ??= []; }
+    }
+}

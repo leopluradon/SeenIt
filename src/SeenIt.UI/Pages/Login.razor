@@ -1,0 +1,49 @@
+@page "/login"
+@inject SessionState Session
+@inject NavigationManager Nav
+<PageTitle>Sign in · SeenIt</PageTitle>
+
+<div class="auth-card">
+    <Logo />
+    <h1>Sign in</h1>
+    <EditForm Model="model" OnValidSubmit="Submit" FormName="login">
+        <div class="field">
+            <label for="login-user">Username or email</label>
+            <InputText id="login-user" @bind-Value="model.User" autocomplete="username" required />
+        </div>
+        <div class="field">
+            <label for="login-pass">Password</label>
+            <InputText id="login-pass" type="password" @bind-Value="model.Password" autocomplete="current-password" required />
+        </div>
+        <ErrorBox Message="@error" />
+        <button class="btn btn-primary btn-block" type="submit" disabled="@busy">@(busy ? "Signing in…" : "Sign in")</button>
+    </EditForm>
+    <p class="muted center">New here? <a href="@("register" + (ReturnUrl is null ? "" : "?returnUrl=" + Uri.EscapeDataString(ReturnUrl)))">Create an account</a></p>
+    <ServerPicker />
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    private readonly Model model = new();
+    private string? error;
+    private bool busy;
+
+    private class Model { public string User { get; set; } = ""; public string Password { get; set; } = ""; }
+
+    private async Task Submit()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            await Session.LoginAsync(model.User.Trim(), model.Password);
+            Nav.NavigateTo(SafeReturn(ReturnUrl));
+        }
+        catch (Exception ex) { error = ex.Message; }
+        busy = false;
+    }
+
+    /// <summary>Only allow local, relative return paths.</summary>
+    public static string SafeReturn(string? url) =>
+        string.IsNullOrEmpty(url) || url.Contains("://") || url.StartsWith("//") || url.StartsWith("login") || url.StartsWith("register") ? "" : url.TrimStart('/');
+}

@@ -1,0 +1,116 @@
+@page "/movie/{Id:int}"
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+<PageTitle>@(m?.Title ?? "Movie") · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (m is null && error is null) { <Spinner /> }
+else if (m is not null)
+{
+    <MediaHero Title="@m.Title" Year="m.ReleaseDate?.Year" Tagline="@m.Tagline" Poster="@m.PosterPath" Backdrop="@m.BackdropPath" Score="m.VoteAverage" Votes="m.VoteCount">
+        <Facts>
+            @if (m.ReleaseDate is { } d) { <span>@d.ToString("d MMM yyyy")</span> }
+            @if (m.Runtime is > 0) { <span>@Fmt.Runtime(m.Runtime)</span> }
+            @if (m.Genres.Count > 0) { <span>@string.Join(", ", m.Genres)</span> }
+            @if (m.Status is not null and not "Released") { <span class="pill">@m.Status</span> }
+        </Facts>
+        <Actions>
+            @if (m.User is { } u)
+            {
+                <button class="btn @(u.Plays > 0 ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="() => watchOpen = true">
+                    <Icon Name="check" Size="18" /> @(u.Plays switch { 0 => "Mark watched", 1 => "Watched", var n => $"Watched {n}×" })
+                </button>
+                <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
+                    <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
+                </button>
+                <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
+            }
+            else
+            {
+                <a class="btn btn-primary" href="@($"login?returnUrl=movie/{Id}")">Sign in to track</a>
+            }
+        </Actions>
+    </MediaHero>
+
+    <div class="detail-body">
+        <div class="detail-main">
+            @if (m.User is { } u)
+            {
+                <div class="panel rate-panel">
+                    <span>Your rating</span>
+                    <RatingPicker Value="u.Rating" ValueChanged="Rate" />
+                    @if (u.LastWatchedAt is { } last) { <span class="muted small">Last watched @Fmt.Relative(last)</span> }
+                    @if (u.Plays > 0) { <button class="btn btn-sm btn-ghost" @onclick="UnwatchAll"><Icon Name="trash" Size="14" /> Remove plays</button> }
+                </div>
+            }
+            @if (m.Overview is not null) { <p class="overview">@m.Overview</p> }
+            @if (m.Crew.Count > 0)
+            {
+                <dl class="crew">
+                    @foreach (var g in m.Crew.GroupBy(c => c.Job))
+                    {
+                        <div><dt>@g.Key</dt><dd>@string.Join(", ", g.Select(c => c.Name).Distinct())</dd></div>
+                    }
+                </dl>
+            }
+            <div class="links">
+                @if (m.ImdbId is not null) { <a href="@($"https://www.imdb.com/title/{m.ImdbId}")" target="_blank" rel="noopener">IMDb</a> }
+                <a href="@($"https://www.themoviedb.org/movie/{m.TmdbId}")" target="_blank" rel="noopener">TMDB</a>
+            </div>
+        </div>
+    </div>
+
+    <CastRow Cast="m.Cast" />
+    <Trailers Videos="m.Videos" />
+    <PosterRow Title="You might also like" Items="m.Recommendations" EmptyText="No recommendations yet." />
+
+    @if (m.User is { } user)
+    {
+        <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" />
+        <AddToListDialog @bind-Open="listOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Selected="user.ListIds.ToList()" />
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private MovieDetail? m;
+    private string? error;
+    private bool busy, watchOpen, listOpen;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        if (m?.TmdbId != Id) m = null;
+        try { m = await Api.MovieAsync(Id); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Act(Func<Task> action, string? done = null)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            if (done is not null) Toasts.Show(done);
+            m = await Api.MovieAsync(Id);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+
+    private Task Watch(DateTimeOffset when) =>
+        Act(() => Api.WatchAsync(new WatchRequest(MediaType.Movie, Id, WatchedAt: when)), $"Watched {m!.Title}");
+
+    private Task UnwatchAll() => Act(() => Api.UnwatchAsync(MediaType.Movie, Id), "Removed from history");
+
+    private Task ToggleWatchlist() => m!.User!.InWatchlist
+        ? Act(() => Api.RemoveFromWatchlistAsync(MediaType.Movie, Id), "Removed from watchlist")
+        : Act(() => Api.AddToWatchlistAsync(MediaType.Movie, Id), "Added to watchlist");
+
+    private Task Rate(int? value) => value is { } v
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Movie, Id, v)), $"Rated {v}/10")
+        : Act(() => Api.UnrateAsync(MediaType.Movie, Id), "Rating removed");
+}

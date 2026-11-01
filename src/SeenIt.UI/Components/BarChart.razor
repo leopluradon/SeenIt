@@ -1,0 +1,36 @@
+@* Simple horizontal or vertical bar chart rendered with divs; no chart library needed. *@
+@if (Vertical)
+{
+    <div class="vbars" role="img" aria-label="@Label">
+        @foreach (var b in Data)
+        {
+            <div class="vbar" title="@($"{b.Label}: {b.Count}")">
+                <div class="vbar-track"><div class="vbar-fill" style="height:@Pct(b.Count)%"></div></div>
+                <span class="vbar-label">@b.Label</span>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="hbars" role="img" aria-label="@Label">
+        @foreach (var b in Data)
+        {
+            <div class="hbar">
+                <span class="hbar-label">@b.Label</span>
+                <div class="hbar-track"><div class="hbar-fill" style="width:@Pct(b.Count)%"></div></div>
+                <span class="hbar-value">@b.Count.ToString("N0")</span>
+            </div>
+        }
+    </div>
+}
+@code {
+    [Parameter] public IReadOnlyList<CountBucket> Data { get; set; } = [];
+    [Parameter] public bool Vertical { get; set; }
+    [Parameter] public string Label { get; set; } = "";
+    private string Pct(int v)
+    {
+        var max = Data.Count == 0 ? 0 : Data.Max(d => d.Count);
+        return (max == 0 ? 0 : 100.0 * v / max).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+    }
+}

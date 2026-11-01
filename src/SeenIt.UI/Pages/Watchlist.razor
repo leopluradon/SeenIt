@@ -1,0 +1,61 @@
+@page "/watchlist"
+@attribute [Authorize]
+@inject ApiClient Api
+<PageTitle>Watchlist · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Watchlist</h1>
+    <div class="segmented">
+        <button class="@(filter is null ? "on" : "")" @onclick="() => filter = null">All</button>
+        <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => filter = MediaType.Movie">Movies</button>
+        <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => filter = MediaType.Show">Shows</button>
+    </div>
+</div>
+<div class="chips">
+    <button class="chip @(sort == "added" ? "on" : "")" @onclick='() => sort = "added"'>Recently added</button>
+    <button class="chip @(sort == "release" ? "on" : "")" @onclick='() => sort = "release"'>Release date</button>
+    <button class="chip @(sort == "title" ? "on" : "")" @onclick='() => sort = "title"'>Title</button>
+</div>
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items is null && error is null) { <Spinner /> }
+else if (items is not null)
+{
+    var shown = Sorted().ToList();
+    @if (shown.Count == 0) { <Empty Title="Your watchlist is empty.">Add movies and shows you want to watch from their pages.</Empty> }
+    else
+    {
+        <div class="poster-grid">
+            @foreach (var w in shown)
+            {
+                var upcoming = w.ReleaseDate is { } rd && rd > DateOnly.FromDateTime(DateTime.Today);
+                <PosterCard Media="w.Media" Badge="@(upcoming ? w.ReleaseDate!.Value.ToString("d MMM") : null)" @key="(w.Media.Type, w.Media.TmdbId)" />
+            }
+        </div>
+    }
+}
+@code {
+    private List<WatchlistEntry>? items;
+    private string? error;
+    private MediaType? filter;
+    private string sort = "added";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { items = await Api.WatchlistAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private IEnumerable<WatchlistEntry> Sorted()
+    {
+        var q = items!.Where(i => filter is null || i.Media.Type == filter);
+        return sort switch
+        {
+            "release" => q.OrderBy(i => i.ReleaseDate ?? DateOnly.MaxValue),
+            "title" => q.OrderBy(i => i.Media.Title, StringComparer.OrdinalIgnoreCase),
+            _ => q.OrderByDescending(i => i.AddedAt),
+        };
+    }
+}

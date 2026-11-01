@@ -1,0 +1,65 @@
+@inject ApiClient Api
+@inject Toasts Toasts
+<Modal Open="Open" OpenChanged="OpenChanged" Title="Add to list">
+    @if (lists is null) { <Spinner /> }
+    else
+    {
+        <div class="stack">
+            @foreach (var l in lists)
+            {
+                var inList = Selected.Contains(l.Id);
+                <button class="list-choice @(inList ? "on" : "")" @onclick="() => Toggle(l.Id, inList)" @key="l.Id">
+                    <span class="check-dot">@if (inList) { <Icon Name="check" Size="14" /> }</span>
+                    <span>@l.Name</span>
+                    <span class="muted small">@l.ItemCount</span>
+                </button>
+            }
+            <form class="inline" @onsubmit="Create">
+                <input placeholder="New list name" @bind="newName" maxlength="100" aria-label="New list name" />
+                <button class="btn" type="submit" disabled="@string.IsNullOrWhiteSpace(newName)"><Icon Name="plus" Size="16" /> Create</button>
+            </form>
+        </div>
+    }
+</Modal>
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public MediaType Type { get; set; }
+    [Parameter] public int TmdbId { get; set; }
+    [Parameter] public List<Guid> Selected { get; set; } = [];
+    private List<ListSummary>? lists;
+    private string newName = "";
+    private bool wasOpen;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Open && !wasOpen)
+        {
+            try { lists = await Api.ListsAsync(); }
+            catch (Exception ex) { Toasts.Error(ex); lists = []; }
+        }
+        wasOpen = Open;
+    }
+
+    private async Task Toggle(Guid id, bool inList)
+    {
+        try
+        {
+            if (inList) { await Api.RemoveFromListAsync(id, Type, TmdbId); Selected.Remove(id); }
+            else { await Api.AddToListAsync(id, Type, TmdbId); Selected.Add(id); }
+            lists = await Api.ListsAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Create()
+    {
+        try
+        {
+            var id = await Api.CreateListAsync(new CreateListRequest(newName.Trim(), null, false));
+            newName = "";
+            await Toggle(id, false);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

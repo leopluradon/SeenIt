@@ -1,0 +1,22 @@
+@page "/more"
+@attribute [Authorize]
+@inject SessionState Session
+@inject NavigationManager Nav
+<PageTitle>More · SeenIt</PageTitle>
+<h1>More</h1>
+<nav class="more-list">
+    <a href="watchlist"><Icon Name="bookmark" /> Watchlist</a>
+    <a href="history"><Icon Name="history" /> History</a>
+    <a href="lists"><Icon Name="list" /> Lists</a>
+    <a href="ratings"><Icon Name="star" /> Ratings</a>
+    <a href="stats"><Icon Name="chart" /> Stats</a>
+    <a href="settings"><Icon Name="settings" /> Settings</a>
+    <button @onclick="Logout"><Icon Name="logout" /> Sign out</button>
+</nav>
+@code {
+    private async Task Logout()
+    {
+        await Session.LogoutAsync();
+        Nav.NavigateTo("");
+    }
+}

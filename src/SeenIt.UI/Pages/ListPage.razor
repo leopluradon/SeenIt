@@ -1,0 +1,87 @@
+@page "/lists/{Id:guid}"
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+@inject IServerConfig Server
+<PageTitle>@(list?.Name ?? "List") · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (list is null && error is null) { <Spinner /> }
+else if (list is not null)
+{
+    <nav class="crumbs">@if (list.IsOwner) { <a href="lists"><Icon Name="chevron-left" Size="16" /> Lists</a> }</nav>
+    <div class="page-head">
+        <div>
+            <h1>@list.Name</h1>
+            <p class="muted small">by @list.OwnerUserName · @list.Items.Count items · @(list.IsPublic ? "Public" : "Private")</p>
+        </div>
+        @if (list.IsOwner)
+        {
+            <div class="inline">
+                @if (list.IsPublic) { <button class="btn btn-sm" @onclick="CopyLink"><Icon Name="copy" Size="16" /> Copy link</button> }
+                <button class="btn btn-sm" @onclick="() => editOpen = true">Edit</button>
+                <button class="btn btn-sm btn-danger" @onclick="Delete">Delete</button>
+            </div>
+        }
+    </div>
+    @if (list.Description is not null) { <p class="overview">@list.Description</p> }
+    @if (list.Items.Count == 0) { <Empty Title="This list is empty.">Add movies and shows from their pages with the “Lists” button.</Empty> }
+    <div class="poster-grid">
+        @foreach (var i in list.Items)
+        {
+            <div class="poster-wrap" @key="i.Id">
+                <PosterCard Media="i.Media" />
+                @if (list.IsOwner)
+                {
+                    <button class="poster-remove" @onclick="() => Remove(i)" aria-label="Remove @i.Media.Title"><Icon Name="x" Size="14" /></button>
+                }
+            </div>
+        }
+    </div>
+
+    <Modal @bind-Open="editOpen" Title="Edit list">
+        <ListForm Name="@list.Name" Description="@list.Description" IsPublic="list.IsPublic" OnSave="Save" />
+    </Modal>
+}
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [Inject] private IJSRuntime Js { get; set; } = default!;
+    private ListDetail? list;
+    private string? error;
+    private bool editOpen;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { list = await Api.ListAsync(Id); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Save(CreateListRequest req)
+    {
+        try { await Api.UpdateListAsync(Id, req); editOpen = false; await Load(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Remove(ListItemDto i)
+    {
+        try { await Api.RemoveFromListAsync(Id, i.Media.Type, i.Media.TmdbId); await Load(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Delete()
+    {
+        if (!await Js.InvokeAsync<bool>("confirm", $"Delete “{list!.Name}”? This can't be undone.")) return;
+        try { await Api.DeleteListAsync(Id); Nav.NavigateTo("lists"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task CopyLink()
+    {
+        var url = new Uri(new Uri(Server.Url), $"lists/{Id}").ToString();
+        try { await Js.InvokeVoidAsync("navigator.clipboard.writeText", url); Toasts.Show("Link copied"); }
+        catch { Toasts.Show(url); }
+    }
+}

@@ -1,0 +1,15 @@
+@if (Videos.Count > 0)
+{
+    <section class="row-section">
+        <div class="section-head"><h2>Trailers</h2></div>
+        <div class="chips">
+            @foreach (var v in Videos)
+            {
+                <a class="chip" href="@($"https://www.youtube.com/watch?v={v.Key}")" target="_blank" rel="noopener"><Icon Name="play" Size="14" /> @v.Name</a>
+            }
+        </div>
+    </section>
+}
+@code {
+    [Parameter] public IReadOnlyList<Video> Videos { get; set; } = [];
+}

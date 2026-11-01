@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e1014" />
+    <meta name="description" content="SeenIt: track the movies and TV you watch." />
+    <title>SeenIt</title>
+    <base href="/" />
+    <link rel="preconnect" href="https://image.tmdb.org" />
+    <link rel="stylesheet" href="_content/SeenIt.UI/seenit.css" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <style>
+        body { background: #0e1014; }
+        .boot { position: fixed; inset: 0; display: grid; place-items: center; }
+        .boot svg { animation: boot 1.2s ease-in-out infinite; }
+        @keyframes boot { 50% { opacity: .4; } }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="boot">
+            <svg width="56" height="56" viewBox="0 0 32 32" aria-label="Loading SeenIt">
+                <rect width="32" height="32" rx="8" fill="#ec3f4f" />
+                <path d="M5 16s4-7 11-7 11 7 11 7-4 7-11 7S5 16 5 16z" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" />
+                <path d="m12.5 16 2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+        </div>
+    </div>
+    <div id="blazor-error-ui" style="display:none;position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#ec3f4f;color:#fff;z-index:1000">
+        Something went wrong. <a href="" class="reload" style="color:#fff;text-decoration:underline">Reload</a>
+    </div>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+</html>

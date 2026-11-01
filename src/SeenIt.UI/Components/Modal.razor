@@ -1,0 +1,18 @@
+@if (Open)
+{
+    <div class="modal-backdrop" @onclick="Close"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="@Title">
+        <div class="modal-head">
+            <h3>@Title</h3>
+            <button class="icon-btn" @onclick="Close" aria-label="Close"><Icon Name="x" /></button>
+        </div>
+        <div class="modal-body">@ChildContent</div>
+    </div>
+}
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private Task Close() => OpenChanged.InvokeAsync(false);
+}

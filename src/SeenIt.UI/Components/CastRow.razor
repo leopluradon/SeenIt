@@ -1,0 +1,20 @@
+@if (Cast.Count > 0)
+{
+    <section class="row-section">
+        <div class="section-head"><h2>Cast</h2></div>
+        <div class="cast-scroller">
+            @foreach (var c in Cast)
+            {
+                <div class="cast" @key="c.Id">
+                    @if (Img.Profile(c.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                    else { <div class="cast-fallback">@c.Name[..1]</div> }
+                    <div class="cast-name">@c.Name</div>
+                    <div class="cast-role muted small">@c.Character</div>
+                </div>
+            }
+        </div>
+    </section>
+}
+@code {
+    [Parameter] public IReadOnlyList<CastMember> Cast { get; set; } = [];
+}

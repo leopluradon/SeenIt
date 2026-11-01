@@ -1,0 +1,25 @@
+<a class="poster-card" href="@Fmt.Href(Media.Type, Media.TmdbId)" title="@Media.Title">
+    <div class="poster">
+        @if (Img.Poster(Media.PosterPath) is { } src)
+        {
+            <img src="@src" alt="" loading="lazy" />
+        }
+        else
+        {
+            <div class="poster-fallback"><Icon Name="@(Media.Type == MediaType.Movie ? "film" : "tv")" Size="32" /><span>@Media.Title</span></div>
+        }
+        @if (Badge is not null) { <span class="poster-badge">@Badge</span> }
+        @if (Media.VoteAverage is > 0 && ShowScore) { <span class="poster-score">@Media.VoteAverage.Value.ToString("0.0")</span> }
+    </div>
+    <div class="poster-title">@Media.Title</div>
+    <div class="poster-sub">
+        @if (Sub is not null) { @Sub }
+        else { @(Media.Year?.ToString() ?? "")<span class="dot-sep">@(Media.Type == MediaType.Movie ? "Movie" : "TV")</span> }
+    </div>
+</a>
+@code {
+    [Parameter, EditorRequired] public MediaSummary Media { get; set; } = default!;
+    [Parameter] public string? Badge { get; set; }
+    [Parameter] public string? Sub { get; set; }
+    [Parameter] public bool ShowScore { get; set; } = true;
+}

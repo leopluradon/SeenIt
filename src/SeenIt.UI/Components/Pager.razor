@@ -1,0 +1,13 @@
+@if (TotalPages > 1)
+{
+    <nav class="pager" aria-label="Pages">
+        <button class="btn btn-sm" disabled="@(Page <= 1)" @onclick="() => OnPage.InvokeAsync(Page - 1)"><Icon Name="chevron-left" Size="16" /> Newer</button>
+        <span class="muted small">Page @Page of @TotalPages</span>
+        <button class="btn btn-sm" disabled="@(Page >= TotalPages)" @onclick="() => OnPage.InvokeAsync(Page + 1)">Older <Icon Name="chevron-right" Size="16" /></button>
+    </nav>
+}
+@code {
+    [Parameter] public int Page { get; set; }
+    [Parameter] public int TotalPages { get; set; }
+    [Parameter] public EventCallback<int> OnPage { get; set; }
+}

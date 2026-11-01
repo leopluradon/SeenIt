@@ -1,0 +1,109 @@
+@page "/show/{Id:int}/season/{Number:int}"
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>@(season is null ? "Season" : $"{season.ShowName} · {season.Name}") · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (season is null && error is null) { <Spinner /> }
+else if (season is not null)
+{
+    <nav class="crumbs"><a href="@($"show/{Id}")"><Icon Name="chevron-left" Size="16" /> @season.ShowName</a></nav>
+    <div class="page-head">
+        <h1>@season.Name</h1>
+        <AuthorizeView>
+            <div class="inline">
+                <span class="muted">@Watched/@Aired watched</span>
+                @if (Watched < Aired)
+                {
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => watchAllOpen = true"><Icon Name="check" Size="16" /> Mark season watched</button>
+                }
+                else if (Watched > 0)
+                {
+                    <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="UnwatchSeason">Unwatch season</button>
+                }
+            </div>
+        </AuthorizeView>
+    </div>
+    @if (season.Overview is not null) { <p class="overview">@season.Overview</p> }
+
+    <div class="episodes">
+        @foreach (var e in season.Episodes)
+        {
+            var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
+            <article class="episode @(e.Plays > 0 ? "watched" : "")" @key="e.EpisodeNumber">
+                <div class="episode-still">
+                    @if (Img.Still(e.StillPath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                    <span class="episode-num">@e.EpisodeNumber</span>
+                </div>
+                <div class="episode-body">
+                    <div class="episode-title">
+                        <b>@e.Name</b>
+                        <span class="muted small">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) @if (e.AirDate is { } ad) { <span>· @ad.ToString("d MMM yyyy")</span> } @if (e.Runtime is > 0) { <span>· @Fmt.Runtime(e.Runtime)</span> }</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(e.Overview)) { <p class="episode-overview">@e.Overview</p> }
+                    <AuthorizeView>
+                        <div class="episode-actions">
+                            @if (e.Plays > 0)
+                            {
+                                <button class="btn btn-sm btn-watched" disabled="@busy" @onclick="() => Watch(e)" title="Watch again"><Icon Name="check" Size="14" /> @(e.Plays > 1 ? $"{e.Plays} plays" : "Watched")</button>
+                                <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Unwatch(e)" aria-label="Remove plays"><Icon Name="x" Size="14" /></button>
+                            }
+                            else if (aired)
+                            {
+                                <button class="btn btn-sm" disabled="@busy" @onclick="() => Watch(e)"><Icon Name="check" Size="14" /> Mark watched</button>
+                            }
+                            else
+                            {
+                                <span class="pill">Not aired yet</span>
+                            }
+                            <RatingPicker Value="e.Rating" ValueChanged="v => Rate(e, v)" Compact="true" />
+                        </div>
+                    </AuthorizeView>
+                </div>
+            </article>
+        }
+    </div>
+    <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" OnPick="WatchSeason" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    [Parameter] public int Number { get; set; }
+    private SeasonDetail? season;
+    private string? error;
+    private bool busy, watchAllOpen;
+
+    private int Aired => season?.Episodes.Count(e => e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today)) ?? 0;
+    private int Watched => season?.Episodes.Count(e => e.Plays > 0) ?? 0;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        if (season is not null && (season.ShowTmdbId != Id || season.SeasonNumber != Number)) season = null;
+        try { season = await Api.SeasonAsync(Id, Number); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Act(Func<Task> action, string? done = null)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            if (done is not null) Toasts.Show(done);
+            season = await Api.SeasonAsync(Id, Number);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+
+    private Task Watch(EpisodeDto e) => Act(() => Api.WatchAsync(new WatchRequest(MediaType.Episode, Id, e.SeasonNumber, e.EpisodeNumber)), $"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}");
+    private Task Unwatch(EpisodeDto e) => Act(() => Api.UnwatchAsync(MediaType.Episode, Id, e.SeasonNumber, e.EpisodeNumber), "Removed from history");
+    private Task WatchSeason(DateTimeOffset when) => Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, Number, when)), $"Marked {season!.Name} watched");
+    private Task UnwatchSeason() => Act(() => Api.UnwatchAsync(MediaType.Episode, Id, Number), "Season removed from history");
+    private Task Rate(EpisodeDto e, int? v) => v is { } r
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, r, e.SeasonNumber, e.EpisodeNumber)), $"Rated {r}/10")
+        : Act(() => Api.UnrateAsync(MediaType.Episode, Id, e.SeasonNumber, e.EpisodeNumber), "Rating removed");
+}

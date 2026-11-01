@@ -1,0 +1,28 @@
+@inject IServerConfig Server
+@inject Toasts Toasts
+@if (Server.Configurable)
+{
+    <details class="server-picker">
+        <summary>Server: @Display</summary>
+        <form class="inline" @onsubmit="Save">
+            <input type="url" @bind="url" placeholder="https://seenit.example.com" aria-label="Server address" />
+            <button class="btn" type="submit">Use</button>
+        </form>
+    </details>
+}
+@code {
+    private string url = "";
+    private string Display => Uri.TryCreate(Server.Url, UriKind.Absolute, out var u) ? u.Host : Server.Url;
+    protected override void OnInitialized() => url = Server.Url;
+
+    private async Task Save()
+    {
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https"))
+        {
+            Toasts.Show("Enter a full address, like https://seenit.example.com", error: true);
+            return;
+        }
+        await Server.SetAsync(u.ToString());
+        Toasts.Show($"Using {u.Host}");
+    }
+}

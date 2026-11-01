@@ -1,0 +1,13 @@
+@implements IDisposable
+@inject Toasts Toasts
+<div class="toaster" aria-live="polite">
+    @foreach (var t in Toasts.Items)
+    {
+        <div class="toast @(t.Error ? "toast-error" : "")" @key="t.Id">@t.Message</div>
+    }
+</div>
+@code {
+    protected override void OnInitialized() => Toasts.Changed += Update;
+    private void Update() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Toasts.Changed -= Update;
+}

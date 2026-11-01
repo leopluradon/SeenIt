@@ -1,0 +1,8 @@
+<div class="empty">
+    <div class="empty-title">@Title</div>
+    @if (ChildContent is not null) { <div class="empty-body">@ChildContent</div> }
+</div>
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

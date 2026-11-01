@@ -1,0 +1,61 @@
+@page "/lists"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+<PageTitle>Lists · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Lists</h1>
+    <button class="btn btn-primary btn-sm" @onclick="() => createOpen = true"><Icon Name="plus" Size="16" /> New list</button>
+</div>
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (lists is null && error is null) { <Spinner /> }
+else if (lists is not null)
+{
+    @if (lists.Count == 0) { <Empty Title="No lists yet.">Make lists like “Best of 2025” or “Comfort rewatches”, and share them publicly if you like.</Empty> }
+    <div class="list-grid">
+        @foreach (var l in lists)
+        {
+            <a class="list-card" href="@($"lists/{l.Id}")" @key="l.Id">
+                <div class="list-posters">
+                    @foreach (var p in l.Posters.Take(4)) { <img src="@Img.Poster(p, "w154")" alt="" loading="lazy" /> }
+                </div>
+                <div class="list-meta">
+                    <b>@l.Name</b>
+                    <span class="muted small">@l.ItemCount items · @(l.IsPublic ? "Public" : "Private")</span>
+                </div>
+            </a>
+        }
+    </div>
+}
+
+<Modal @bind-Open="createOpen" Title="New list">
+    <ListForm OnSave="Create" />
+</Modal>
+
+@code {
+    private List<ListSummary>? lists;
+    private string? error;
+    private bool createOpen;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { lists = await Api.ListsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Create(CreateListRequest req)
+    {
+        try
+        {
+            var id = await Api.CreateListAsync(req);
+            createOpen = false;
+            Nav.NavigateTo($"lists/{id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

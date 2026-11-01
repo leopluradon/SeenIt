@@ -1,0 +1,142 @@
+@page "/show/{Id:int}"
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>@(s?.Name ?? "Show") · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (s is null && error is null) { <Spinner /> }
+else if (s is not null)
+{
+    <MediaHero Title="@s.Name" Year="s.FirstAirDate?.Year" Tagline="@s.Tagline" Poster="@s.PosterPath" Backdrop="@s.BackdropPath" Score="s.VoteAverage" Votes="s.VoteCount">
+        <Facts>
+            @if (s.Networks.Count > 0) { <span>@string.Join(", ", s.Networks)</span> }
+            <span>@s.NumberOfSeasons season@(s.NumberOfSeasons == 1 ? "" : "s") · @s.NumberOfEpisodes episodes</span>
+            @if (s.EpisodeRuntime is > 0) { <span>@Fmt.Runtime(s.EpisodeRuntime)</span> }
+            @if (s.Genres.Count > 0) { <span>@string.Join(", ", s.Genres)</span> }
+            @if (s.Status is not null) { <span class="pill">@s.Status</span> }
+        </Facts>
+        <Actions>
+            @if (s.User is { } u)
+            {
+                <button class="btn @(s.Progress?.Completed == true ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="() => watchAllOpen = true">
+                    <Icon Name="check" Size="18" /> @(s.Progress?.Completed == true ? "All caught up" : "Mark all watched")
+                </button>
+                <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
+                    <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
+                </button>
+                <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
+            }
+            else
+            {
+                <a class="btn btn-primary" href="@($"login?returnUrl=show/{Id}")">Sign in to track</a>
+            }
+        </Actions>
+    </MediaHero>
+
+    <div class="detail-body">
+        <div class="detail-main">
+            @if (s.User is { } u)
+            {
+                <div class="panel rate-panel">
+                    <span>Your rating</span>
+                    <RatingPicker Value="u.Rating" ValueChanged="Rate" />
+                </div>
+            }
+            @if (s.Progress is { } p)
+            {
+                <div class="panel progress-panel">
+                    <div class="inline spread">
+                        <b>@p.Watched of @p.Aired episodes watched</b>
+                        <span class="muted small">@(p.Aired == 0 ? 0 : 100 * p.Watched / p.Aired)%</span>
+                    </div>
+                    <ProgressBar Value="p.Watched" Max="p.Aired" />
+                    @if (p.NextEpisode is { } n)
+                    {
+                        <div class="inline spread next-ep">
+                            <span>Next: <a href="@($"show/{Id}/season/{n.SeasonNumber}")"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> @n.Name</a></span>
+                            <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => WatchEpisode(n)"><Icon Name="check" Size="14" /> Watched</button>
+                        </div>
+                    }
+                </div>
+            }
+            @if (s.NextEpisodeToAir is { } next)
+            {
+                <p class="muted">Next episode: <b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> @next.Name @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }</p>
+            }
+            @if (s.Overview is not null) { <p class="overview">@s.Overview</p> }
+            <div class="links">
+                <a href="@($"https://www.themoviedb.org/tv/{s.TmdbId}")" target="_blank" rel="noopener">TMDB</a>
+            </div>
+        </div>
+    </div>
+
+    <section class="row-section">
+        <div class="section-head"><h2>Seasons</h2></div>
+        <div class="season-grid">
+            @foreach (var season in s.Seasons)
+            {
+                <a class="season-card" href="@($"show/{Id}/season/{season.SeasonNumber}")" @key="season.SeasonNumber">
+                    <div class="poster">
+                        @if (Img.Poster(season.PosterPath ?? s.PosterPath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                        @if (season.EpisodeCount > 0 && season.Watched >= season.EpisodeCount) { <span class="poster-badge done"><Icon Name="check" Size="14" /></span> }
+                    </div>
+                    <div class="poster-title">@season.Name</div>
+                    <div class="poster-sub">@season.EpisodeCount episodes @if (season.Watched > 0) { <span>· @season.Watched watched</span> }</div>
+                    @if (s.User is not null && season.EpisodeCount > 0) { <ProgressBar Value="season.Watched" Max="season.EpisodeCount" /> }
+                </a>
+            }
+        </div>
+    </section>
+
+    <CastRow Cast="s.Cast" />
+    <Trailers Videos="s.Videos" />
+    <PosterRow Title="You might also like" Items="s.Recommendations" EmptyText="No recommendations yet." />
+
+    @if (s.User is { } user)
+    {
+        <WatchDialog @bind-Open="watchAllOpen" What="every aired episode" OnPick="WatchAll" />
+        <AddToListDialog @bind-Open="listOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Selected="user.ListIds.ToList()" />
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private ShowDetail? s;
+    private string? error;
+    private bool busy, watchAllOpen, listOpen;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        if (s?.TmdbId != Id) s = null;
+        try { s = await Api.ShowAsync(Id); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Act(Func<Task> action, string? done = null)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            if (done is not null) Toasts.Show(done);
+            s = await Api.ShowAsync(Id);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+
+    private Task WatchAll(DateTimeOffset when) => Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, null, when)), "Marked all aired episodes watched");
+    private Task WatchEpisode(EpisodeRef n) =>
+        Act(() => Api.WatchAsync(new WatchRequest(MediaType.Episode, Id, n.SeasonNumber, n.EpisodeNumber)), $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}");
+
+    private Task ToggleWatchlist() => s!.User!.InWatchlist
+        ? Act(() => Api.RemoveFromWatchlistAsync(MediaType.Show, Id), "Removed from watchlist")
+        : Act(() => Api.AddToWatchlistAsync(MediaType.Show, Id), "Added to watchlist");
+
+    private Task Rate(int? value) => value is { } v
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Show, Id, v)), $"Rated {v}/10")
+        : Act(() => Api.UnrateAsync(MediaType.Show, Id), "Rating removed");
+}
