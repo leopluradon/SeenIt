@@ -159,9 +159,9 @@ public class SessionState(ApiClient api, TokenManager tokens, IOfflineStore offl
         await tokens.SaveAsync(t);
     }
 
-    public async Task RegisterAsync(string userName, string email, string password)
+    public async Task RegisterAsync(string userName, string email, string password, string? inviteCode = null)
     {
-        var t = await api.RegisterAsync(new RegisterRequest(userName, email, password));
+        var t = await api.RegisterAsync(new RegisterRequest(userName, email, password, inviteCode));
         await offline.ClearAsync();
         await tokens.SaveAsync(t);
     }

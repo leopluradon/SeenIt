@@ -196,6 +196,37 @@
             </div>
         </section>
 
+        <section class="panel" id="invites">
+            <h2>Invite friends</h2>
+            <p class="muted small">SeenIt is invite-only@(features?.OpenRegistration == true ? " (sign-ups are currently open too)" : ""). Each link works once and expires after 14 days. You and whoever joins with it will follow each other.</p>
+            <button class="btn" @onclick="CreateInvite" disabled="@creatingInvite"><Icon Name="plus" Size="16" /> @(creatingInvite ? "Creating…" : "Create invite link")</button>
+            @if (invites is { Count: > 0 })
+            {
+                <ul class="invite-list">
+                    @foreach (var i in invites)
+                    {
+                        var expired = i.UsedAt is null && i.ExpiresAt <= DateTimeOffset.UtcNow;
+                        <li @key="i.Code" class="@(i.UsedAt is not null || expired ? "done" : "")">
+                            <code>@i.Code</code>
+                            <span class="muted small">
+                                @if (i.UsedBy is { } joined) { <text>Joined: <a href="@Fmt.UserHref(joined)">@joined</a></text> }
+                                else if (i.UsedAt is not null) { <text>Used</text> }
+                                else if (expired) { <text>Expired</text> }
+                                else { <text>Unused · expires @i.ExpiresAt.ToLocalTime().ToString("d MMM")</text> }
+                            </span>
+                            @if (i.UsedAt is null && !expired)
+                            {
+                                <span class="invite-actions">
+                                    <button class="icon-btn" title="Share link" aria-label="Share invite link" @onclick="() => ShareInvite(i.Code)"><Icon Name="share" Size="16" /></button>
+                                    <button class="icon-btn" title="Delete" aria-label="Delete invite" @onclick="() => DeleteInvite(i.Code)"><Icon Name="trash" Size="16" /></button>
+                                </span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
         <section class="panel" id="privacy">
             <h2>Privacy</h2>
             <p class="muted small">Who can see your profile, history, ratings, stats and what you're watching now. Lists have their own public/private setting.</p>
@@ -370,6 +401,7 @@
         visibility = Session.Me?.Visibility ?? ProfileVisibility.Friends;
         region = Session.Me?.Region;
         _ = LoadFeatures();
+        _ = LoadInvites();
         await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions());
         StartPolling();
     }
@@ -496,7 +528,38 @@
     }
 
     private ServerFeatures? features;
-    private bool testingEmail;
+    private bool testingEmail, creatingInvite;
+    private List<InviteDto>? invites;
+
+    private async Task LoadInvites()
+    {
+        try { invites = await Api.InvitesAsync(); StateHasChanged(); } catch { }
+    }
+
+    private async Task CreateInvite()
+    {
+        creatingInvite = true;
+        try
+        {
+            var i = await Api.CreateInviteAsync();
+            if (i is not null) { (invites ??= []).Insert(0, i); await ShareInvite(i.Code); }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { creatingInvite = false; }
+    }
+
+    private async Task ShareInvite(string code)
+    {
+        var result = await Platform.ShareLinkAsync("Join me on SeenIt", Platform.PublicUrl($"invite/{code}"));
+        if (result == "copied") Toasts.Show("Invite link copied");
+        else if (result == "failed") Toasts.Show("Couldn't share the link.", error: true);
+    }
+
+    private async Task DeleteInvite(string code)
+    {
+        try { await Api.DeleteInviteAsync(code); invites?.RemoveAll(i => i.Code == code); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
 
     private async Task LoadFeatures()
     {

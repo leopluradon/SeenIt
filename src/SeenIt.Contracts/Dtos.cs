@@ -6,7 +6,7 @@ public enum WatchSource { Manual, Jellyfin, TraktImport, LetterboxdImport }
 
 // ---------- Auth ----------
 
-public record RegisterRequest(string UserName, string Email, string Password);
+public record RegisterRequest(string UserName, string Email, string Password, string? InviteCode = null);
 public record LoginRequest(string UserNameOrEmail, string Password);
 public record RefreshRequest(string RefreshToken);
 public record TokenResponse(string AccessToken, string RefreshToken, long ExpiresIn);
@@ -66,7 +66,10 @@ public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public record ForgotPasswordRequest(string Email);
 public record ResetPasswordRequest(Guid UserId, string Token, string NewPassword);
 /// <summary>What this server can do, so clients can hide features it isn't set up for.</summary>
-public record ServerFeatures(bool Email);
+public record ServerFeatures(bool Email, bool OpenRegistration = true);
+public record InviteDto(string Code, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, string? UsedBy, DateTimeOffset? UsedAt);
+/// <summary>Public check of an invite link before signing up.</summary>
+public record InviteCheck(bool Valid, string? InvitedBy);
 public record DeleteAccountRequest(string Password);
 
 // ---------- Catalogue (TMDB) ----------

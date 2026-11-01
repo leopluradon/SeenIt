@@ -20,7 +20,14 @@
         <ErrorBox Message="@error" />
         <button class="btn btn-primary btn-block" type="submit" disabled="@busy">@(busy ? "Signing in…" : "Sign in")</button>
     </EditForm>
-    <p class="muted center">New here? <a href="@("register" + (ReturnUrl is null ? "" : "?returnUrl=" + Uri.EscapeDataString(ReturnUrl)))">Create an account</a></p>
+    @if (features?.OpenRegistration != false)
+    {
+        <p class="muted center">New here? <a href="@("register" + (ReturnUrl is null ? "" : "?returnUrl=" + Uri.EscapeDataString(ReturnUrl)))">Create an account</a></p>
+    }
+    else
+    {
+        <p class="muted center small">SeenIt is invite-only. Ask a member for an invite link.</p>
+    }
     <ServerPicker />
 </div>
 
@@ -53,5 +60,5 @@
 
     /// <summary>Only allow local, relative return paths.</summary>
     public static string SafeReturn(string? url) =>
-        string.IsNullOrEmpty(url) || url.Contains("://") || url.StartsWith("//") || url.StartsWith("login") || url.StartsWith("register") ? "" : url.TrimStart('/');
+        string.IsNullOrEmpty(url) || url.Contains("://") || url.StartsWith("//") || url.StartsWith("login") || url.StartsWith("register") || url.StartsWith("invite") ? "" : url.TrimStart('/');
 }

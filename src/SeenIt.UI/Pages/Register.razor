@@ -1,38 +1,70 @@
 @page "/register"
+@page "/invite/{Code}"
 @inject SessionState Session
 @inject NavigationManager Nav
+@inject ApiClient Api
 <PageTitle>Create account · SeenIt</PageTitle>
 
 <div class="auth-card">
     <Logo />
     <h1>Create your account</h1>
-    <EditForm Model="model" OnValidSubmit="Submit" FormName="register">
-        <div class="field">
-            <label for="reg-user">Username</label>
-            <InputText id="reg-user" @bind-Value="model.UserName" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]+" />
-            <small class="muted">3–32 letters, numbers, dots, dashes or underscores.</small>
-        </div>
-        <div class="field">
-            <label for="reg-email">Email</label>
-            <InputText id="reg-email" type="email" @bind-Value="model.Email" autocomplete="email" required />
-        </div>
-        <div class="field">
-            <label for="reg-pass">Password</label>
-            <InputText id="reg-pass" type="password" @bind-Value="model.Password" autocomplete="new-password" required minlength="8" />
-            <small class="muted">At least 8 characters, with a number and a lowercase letter.</small>
-        </div>
-        <ErrorBox Message="@error" />
-        <button class="btn btn-primary btn-block" type="submit" disabled="@busy">@(busy ? "Creating…" : "Create account")</button>
-    </EditForm>
-    <p class="muted center">Already have one? <a href="login">Sign in</a></p>
+    @if (!checkedInvite)
+    {
+        <Spinner />
+    }
+    else if (NeedsInvite && invite?.Valid != true)
+    {
+        @if (!string.IsNullOrWhiteSpace(code))
+        {
+            <p class="muted center">This invite has expired or has already been used. Ask whoever sent it for a new one.</p>
+        }
+        else
+        {
+            <p class="muted center">SeenIt is invite-only. Open the invite link a member sent you, or paste its code here.</p>
+        }
+        <form class="inline invite-form" @onsubmit="CheckPasted">
+            <input placeholder="Invite code" @bind="pasted" aria-label="Invite code" autocapitalize="off" autocomplete="off" />
+            <button class="btn" type="submit" disabled="@string.IsNullOrWhiteSpace(pasted)">Continue</button>
+        </form>
+        <p class="muted center">Already have an account? <a href="login">Sign in</a></p>
+    }
+    else
+    {
+        @if (invite?.InvitedBy is { } by) { <p class="invite-note"><b>@by</b> invited you to SeenIt. You'll follow each other once you join.</p> }
+        <EditForm Model="model" OnValidSubmit="Submit" FormName="register">
+            <div class="field">
+                <label for="reg-user">Username</label>
+                <InputText id="reg-user" @bind-Value="model.UserName" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]+" />
+                <small class="muted">3–32 letters, numbers, dots, dashes or underscores.</small>
+            </div>
+            <div class="field">
+                <label for="reg-email">Email</label>
+                <InputText id="reg-email" type="email" @bind-Value="model.Email" autocomplete="email" required />
+            </div>
+            <div class="field">
+                <label for="reg-pass">Password</label>
+                <InputText id="reg-pass" type="password" @bind-Value="model.Password" autocomplete="new-password" required minlength="8" />
+                <small class="muted">At least 8 characters, with a number and a lowercase letter.</small>
+            </div>
+            <ErrorBox Message="@error" />
+            <button class="btn btn-primary btn-block" type="submit" disabled="@busy">@(busy ? "Creating…" : "Create account")</button>
+        </EditForm>
+        <p class="muted center">Already have one? <a href="login">Sign in</a></p>
+    }
     <ServerPicker />
 </div>
 
 @code {
+    [Parameter] public string? Code { get; set; }
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "invite")] public string? InviteQuery { get; set; }
     private readonly Model model = new();
-    private string? error;
-    private bool busy;
+    private string? error, code, pasted;
+    private bool busy, checkedInvite;
+    private ServerFeatures? features;
+    private InviteCheck? invite;
+
+    private bool NeedsInvite => features?.OpenRegistration == false;
 
     private class Model
     {
@@ -41,13 +73,38 @@
         public string Password { get; set; } = "";
     }
 
+    protected override async Task OnParametersSetAsync()
+    {
+        code = (Code ?? InviteQuery)?.Trim();
+        try { features = await Api.FeaturesAsync(); } catch { }
+        await Check();
+    }
+
+    private async Task Check()
+    {
+        invite = null;
+        if (!string.IsNullOrWhiteSpace(code))
+        {
+            try { invite = await Api.CheckInviteAsync(code); } catch { invite = new InviteCheck(false, null); }
+        }
+        checkedInvite = true;
+    }
+
+    /// <summary>Accepts a bare code or a whole pasted link.</summary>
+    private async Task CheckPasted()
+    {
+        var text = pasted?.Trim().TrimEnd('/') ?? "";
+        code = text.Contains('/') ? text[(text.LastIndexOf('/') + 1)..] : text;
+        await Check();
+    }
+
     private async Task Submit()
     {
         busy = true;
         error = null;
         try
         {
-            await Session.RegisterAsync(model.UserName.Trim(), model.Email.Trim(), model.Password);
+            await Session.RegisterAsync(model.UserName.Trim(), model.Email.Trim(), model.Password, invite?.Valid == true ? code : null);
             Nav.NavigateTo(Login.SafeReturn(ReturnUrl) is { Length: > 0 } r ? r : "settings?welcome=1");
         }
         catch (Exception ex) { error = ex.Message; }

@@ -527,6 +527,14 @@ a.cast { color: var(--text); }
 .auth-card { max-width: 400px; margin: 32px auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; }
 .auth-card .logo { margin-bottom: 18px; }
 .auth-card h1 { font-size: 1.4rem; }
+.invite-note { background: var(--surface-2, rgba(255,255,255,.04)); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+.invite-form { justify-content: center; margin: 12px 0; }
+.invite-form input { flex: 1; min-width: 0; }
+.invite-list { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; }
+.invite-list li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.invite-list li.done { opacity: .6; }
+.invite-list code { font-size: .9rem; letter-spacing: .03em; }
+.invite-actions { margin-left: auto; display: flex; gap: 4px; }
 .forgot-link { text-align: right; margin: -6px 0 12px; }
 .auth-card input { width: 100%; }
 .server-picker { margin-top: 16px; font-size: .85rem; color: var(--muted); }

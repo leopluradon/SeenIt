@@ -20,6 +20,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ShowState> ShowStates => Set<ShowState>();
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Follow> Follows => Set<Follow>();
+    public DbSet<Invite> Invites => Set<Invite>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -94,6 +95,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasIndex(x => x.FolloweeId);
             e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.FollowerId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.FolloweeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<Invite>(e =>
+        {
+            e.HasKey(x => x.Code);
+            e.Property(x => x.Code).HasMaxLength(32);
+            e.HasIndex(x => x.CreatedById);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UsedById).OnDelete(DeleteBehavior.SetNull);
         });
 
         // Per-user rows go when the user does.

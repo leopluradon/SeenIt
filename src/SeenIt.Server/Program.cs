@@ -74,6 +74,7 @@ builder.Services.AddScoped<JellyfinService>();
 builder.Services.AddScoped<CheckInService>();
 builder.Services.AddScoped<SocialService>();
 builder.Services.AddScoped<ExportService>();
+builder.Services.AddScoped<InviteService>();
 builder.Services.AddHostedService<CheckInWorker>();
 builder.Services.Configure<SmtpOptions>(config.GetSection("Smtp"));
 builder.Services.AddSingleton<EmailService>();

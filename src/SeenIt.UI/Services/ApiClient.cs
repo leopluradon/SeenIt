@@ -28,7 +28,20 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task UpdateProfileAsync(UpdateProfileRequest r) => SendAsync(HttpMethod.Put, "api/auth/me", r);
     public Task SetPreferencesAsync(PreferencesRequest r) => SendAsync(HttpMethod.Put, "api/auth/preferences", r);
     public Task ChangePasswordAsync(ChangePasswordRequest r) => SendAsync(HttpMethod.Post, "api/auth/password", r);
-    public Task<ServerFeatures?> FeaturesAsync() => SendAsync<ServerFeatures>(HttpMethod.Get, "api/auth/features", null, auth: false);
+    private Task<ServerFeatures?>? _features;
+
+    /// <summary>What the server supports. Cached for the session; a failed lookup is retried next time.</summary>
+    public Task<ServerFeatures?> FeaturesAsync()
+    {
+        var t = _features ??= SendAsync<ServerFeatures>(HttpMethod.Get, "api/auth/features", null, auth: false);
+        if (t.IsFaulted || t.IsCanceled) _features = null;
+        return t;
+    }
+
+    public Task<InviteCheck?> CheckInviteAsync(string code) => SendAsync<InviteCheck>(HttpMethod.Get, $"api/auth/invite/{Uri.EscapeDataString(code)}", null, auth: false);
+    public Task<List<InviteDto>?> InvitesAsync() => SendAsync<List<InviteDto>>(HttpMethod.Get, "api/auth/invites");
+    public Task<InviteDto?> CreateInviteAsync() => SendAsync<InviteDto>(HttpMethod.Post, "api/auth/invites");
+    public Task DeleteInviteAsync(string code) => SendAsync(HttpMethod.Delete, $"api/auth/invites/{Uri.EscapeDataString(code)}");
     public Task ForgotPasswordAsync(ForgotPasswordRequest r) => SendAsync<object>(HttpMethod.Post, "api/auth/forgot", r, auth: false);
     public Task ResetPasswordAsync(ResetPasswordRequest r) => SendAsync<object>(HttpMethod.Post, "api/auth/reset", r, auth: false);
     public Task SendTestEmailAsync() => SendAsync(HttpMethod.Post, "api/auth/test-email", null);

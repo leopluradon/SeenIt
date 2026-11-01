@@ -225,6 +225,17 @@ public class CheckIn
     public WatchSource Source { get; set; }
 }
 
+/// <summary>A single-use sign-up link. Signing up with it makes the inviter and the new member follow each other.</summary>
+public class Invite
+{
+    public string Code { get; set; } = "";
+    public Guid CreatedById { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public Guid? UsedById { get; set; }
+    public DateTimeOffset? UsedAt { get; set; }
+}
+
 public class Follow
 {
     public Guid FollowerId { get; set; }

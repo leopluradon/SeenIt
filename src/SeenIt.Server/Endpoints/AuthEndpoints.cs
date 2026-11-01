@@ -29,7 +29,7 @@ public static partial class AuthEndpoints
         var g = app.MapGroup("/api/auth");
 
         g.MapPost("/register", async Task<Results<SignInHttpResult, BadRequest<ProblemInfo>>> (
-            RegisterRequest req, UserManager<AppUser> users, SignInManager<AppUser> signIn) =>
+            RegisterRequest req, UserManager<AppUser> users, SignInManager<AppUser> signIn, InviteService invites) =>
         {
             var userName = req.UserName?.Trim() ?? "";
             if (!UserNamePattern().IsMatch(userName))
@@ -37,11 +37,22 @@ public static partial class AuthEndpoints
             if (string.IsNullOrWhiteSpace(req.Email) || !req.Email.Contains('@'))
                 return Bad("Enter a valid email address.");
 
+            // An invite is required unless sign-ups are open; with open sign-ups it's still honoured (auto-follow).
+            var inviter = await invites.ClaimAsync(req.InviteCode);
+            if (inviter is null && !invites.OpenRegistration)
+                return Bad(string.IsNullOrWhiteSpace(req.InviteCode)
+                    ? "SeenIt is invite-only. Ask a member for an invite link."
+                    : "This invite has expired or has already been used. Ask for a new one.");
+
             var user = new AppUser { UserName = userName, Email = req.Email.Trim() };
             var result = await users.CreateAsync(user, req.Password ?? "");
             if (!result.Succeeded)
+            {
+                if (inviter is not null) await invites.ReleaseAsync(req.InviteCode!);
                 return TypedResults.BadRequest(new ProblemInfo("Couldn't create the account.",
                     result.Errors.GroupBy(e => e.Code).ToDictionary(e => e.Key, e => e.Select(x => x.Description).ToArray())));
+            }
+            if (inviter is { } by) await invites.CompleteAsync(req.InviteCode!, by, user.Id);
 
             var principal = await signIn.CreateUserPrincipalAsync(user);
             return TypedResults.SignIn(principal, authenticationScheme: IdentityConstants.BearerScheme);
@@ -76,7 +87,9 @@ public static partial class AuthEndpoints
             return TypedResults.SignIn(principal, authenticationScheme: IdentityConstants.BearerScheme);
         });
 
-        g.MapGet("/features", (EmailService email) => new ServerFeatures(email.Enabled));
+        g.MapGet("/features", (EmailService email, InviteService invites) => new ServerFeatures(email.Enabled, invites.OpenRegistration));
+
+        g.MapGet("/invite/{code}", (string code, InviteService invites) => invites.CheckAsync(code)).RequireRateLimiting("auth");
 
         // Always answers 204, so it can't be used to find out which emails have accounts.
         g.MapPost("/forgot", async (ForgotPasswordRequest req, UserManager<AppUser> users, EmailService email, HttpContext http, IConfiguration config) =>
@@ -175,6 +188,11 @@ public static partial class AuthEndpoints
             return r.Succeeded ? Results.NoContent()
                 : Results.BadRequest(new ProblemInfo(string.Join(" ", r.Errors.Select(e => e.Description))));
         }).RequireRateLimiting("auth");
+
+        me.MapGet("/invites", (ClaimsPrincipal p, InviteService invites) => invites.ListAsync(p.UserId()));
+        me.MapPost("/invites", (ClaimsPrincipal p, InviteService invites) => invites.CreateAsync(p.UserId()));
+        me.MapDelete("/invites/{code}", async (string code, ClaimsPrincipal p, InviteService invites) =>
+            await invites.DeleteAsync(p.UserId(), code) ? Results.NoContent() : Results.NotFound());
 
         me.MapPost("/delete", async (DeleteAccountRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
         {

@@ -126,9 +126,10 @@
             <h1>Remember everything you watch.</h1>
             <p>Track movies and TV, see what's next in every show, follow what's airing, and scrobble automatically from Jellyfin.</p>
             <div class="inline">
-                <a href="register" class="btn btn-primary">Create a free account</a>
+                @if (features?.OpenRegistration != false) { <a href="register" class="btn btn-primary">Create a free account</a> }
                 <a href="login" class="btn">Sign in</a>
             </div>
+            @if (features?.OpenRegistration == false) { <p class="muted small">SeenIt is invite-only. Got an invite link? Open it to create your account.</p> }
         </section>
     </NotAuthorized>
 </AuthorizeView>
@@ -171,6 +172,7 @@
     private bool signedIn, customizeOpen;
     private HashSet<string> hidden = [];
     private List<(string Href, string Text)> reviewLinks = [];
+    private ServerFeatures? features;
 
     private bool Visible(string key) => !signedIn || !hidden.Contains(key);
 
@@ -179,6 +181,7 @@
         signedIn = AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated == true;
         hidden = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         var trendingTask = LoadTrending();
+        if (!signedIn) { try { features = await Api.FeaturesAsync(); } catch { } }
         if (signedIn)
         {
             var reviewTask = LoadReviewLinks();

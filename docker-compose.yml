@@ -13,6 +13,8 @@ services:
     environment:
       ConnectionStrings__Default: "Host=seenit-db;Database=seenit;Username=seenit;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
       Tmdb__ReadAccessToken: "${TMDB_READ_ACCESS_TOKEN}"
+      # Sign-ups need an invite link from a member unless this is true.
+      SeenIt__OpenRegistration: "${OPEN_REGISTRATION:-false}"
       SeenIt__PublicUrl: "${PUBLIC_URL:-https://seenit.vohiyo.com/}"
       # Optional: leave SMTP_HOST empty to turn off email (password reset).
       Smtp__Host: "${SMTP_HOST:-}"
