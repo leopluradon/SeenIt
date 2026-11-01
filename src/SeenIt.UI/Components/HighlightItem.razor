@@ -1,0 +1,13 @@
+<a class="highlight" href="@(Item.Type == MediaType.Movie ? $"movie/{Item.TmdbId}" : $"show/{Item.TmdbId}")">
+    <img src="@Img.Poster(Item.PosterPath, "w154")" alt="" loading="lazy" />
+    <div>
+        <span class="highlight-label">@Label</span>
+        <b>@Item.Title</b>
+        @if (Extra is not null) { <span class="muted small">@Extra</span> }
+    </div>
+</a>
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public ReviewItem Item { get; set; } = default!;
+    [Parameter] public string? Extra { get; set; }
+}

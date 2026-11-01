@@ -22,6 +22,7 @@
         <a href="settings#imports">Import</a>
         <a href="settings#jellyfin">Jellyfin</a>
         <a href="settings#spoilers">Spoilers</a>
+        <a href="settings#layout">Layout</a>
         <a href="settings#profile">Profile</a>
         <a href="settings#account">Account</a>
     </nav>
@@ -150,6 +151,48 @@
             </div>
         </section>
 
+        <section class="panel" id="layout">
+            <h2>Layout</h2>
+            <h3>Tabs at the bottom of the app</h3>
+            <p class="muted small">Pick up to @UiPrefs.MaxTabs, in order. “More” is always last and links to everything else. These tabs appear on phones and narrow windows.</p>
+            <div class="tab-editor">
+                @for (var i = 0; i < tabs.Count; i++)
+                {
+                    var index = i;
+                    var t = UiPrefs.Tabs.First(x => x.Key == tabs[index]);
+                    <div class="tab-row" @key="t.Key">
+                        <Icon Name="@t.Icon" Size="18" />
+                        <span>@t.Label</span>
+                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveTab(index, -1)" aria-label="Move @t.Label left"><Icon Name="chevron-left" Size="16" /></button>
+                        <button class="icon-btn" disabled="@(index == tabs.Count - 1)" @onclick="() => MoveTab(index, 1)" aria-label="Move @t.Label right"><Icon Name="chevron-right" Size="16" /></button>
+                        <button class="icon-btn" disabled="@(tabs.Count == 1)" @onclick="() => RemoveTab(index)" aria-label="Remove @t.Label"><Icon Name="x" Size="16" /></button>
+                    </div>
+                }
+                <div class="tab-row fixed"><Icon Name="menu" Size="18" /><span>More</span><span class="muted small">always shown</span></div>
+            </div>
+            @if (tabs.Count < UiPrefs.MaxTabs)
+            {
+                <div class="chips">
+                    @foreach (var t in UiPrefs.Tabs.Where(x => !tabs.Contains(x.Key)))
+                    {
+                        <button class="chip" @onclick="() => AddTab(t.Key)" @key="t.Key"><Icon Name="plus" Size="14" /> @t.Label</button>
+                    }
+                </div>
+            }
+            else { <p class="muted small">Remove a tab to add a different one.</p> }
+            <button class="btn btn-sm btn-ghost" @onclick="ResetTabs">Reset to default</button>
+
+            <h3>Home page sections</h3>
+            <div class="stack">
+                @foreach (var (key, label) in UiPrefs.HomeSections)
+                {
+                    <label class="check" @key="key">
+                        <input type="checkbox" checked="@(!hiddenSections.Contains(key))" @onchange="e => ToggleSection(key, (bool)e.Value!)" /> @label
+                    </label>
+                }
+            </div>
+        </section>
+
         <section class="panel" id="profile">
             <h2>Profile</h2>
             @if (Session.Me is { } me)
@@ -215,6 +258,8 @@
     private bool uploading;
     private string? displayName, currentPassword, newPassword, deletePassword;
     private bool hideSpoilers, blurImages;
+    private List<string> tabs = [];
+    private HashSet<string> hiddenSections = [];
     private CancellationTokenSource? poll;
 
     private string WebhookUrl => jf is null ? "" : new Uri(new Uri(Server.Url), jf.WebhookUrlPath.TrimStart('/')).ToString();
@@ -224,6 +269,8 @@
         displayName = Session.Me?.DisplayName;
         hideSpoilers = Session.Me?.HideSpoilers ?? false;
         blurImages = Session.Me?.BlurSpoilerImages ?? false;
+        tabs = UiLayout.Tabs(Session.Me).Select(t => t.Key).ToList();
+        hiddenSections = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         await Task.WhenAll(LoadJellyfin(), LoadImports());
         StartPolling();
     }
@@ -302,10 +349,33 @@
         (hideSpoilers, blurImages) = (hide, blur);
         try
         {
-            await Api.SetPreferencesAsync(new PreferencesRequest(hide, blur));
+            await Api.SetPreferencesAsync(new PreferencesRequest(HideSpoilers: hide, BlurSpoilerImages: blur));
             Session.Refresh();
             Toasts.Show(hide ? "Spoilers hidden" : "Spoilers shown");
         }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private Task MoveTab(int i, int step)
+    {
+        (tabs[i], tabs[i + step]) = (tabs[i + step], tabs[i]);
+        return SaveTabs();
+    }
+
+    private Task RemoveTab(int i) { tabs.RemoveAt(i); return SaveTabs(); }
+    private Task AddTab(string key) { tabs.Add(key); return SaveTabs(); }
+    private Task ResetTabs() { tabs = UiPrefs.DefaultTabs.ToList(); return SaveTabs(); }
+
+    private async Task SaveTabs()
+    {
+        try { await Api.SetPreferencesAsync(new PreferencesRequest(Tabs: tabs)); Session.Refresh(); Toasts.Show("Tabs updated"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleSection(string key, bool visible)
+    {
+        if (visible) hiddenSections.Remove(key); else hiddenSections.Add(key);
+        try { await Api.SetPreferencesAsync(new PreferencesRequest(HiddenHomeSections: hiddenSections.ToList())); Session.Refresh(); }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

@@ -1,0 +1,18 @@
+@* Every year and month with plays, newest first. *@
+<div class="periods">
+    @foreach (var y in Periods)
+    {
+        <div class="period-year" @key="y.Year">
+            <a class="period-year-link" href="@($"review/{y.Year}")"><b>@y.Year</b> <span class="muted small">@y.Plays.ToString("N0") plays · @Fmt.Duration(y.Minutes)</span></a>
+            <div class="chips">
+                @foreach (var m in y.Months)
+                {
+                    <a class="chip" href="@($"review/{y.Year}/{m.Month}")" title="@($"{m.Plays} plays")" @key="m.Month">@(new DateTime(y.Year, m.Month, 1).ToString("MMM"))</a>
+                }
+            </div>
+        </div>
+    }
+</div>
+@code {
+    [Parameter] public IReadOnlyList<ReviewYear> Periods { get; set; } = [];
+}

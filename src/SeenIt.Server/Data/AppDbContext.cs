@@ -32,6 +32,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             e.HasKey(m => m.TmdbId);
             e.Property(m => m.TmdbId).ValueGeneratedNever();
+            e.OwnsMany(m => m.Cast, o => o.ToJson());
+            e.OwnsMany(m => m.Directors, o => o.ToJson());
         });
 
         b.Entity<ShowMeta>(e =>
@@ -39,6 +41,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasKey(s => s.TmdbId);
             e.Property(s => s.TmdbId).ValueGeneratedNever();
             e.Ignore(s => s.IsOngoing);
+            e.OwnsMany(s => s.Cast, o => o.ToJson());
+            e.OwnsMany(s => s.Creators, o => o.ToJson());
         });
 
         b.Entity<EpisodeMeta>(e =>

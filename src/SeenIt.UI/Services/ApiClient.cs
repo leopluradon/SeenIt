@@ -64,6 +64,12 @@ public class ApiClient(HttpClient http, TokenManager tokens)
     public Task<List<CalendarEntry>> CalendarAsync(DateOnly from, int days) => GetAsync<List<CalendarEntry>>($"api/calendar?from={from:yyyy-MM-dd}&days={days}");
     public Task<DashboardDto> DashboardAsync() => GetAsync<DashboardDto>("api/dashboard");
     public Task<StatsDto> StatsAsync() => GetAsync<StatsDto>("api/stats");
+    public Task<List<ReviewYear>> ReviewPeriodsAsync() => GetAsync<List<ReviewYear>>($"api/review/periods?tz={Tz}");
+    public Task<ReviewDto> ReviewAsync(int year, int? month) =>
+        GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}");
+
+    /// <summary>The device's IANA time zone, so reviews use the viewer's own calendar days.</summary>
+    private static string Tz => Uri.EscapeDataString(TimeZoneInfo.Local.Id);
 
     // ---------- Lists ----------
 

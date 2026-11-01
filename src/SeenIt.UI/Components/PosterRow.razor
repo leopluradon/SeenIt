@@ -1,7 +1,10 @@
 <section class="row-section">
     <div class="section-head">
         <h2>@Title</h2>
-        @if (MoreHref is not null) { <a href="@MoreHref" class="section-more">See all <Icon Name="chevron-right" Size="16" /></a> }
+        <div class="section-tools">
+            @if (MoreHref is not null) { <a href="@MoreHref" class="section-more">See all <Icon Name="chevron-right" Size="16" /></a> }
+            @if (OnHide.HasDelegate) { <HideButton OnHide="OnHide" /> }
+        </div>
     </div>
     @if (Items is null) { <div class="poster-scroller"><div class="poster-card skeleton"></div><div class="poster-card skeleton"></div><div class="poster-card skeleton"></div><div class="poster-card skeleton"></div></div> }
     else if (Items.Count == 0) { <p class="muted">@EmptyText</p> }
@@ -17,4 +20,5 @@
     [Parameter] public IReadOnlyList<MediaSummary>? Items { get; set; }
     [Parameter] public string? MoreHref { get; set; }
     [Parameter] public string EmptyText { get; set; } = "Nothing here yet.";
+    [Parameter] public EventCallback OnHide { get; set; }
 }

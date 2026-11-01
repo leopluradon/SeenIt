@@ -10,7 +10,14 @@
     <a href="lists"><Icon Name="list" /> Lists</a>
     <a href="ratings"><Icon Name="star" /> Ratings</a>
     <a href="stats"><Icon Name="chart" /> Stats</a>
+    <a href="@($"review/{DateTime.Today.Year}/{DateTime.Today.Month}")"><Icon Name="chart" /> Month in review</a>
+    <a href="@($"review/{DateTime.Today.Year}")"><Icon Name="chart" /> Year in review</a>
+    <a href="progress"><Icon Name="progress" /> Progress</a>
+    <a href="calendar"><Icon Name="calendar" /> Calendar</a>
+    <a href="discover"><Icon Name="compass" /> Discover</a>
+    <a href="search"><Icon Name="search" /> Search</a>
     <a href="settings"><Icon Name="settings" /> Settings</a>
+    <a href="settings#layout"><Icon Name="menu" /> Customize tabs</a>
     <button @onclick="Logout"><Icon Name="logout" /> Sign out</button>
 </nav>
 @code {

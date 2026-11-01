@@ -1,32 +1,55 @@
 @page "/"
 @inject ApiClient Api
+@inject SessionState Session
+@inject Toasts Toasts
 <PageTitle>SeenIt</PageTitle>
 
 <AuthorizeView>
     <Authorized>
         <h1 class="visually-hidden">Home</h1>
         <ErrorBox Message="@error" OnRetry="LoadDashboard" />
+
+        @if (Visible("review") && reviewLinks.Count > 0)
+        {
+            <section class="review-banner">
+                <Icon Name="chart" Size="22" />
+                <div class="review-banner-links">
+                    @foreach (var (href, text) in reviewLinks) { <a href="@href">@text <Icon Name="chevron-right" Size="16" /></a> }
+                </div>
+                <HideButton OnHide='() => Hide("review")' />
+            </section>
+        }
+
         @if (dash is null && error is null) { <Spinner /> }
         else if (dash is not null)
         {
-            <section class="row-section">
-                <div class="section-head"><h2>Up next</h2><a href="progress" class="section-more">All progress <Icon Name="chevron-right" Size="16" /></a></div>
-                @if (dash.UpNext.Count == 0)
-                {
-                    <p class="muted">Start watching a show and your next episode shows up here. <a href="discover">Find something to watch</a>.</p>
-                }
-                else
-                {
-                    <div class="card-scroller">
-                        @foreach (var p in dash.UpNext) { <UpNextCard Progress="p" OnWatched="LoadDashboard" @key="p.ShowTmdbId" /> }
-                    </div>
-                }
-            </section>
-
-            @if (dash.Upcoming.Count > 0)
+            @if (Visible("upnext"))
             {
                 <section class="row-section">
-                    <div class="section-head"><h2>Coming up</h2><a href="calendar" class="section-more">Calendar <Icon Name="chevron-right" Size="16" /></a></div>
+                    <div class="section-head">
+                        <h2>Up next</h2>
+                        <div class="section-tools"><a href="progress" class="section-more">All progress <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("upnext")' /></div>
+                    </div>
+                    @if (dash.UpNext.Count == 0)
+                    {
+                        <p class="muted">Start watching a show and your next episode shows up here. <a href="discover">Find something to watch</a>.</p>
+                    }
+                    else
+                    {
+                        <div class="card-scroller">
+                            @foreach (var p in dash.UpNext) { <UpNextCard Progress="p" OnWatched="LoadDashboard" @key="p.ShowTmdbId" /> }
+                        </div>
+                    }
+                </section>
+            }
+
+            @if (Visible("upcoming") && dash.Upcoming.Count > 0)
+            {
+                <section class="row-section">
+                    <div class="section-head">
+                        <h2>Coming up</h2>
+                        <div class="section-tools"><a href="calendar" class="section-more">Calendar <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("upcoming")' /></div>
+                    </div>
                     <div class="mini-list">
                         @foreach (var c in dash.Upcoming)
                         {
@@ -43,18 +66,29 @@
                 </section>
             }
 
-            @if (dash.RecentHistory.Count > 0)
+            @if (Visible("recent"))
             {
                 <section class="row-section">
-                    <div class="section-head"><h2>Recently watched</h2><a href="history" class="section-more">History <Icon Name="chevron-right" Size="16" /></a></div>
-                    <div class="poster-scroller">
-                        @foreach (var h in dash.RecentHistory)
-                        {
-                            <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
-                                        Sub="@(h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · {Fmt.Relative(h.WatchedAt)}" : Fmt.Relative(h.WatchedAt))"
-                                        ShowScore="false" @key="h.Id" />
-                        }
+                    <div class="section-head">
+                        <h2>Recently watched</h2>
+                        <div class="section-tools"><a href="history" class="section-more">Full history <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("recent")' /></div>
                     </div>
+                    @if (dash.RecentHistory.Count == 0)
+                    {
+                        <p class="muted">Nothing yet. Mark something watched, connect Jellyfin, or import from Trakt or Letterboxd in <a href="settings">Settings</a>.</p>
+                    }
+                    else
+                    {
+                        <div class="poster-scroller">
+                            @foreach (var h in dash.RecentHistory)
+                            {
+                                <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
+                                            Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
+                                            Sub="@(h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · {Fmt.Relative(h.WatchedAt)}" : Fmt.Relative(h.WatchedAt))"
+                                            ShowScore="false" @key="h.Id" />
+                            }
+                        </div>
+                    }
                 </section>
             }
         }
@@ -71,20 +105,56 @@
     </NotAuthorized>
 </AuthorizeView>
 
-<PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" />
-<PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" />
+@if (Visible("trending-movies"))
+{
+    <PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" OnHide="@(signedIn ? EventCallback.Factory.Create(this, () => Hide("trending-movies")) : default)" />
+}
+@if (Visible("trending-shows"))
+{
+    <PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" OnHide="@(signedIn ? EventCallback.Factory.Create(this, () => Hide("trending-shows")) : default)" />
+}
+
+@if (signedIn)
+{
+    <div class="center">
+        <button class="btn btn-ghost btn-sm" @onclick="() => customizeOpen = true"><Icon Name="settings" Size="16" /> Customize home</button>
+    </div>
+    <Modal @bind-Open="customizeOpen" Title="Customize home">
+        <div class="stack">
+            <p class="muted small">Choose what shows on your home page. This is saved to your account.</p>
+            @foreach (var (key, label) in UiPrefs.HomeSections)
+            {
+                <label class="check" @key="key">
+                    <input type="checkbox" checked="@(!hidden.Contains(key))" @onchange="e => Toggle(key, (bool)e.Value!)" /> @label
+                </label>
+            }
+            <a href="settings#layout" class="small">Change the tabs at the bottom of the app</a>
+        </div>
+    </Modal>
+}
 
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     private DashboardDto? dash;
     private string? error;
     private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows;
+    private bool signedIn, customizeOpen;
+    private HashSet<string> hidden = [];
+    private List<(string Href, string Text)> reviewLinks = [];
+
+    private bool Visible(string key) => !signedIn || !hidden.Contains(key);
 
     protected override async Task OnInitializedAsync()
     {
+        signedIn = AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated == true;
+        hidden = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         var trendingTask = LoadTrending();
-        if (AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated == true)
+        if (signedIn)
+        {
+            var reviewTask = LoadReviewLinks();
             await LoadDashboard();
+            await reviewTask;
+        }
         await trendingTask;
     }
 
@@ -97,6 +167,7 @@
 
     private async Task LoadTrending()
     {
+        if (signedIn && hidden.Contains("trending-movies") && hidden.Contains("trending-shows")) return;
         try
         {
             var m = Api.BrowseAsync(MediaType.Movie, "trending/week");
@@ -105,5 +176,41 @@
             trendingShows = (await s).Items;
         }
         catch { trendingMovies ??= []; trendingShows ??= []; }
+    }
+
+    /// <summary>Early in a month, point at last month's review (and in January, last year's); otherwise this month so far.</summary>
+    private async Task LoadReviewLinks()
+    {
+        if (hidden.Contains("review")) return;
+        List<ReviewYear> periods;
+        try { periods = await Api.ReviewPeriodsAsync(); } catch { return; }
+        bool Has(int y, int m) => periods.Any(p => p.Year == y && p.Months.Any(x => x.Month == m && x.Plays > 0));
+
+        var today = DateTime.Today;
+        var last = today.AddMonths(-1);
+        if (today.Day <= 10 && Has(last.Year, last.Month))
+            reviewLinks.Add(($"review/{last.Year}/{last.Month}", $"Your {last:MMMM} in review is ready"));
+        else if (Has(today.Year, today.Month))
+            reviewLinks.Add(($"review/{today.Year}/{today.Month}", $"Your {today:MMMM} so far"));
+        if (today.Month == 1 && periods.Any(p => p.Year == today.Year - 1))
+            reviewLinks.Add(($"review/{today.Year - 1}", $"Your {today.Year - 1} in review"));
+        else if (today.Month == 12 && periods.Any(p => p.Year == today.Year))
+            reviewLinks.Add(($"review/{today.Year}", $"Your {today.Year} so far"));
+    }
+
+    private Task Hide(string key) => Toggle(key, false);
+
+    private async Task Toggle(string key, bool visible)
+    {
+        if (visible) hidden.Remove(key); else hidden.Add(key);
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(HiddenHomeSections: hidden.ToList()));
+            Session.Refresh();
+            if (!visible) Toasts.Show("Section hidden. Bring it back with “Customize home”.");
+            if (visible && key.StartsWith("trending") && trendingMovies is null) await LoadTrending();
+            if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
     }
 }

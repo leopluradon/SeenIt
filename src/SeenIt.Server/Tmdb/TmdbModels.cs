@@ -49,9 +49,15 @@ public record TmdbMovie(
     string? Status,
     TmdbCredits? Credits,
     TmdbVideos? Videos,
-    TmdbRecommendations? Recommendations);
+    TmdbRecommendations? Recommendations,
+    string? OriginalLanguage = null,
+    List<TmdbCountry>? ProductionCountries = null,
+    List<TmdbCompany>? ProductionCompanies = null);
 
 public record TmdbNetwork(int Id, string Name);
+public record TmdbCountry([property: System.Text.Json.Serialization.JsonPropertyName("iso_3166_1")] string? Iso31661, string Name);
+public record TmdbCompany(int Id, string Name);
+public record TmdbCreator(int Id, string Name, string? ProfilePath);
 
 public record TmdbSeasonSummary(int SeasonNumber, string? Name, int EpisodeCount, string? AirDate, string? PosterPath);
 
@@ -80,7 +86,10 @@ public record TmdbShow(
     TmdbCredits? AggregateCredits,
     TmdbCredits? Credits,
     TmdbVideos? Videos,
-    TmdbRecommendations? Recommendations)
+    TmdbRecommendations? Recommendations,
+    string? OriginalLanguage = null,
+    List<string>? OriginCountry = null,
+    List<TmdbCreator>? CreatedBy = null)
 {
     /// <summary>"season/N" blocks pulled in via append_to_response.</summary>
     [JsonExtensionData]

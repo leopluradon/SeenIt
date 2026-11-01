@@ -1,0 +1,181 @@
+@page "/review/{Year:int}"
+@page "/review/{Year:int}/{Month:int}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Nav
+<PageTitle>@(r?.Label ?? "Review") in review · SeenIt</PageTitle>
+
+<div class="review-head">
+    <button class="icon-btn" @onclick="() => Go(-1)" aria-label="Previous @(Month is null ? "year" : "month")"><Icon Name="chevron-left" /></button>
+    <div class="review-title">
+        <span class="review-kicker">@(Month is null ? "Year" : "Month") in review</span>
+        <h1>@Label</h1>
+    </div>
+    <button class="icon-btn" @onclick="() => Go(1)" disabled="@IsCurrentOrFuture" aria-label="Next @(Month is null ? "year" : "month")"><Icon Name="chevron-right" /></button>
+</div>
+<div class="chips center-chips">
+    @if (Month is not null) { <a class="chip" href="@($"review/{Year}")">See all of @Year</a> }
+    else if (periods?.FirstOrDefault(p => p.Year == Year) is { } py)
+    {
+        @foreach (var m in py.Months)
+        {
+            <a class="chip" href="@($"review/{Year}/{m.Month}")" @key="m.Month">@(new DateTime(Year, m.Month, 1).ToString("MMM"))</a>
+        }
+    }
+    <a class="chip" href="stats">All-time stats</a>
+</div>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (r is null && error is null) { <Spinner /> }
+else if (r is not null)
+{
+    @if (r.Totals.Plays == 0)
+    {
+        <Empty Title="@($"Nothing watched in {r.Label}.")">
+            @if (periods is { Count: > 0 }) { <span>Try another period:</span> <PeriodLinks Periods="periods" /> }
+        </Empty>
+    }
+    else
+    {
+        var t = r.Totals;
+        var p = r.Previous;
+        <section class="stat-tiles review-tiles">
+            <div class="stat big"><span class="stat-value">@Fmt.Duration(t.Minutes)</span><span class="stat-label">watched <Delta Now="t.Minutes" Then="p.Minutes" /></span></div>
+            <div class="stat"><span class="stat-value">@t.Plays.ToString("N0")</span><span class="stat-label">plays <Delta Now="t.Plays" Then="p.Plays" /></span></div>
+            <div class="stat"><span class="stat-value">@t.Movies.ToString("N0")</span><span class="stat-label">movies@(t.MoviePlays > t.Movies ? $" · {t.MoviePlays} plays" : "") <Delta Now="t.Movies" Then="p.Movies" /></span></div>
+            <div class="stat"><span class="stat-value">@t.Episodes.ToString("N0")</span><span class="stat-label">episodes of @t.Shows show@(t.Shows == 1 ? "" : "s") <Delta Now="t.Episodes" Then="p.Episodes" /></span></div>
+            <div class="stat"><span class="stat-value">@t.Ratings.ToString("N0")</span><span class="stat-label">ratings@(r.AverageRating is { } avg ? $" · avg {avg:0.0}" : "")</span></div>
+        </section>
+        <p class="muted small center-text">Compared with @r.PreviousLabel · times in @r.TimeZone</p>
+
+        <section class="review-facts">
+            <div class="fact"><b>@r.DaysActive</b><span>of @r.DaysInPeriod days with something watched</span></div>
+            <div class="fact"><b>@r.LongestStreak.Days day@(r.LongestStreak.Days == 1 ? "" : "s")</b><span>longest streak@(r.LongestStreak.Start is { } ss && r.LongestStreak.Days > 1 ? $" ({ss:d MMM} – {r.LongestStreak.End:d MMM})" : "")</span></div>
+            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString("ddd d MMM")</b><span>busiest day: @bd.Plays plays, @Fmt.Duration(bd.Minutes)</span></div> }
+            <div class="fact"><b>@r.AveragePlaysPerActiveDay</b><span>plays per active day</span></div>
+            @if (r.FavoriteWeekday is { } fw) { <div class="fact"><b>@(fw)s</b><span>favourite day to watch</span></div> }
+            @if (r.PeakHour is { } ph) { <div class="fact"><b>@HourLabel(ph)</b><span>peak viewing hour</span></div> }
+            <div class="fact"><b>@r.ShowsStarted</b><span>new show@(r.ShowsStarted == 1 ? "" : "s") started</span></div>
+            <div class="fact"><b>@r.ShowsCompleted</b><span>show@(r.ShowsCompleted == 1 ? "" : "s") caught up on</span></div>
+            <div class="fact"><b>@r.FirstTimeWatches</b><span>first-time watches</span></div>
+            <div class="fact"><b>@r.Rewatches</b><span>rewatches</span></div>
+        </section>
+
+        <section class="panel">
+            <h2>@(Month is null ? "Plays by month" : "Plays by day")</h2>
+            <BarChart Data="r.Timeline" Vertical="true" Label="@(Month is null ? "Plays per month" : "Plays per day")" />
+        </section>
+
+        @if (r.TopShows.Count > 0)
+        {
+            <section class="row-section">
+                <div class="section-head"><h2>Top shows</h2></div>
+                <div class="poster-scroller">
+                    @{ var rank = 0; }
+                    @foreach (var s in r.TopShows)
+                    {
+                        rank++;
+                        <PosterCard Media="@(new MediaSummary(MediaType.Show, s.TmdbId, s.Title, null, s.PosterPath, null, null, null))"
+                                    Badge="@($"#{rank}")" ShowScore="false" Sub="@($"{s.Detail} · {Fmt.Duration(s.Minutes)}")" @key="s.TmdbId" />
+                    }
+                </div>
+            </section>
+        }
+        @if (r.TopMovies.Count > 0)
+        {
+            <section class="row-section">
+                <div class="section-head"><h2>Movies</h2></div>
+                <div class="poster-scroller">
+                    @foreach (var m in r.TopMovies)
+                    {
+                        <PosterCard Media="@(new MediaSummary(MediaType.Movie, m.TmdbId, m.Title, null, m.PosterPath, null, null, null))"
+                                    Badge="@(m.Rating is { } mr ? $"★ {mr}" : null)" ShowScore="false"
+                                    Sub="@(m.Plays > 1 ? $"{m.Detail} · {m.Plays}×" : m.Detail)" @key="m.TmdbId" />
+                    }
+                </div>
+            </section>
+        }
+
+        @if (r.TopActors.Count > 0) { <PeopleRow Title="Actors you watched most" People="r.TopActors" /> }
+        @if (r.TopDirectors.Count > 0) { <PeopleRow Title="Directors & creators" People="r.TopDirectors" /> }
+
+        <div class="stat-panels">
+            @if (r.Genres.Count > 0) { <section class="panel"><h2>Genres</h2><BarChart Data="r.Genres" Label="Plays by genre" /></section> }
+            @if (r.Networks.Count > 0) { <section class="panel"><h2>Networks</h2><BarChart Data="r.Networks" Label="Episodes by network" /></section> }
+            <section class="panel"><h2>Day of week</h2><BarChart Data="r.Weekdays" Vertical="true" Label="Plays by weekday" /></section>
+            <section class="panel"><h2>Time of day</h2><BarChart Data="r.Hours" Vertical="true" Label="Plays by hour" /></section>
+            @if (r.Languages.Count > 0) { <section class="panel"><h2>Languages</h2><BarChart Data="r.Languages" Label="Plays by original language" /></section> }
+            @if (r.Countries.Count > 0) { <section class="panel"><h2>Countries</h2><BarChart Data="r.Countries" Label="Plays by country of origin" /></section> }
+            @if (r.Decades.Count > 0) { <section class="panel"><h2>Movies by decade</h2><BarChart Data="r.Decades" Vertical="true" Label="Movie plays by release decade" /></section> }
+            @if (r.RatingDistribution.Any(b => b.Count > 0)) { <section class="panel"><h2>Ratings given</h2><BarChart Data="r.RatingDistribution" Vertical="true" Label="Ratings given by score" /></section> }
+            @if (r.Sources.Count > 0) { <section class="panel"><h2>How it was tracked</h2><BarChart Data="r.Sources" Label="Plays by source" /></section> }
+        </div>
+
+        @if (r.HighestRated.Count > 0)
+        {
+            <section class="row-section">
+                <div class="section-head"><h2>Highest rated</h2></div>
+                <div class="poster-scroller">
+                    @foreach (var h in r.HighestRated)
+                    {
+                        <PosterCard Media="@(new MediaSummary(h.Type, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))" Badge="@($"★ {h.Rating}")" ShowScore="false" @key="(h.Type, h.TmdbId)" />
+                    }
+                </div>
+            </section>
+        }
+
+        <section class="row-section">
+            <div class="section-head"><h2>Highlights</h2></div>
+            <div class="highlights">
+                @if (r.FirstPlay is { } fp) { <Highlight Label="First watch" Entry="fp" /> }
+                @if (r.LastPlay is { } lp && lp.Id != r.FirstPlay?.Id) { <Highlight Label="Most recent" Entry="lp" /> }
+                @if (r.MostRewatched is { } mr2) { <HighlightItem Label="Most rewatched" Item="mr2" Extra="@($"{mr2.Plays} times")" /> }
+                @if (r.LongestMovie is { } lm) { <HighlightItem Label="Longest movie" Item="lm" Extra="@lm.Detail" /> }
+                @if (r.OldestMovie is { } om) { <HighlightItem Label="Oldest movie" Item="om" Extra="@om.Detail" /> }
+                @if (r.NewestMovie is { } nm && nm.TmdbId != r.OldestMovie?.TmdbId) { <HighlightItem Label="Newest movie" Item="nm" Extra="@nm.Detail" /> }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public int Year { get; set; }
+    [Parameter] public int? Month { get; set; }
+    private ReviewDto? r;
+    private List<ReviewYear>? periods;
+    private string? error;
+
+    private string Label => Month is { } m ? new DateTime(Year, m, 1).ToString("MMMM yyyy") : Year.ToString();
+    private bool IsCurrentOrFuture => Month is { } m
+        ? new DateTime(Year, m, 1) >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
+        : Year >= DateTime.Today.Year;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        r = null;
+        await Load();
+        if (periods is null)
+        {
+            try { periods = await Api.ReviewPeriodsAsync(); } catch { periods = []; }
+        }
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        try { r = await Api.ReviewAsync(Year, Month); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void Go(int step)
+    {
+        if (Month is { } m)
+        {
+            var d = new DateTime(Year, m, 1).AddMonths(step);
+            Nav.NavigateTo($"review/{d.Year}/{d.Month}");
+        }
+        else Nav.NavigateTo($"review/{Year + step}");
+    }
+
+    private static string HourLabel(int h) => new DateTime(2000, 1, 1, h, 0, 0).ToString("h tt").ToLowerInvariant();
+}

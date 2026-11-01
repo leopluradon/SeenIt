@@ -3,7 +3,13 @@
 @inject ApiClient Api
 <PageTitle>Stats · SeenIt</PageTitle>
 
-<h1>Stats</h1>
+<div class="page-head">
+    <h1>Stats</h1>
+    <div class="inline">
+        <a class="btn btn-sm btn-primary" href="@($"review/{DateTime.Today.Year}/{DateTime.Today.Month}")"><Icon Name="chart" Size="16" /> Month in review</a>
+        <a class="btn btn-sm" href="@($"review/{DateTime.Today.Year}")">Year in review</a>
+    </div>
+</div>
 <ErrorBox Message="@error" />
 @if (s is null && error is null) { <Spinner /> }
 else if (s is not null)
@@ -35,13 +41,23 @@ else if (s is not null)
             <BarChart Data="s.PlaysByWeekday" Vertical="true" Label="Plays by day of week" />
         </section>
     </div>
+
+    @if (periods is { Count: > 0 })
+    {
+        <section class="panel review-periods">
+            <h2>Reviews</h2>
+            <PeriodLinks Periods="periods" />
+        </section>
+    }
 }
 @code {
+    private List<ReviewYear>? periods;
     private StatsDto? s;
     private string? error;
 
     protected override async Task OnInitializedAsync()
     {
+        try { periods = await Api.ReviewPeriodsAsync(); } catch { periods = []; }
         try { s = await Api.StatsAsync(); }
         catch (Exception ex) { error = ex.Message; }
     }

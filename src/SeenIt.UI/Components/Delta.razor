@@ -1,0 +1,14 @@
+@* Change versus the previous period, e.g. "▲ 24%". *@
+@if (Then > 0)
+{
+    var pct = (int)Math.Round(100.0 * (Now - Then) / Then);
+    <span class="delta @(pct > 0 ? "up" : pct < 0 ? "down" : "")">@(pct > 0 ? "▲" : pct < 0 ? "▼" : "=") @Math.Abs(pct)%</span>
+}
+else if (Now > 0)
+{
+    <span class="delta up">new</span>
+}
+@code {
+    [Parameter] public long Now { get; set; }
+    [Parameter] public long Then { get; set; }
+}

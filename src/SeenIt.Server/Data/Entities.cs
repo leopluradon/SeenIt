@@ -17,11 +17,30 @@ public class AppUser : IdentityUser<Guid>
     /// <summary>Also blur those episodes' images.</summary>
     public bool BlurSpoilerImages { get; set; }
 
+    /// <summary>Home page sections the user has hidden (keys from UiPrefs.HomeSections).</summary>
+    public List<string> HiddenHomeSections { get; set; } = [];
+    /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
+    public List<string> Tabs { get; set; } = [];
+
     public static string NewToken() =>
         Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
 }
 
 // ---------- Cached TMDB metadata (shared by every user) ----------
+
+/// <summary>A person on a title's credits, kept for review stats (top actors, directors).</summary>
+public class PersonCredit
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string? ProfilePath { get; set; }
+}
+
+public static class MetaVersions
+{
+    /// <summary>Bump when MovieMeta/ShowMeta gain fields, so cached rows are refetched.</summary>
+    public const int Current = 2;
+}
 
 public class MovieMeta
 {
@@ -36,6 +55,13 @@ public class MovieMeta
     public double? VoteAverage { get; set; }
     public string? Overview { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public string? OriginalLanguage { get; set; }
+    public List<string> Countries { get; set; } = [];
+    public List<string> Studios { get; set; } = [];
+    public List<PersonCredit> Cast { get; set; } = [];
+    public List<PersonCredit> Directors { get; set; } = [];
+    public int MetaVersion { get; set; }
 }
 
 public class ShowMeta
@@ -51,6 +77,13 @@ public class ShowMeta
     public double? VoteAverage { get; set; }
     public string? Overview { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public string? OriginalLanguage { get; set; }
+    public List<string> Countries { get; set; } = [];
+    public List<string> Networks { get; set; } = [];
+    public List<PersonCredit> Cast { get; set; } = [];
+    public List<PersonCredit> Creators { get; set; } = [];
+    public int MetaVersion { get; set; }
 
     /// <summary>When the episode list was last pulled. Null until the first full refresh.</summary>
     public DateTimeOffset? EpisodesUpdatedAt { get; set; }

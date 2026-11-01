@@ -12,8 +12,46 @@ public record RefreshRequest(string RefreshToken);
 public record TokenResponse(string AccessToken, string RefreshToken, long ExpiresIn);
 public record ProblemInfo(string Title, Dictionary<string, string[]>? Errors = null);
 
-public record MeDto(Guid Id, string UserName, string Email, string? DisplayName, DateTimeOffset CreatedAt, bool HideSpoilers = false, bool BlurSpoilerImages = false);
-public record PreferencesRequest(bool HideSpoilers, bool BlurSpoilerImages);
+public record MeDto(
+    Guid Id, string UserName, string Email, string? DisplayName, DateTimeOffset CreatedAt,
+    bool HideSpoilers = false, bool BlurSpoilerImages = false,
+    IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null);
+
+/// <summary>Only the fields that are set are changed.</summary>
+public record PreferencesRequest(
+    bool? HideSpoilers = null, bool? BlurSpoilerImages = null,
+    IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null);
+
+/// <summary>The customisable bits of the UI and their allowed keys.</summary>
+public static class UiPrefs
+{
+    public static readonly (string Key, string Label)[] HomeSections =
+    [
+        ("review", "Month / year in review banner"),
+        ("upnext", "Up next"),
+        ("upcoming", "Coming up"),
+        ("recent", "Recently watched"),
+        ("trending-movies", "Trending movies"),
+        ("trending-shows", "Trending shows"),
+    ];
+
+    public static readonly (string Key, string Label, string Icon, string Href)[] Tabs =
+    [
+        ("home", "Home", "home", ""),
+        ("discover", "Discover", "compass", "discover"),
+        ("progress", "Progress", "progress", "progress"),
+        ("calendar", "Calendar", "calendar", "calendar"),
+        ("history", "History", "history", "history"),
+        ("watchlist", "Watchlist", "bookmark", "watchlist"),
+        ("lists", "Lists", "list", "lists"),
+        ("stats", "Stats", "chart", "stats"),
+        ("ratings", "Ratings", "star", "ratings"),
+        ("search", "Search", "search", "search"),
+    ];
+
+    public const int MaxTabs = 4; // plus the fixed "More" tab
+    public static readonly string[] DefaultTabs = ["home", "discover", "progress", "calendar"];
+}
 public record UpdateProfileRequest(string? DisplayName);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public record DeleteAccountRequest(string Password);
@@ -259,3 +297,76 @@ public record ImportJobDto(
     int Failed,
     string? Message,
     IReadOnlyList<string> Unmatched);
+
+// ---------- Month / year in review ----------
+
+public record PeriodTotals(
+    int Plays,
+    int MoviePlays,
+    int Movies,          // distinct
+    int EpisodePlays,
+    int Episodes,        // distinct
+    int Shows,           // distinct
+    long Minutes,
+    int Ratings);
+
+public record ReviewItem(
+    MediaType Type,
+    int TmdbId,
+    string Title,
+    string? PosterPath,
+    int Plays,
+    long Minutes,
+    int? Rating,
+    string? Detail);
+
+public record ReviewPerson(int Id, string Name, string? ProfilePath, int Titles, int Plays);
+
+public record ReviewDay(DateOnly Date, int Plays, long Minutes);
+
+public record ReviewStreak(int Days, DateOnly? Start, DateOnly? End);
+
+public record ReviewDto(
+    int Year,
+    int? Month,
+    string Label,
+    string TimeZone,
+    PeriodTotals Totals,
+    PeriodTotals Previous,
+    string PreviousLabel,
+    int DaysActive,
+    int DaysInPeriod,
+    ReviewStreak LongestStreak,
+    ReviewDay? BusiestDay,
+    string? FavoriteWeekday,
+    int? PeakHour,
+    double AveragePlaysPerActiveDay,
+    IReadOnlyList<CountBucket> Timeline,        // per day (month) or per month (year)
+    IReadOnlyList<CountBucket> Weekdays,
+    IReadOnlyList<CountBucket> Hours,
+    IReadOnlyList<ReviewItem> TopShows,
+    IReadOnlyList<ReviewItem> TopMovies,
+    IReadOnlyList<ReviewPerson> TopActors,
+    IReadOnlyList<ReviewPerson> TopDirectors,
+    IReadOnlyList<CountBucket> Genres,
+    IReadOnlyList<CountBucket> Networks,
+    IReadOnlyList<CountBucket> Languages,
+    IReadOnlyList<CountBucket> Countries,
+    IReadOnlyList<CountBucket> Decades,
+    IReadOnlyList<CountBucket> Sources,
+    double? AverageRating,
+    IReadOnlyList<CountBucket> RatingDistribution,
+    IReadOnlyList<ReviewItem> HighestRated,
+    int ShowsStarted,
+    int ShowsCompleted,
+    int FirstTimeWatches,
+    int Rewatches,
+    ReviewItem? LongestMovie,
+    ReviewItem? OldestMovie,
+    ReviewItem? NewestMovie,
+    HistoryEntry? FirstPlay,
+    HistoryEntry? LastPlay,
+    ReviewItem? MostRewatched);
+
+public record ReviewMonth(int Month, int Plays, long Minutes);
+public record ReviewYear(int Year, int Plays, long Minutes, IReadOnlyList<ReviewMonth> Months);

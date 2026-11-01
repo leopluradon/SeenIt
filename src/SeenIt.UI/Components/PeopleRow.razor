@@ -1,0 +1,18 @@
+<section class="row-section">
+    <div class="section-head"><h2>@Title</h2></div>
+    <div class="cast-scroller">
+        @foreach (var p in People)
+        {
+            <div class="cast" @key="p.Id">
+                @if (Img.Profile(p.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                else { <div class="cast-fallback">@p.Name[..1]</div> }
+                <div class="cast-name">@p.Name</div>
+                <div class="cast-role muted small">@p.Titles title@(p.Titles == 1 ? "" : "s") · @p.Plays play@(p.Plays == 1 ? "" : "s")</div>
+            </div>
+        }
+    </div>
+</section>
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public IReadOnlyList<ReviewPerson> People { get; set; } = [];
+}

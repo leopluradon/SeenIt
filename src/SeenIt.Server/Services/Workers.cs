@@ -85,7 +85,7 @@ public class ShowRefreshWorker(IServiceScopeFactory scopes, ILogger<ShowRefreshW
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+        await Task.Delay(TimeSpan.FromSeconds(20), stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {
             try { await RefreshStaleAsync(stoppingToken); }
@@ -107,7 +107,7 @@ public class ShowRefreshWorker(IServiceScopeFactory scopes, ILogger<ShowRefreshW
         }
 
         var stale = candidates
-            .Where(s => s.EpisodesUpdatedAt is null || DateTimeOffset.UtcNow - s.EpisodesUpdatedAt > CatalogService.ShowTtl(s))
+            .Where(s => s.EpisodesUpdatedAt is null || DateTimeOffset.UtcNow - s.EpisodesUpdatedAt > CatalogService.ShowTtl(s) || s.MetaVersion < MetaVersions.Current)
             .OrderBy(s => s.EpisodesUpdatedAt ?? DateTimeOffset.MinValue)
             .Take(200)
             .ToList();
@@ -120,5 +120,25 @@ public class ShowRefreshWorker(IServiceScopeFactory scopes, ILogger<ShowRefreshW
             catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "Refreshing show {Id} failed", s.TmdbId); }
         }
         if (stale.Count > 0) log.LogInformation("Refreshed {Count} shows", stale.Count);
+
+        // Movies cached before metadata gained cast/directors/etc. (or long ago) get refetched.
+        List<int> movies;
+        await using (var scope = scopes.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var used = db.WatchEvents.Where(w => w.Type == MediaType.Movie).Select(w => w.TmdbId)
+                .Union(db.Watchlist.Where(w => w.Type == MediaType.Movie).Select(w => w.TmdbId))
+                .Union(db.Ratings.Where(r => r.Type == MediaType.Movie).Select(r => r.TmdbId));
+            movies = await db.Movies.AsNoTracking()
+                .Where(m => used.Contains(m.TmdbId) && m.MetaVersion < MetaVersions.Current)
+                .Select(m => m.TmdbId).Take(500).ToListAsync(ct);
+        }
+        foreach (var id in movies)
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            try { await scope.ServiceProvider.GetRequiredService<CatalogService>().EnsureMovieAsync(id, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "Refreshing movie {Id} failed", id); }
+        }
+        if (movies.Count > 0) log.LogInformation("Backfilled metadata for {Count} movies", movies.Count);
     }
 }

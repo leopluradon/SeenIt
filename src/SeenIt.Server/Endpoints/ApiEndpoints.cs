@@ -94,6 +94,10 @@ public static class ApiEndpoints
             t.GetCalendarAsync(p.UserId(), from ?? DateOnly.FromDateTime(DateTime.UtcNow), days ?? 30, ct));
         g.MapGet("/dashboard", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetDashboardAsync(p.UserId(), ct));
         g.MapGet("/stats", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetStatsAsync(p.UserId(), ct));
+
+        g.MapGet("/review/periods", (string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.GetPeriodsAsync(p.UserId(), tz, ct));
+        g.MapGet("/review/{year:int}", (int year, string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.BuildAsync(p.UserId(), year, null, tz, ct));
+        g.MapGet("/review/{year:int}/{month:int}", (int year, int month, string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.BuildAsync(p.UserId(), year, month, tz, ct));
     }
 
     // ---------- Lists ----------

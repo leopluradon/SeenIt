@@ -43,11 +43,11 @@ public class TmdbClient
     }
 
     public Task<TmdbMovie?> GetMovieAsync(int id, bool full, CancellationToken ct = default) =>
-        GetAsync<TmdbMovie>($"movie/{id}" + (full ? "?append_to_response=credits,videos,recommendations" : ""),
+        GetAsync<TmdbMovie>($"movie/{id}?append_to_response=credits" + (full ? ",videos,recommendations" : ""),
             full ? TimeSpan.FromHours(1) : TimeSpan.FromMinutes(10), ct);
 
     public Task<TmdbShow?> GetShowAsync(int id, bool full, CancellationToken ct = default) =>
-        GetAsync<TmdbShow>($"tv/{id}" + (full ? "?append_to_response=aggregate_credits,videos,recommendations" : ""),
+        GetAsync<TmdbShow>($"tv/{id}?append_to_response=aggregate_credits" + (full ? ",videos,recommendations" : ""),
             full ? TimeSpan.FromHours(1) : TimeSpan.FromMinutes(10), ct);
 
     /// <summary>Show plus up to 20 seasons in a single request (TMDB's append limit).</summary>

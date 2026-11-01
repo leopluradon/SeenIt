@@ -23,13 +23,11 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
     public async Task<MovieMeta?> EnsureMovieAsync(int id, CancellationToken ct = default)
     {
         var meta = await db.Movies.FindAsync([id], ct);
-        if (meta is not null && DateTimeOffset.UtcNow - meta.UpdatedAt < MovieTtl)
-            return meta;
+        if (IsFresh(meta)) return meta;
 
         using var _ = await LockAsync($"m{id}", ct);
         meta = await db.Movies.FindAsync([id], ct);
-        if (meta is not null && DateTimeOffset.UtcNow - meta.UpdatedAt < MovieTtl)
-            return meta;
+        if (IsFresh(meta)) return meta;
 
         var m = await tmdb.GetMovieAsync(id, full: false, ct);
         if (m is null) return meta;
@@ -62,7 +60,10 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
     }
 
     private static bool IsFresh(ShowMeta? s) =>
-        s?.EpisodesUpdatedAt is { } at && DateTimeOffset.UtcNow - at < ShowTtl(s);
+        s?.EpisodesUpdatedAt is { } at && DateTimeOffset.UtcNow - at < ShowTtl(s) && s.MetaVersion >= MetaVersions.Current;
+
+    private static bool IsFresh(MovieMeta? m) =>
+        m is not null && DateTimeOffset.UtcNow - m.UpdatedAt < MovieTtl && m.MetaVersion >= MetaVersions.Current;
 
     public async Task<ShowMeta?> RefreshShowAsync(int id, ShowMeta? meta, CancellationToken ct)
     {
@@ -130,6 +131,16 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         meta.VoteAverage = m.VoteAverage;
         meta.Overview = m.Overview;
         meta.UpdatedAt = DateTimeOffset.UtcNow;
+        meta.OriginalLanguage = m.OriginalLanguage;
+        meta.Countries = m.ProductionCountries?.Select(c => c.Name).ToList() ?? [];
+        meta.Studios = m.ProductionCompanies?.Select(c => c.Name).Take(5).ToList() ?? [];
+        if (m.Credits is { } credits)
+        {
+            meta.Cast = (credits.Cast ?? []).OrderBy(c => c.Order).Take(15).Select(Person).ToList();
+            meta.Directors = (credits.Crew ?? []).Where(c => c.Job == "Director").DistinctBy(c => c.Id)
+                .Select(c => new PersonCredit { Id = c.Id, Name = c.Name, ProfilePath = c.ProfilePath }).ToList();
+            meta.MetaVersion = MetaVersions.Current;
+        }
         return meta;
     }
 
@@ -150,8 +161,19 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         meta.VoteAverage = s.VoteAverage;
         meta.Overview = s.Overview;
         meta.UpdatedAt = DateTimeOffset.UtcNow;
+        meta.OriginalLanguage = s.OriginalLanguage;
+        meta.Countries = s.OriginCountry ?? [];
+        meta.Networks = s.Networks?.Select(n => n.Name).ToList() ?? [];
+        meta.Creators = s.CreatedBy?.Select(c => new PersonCredit { Id = c.Id, Name = c.Name, ProfilePath = c.ProfilePath }).ToList() ?? [];
+        if ((s.AggregateCredits ?? s.Credits) is { } credits)
+        {
+            meta.Cast = (credits.Cast ?? []).OrderBy(c => c.Order).Take(15).Select(Person).ToList();
+            meta.MetaVersion = MetaVersions.Current;
+        }
         return meta;
     }
+
+    private static PersonCredit Person(TmdbCast c) => new() { Id = c.Id, Name = c.Name, ProfilePath = c.ProfilePath };
 
     private static async Task<IDisposable> LockAsync(string key, CancellationToken ct)
     {
@@ -224,7 +246,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
 
         // Opportunistically refresh the cached copy.
         var meta = await db.Movies.FindAsync([id], ct);
-        if (meta is null || DateTimeOffset.UtcNow - meta.UpdatedAt > TimeSpan.FromDays(1))
+        if (meta is null || DateTimeOffset.UtcNow - meta.UpdatedAt > TimeSpan.FromDays(1) || meta.MetaVersion < MetaVersions.Current)
         {
             UpsertMovie(m, meta);
             await SaveIgnoringRacesAsync(ct);

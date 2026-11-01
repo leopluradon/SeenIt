@@ -1,0 +1,4 @@
+<button class="icon-btn section-hide" @onclick="OnHide" title="Hide this section" aria-label="Hide this section"><Icon Name="x" Size="16" /></button>
+@code {
+    [Parameter] public EventCallback OnHide { get; set; }
+}

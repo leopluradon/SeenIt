@@ -61,11 +61,12 @@
 
     <AuthorizeView>
         <Authorized>
-            <nav class="tabbar" aria-label="Sections">
-                <NavLink href="" Match="NavLinkMatch.All"><Icon Name="home" /><span>Home</span></NavLink>
-                <NavLink href="discover"><Icon Name="compass" /><span>Discover</span></NavLink>
-                <NavLink href="progress"><Icon Name="progress" /><span>Progress</span></NavLink>
-                <NavLink href="calendar"><Icon Name="calendar" /><span>Calendar</span></NavLink>
+            @{ var tabs = UiLayout.Tabs(Session.Me); }
+            <nav class="tabbar" aria-label="Sections" style="grid-template-columns: repeat(@(tabs.Count + 1), 1fr)">
+                @foreach (var t in tabs)
+                {
+                    <NavLink href="@t.Href" Match="@(t.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" @key="t.Key"><Icon Name="@t.Icon" /><span>@t.Label</span></NavLink>
+                }
                 <NavLink href="more"><Icon Name="menu" /><span>More</span></NavLink>
             </nav>
         </Authorized>

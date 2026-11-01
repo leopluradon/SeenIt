@@ -76,7 +76,7 @@ public static partial class AuthEndpoints
 
         me.MapGet("/me", async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> (ClaimsPrincipal p, UserManager<AppUser> users) =>
             await users.FindByIdAsync(p.UserId().ToString()) is { } u
-                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages))
+                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages, u.HiddenHomeSections, u.Tabs))
                 : TypedResults.Unauthorized());
 
         me.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
@@ -93,8 +93,12 @@ public static partial class AuthEndpoints
         {
             var u = await users.FindByIdAsync(p.UserId().ToString());
             if (u is null) return Results.Unauthorized();
-            u.HideSpoilers = req.HideSpoilers;
-            u.BlurSpoilerImages = req.BlurSpoilerImages;
+            if (req.HideSpoilers is { } hide) u.HideSpoilers = hide;
+            if (req.BlurSpoilerImages is { } blur) u.BlurSpoilerImages = blur;
+            if (req.HiddenHomeSections is { } hidden)
+                u.HiddenHomeSections = hidden.Where(k => UiPrefs.HomeSections.Any(s => s.Key == k)).Distinct().ToList();
+            if (req.Tabs is { } tabs)
+                u.Tabs = tabs.Where(k => UiPrefs.Tabs.Any(t => t.Key == k)).Distinct().Take(UiPrefs.MaxTabs).ToList();
             await users.UpdateAsync(u);
             return Results.NoContent();
         });

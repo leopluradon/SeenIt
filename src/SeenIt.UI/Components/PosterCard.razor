@@ -1,4 +1,4 @@
-<a class="poster-card" href="@Fmt.Href(Media.Type, Media.TmdbId)" title="@Media.Title">
+<a class="poster-card" href="@(Href ?? Fmt.Href(Media.Type, Media.TmdbId))" title="@Media.Title">
     <div class="poster">
         @if (Img.Poster(Media.PosterPath) is { } src)
         {
@@ -22,4 +22,5 @@
     [Parameter] public string? Badge { get; set; }
     [Parameter] public string? Sub { get; set; }
     [Parameter] public bool ShowScore { get; set; } = true;
+    [Parameter] public string? Href { get; set; }
 }

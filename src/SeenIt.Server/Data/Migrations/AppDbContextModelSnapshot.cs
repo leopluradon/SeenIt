@@ -183,6 +183,10 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.PrimitiveCollection<List<string>>("HiddenHomeSections")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<bool>("HideSpoilers")
                         .HasColumnType("boolean");
 
@@ -218,6 +222,10 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("Tabs")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
@@ -376,11 +384,21 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<string>("BackdropPath")
                         .HasColumnType("text");
 
+                    b.PrimitiveCollection<List<string>>("Countries")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.PrimitiveCollection<List<string>>("Genres")
                         .IsRequired()
                         .HasColumnType("text[]");
 
                     b.Property<string>("ImdbId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("MetaVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OriginalLanguage")
                         .HasColumnType("text");
 
                     b.Property<string>("Overview")
@@ -394,6 +412,10 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.Property<int?>("Runtime")
                         .HasColumnType("integer");
+
+                    b.PrimitiveCollection<List<string>>("Studios")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -455,6 +477,10 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<string>("BackdropPath")
                         .HasColumnType("text");
 
+                    b.PrimitiveCollection<List<string>>("Countries")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<int?>("EpisodeRuntime")
                         .HasColumnType("integer");
 
@@ -468,8 +494,18 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<int>("MetaVersion")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("Networks")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("OriginalLanguage")
                         .HasColumnType("text");
 
                     b.Property<string>("Overview")
@@ -689,6 +725,65 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.MovieMeta", b =>
+                {
+                    b.OwnsMany("SeenIt.Server.Data.PersonCredit", "Cast", b1 =>
+                        {
+                            b1.Property<int>("MovieMetaTmdbId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<int>("Id");
+
+                            b1.Property<string>("Name")
+                                .IsRequired();
+
+                            b1.Property<string>("ProfilePath");
+
+                            b1.HasKey("MovieMetaTmdbId", "__synthesizedOrdinal");
+
+                            b1.ToTable("Movies");
+
+                            b1
+                                .ToJson("Cast")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("MovieMetaTmdbId");
+                        });
+
+                    b.OwnsMany("SeenIt.Server.Data.PersonCredit", "Directors", b1 =>
+                        {
+                            b1.Property<int>("MovieMetaTmdbId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<int>("Id");
+
+                            b1.Property<string>("Name")
+                                .IsRequired();
+
+                            b1.Property<string>("ProfilePath");
+
+                            b1.HasKey("MovieMetaTmdbId", "__synthesizedOrdinal");
+
+                            b1.ToTable("Movies");
+
+                            b1
+                                .ToJson("Directors")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("MovieMetaTmdbId");
+                        });
+
+                    b.Navigation("Cast");
+
+                    b.Navigation("Directors");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.Rating", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
@@ -696,6 +791,65 @@ namespace SeenIt.Server.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ShowMeta", b =>
+                {
+                    b.OwnsMany("SeenIt.Server.Data.PersonCredit", "Cast", b1 =>
+                        {
+                            b1.Property<int>("ShowMetaTmdbId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<int>("Id");
+
+                            b1.Property<string>("Name")
+                                .IsRequired();
+
+                            b1.Property<string>("ProfilePath");
+
+                            b1.HasKey("ShowMetaTmdbId", "__synthesizedOrdinal");
+
+                            b1.ToTable("Shows");
+
+                            b1
+                                .ToJson("Cast")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShowMetaTmdbId");
+                        });
+
+                    b.OwnsMany("SeenIt.Server.Data.PersonCredit", "Creators", b1 =>
+                        {
+                            b1.Property<int>("ShowMetaTmdbId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<int>("Id");
+
+                            b1.Property<string>("Name")
+                                .IsRequired();
+
+                            b1.Property<string>("ProfilePath");
+
+                            b1.HasKey("ShowMetaTmdbId", "__synthesizedOrdinal");
+
+                            b1.ToTable("Shows");
+
+                            b1
+                                .ToJson("Creators")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShowMetaTmdbId");
+                        });
+
+                    b.Navigation("Cast");
+
+                    b.Navigation("Creators");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.UserList", b =>

@@ -68,6 +68,7 @@ builder.Services.AddHttpClient<TmdbClient>(c => c.Timeout = TimeSpan.FromSeconds
 builder.Services.AddScoped<CatalogService>();
 builder.Services.AddScoped<TrackingService>();
 builder.Services.AddScoped<ListService>();
+builder.Services.AddScoped<ReviewService>();
 builder.Services.AddScoped<JellyfinService>();
 builder.Services.AddScoped<ImportRunner>();
 builder.Services.AddHostedService<ImportWorker>();

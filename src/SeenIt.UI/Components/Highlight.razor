@@ -1,0 +1,12 @@
+<a class="highlight" href="@(Entry.Type == MediaType.Movie ? $"movie/{Entry.TmdbId}" : Fmt.EpisodeHref(Entry.TmdbId, Entry.SeasonNumber, Entry.EpisodeNumber))">
+    <img src="@Img.Poster(Entry.PosterPath, "w154")" alt="" loading="lazy" />
+    <div>
+        <span class="highlight-label">@Label</span>
+        <b>@Entry.Title</b>
+        <span class="muted small">@(Entry.Type == MediaType.Episode ? Fmt.Ep(Entry.SeasonNumber, Entry.EpisodeNumber) + " · " : "")@Entry.WatchedAt.ToLocalTime().ToString("d MMM, h:mm tt")</span>
+    </div>
+</a>
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public HistoryEntry Entry { get; set; } = default!;
+}
