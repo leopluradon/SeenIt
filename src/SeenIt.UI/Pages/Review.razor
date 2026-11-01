@@ -63,7 +63,7 @@ else if (r is not null)
 
         <section class="panel">
             <h2>@(Month is null ? "Plays by month" : "Plays by day")</h2>
-            <BarChart Data="r.Timeline" Vertical="true" Label="@(Month is null ? "Plays per month" : "Plays per day")" />
+            <BarChart Data="r.Timeline" Vertical="true" LabelEvery="@(Month is null ? 1 : 5)" Label="@(Month is null ? "Plays per month" : "Plays per day")" />
         </section>
 
         @if (r.TopShows.Count > 0)
@@ -103,7 +103,7 @@ else if (r is not null)
             @if (r.Genres.Count > 0) { <section class="panel"><h2>Genres</h2><BarChart Data="r.Genres" Label="Plays by genre" /></section> }
             @if (r.Networks.Count > 0) { <section class="panel"><h2>Networks</h2><BarChart Data="r.Networks" Label="Episodes by network" /></section> }
             <section class="panel"><h2>Day of week</h2><BarChart Data="r.Weekdays" Vertical="true" Label="Plays by weekday" /></section>
-            <section class="panel"><h2>Time of day</h2><BarChart Data="r.Hours" Vertical="true" Label="Plays by hour" /></section>
+            <section class="panel"><h2>Time of day</h2><BarChart Data="r.Hours" Vertical="true" LabelEvery="3" Label="Plays by hour" /></section>
             @if (r.Languages.Count > 0) { <section class="panel"><h2>Languages</h2><BarChart Data="r.Languages" Label="Plays by original language" /></section> }
             @if (r.Countries.Count > 0) { <section class="panel"><h2>Countries</h2><BarChart Data="r.Countries" Label="Plays by country of origin" /></section> }
             @if (r.Decades.Count > 0) { <section class="panel"><h2>Movies by decade</h2><BarChart Data="r.Decades" Vertical="true" Label="Movie plays by release decade" /></section> }

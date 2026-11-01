@@ -2,11 +2,12 @@
 @if (Vertical)
 {
     <div class="vbars" role="img" aria-label="@Label">
-        @foreach (var b in Data)
+        @for (var i = 0; i < Data.Count; i++)
         {
+            var b = Data[i];
             <div class="vbar" title="@($"{b.Label}: {b.Count}")">
                 <div class="vbar-track"><div class="vbar-fill" style="height:@Pct(b.Count)%"></div></div>
-                <span class="vbar-label">@b.Label</span>
+                <span class="vbar-label">@(i % LabelEvery == 0 ? b.Label : "\u00a0")</span>
             </div>
         }
     </div>
@@ -28,6 +29,8 @@ else
     [Parameter] public IReadOnlyList<CountBucket> Data { get; set; } = [];
     [Parameter] public bool Vertical { get; set; }
     [Parameter] public string Label { get; set; } = "";
+    /// <summary>Show every Nth axis label (dense charts like days of a month).</summary>
+    [Parameter] public int LabelEvery { get; set; } = 1;
     private string Pct(int v)
     {
         var max = Data.Count == 0 ? 0 : Data.Max(d => d.Count);

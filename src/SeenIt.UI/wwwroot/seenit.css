@@ -429,7 +429,7 @@ label.check.disabled { opacity: .5; cursor: default; }
 .delta { display: inline-block; margin-left: 4px; font-size: .74rem; font-weight: 700; color: var(--muted); }
 .delta.up { color: var(--ok); }
 .delta.down { color: var(--accent-hover); }
-.review-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 10px; margin: 20px 0; }
+.review-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 45%), 1fr)); gap: 10px; margin: 20px 0; }
 .fact { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
 .fact b { font-size: 1.25rem; letter-spacing: -.01em; }
 .fact span { color: var(--muted); font-size: .84rem; }
