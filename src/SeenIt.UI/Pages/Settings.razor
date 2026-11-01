@@ -253,6 +253,12 @@
                 <input type="password" placeholder="New password" @bind="newPassword" autocomplete="new-password" minlength="8" aria-label="New password" />
                 <button class="btn" type="submit" disabled="@(string.IsNullOrEmpty(currentPassword) || string.IsNullOrEmpty(newPassword))">Change password</button>
             </form>
+            @if (features?.Email == true)
+            {
+                <h3>Email</h3>
+                <p class="muted small">Password reset emails go to @(Session.Me?.Email). Send yourself a test to check they arrive.</p>
+                <button class="btn" @onclick="TestEmail" disabled="@testingEmail">@(testingEmail ? "Sending…" : "Send test email")</button>
+            }
             <h3>Delete account</h3>
             <p class="muted small">Permanently deletes your account, history, ratings, watchlist and lists.</p>
             <form class="stack narrow" @onsubmit="DeleteAccount">
@@ -363,6 +369,7 @@
         hiddenSections = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         visibility = Session.Me?.Visibility ?? ProfileVisibility.Friends;
         region = Session.Me?.Region;
+        _ = LoadFeatures();
         await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions());
         StartPolling();
     }
@@ -486,6 +493,22 @@
     {
         try { await Api.UpdateProfileAsync(new UpdateProfileRequest(displayName)); Session.Refresh(); Toasts.Show("Saved"); }
         catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private ServerFeatures? features;
+    private bool testingEmail;
+
+    private async Task LoadFeatures()
+    {
+        try { features = await Api.FeaturesAsync(); StateHasChanged(); } catch { }
+    }
+
+    private async Task TestEmail()
+    {
+        testingEmail = true;
+        try { await Api.SendTestEmailAsync(); Toasts.Show($"Sent to {Session.Me?.Email}."); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { testingEmail = false; }
     }
 
     private async Task ChangePassword()

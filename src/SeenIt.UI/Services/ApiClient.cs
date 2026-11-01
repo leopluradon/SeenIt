@@ -28,6 +28,10 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task UpdateProfileAsync(UpdateProfileRequest r) => SendAsync(HttpMethod.Put, "api/auth/me", r);
     public Task SetPreferencesAsync(PreferencesRequest r) => SendAsync(HttpMethod.Put, "api/auth/preferences", r);
     public Task ChangePasswordAsync(ChangePasswordRequest r) => SendAsync(HttpMethod.Post, "api/auth/password", r);
+    public Task<ServerFeatures?> FeaturesAsync() => SendAsync<ServerFeatures>(HttpMethod.Get, "api/auth/features", null, auth: false);
+    public Task ForgotPasswordAsync(ForgotPasswordRequest r) => SendAsync<object>(HttpMethod.Post, "api/auth/forgot", r, auth: false);
+    public Task ResetPasswordAsync(ResetPasswordRequest r) => SendAsync<object>(HttpMethod.Post, "api/auth/reset", r, auth: false);
+    public Task SendTestEmailAsync() => SendAsync(HttpMethod.Post, "api/auth/test-email", null);
     public Task DeleteAccountAsync(DeleteAccountRequest r) => SendAsync(HttpMethod.Post, "api/auth/delete", r);
 
     // ---------- Catalogue ----------

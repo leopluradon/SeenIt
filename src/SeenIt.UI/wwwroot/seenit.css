@@ -527,6 +527,7 @@ a.cast { color: var(--text); }
 .auth-card { max-width: 400px; margin: 32px auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; }
 .auth-card .logo { margin-bottom: 18px; }
 .auth-card h1 { font-size: 1.4rem; }
+.forgot-link { text-align: right; margin: -6px 0 12px; }
 .auth-card input { width: 100%; }
 .server-picker { margin-top: 16px; font-size: .85rem; color: var(--muted); }
 .server-picker summary { cursor: pointer; }

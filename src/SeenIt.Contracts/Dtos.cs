@@ -63,6 +63,10 @@ public static class UiPrefs
 }
 public record UpdateProfileRequest(string? DisplayName);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public record ForgotPasswordRequest(string Email);
+public record ResetPasswordRequest(Guid UserId, string Token, string NewPassword);
+/// <summary>What this server can do, so clients can hide features it isn't set up for.</summary>
+public record ServerFeatures(bool Email);
 public record DeleteAccountRequest(string Password);
 
 // ---------- Catalogue (TMDB) ----------

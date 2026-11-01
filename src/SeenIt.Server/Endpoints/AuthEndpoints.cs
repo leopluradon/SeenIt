@@ -1,11 +1,15 @@
+using System.Net;
 using System.Security.Claims;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using SeenIt.Contracts;
 using SeenIt.Server.Data;
+using SeenIt.Server.Services;
 
 namespace SeenIt.Server.Endpoints;
 
@@ -72,7 +76,58 @@ public static partial class AuthEndpoints
             return TypedResults.SignIn(principal, authenticationScheme: IdentityConstants.BearerScheme);
         });
 
+        g.MapGet("/features", (EmailService email) => new ServerFeatures(email.Enabled));
+
+        // Always answers 204, so it can't be used to find out which emails have accounts.
+        g.MapPost("/forgot", async (ForgotPasswordRequest req, UserManager<AppUser> users, EmailService email, HttpContext http, IConfiguration config) =>
+        {
+            if (!email.Enabled) return Results.BadRequest(new ProblemInfo("Password reset by email isn't set up on this server."));
+            var address = req.Email?.Trim() ?? "";
+            if (address.Contains('@') && await users.FindByEmailAsync(address) is { Email: not null } u)
+            {
+                var token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GeneratePasswordResetTokenAsync(u)));
+                var link = $"{PublicBase(http, config)}reset-password?user={u.Id}&token={token}";
+                var name = WebUtility.HtmlEncode(u.UserName);
+                email.Queue(new EmailMessage(u.Email, "Reset your SeenIt password",
+                    $"Hi {u.UserName},\n\nSomeone (hopefully you) asked to reset your SeenIt password. Open this link within 2 hours to choose a new one:\n\n{link}\n\nIf it wasn't you, ignore this email and your password stays the same.\n",
+                    $"<p>Hi {name},</p><p>Someone (hopefully you) asked to reset your SeenIt password. Open this link within 2 hours to choose a new one:</p>" +
+                    $"<p><a href=\"{WebUtility.HtmlEncode(link)}\">Reset my password</a></p><p>If it wasn't you, ignore this email and your password stays the same.</p>"));
+            }
+            return Results.NoContent();
+        }).RequireRateLimiting("auth");
+
+        g.MapPost("/reset", async (ResetPasswordRequest req, UserManager<AppUser> users) =>
+        {
+            const string expired = "This reset link is invalid or has expired. Ask for a new one.";
+            if (await users.FindByIdAsync(req.UserId.ToString()) is not { } u) return Results.BadRequest(new ProblemInfo(expired));
+            string token;
+            try { token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(req.Token ?? "")); }
+            catch (FormatException) { return Results.BadRequest(new ProblemInfo(expired)); }
+
+            // Also rotates the security stamp, signing out every device.
+            var r = await users.ResetPasswordAsync(u, token, req.NewPassword ?? "");
+            if (!r.Succeeded)
+                return Results.BadRequest(new ProblemInfo(r.Errors.Any(e => e.Code == "InvalidToken") ? expired : string.Join(" ", r.Errors.Select(e => e.Description))));
+            await users.SetLockoutEndDateAsync(u, null);
+            await users.ResetAccessFailedCountAsync(u);
+            return Results.NoContent();
+        }).RequireRateLimiting("auth");
+
         var me = g.MapGroup("").RequireAuthorization();
+
+        // Sends straight away (not queued) so Settings can show the mail server's error.
+        me.MapPost("/test-email", async (ClaimsPrincipal p, UserManager<AppUser> users, EmailService email, HttpContext http, IConfiguration config) =>
+        {
+            if (!email.Enabled) return Results.BadRequest(new ProblemInfo("SMTP isn't configured on this server."));
+            if (await users.FindByIdAsync(p.UserId().ToString()) is not { Email: not null } u) return Results.Unauthorized();
+            try
+            {
+                await email.SendAsync(new EmailMessage(u.Email, "SeenIt test email",
+                    $"Email from {PublicBase(http, config)} is working.", $"<p>Email from <a href=\"{PublicBase(http, config)}\">SeenIt</a> is working.</p>"));
+                return Results.NoContent();
+            }
+            catch (Exception ex) { return Results.BadRequest(new ProblemInfo($"Couldn't send: {ex.Message}")); }
+        }).RequireRateLimiting("auth");
 
         me.MapGet("/me", async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> (ClaimsPrincipal p, UserManager<AppUser> users) =>
             await users.FindByIdAsync(p.UserId().ToString()) is { } u
@@ -131,6 +186,10 @@ public static partial class AuthEndpoints
             return Results.NoContent();
         }).RequireRateLimiting("auth");
     }
+
+    /// <summary>Where links in emails point: SeenIt:PublicUrl if set, otherwise the address this request came in on.</summary>
+    private static string PublicBase(HttpContext http, IConfiguration config) =>
+        config["SeenIt:PublicUrl"] is { Length: > 0 } url ? url.TrimEnd('/') + "/" : $"{http.Request.Scheme}://{http.Request.Host}{http.Request.PathBase}/";
 
     private static BadRequest<ProblemInfo> Bad(string message) => TypedResults.BadRequest(new ProblemInfo(message));
 }

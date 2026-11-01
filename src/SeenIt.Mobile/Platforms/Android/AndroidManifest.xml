@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- usesCleartextTraffic lets the app reach a plain-http server on your LAN. Remove once SeenIt is behind HTTPS. -->
     <application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round"
-                 android:supportsRtl="true" android:usesCleartextTraffic="true" />
+                 android:supportsRtl="true" android:usesCleartextTraffic="false" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>

@@ -75,6 +75,11 @@ builder.Services.AddScoped<CheckInService>();
 builder.Services.AddScoped<SocialService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddHostedService<CheckInWorker>();
+builder.Services.Configure<SmtpOptions>(config.GetSection("Smtp"));
+builder.Services.AddSingleton<EmailService>();
+builder.Services.AddHostedService<EmailWorker>();
+// Password reset links are good for two hours.
+builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = TimeSpan.FromHours(2));
 builder.Services.AddScoped<ImportRunner>();
 builder.Services.AddHostedService<ImportWorker>();
 builder.Services.AddHostedService<ShowRefreshWorker>();

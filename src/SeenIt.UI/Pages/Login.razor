@@ -1,6 +1,7 @@
 @page "/login"
 @inject SessionState Session
 @inject NavigationManager Nav
+@inject ApiClient Api
 <PageTitle>Sign in · SeenIt</PageTitle>
 
 <div class="auth-card">
@@ -15,6 +16,7 @@
             <label for="login-pass">Password</label>
             <InputText id="login-pass" type="password" @bind-Value="model.Password" autocomplete="current-password" required />
         </div>
+        @if (features?.Email == true) { <p class="small forgot-link"><a href="forgot-password">Forgot password?</a></p> }
         <ErrorBox Message="@error" />
         <button class="btn btn-primary btn-block" type="submit" disabled="@busy">@(busy ? "Signing in…" : "Sign in")</button>
     </EditForm>
@@ -27,6 +29,12 @@
     private readonly Model model = new();
     private string? error;
     private bool busy;
+    private ServerFeatures? features;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { features = await Api.FeaturesAsync(); } catch { /* offline or older server: just hide the link */ }
+    }
 
     private class Model { public string User { get; set; } = ""; public string Password { get; set; } = ""; }
 

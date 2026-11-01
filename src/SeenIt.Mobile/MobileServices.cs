@@ -21,12 +21,27 @@ public class SecureTokenStore : ITokenStore
 /// <summary>The SeenIt server this phone talks to; changeable from the sign-in screen.</summary>
 public class PreferencesServerConfig : IServerConfig
 {
-    // Change this to your public SeenIt address before publishing the app.
-    public const string DefaultUrl = "http://192.168.1.167:8082/";
+    public const string DefaultUrl = "https://seenit.vohiyo.com/";
     private const string Key = "seenit.server";
 
+    /// <summary>Addresses earlier builds used by default. Plain http is blocked now, so move them to the domain.</summary>
+    private static readonly string[] OldDefaults = ["http://192.168.1.167:8082/"];
+
     public bool Configurable => true;
-    public string Url => Preferences.Default.Get(Key, DefaultUrl);
+
+    public string Url
+    {
+        get
+        {
+            var url = Preferences.Default.Get(Key, DefaultUrl);
+            if (OldDefaults.Contains(url, StringComparer.OrdinalIgnoreCase))
+            {
+                Preferences.Default.Set(Key, DefaultUrl);
+                url = DefaultUrl;
+            }
+            return url;
+        }
+    }
 
     public Task SetAsync(string url)
     {

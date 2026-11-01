@@ -77,9 +77,9 @@ dotnet workload install maui-ios
 dotnet build src/SeenIt.Mobile -f net10.0-ios
 ```
 
-Until SeenIt sits behind HTTPS on a public domain, the app allows plain-http traffic
-(`usesCleartextTraffic` on Android, ATS exceptions on iOS) so it can reach the LAN server. Remove
-those once it's on HTTPS.
+The app talks to `https://seenit.vohiyo.com/` by default (the Synology reverse proxy terminates
+HTTPS and forwards to homelab:8082). Plain-http servers are blocked, so a self-hosted server
+entered on the sign-in screen needs HTTPS too.
 
 ## Not done yet
 
