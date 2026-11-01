@@ -118,6 +118,7 @@ p.center { display: block; }
     border-radius: 50%; border: 0; background: none; cursor: pointer; color: var(--text-2);
 }
 .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+.icon-btn:disabled { opacity: .3; cursor: default; background: none; }
 .only-mobile { display: none !important; }
 
 /* ---------- Buttons & forms ---------- */

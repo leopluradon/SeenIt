@@ -61,7 +61,7 @@ public static class Fmt
     {
         var days = minutes / 1440;
         var hours = minutes % 1440 / 60;
-        return days > 0 ? $"{days}d {hours}h" : $"{hours}h {minutes % 60}m";
+        return days > 0 ? $"{days}d {hours}h" : hours > 0 ? $"{hours}h {minutes % 60}m" : $"{minutes}m";
     }
 
     public static string Relative(DateTimeOffset when)

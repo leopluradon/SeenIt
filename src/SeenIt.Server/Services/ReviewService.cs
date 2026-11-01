@@ -87,7 +87,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             .Select(g => new ReviewItem(MediaType.Show, g.Key, shows.GetValueOrDefault(g.Key)?.Name ?? $"Show {g.Key}",
                 shows.GetValueOrDefault(g.Key)?.PosterPath, g.Count(), g.Sum(p => minutes(p)),
                 titleRating.TryGetValue((MediaType.Show, g.Key), out var r) ? r : null,
-                $"{g.Select(p => (p.Season, p.Episode)).Distinct().Count()} episodes"))
+                g.Select(p => (p.Season, p.Episode)).Distinct().Count() is var n && n == 1 ? "1 episode" : $"{n} episodes"))
             .OrderByDescending(i => i.Plays).ThenByDescending(i => i.Minutes).Take(10).ToList();
 
         var topMovies = inPeriod.Where(p => p.Type == MediaType.Movie).GroupBy(p => p.TmdbId)
@@ -118,7 +118,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             tally[p.Id] = (p, cur.Item2 + 1, cur.Item3 + plays);
         }
         List<ReviewPerson> TopPeople(Dictionary<int, (PersonCredit P, int Titles, int Plays)> t) =>
-            t.Values.Where(v => v.Titles > 1 || t.Count < 30)
+            t.Values
                 .OrderByDescending(v => v.Titles).ThenByDescending(v => v.Plays)
                 .Take(12).Select(v => new ReviewPerson(v.P.Id, v.P.Name, v.P.ProfilePath, v.Titles, v.Plays)).ToList();
 
