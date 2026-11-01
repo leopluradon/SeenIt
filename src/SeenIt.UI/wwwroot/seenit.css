@@ -671,3 +671,6 @@ a.cast { color: var(--text); }
     .provider-label { width: 58px; }
     .profile-actions { width: 100%; }
 }
+.profile-tiles { grid-template-columns: repeat(auto-fit, minmax(min(140px, 45%), 1fr)); }
+.profile-tiles .stat-value { font-size: 1.5rem; }
+.compare-head h1 { margin-bottom: 4px; }

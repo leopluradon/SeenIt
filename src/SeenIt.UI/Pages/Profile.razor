@@ -49,7 +49,7 @@ else if (p is not null)
         @if (p.NowWatching is { } nw) { <NowWatchingCard Item="nw" Who="@(p.IsMe ? null : p.User.Name)" /> }
         @if (p.Stats is { } st)
         {
-            <section class="stat-tiles">
+            <section class="stat-tiles profile-tiles">
                 <div class="stat"><span class="stat-value">@Fmt.Duration(st.Minutes)</span><span class="stat-label">watched</span></div>
                 <div class="stat"><span class="stat-value">@st.Movies.ToString("N0")</span><span class="stat-label">movies</span></div>
                 <div class="stat"><span class="stat-value">@st.Episodes.ToString("N0")</span><span class="stat-label">episodes of @st.Shows.ToString("N0") shows</span></div>
