@@ -160,9 +160,24 @@ public class SessionState(ApiClient api, TokenManager tokens) : AuthenticationSt
 
     public Task LogoutAsync() => tokens.SignedOutAsync();
 
-    public void Refresh()
+    /// <summary>
+    /// Re-reads the profile, then notifies with an already-finished task. Notifying with a pending
+    /// task makes AuthorizeRouteView show its "authorizing" state, which tears down and rebuilds
+    /// the current page (losing scroll position and any open section).
+    /// </summary>
+    public async void Refresh()
     {
-        _pending = null;
-        NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+        var state = await LoadAsync();
+        _pending = Task.FromResult(state);
+        NotifyAuthenticationStateChanged(_pending);
+    }
+
+    /// <summary>Applies a profile change we already know about (e.g. a saved preference) without a round trip.</summary>
+    public void Update(Func<MeDto, MeDto> change)
+    {
+        if (_me is null) return;
+        _me = change(_me);
+        if (_pending is { IsCompletedSuccessfully: true } done)
+            NotifyAuthenticationStateChanged(Task.FromResult(done.Result));
     }
 }

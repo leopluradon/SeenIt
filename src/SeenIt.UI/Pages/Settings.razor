@@ -350,7 +350,7 @@
         try
         {
             await Api.SetPreferencesAsync(new PreferencesRequest(HideSpoilers: hide, BlurSpoilerImages: blur));
-            Session.Refresh();
+            Session.Update(me => me with { HideSpoilers = hide, BlurSpoilerImages = blur });
             Toasts.Show(hide ? "Spoilers hidden" : "Spoilers shown");
         }
         catch (Exception ex) { Toasts.Error(ex); }
@@ -368,14 +368,25 @@
 
     private async Task SaveTabs()
     {
-        try { await Api.SetPreferencesAsync(new PreferencesRequest(Tabs: tabs)); Session.Refresh(); Toasts.Show("Tabs updated"); }
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(Tabs: tabs));
+            var saved = tabs.ToList();
+            Session.Update(me => me with { Tabs = saved });
+            Toasts.Show("Tabs updated");
+        }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
     private async Task ToggleSection(string key, bool visible)
     {
         if (visible) hiddenSections.Remove(key); else hiddenSections.Add(key);
-        try { await Api.SetPreferencesAsync(new PreferencesRequest(HiddenHomeSections: hiddenSections.ToList())); Session.Refresh(); }
+        try
+        {
+            var saved = hiddenSections.ToList();
+            await Api.SetPreferencesAsync(new PreferencesRequest(HiddenHomeSections: saved));
+            Session.Update(me => me with { HiddenHomeSections = saved });
+        }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

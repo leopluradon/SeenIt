@@ -205,8 +205,9 @@
         if (visible) hidden.Remove(key); else hidden.Add(key);
         try
         {
-            await Api.SetPreferencesAsync(new PreferencesRequest(HiddenHomeSections: hidden.ToList()));
-            Session.Refresh();
+            var saved = hidden.ToList();
+            await Api.SetPreferencesAsync(new PreferencesRequest(HiddenHomeSections: saved));
+            Session.Update(me => me with { HiddenHomeSections = saved });
             if (!visible) Toasts.Show("Section hidden. Bring it back with “Customize home”.");
             if (visible && key.StartsWith("trending") && trendingMovies is null) await LoadTrending();
             if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
