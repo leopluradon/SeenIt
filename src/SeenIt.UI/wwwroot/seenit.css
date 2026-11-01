@@ -739,3 +739,5 @@ a.cast { color: var(--text); }
 .otd-text b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .otd-when { color: var(--accent); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 @media (max-width: 640px) { .otd-list { grid-auto-columns: 82%; } }
+.pick-filters .segmented { justify-self: start; }
+.progress-panel .progress { flex: none; } /* flex:1 collapsed it to 0px tall in the column layout */
