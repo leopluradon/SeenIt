@@ -132,7 +132,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         meta.Overview = m.Overview;
         meta.UpdatedAt = DateTimeOffset.UtcNow;
         meta.OriginalLanguage = m.OriginalLanguage;
-        meta.Countries = m.ProductionCountries?.Select(c => c.Name).ToList() ?? [];
+        meta.Countries = m.ProductionCountries?.Select(c => c.Iso31661 ?? c.Name).ToList() ?? []; // ISO codes, like shows
         meta.Studios = m.ProductionCompanies?.Select(c => c.Name).Take(5).ToList() ?? [];
         if (m.Credits is { } credits)
         {

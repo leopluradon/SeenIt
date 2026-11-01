@@ -134,7 +134,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             {
                 foreach (var g in m.Genres) Add(genres, g);
                 if (m.OriginalLanguage is { } lang) Add(languages, Language(lang));
-                foreach (var c in m.Countries) Add(countries, c);
+                foreach (var c in m.Countries) Add(countries, Country(c));
                 if (m.ReleaseDate is { } rd) Add(decades, $"{rd.Year / 10 * 10}s");
             }
             else if (p.Type == MediaType.Episode && shows.GetValueOrDefault(p.TmdbId) is { } s)
@@ -287,6 +287,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
 
     private static string Country(string iso)
     {
+        if (iso.Length != 2) return iso; // already a name (older cached rows)
         try { return new RegionInfo(iso).EnglishName; }
         catch (ArgumentException) { return iso; }
     }

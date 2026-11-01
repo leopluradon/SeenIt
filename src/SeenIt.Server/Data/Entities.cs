@@ -39,7 +39,7 @@ public class PersonCredit
 public static class MetaVersions
 {
     /// <summary>Bump when MovieMeta/ShowMeta gain fields, so cached rows are refetched.</summary>
-    public const int Current = 2;
+    public const int Current = 3; // 3: movie countries stored as ISO codes
 }
 
 public class MovieMeta

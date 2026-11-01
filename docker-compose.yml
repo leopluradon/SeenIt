@@ -11,7 +11,7 @@ services:
     ports:
       - "8082:8080"
     environment:
-      ConnectionStrings__Default: "Host=seenit-db;Database=seenit;Username=seenit;Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Default: "Host=seenit-db;Database=seenit;Username=seenit;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
       Tmdb__ReadAccessToken: "${TMDB_READ_ACCESS_TOKEN}"
     volumes:
       - seenit-keys:/keys
