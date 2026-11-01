@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
-    <!-- iOS only builds on a Mac (Xcode). On Linux/Windows build with -f net10.0-android. -->
-    <TargetFrameworks>net10.0-android;net10.0-ios</TargetFrameworks>
+    <!-- iOS is only targeted on a Mac (it needs Xcode); elsewhere this is an Android-only project. -->
+    <TargetFrameworks>net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
     <OutputType>Exe</OutputType>
     <RootNamespace>SeenIt.Mobile</RootNamespace>
     <UseMaui>true</UseMaui>
