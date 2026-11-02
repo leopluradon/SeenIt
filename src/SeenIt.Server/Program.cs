@@ -129,7 +129,13 @@ if (app.Environment.IsDevelopment())
     app.UseWebAssemblyDebugging();
 
 app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
+// Most files keep the same URL across deploys (seenit.css, seenit.js, …). Without this, browsers
+// guess how long to cache them and can run old styles/scripts against a new app after a deploy;
+// "no-cache" makes them check first, which is a cheap 304 when nothing changed.
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache",
+});
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

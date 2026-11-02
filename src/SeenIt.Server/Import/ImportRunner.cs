@@ -242,24 +242,20 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
 
         if (r.Type == MediaType.Movie)
         {
-            // Release years differ between sources surprisingly often (300 is 2006 on Letterboxd, 2007
-            // on TMDB), so look for an exact title in the neighbouring years before settling for
-            // TMDB's popularity-ordered first result, which can be a different film entirely.
-            TmdbPage<TmdbListItem>? sameYear = null;
+            // Only an exact title counts. TMDB's first search result is often a different film
+            // ("300" gave "My Poetic Works 300 Yen"), and a wrong match is worse than an unmatched
+            // one, which at least gets listed. Release years differ between sources surprisingly
+            // often (300 is 2006 on Letterboxd, 2007 on TMDB), so neighbouring years are tried too.
             foreach (var year in r.Year is { } y ? new int?[] { y, y + 1, y - 1 } : [null])
-            {
-                var res = await tmdb.SearchMovieAsync(r.Title, year, ct);
-                sameYear ??= res;
-                if (Exact(res?.Results, r.Title, r.Year) is { } m) return m.Id;
-            }
+                if (Exact((await tmdb.SearchMovieAsync(r.Title, year, ct))?.Results, r.Title, r.Year) is { } m) return m.Id;
             if (r.Year is not null && Exact((await tmdb.SearchMovieAsync(r.Title, null, ct))?.Results, r.Title, r.Year, maxYearGap: 2) is { } any)
                 return any.Id;
-            return Loose(sameYear?.Results, r.Title)?.Id;
+            return null;
         }
 
         var shows = await tmdb.SearchShowAsync(r.Title, r.Year, ct) is { Results.Count: > 0 } withYear
             ? withYear : await tmdb.SearchShowAsync(r.Title, null, ct);
-        return (Exact(shows?.Results, r.Title, r.Year, maxYearGap: 99) ?? Loose(shows?.Results, r.Title))?.Id;
+        return Exact(shows?.Results, r.Title, r.Year, maxYearGap: 99)?.Id;
     }
 
     /// <summary>A result whose title (or original title) matches, nearest in year first.</summary>
@@ -274,21 +270,17 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             .Select(x => x.x).FirstOrDefault();
     }
 
-    /// <summary>No exact title: the top result, but only if one title contains the other.</summary>
-    public static TmdbListItem? Loose(List<TmdbListItem>? results, string title)
-    {
-        var want = Normalize(title);
-        return (results ?? []).FirstOrDefault(x => Normalize(x.Title ?? x.Name) is { Length: > 0 } t
-            && (t.StartsWith(want) || want.StartsWith(t)));
-    }
-
     private static int? YearOf(TmdbListItem x) =>
         (x.ReleaseDate ?? x.FirstAirDate) is { Length: >= 4 } d && int.TryParse(d[..4], out var y) ? y : null;
 
-    /// <summary>Case, accents, punctuation and "&amp;"/"and" don't matter: "Spider-Man: No Way Home" = "spider man no way home".</summary>
+    /// <summary>
+    /// Case, accents, punctuation, "&amp;"/"and" and a leading article don't matter:
+    /// "Spider-Man: No Way Home" = "spider man no way home", "The School of Rock" = "School of Rock".
+    /// </summary>
     public static string Normalize(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return "";
+        s = System.Text.RegularExpressions.Regex.Replace(s.Trim(), @"^(the|a|an)\s+(?=\S)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         var sb = new System.Text.StringBuilder();
         foreach (var c in s.Replace("&", " and ").Normalize(System.Text.NormalizationForm.FormD))
         {

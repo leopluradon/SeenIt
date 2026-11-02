@@ -18,8 +18,6 @@ public class ImportMatchTests
         var search2007 = new List<TmdbListItem> { Movie(53182, "300: Rise of an Empire", "2014-03-05"), Movie(1271, "300", "2007-03-07") };
         Assert.Null(ImportRunner.Exact(search2006, "300", 2006));
         Assert.Equal(1271, ImportRunner.Exact(search2007, "300", 2006)?.Id);
-        // ... and with no exact title at all, an unrelated top result isn't taken.
-        Assert.Null(ImportRunner.Loose(search2006, "300"));
     }
 
     [Fact]
@@ -28,6 +26,8 @@ public class ImportMatchTests
         Assert.Equal(ImportRunner.Normalize("Spider-Man: No Way Home"), ImportRunner.Normalize("spider man no way home"));
         Assert.Equal(ImportRunner.Normalize("Amélie"), ImportRunner.Normalize("Amelie"));
         Assert.Equal(ImportRunner.Normalize("Fast & Furious"), ImportRunner.Normalize("Fast and Furious"));
+        Assert.Equal(ImportRunner.Normalize("The School of Rock"), ImportRunner.Normalize("School of Rock"));
+        Assert.Equal("a", ImportRunner.Normalize("A"));   // a lone article is the whole title
         Assert.Equal(2, ImportRunner.Exact([Movie(1, "Le Fabuleux", "2001-04-25"), Movie(2, "Amélie", "2001-04-25", "Le Fabuleux Destin d'Amélie Poulain")],
             "Le Fabuleux Destin d'Amelie Poulain", 2001)?.Id);
     }
