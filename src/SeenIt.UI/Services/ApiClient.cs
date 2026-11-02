@@ -48,6 +48,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task DeleteAccountAsync(DeleteAccountRequest r) => SendAsync(HttpMethod.Post, "api/auth/delete", r);
     public Task<ClearDataResult?> ClearDataAsync(ClearDataRequest r) => SendAsync<ClearDataResult>(HttpMethod.Post, "api/auth/clear", r);
 
+    public Task<List<TimeZoneOption>> TimeZonesAsync() => GetAsync<List<TimeZoneOption>>("api/auth/timezones");
+    public Task<AppRelease?> AndroidReleaseAsync() => SendAsync<AppRelease>(HttpMethod.Get, "api/app/android", null, auth: false);
+
     // ---------- Admin ----------
 
     public Task<AdminOverview> AdminOverviewAsync() => GetAsync<AdminOverview>("api/admin/overview");
@@ -82,8 +85,15 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
     public Task BulkWatchAsync(BulkWatchRequest r) => SendQueueableAsync(HttpMethod.Post, "api/watch/bulk",
         r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
-    public Task UnwatchAsync(MediaType type, int tmdbId, int? season = null, int? episode = null) =>
-        SendAsync(HttpMethod.Delete, $"api/watch?type={type}&tmdbId={tmdbId}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"));
+    /// <summary>Returns what was removed, for <see cref="RestorePlaysAsync"/> (undo).</summary>
+    public async Task<RemovedPlays> UnwatchAsync(MediaType type, int tmdbId, int? season = null, int? episode = null) =>
+        await SendAsync<RemovedPlays>(HttpMethod.Delete, $"api/watch?type={type}&tmdbId={tmdbId}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"))
+        ?? new RemovedPlays(0, []);
+    public async Task<RemovedPlays> DeleteHistoryAsync(IReadOnlyList<Guid> ids) =>
+        await SendAsync<RemovedPlays>(HttpMethod.Post, "api/history/delete", ids) ?? new RemovedPlays(0, []);
+    public Task RestorePlaysAsync(IReadOnlyList<RestorePlay> plays) => SendAsync(HttpMethod.Post, "api/history/restore", plays);
+    public Task<RematchResult?> RematchAsync(RematchRequest r) => SendAsync<RematchResult>(HttpMethod.Post, "api/rematch", r);
+    public Task<List<DuplicateGroup>> DuplicatesAsync() => GetAsync<List<DuplicateGroup>>("api/duplicates");
     public Task<HistoryPage> HistoryAsync(HistoryQuery f)
     {
         var qs = new List<string> { $"page={f.Page}", $"pageSize={f.PageSize}", $"tz={Tz}" };
@@ -97,7 +107,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         return GetAsync<HistoryPage>("api/history?" + string.Join('&', qs));
     }
     public Task<List<string>> HistoryGenresAsync() => GetAsync<List<string>>("api/history/genres");
-    public Task DeleteHistoryAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/history/{id}");
+    public async Task<RemovedPlays> DeleteHistoryAsync(Guid id) =>
+        await SendAsync<RemovedPlays>(HttpMethod.Delete, $"api/history/{id}") ?? new RemovedPlays(0, []);
 
     public Task<List<WatchlistEntry>> WatchlistAsync() => GetAsync<List<WatchlistEntry>>("api/watchlist");
     public Task AddToWatchlistAsync(MediaType type, int id) => SendQueueableAsync(HttpMethod.Post, "api/watchlist", new WatchlistRequest(type, id));

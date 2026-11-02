@@ -13,6 +13,7 @@
         <button class="@(Type == MediaType.Episode ? "on" : "")" @onclick='() => Go(type: "Episode")'>Episodes</button>
     </div>
 </div>
+<p class="small history-tools"><a href="duplicates">Find possible duplicate plays</a></p>
 
 <form class="searchbar" @onsubmit="Submit" role="search">
     <Icon Name="search" Size="18" />
@@ -239,8 +240,12 @@ else if (data is not null)
     {
         try
         {
-            await Api.DeleteHistoryAsync(h.Id);
-            Toasts.Show("Play removed");
+            var removed = await Api.DeleteHistoryAsync(h.Id);
+            Toasts.Show("Play removed", undo: async () =>
+            {
+                await Api.RestorePlaysAsync(removed.Plays);
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
             await Load();
         }
         catch (Exception ex) { Toasts.Error(ex); }

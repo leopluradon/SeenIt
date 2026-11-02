@@ -42,7 +42,7 @@ fi
 
 ssh "$HOST" "test -f $DIR/.env" || { echo "Missing $HOST:$DIR/.env (copy .env.example and fill it in)."; exit 1; }
 
-git archive HEAD | ssh "$HOST" "mkdir -p $DIR/offsite && tar -x -C $DIR && echo $commit > $DIR/.deployed-commit"
+git archive HEAD | ssh "$HOST" "mkdir -p $DIR/offsite $DIR/downloads && tar -x -C $DIR && echo $commit > $DIR/.deployed-commit"
 # The build records which version this is (shown on the admin page): 1.<commit count>.
 version="1.$(git rev-list --count HEAD)"
 subject=$(git log -1 --format=%s HEAD | base64 -w0)

@@ -131,18 +131,141 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task<bool> DeleteHistoryAsync(Guid userId, Guid id, CancellationToken ct) =>
-        await db.WatchEvents.Where(w => w.UserId == userId && w.Id == id).ExecuteDeleteAsync(ct) > 0;
+    /// <summary>Deletes one play; returns it as it was (for undo), or null if it isn't yours.</summary>
+    public async Task<RestorePlay?> DeleteHistoryAsync(Guid userId, Guid id, CancellationToken ct)
+    {
+        var q = db.WatchEvents.Where(w => w.UserId == userId && w.Id == id);
+        var play = await q.Select(w => new RestorePlay(w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source)).FirstOrDefaultAsync(ct);
+        return play is not null && await q.ExecuteDeleteAsync(ct) > 0 ? play : null;
+    }
 
-    /// <summary>Removes every play of a movie, a whole show, a season or a single episode.</summary>
-    public async Task<int> UnwatchAsync(Guid userId, MediaType type, int tmdbId, int? season, int? episode, CancellationToken ct)
+    /// <summary>Deletes several plays at once; returns them as they were (for undo).</summary>
+    public async Task<List<RestorePlay>> DeleteHistoryAsync(Guid userId, IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count > 5000) throw new TrackingException("That's too many plays at once.");
+        var q = db.WatchEvents.Where(w => w.UserId == userId && ids.Contains(w.Id));
+        var plays = await q.Select(w => new RestorePlay(w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source)).ToListAsync(ct);
+        await q.ExecuteDeleteAsync(ct);
+        return plays;
+    }
+
+    /// <summary>Removes every play of a movie, a whole show, a season or a single episode; returns them (for undo).</summary>
+    public async Task<List<RestorePlay>> UnwatchAsync(Guid userId, MediaType type, int tmdbId, int? season, int? episode, CancellationToken ct)
     {
         var q = db.WatchEvents.Where(w => w.UserId == userId && w.TmdbId == tmdbId);
         q = type == MediaType.Movie ? q.Where(w => w.Type == MediaType.Movie) : q.Where(w => w.Type == MediaType.Episode);
         if (type != MediaType.Movie && season is not null) q = q.Where(w => w.SeasonNumber == season);
         if (type != MediaType.Movie && episode is not null) q = q.Where(w => w.EpisodeNumber == episode);
-        return await q.ExecuteDeleteAsync(ct);
+        var plays = await q.Select(w => new RestorePlay(w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source)).ToListAsync(ct);
+        await q.ExecuteDeleteAsync(ct);
+        return plays;
     }
+
+    /// <summary>Puts deleted plays back exactly as they were (undo).</summary>
+    public async Task<int> RestoreAsync(Guid userId, IReadOnlyList<RestorePlay> plays, CancellationToken ct)
+    {
+        if (plays.Count > 5000) throw new TrackingException("That's too many plays to restore at once.");
+        foreach (var p in plays)
+        {
+            if (p.Type is not (MediaType.Movie or MediaType.Episode) || (p.Type == MediaType.Episode && (p.SeasonNumber is null || p.EpisodeNumber is null)))
+                throw new TrackingException("That play can't be restored.");
+            db.WatchEvents.Add(new WatchEvent
+            {
+                UserId = userId, Type = p.Type, TmdbId = p.TmdbId,
+                SeasonNumber = p.Type == MediaType.Episode ? p.SeasonNumber : null,
+                EpisodeNumber = p.Type == MediaType.Episode ? p.EpisodeNumber : null,
+                WatchedAt = p.WatchedAt, Source = p.Source,
+            });
+        }
+        await db.SaveChangesAsync(ct);
+        return plays.Count;
+    }
+
+    /// <summary>
+    /// Moves your plays, ratings, watchlist and list entries from one TMDB title to another, for an
+    /// import or Jellyfin match that picked the wrong one. Where the right title already has a
+    /// rating, watchlist entry or list entry, that one is kept and the wrong title's is dropped.
+    /// For shows, episode plays keep their season/episode numbers.
+    /// </summary>
+    public async Task<RematchResult> RematchAsync(Guid userId, MediaType type, int from, int to, CancellationToken ct)
+    {
+        if (type is not (MediaType.Movie or MediaType.Show)) throw new TrackingException("Only movies and shows can be re-matched.");
+        if (from == to) throw new TrackingException("That's the same title.");
+        await EnsureMetaAsync(type, to, ct);
+        var movie = type == MediaType.Movie;
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var plays = await db.WatchEvents.Where(w => w.UserId == userId && w.TmdbId == from && (movie ? w.Type == MediaType.Movie : w.Type == MediaType.Episode))
+            .ExecuteUpdateAsync(s => s.SetProperty(w => w.TmdbId, to), ct);
+        await db.CheckIns.Where(c => c.UserId == userId && c.TmdbId == from && (movie ? c.Type == MediaType.Movie : c.Type != MediaType.Movie))
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.TmdbId, to), ct);
+
+        // Ratings: movie, or show/season/episode ratings of the show.
+        var ratingsQ = db.Ratings.Where(r => r.UserId == userId && r.TmdbId == from && (movie ? r.Type == MediaType.Movie : r.Type != MediaType.Movie));
+        await ratingsQ.Where(r => db.Ratings.Any(t => t.UserId == userId && t.TmdbId == to && t.Type == r.Type
+                                                     && t.SeasonNumber == r.SeasonNumber && t.EpisodeNumber == r.EpisodeNumber))
+            .ExecuteDeleteAsync(ct);
+        var ratings = await ratingsQ.ExecuteUpdateAsync(s => s.SetProperty(r => r.TmdbId, to), ct);
+
+        var watchQ = db.Watchlist.Where(w => w.UserId == userId && w.Type == type && w.TmdbId == from);
+        if (await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == type && w.TmdbId == to, ct)) await watchQ.ExecuteDeleteAsync(ct);
+        var watchlist = await watchQ.ExecuteUpdateAsync(s => s.SetProperty(w => w.TmdbId, to), ct);
+
+        var itemsQ = db.ListItems.Where(i => i.Type == type && i.TmdbId == from && db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId));
+        await itemsQ.Where(i => db.ListItems.Any(t => t.ListId == i.ListId && t.Type == type && t.TmdbId == to)).ExecuteDeleteAsync(ct);
+        var listEntries = await itemsQ.ExecuteUpdateAsync(s => s.SetProperty(i => i.TmdbId, to), ct);
+
+        if (!movie)
+        {
+            var stateQ = db.ShowStates.Where(s => s.UserId == userId && s.ShowTmdbId == from);
+            if (await db.ShowStates.AnyAsync(s => s.UserId == userId && s.ShowTmdbId == to, ct)) await stateQ.ExecuteDeleteAsync(ct);
+            await stateQ.ExecuteUpdateAsync(s => s.SetProperty(x => x.ShowTmdbId, to), ct);
+            await db.Rewatches.Where(r => r.UserId == userId && r.ShowTmdbId == from).ExecuteUpdateAsync(s => s.SetProperty(r => r.ShowTmdbId, to), ct);
+        }
+        await tx.CommitAsync(ct);
+        return new RematchResult(plays, ratings, watchlist, listEntries);
+    }
+
+    /// <summary>Plays of the same movie/episode within a day of the one before: probably logged twice.</summary>
+    public async Task<List<DuplicateGroup>> DuplicatesAsync(Guid userId, CancellationToken ct)
+    {
+        var plays = await db.WatchEvents.Where(w => w.UserId == userId && w.WatchedAt > WatchDates.Unknown)
+            .Select(w => new { w.Id, w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source }).ToListAsync(ct);
+        var groups = new List<(MediaType Type, int TmdbId, int? Season, int? Episode, List<DuplicatePlay> Plays)>();
+        foreach (var item in plays.GroupBy(p => (p.Type, p.TmdbId, p.SeasonNumber, p.EpisodeNumber)).Where(g => g.Count() > 1))
+        {
+            List<DuplicatePlay>? run = null;
+            DuplicatePlay? previous = null;
+            foreach (var p in item.OrderBy(p => p.WatchedAt))
+            {
+                var play = new DuplicatePlay(p.Id, p.WatchedAt, p.Source);
+                if (previous is not null && play.WatchedAt - previous.WatchedAt <= TimeSpan.FromDays(1))
+                {
+                    if (run is null)
+                    {
+                        run = [previous];
+                        groups.Add((item.Key.Type, item.Key.TmdbId, item.Key.SeasonNumber, item.Key.EpisodeNumber, run));
+                    }
+                    run.Add(play);
+                }
+                else run = null;
+                previous = play;
+            }
+        }
+
+        var (movies, shows) = await LoadMetaAsync(groups.Select(g => (g.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, g.TmdbId)), ct);
+        return groups
+            .OrderByDescending(g => g.Plays.Max(p => p.WatchedAt))
+            .Take(500)
+            .Select(g => g.Type == MediaType.Movie
+                ? new DuplicateGroup(g.Type, g.TmdbId, null, null, movies.GetValueOrDefault(g.TmdbId)?.Title ?? $"Movie {g.TmdbId}", movies.GetValueOrDefault(g.TmdbId)?.PosterPath, g.Plays)
+                : new DuplicateGroup(g.Type, g.TmdbId, g.Season, g.Episode, shows.GetValueOrDefault(g.TmdbId)?.Name ?? $"Show {g.TmdbId}", shows.GetValueOrDefault(g.TmdbId)?.PosterPath, g.Plays))
+            .ToList();
+    }
+
+    /// <summary>The user's saved time zone if they have one, otherwise the one the device sent.</summary>
+    public async Task<string?> ZoneIdAsync(Guid userId, string? deviceZone, CancellationToken ct) =>
+        await db.Users.Where(u => u.Id == userId).Select(u => u.TimeZone).FirstOrDefaultAsync(ct) ?? deviceZone;
 
     private static WatchTime Resolve(WatchTime? when, DateTimeOffset? at) =>
         when ?? (at is null ? WatchTime.Now : WatchTime.Custom);
@@ -451,7 +574,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     public async Task<StatsDto> GetStatsAsync(Guid userId, string? tzId, CancellationToken ct)
     {
-        var tz = ReviewService.Zone(tzId);
+        var tz = ReviewService.Zone(await ZoneIdAsync(userId, tzId, ct));
         var since = await TrackingSinceAsync(userId, ct);
         var watches = await db.WatchEvents.Where(w => w.UserId == userId)
             .Select(w => new { w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt }).ToListAsync(ct);

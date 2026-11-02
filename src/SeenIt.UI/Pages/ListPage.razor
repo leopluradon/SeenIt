@@ -69,7 +69,16 @@ else if (list is not null)
 
     private async Task Remove(ListItemDto i)
     {
-        try { await Api.RemoveFromListAsync(Id, i.Media.Type, i.Media.TmdbId); await Load(); }
+        try
+        {
+            await Api.RemoveFromListAsync(Id, i.Media.Type, i.Media.TmdbId);
+            Toasts.Show($"Removed {i.Media.Title}", undo: async () =>
+            {
+                await Api.AddToListAsync(Id, i.Media.Type, i.Media.TmdbId);
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
+            await Load();
+        }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

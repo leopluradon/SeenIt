@@ -1,0 +1,82 @@
+@* "Wrong title?": moves your plays, ratings, watchlist and list entries to the right TMDB title. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+<Modal Open="Open" OpenChanged="OpenChanged" Title="Wrong title?">
+    <p class="muted small">
+        If an import or Jellyfin put your history on the wrong @(Type == MediaType.Movie ? "movie" : "show"), find the right one.
+        Your plays, ratings, watchlist and list entries for <b>@Title</b> move to it@(Type == MediaType.Show ? ", keeping their season and episode numbers" : "").
+    </p>
+    <form class="searchbar" @onsubmit="Search">
+        <Icon Name="search" Size="18" />
+        <input @bind="query" placeholder="Search for the right one" aria-label="Search" />
+        <button class="btn btn-sm" type="submit" disabled="@searching">Search</button>
+    </form>
+    @if (searching) { <Spinner /> }
+    else if (results is { } list)
+    {
+        @if (list.Count == 0) { <p class="muted small">Nothing found.</p> }
+        <div class="fix-results">
+            @foreach (var r in list)
+            {
+                <div class="fix-result" @key="r.TmdbId">
+                    <img src="@Img.Poster(r.PosterPath, "w92")" alt="" loading="lazy" />
+                    <div class="fix-result-main">
+                        <b>@r.Title</b> <span class="muted">@r.Year</span>
+                        @if (r.TmdbId == TmdbId) { <div class="muted small">This is the current one</div> }
+                        else { <div class="muted small">TMDB @r.TmdbId</div> }
+                    </div>
+                    @if (r.TmdbId != TmdbId)
+                    {
+                        <button class="btn btn-sm btn-primary" disabled="@moving" @onclick="() => Move(r)">Move here</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</Modal>
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public MediaType Type { get; set; }
+    [Parameter] public int TmdbId { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    private string query = "";
+    private List<MediaSummary>? results;
+    private bool searching, moving, wasOpen;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Open && !wasOpen)
+        {
+            wasOpen = true;
+            query = Title;
+            await Search();
+        }
+        else if (!Open) wasOpen = false;
+    }
+
+    private async Task Search()
+    {
+        if (string.IsNullOrWhiteSpace(query)) return;
+        searching = true;
+        try { results = (await Api.SearchAsync(query.Trim(), Type == MediaType.Movie ? "movie" : "show")).Items.Take(12).ToList(); }
+        catch (Exception ex) { Toasts.Error(ex); results = []; }
+        searching = false;
+    }
+
+    private async Task Move(MediaSummary to)
+    {
+        moving = true;
+        try
+        {
+            var r = await Api.RematchAsync(new RematchRequest(Type, TmdbId, to.TmdbId));
+            await OpenChanged.InvokeAsync(false);
+            // No undo: moving back would also take anything you already had on the right title.
+            Toasts.Show($"Moved {r?.Plays ?? 0} plays, {r?.Ratings ?? 0} ratings and {(r?.Watchlist ?? 0) + (r?.ListEntries ?? 0)} watchlist/list entries to {to.Title}");
+            Nav.NavigateTo(Fmt.Href(Type, to.TmdbId));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        moving = false;
+    }
+}

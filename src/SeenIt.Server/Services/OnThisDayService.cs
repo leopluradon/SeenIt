@@ -5,11 +5,11 @@ using SeenIt.Server.Data;
 namespace SeenIt.Server.Services;
 
 /// <summary>What the user watched on today's date in earlier years, and shows they finished on this date.</summary>
-public class OnThisDayService(AppDbContext db)
+public class OnThisDayService(AppDbContext db, TrackingService tracking)
 {
     public async Task<List<OnThisDayItem>> GetAsync(Guid userId, string? tzId, CancellationToken ct)
     {
-        var tz = ReviewService.Zone(tzId);
+        var tz = ReviewService.Zone(await tracking.ZoneIdAsync(userId, tzId, ct));
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).DateTime);
         // Pre-filter in SQL on the UTC date a day either side, then match the local date exactly.
         var days = new[] { today.AddDays(-1), today, today.AddDays(1) };

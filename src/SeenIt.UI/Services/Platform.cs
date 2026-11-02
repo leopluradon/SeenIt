@@ -13,6 +13,10 @@ public interface IPlatform
     Task<string> ShareLinkAsync(string title, string url);
     /// <summary>The public address of a page, for links people can open elsewhere.</summary>
     string PublicUrl(string path);
+    /// <summary>The installed app's version (e.g. "1.44"); null on the website.</summary>
+    string? AppVersion { get; }
+    /// <summary>Opens a link outside SeenIt (the browser / the app that handles it).</summary>
+    Task OpenExternalAsync(string url);
 }
 
 public class BrowserPlatform(IJSRuntime js, NavigationManager nav) : IPlatform
@@ -27,6 +31,10 @@ public class BrowserPlatform(IJSRuntime js, NavigationManager nav) : IPlatform
     }
 
     public string PublicUrl(string path) => nav.BaseUri + path.TrimStart('/');
+
+    public string? AppVersion => null;
+
+    public async Task OpenExternalAsync(string url) => await js.InvokeVoidAsync("open", url, "_blank", "noopener");
 }
 
 /// <summary>Keeps the last copy of API responses, and changes made while offline, on the device.</summary>

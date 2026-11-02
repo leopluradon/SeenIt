@@ -137,7 +137,7 @@ else if (e is not null)
         try
         {
             await action();
-            if (done is not null) Toasts.Show(done);
+            if (done is not null) Toasts.Show(done, undo: TakeUndo());
             e = await Api.EpisodeAsync(Id, Season, Number);
         }
         catch (Exception ex) { Toasts.Error(ex); }
@@ -147,9 +147,28 @@ else if (e is not null)
     private Task Watch(WatchChoice c) =>
         Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
 
-    private Task RemovePlay(PlayDto p) => Act(() => Api.DeleteHistoryAsync(p.Id), "Play removed");
+    private Task RemovePlay(PlayDto p) => Act(async () =>
+    {
+        var removed = await Api.DeleteHistoryAsync(p.Id);
+        undo = () => Api.RestorePlaysAsync(removed.Plays);
+    }, "Play removed");
 
     private Task Rate(int? value) => value is { } v
         ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, v, Season, Number)), $"Rated {v}/10")
-        : Act(() => Api.UnrateAsync(MediaType.Episode, Id, Season, Number), "Rating removed");
+        : Act(async () =>
+        {
+            var old = e!.Rating;
+            await Api.UnrateAsync(MediaType.Episode, Id, Season, Number);
+            if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, o, Season, Number));
+        }, "Rating removed");
+
+    // Set by an action that can be undone; the toast it shows gets an Undo button.
+    private Func<Task>? undo;
+    private Func<Task>? TakeUndo()
+    {
+        if (undo is not { } u) return null;
+        undo = null;
+        return async () => { await u(); await InvokeAsync(async () => { await Load(); StateHasChanged(); }); };
+    }
+
 }

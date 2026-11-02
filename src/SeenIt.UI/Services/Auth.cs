@@ -134,6 +134,16 @@ public class SessionState(ApiClient api, TokenManager tokens, IOfflineStore offl
         try
         {
             _me = await api.MeAsync();
+            // Stats and reviews use the profile's time zone so every device agrees; start it at this device's.
+            if (_me.TimeZone is null && TimeZoneInfo.Local.Id is { } local && local.Contains('/'))
+            {
+                try
+                {
+                    await api.SetPreferencesAsync(new PreferencesRequest(TimeZone: local));
+                    _me = _me with { TimeZone = local };
+                }
+                catch (ApiException) { /* the server doesn't know this zone; stats keep using the device's */ }
+            }
         }
         catch (ApiException ex) when (ex.Status == 0)
         {

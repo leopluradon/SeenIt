@@ -84,9 +84,9 @@ public static class ApiEndpoints
 
         g.MapDelete("/watch", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
-            var removed = await t.UnwatchAsync(p.UserId(), type, tmdbId, season, episode, ct);
-            await a.LogAsync(p, ActivityKind.Unwatch, type, tmdbId, season, episode, $"{removed} play{(removed == 1 ? "" : "s")} removed");
-            return Results.Ok(new { removed });
+            var plays = await t.UnwatchAsync(p.UserId(), type, tmdbId, season, episode, ct);
+            await a.LogAsync(p, ActivityKind.Unwatch, type, tmdbId, season, episode, $"{plays.Count} play{(plays.Count == 1 ? "" : "s")} removed");
+            return Results.Ok(new RemovedPlays(plays.Count, plays));
         });
 
         g.MapGet("/history", (MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
@@ -94,14 +94,39 @@ public static class ApiEndpoints
             t.GetHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, pageSize ?? 50, tz), ct));
         g.MapGet("/history/genres", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetHistoryGenresAsync(p.UserId(), ct));
 
-        g.MapDelete("/history/{id:guid}", async (Guid id, ClaimsPrincipal p, TrackingService t, AppDbContext db, ActivityService a, CancellationToken ct) =>
+        g.MapDelete("/history/{id:guid}", async (Guid id, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
-            var uid = p.UserId();
-            var play = await db.WatchEvents.AsNoTracking().FirstOrDefaultAsync(w => w.UserId == uid && w.Id == id, ct);
-            if (play is null || !await t.DeleteHistoryAsync(uid, id, ct)) return Results.NotFound();
+            if (await t.DeleteHistoryAsync(p.UserId(), id, ct) is not { } play) return Results.NotFound();
             await a.LogAsync(p, ActivityKind.DeletePlay, play.Type, play.TmdbId, play.SeasonNumber, play.EpisodeNumber,
                 WatchDates.IsUnknown(play.WatchedAt) ? "play with unknown date" : $"play from {play.WatchedAt:yyyy-MM-dd HH:mm} UTC");
-            return Results.NoContent();
+            return Results.Ok(new RemovedPlays(1, [play]));
+        });
+
+        g.MapPost("/history/delete", async (List<Guid> ids, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var plays = await t.DeleteHistoryAsync(p.UserId(), ids, ct);
+            if (plays.Count > 0) await a.LogAsync(p, ActivityKind.DeletePlay, detail: $"{plays.Count} plays (duplicates)");
+            return Results.Ok(new RemovedPlays(plays.Count, plays));
+        });
+
+        // Undo for the deletes above: the plays come back with their original dates and sources.
+        g.MapPost("/history/restore", async (List<RestorePlay> plays, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var n = await t.RestoreAsync(p.UserId(), plays, ct);
+            if (plays.Count > 0)
+                await a.LogAsync(p, ActivityKind.RestorePlays, plays[0].Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, plays[0].TmdbId,
+                    detail: $"{n} play{(n == 1 ? "" : "s")} (undo)");
+            return Results.Ok(new { restored = n });
+        });
+
+        g.MapGet("/duplicates", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.DuplicatesAsync(p.UserId(), ct));
+
+        g.MapPost("/rematch", async (RematchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var r = await t.RematchAsync(p.UserId(), req.Type, req.FromTmdbId, req.ToTmdbId, ct);
+            await a.LogAsync(p, ActivityKind.Rematch, req.Type, req.ToTmdbId,
+                detail: $"from TMDB {req.FromTmdbId}: {r.Plays} plays, {r.Ratings} ratings, {r.Watchlist} watchlist, {r.ListEntries} list entries");
+            return Results.Ok(r);
         });
 
         g.MapGet("/watchlist", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetWatchlistAsync(p.UserId(), ct));

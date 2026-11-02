@@ -45,6 +45,32 @@ else
                 @if (ov.Subject is { } subj) { <p class="muted small">Latest change: @subj</p> }
 
                 <section class="panel">
+                    <h2>Backups &amp; alerts</h2>
+                    <dl class="admin-config">
+                        @foreach (var h in ov.Health ?? [])
+                        {
+                            <div @key="h.Name"><dt><span class="dot @(h.Ok ? "ok" : "warn")"></span>@h.Name</dt><dd>@h.Value</dd></div>
+                        }
+                    </dl>
+                    @if (ov.Alerts is { Count: > 0 } alerts)
+                    {
+                        <h3>Recent alerts</h3>
+                        @foreach (var al in alerts)
+                        {
+                            <details class="admin-log is-warn">
+                                <summary>
+                                    <span class="muted small nowrap">@al.At.ToLocalTime().ToString("d MMM HH:mm")</span>
+                                    <span class="admin-log-first">@al.Subject</span>
+                                    @if (al.Emailed) { <span class="pill pill-sm">emailed</span> }
+                                </summary>
+                                <pre>@al.Body</pre>
+                            </details>
+                        }
+                    }
+                    else { <p class="muted small">No alerts since the last restart. Failed or missing backups, failed imports and bursts of errors are emailed to the admins.</p> }
+                </section>
+
+                <section class="panel">
                     <h2>Activity, last 30 days</h2>
                     <BarChart Data="ov.ActivityByDay" Vertical="true" LabelEvery="5" Label="Logged actions per day" />
                 </section>

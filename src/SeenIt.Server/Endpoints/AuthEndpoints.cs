@@ -91,6 +91,14 @@ public static partial class AuthEndpoints
 
         g.MapGet("/features", (EmailService email, InviteService invites) => new ServerFeatures(email.Enabled, invites.OpenRegistration, AppInfo.Version));
 
+        // IANA zones the server knows, for the time zone picker.
+        g.MapGet("/timezones", () => TimeZoneInfo.GetSystemTimeZones()
+            .Where(z => z.Id.Contains('/') && !z.Id.StartsWith("Etc/") && !z.Id.StartsWith("SystemV/"))
+            .Select(z => (z, Offset: z.GetUtcOffset(DateTimeOffset.UtcNow)))
+            .OrderBy(x => x.Offset).ThenBy(x => x.z.Id)
+            .Select(x => new TimeZoneOption(x.z.Id, $"(UTC{(x.Offset < TimeSpan.Zero ? "-" : "+")}{x.Offset:hh\\:mm}) {x.z.Id.Replace('_', ' ')}"))
+            .ToList());
+
         g.MapGet("/invite/{code}", (string code, InviteService invites) => invites.CheckAsync(code)).RequireRateLimiting("auth");
 
         // Always answers 204, so it can't be used to find out which emails have accounts.
@@ -155,7 +163,7 @@ public static partial class AuthEndpoints
                 await users.UpdateAsync(u);
             }
             return TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages,
-                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName)));
+                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName), u.TimeZone));
         });
 
         me.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
@@ -186,6 +194,13 @@ public static partial class AuthEndpoints
                 else return Results.BadRequest(new ProblemInfo("Pick a country from the list."));
             }
             if (req.Visibility is { } vis && Enum.IsDefined(vis)) u.Visibility = vis;
+            if (req.TimeZone is { } zone)
+            {
+                zone = zone.Trim();
+                if (zone.Length == 0) u.TimeZone = null;
+                else if (zone.Length <= 64 && TimeZoneInfo.TryFindSystemTimeZoneById(zone, out var found)) u.TimeZone = found.Id;
+                else return Results.BadRequest(new ProblemInfo("Unknown time zone."));
+            }
             if (req.TrackingSince is { } since)
             {
                 if (since.Length == 0) u.TrackingSince = null;

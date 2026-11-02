@@ -15,19 +15,25 @@
     <style>
         body { background: #0e1014; }
         .boot { position: fixed; inset: 0; display: grid; place-items: center; }
+        .boot-inner { display: grid; justify-items: center; gap: 18px; }
         .boot svg { animation: boot 1.2s ease-in-out infinite; }
         @keyframes boot { 50% { opacity: .4; } }
+        /* Download progress (Blazor sets --blazor-load-percentage). Only appears if loading is slow. */
+        .boot-bar { width: 140px; height: 3px; border-radius: 3px; background: #272c37; overflow: hidden; opacity: 0; animation: boot-show .3s .6s forwards; }
+        .boot-bar > div { height: 100%; width: var(--blazor-load-percentage, 0%); background: #ec3f4f; transition: width .2s; }
+        @keyframes boot-show { to { opacity: 1; } }
     </style>
 </head>
 <body>
     <div id="app">
-        <div class="boot">
+        <div class="boot"><div class="boot-inner">
             <svg width="56" height="56" viewBox="0 0 32 32" aria-label="Loading SeenIt">
                 <rect width="32" height="32" rx="8" fill="#ec3f4f" />
                 <path d="M5 16s4-7 11-7 11 7 11 7-4 7-11 7S5 16 5 16z" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" />
                 <path d="m12.5 16 2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-        </div>
+            <div class="boot-bar" role="progressbar" aria-label="Loading"><div></div></div>
+        </div></div>
     </div>
     <div id="blazor-error-ui" style="display:none;position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#ec3f4f;color:#fff;z-index:1000">
         Something went wrong. <a href="" class="reload" style="color:#fff;text-decoration:underline">Reload</a>

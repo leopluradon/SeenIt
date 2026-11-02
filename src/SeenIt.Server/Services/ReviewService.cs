@@ -21,7 +21,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
     /// <summary>Which years and months have any plays, for navigation.</summary>
     public async Task<List<ReviewYear>> GetPeriodsAsync(Guid userId, string? tzId, CancellationToken ct)
     {
-        var tz = Zone(tzId);
+        var tz = Zone(await tracking.ZoneIdAsync(userId, tzId, ct));
         var plays = await LoadPlaysAsync(userId, tz, ct);
         var minutes = await RuntimesAsync(plays, ct);
         return plays.GroupBy(p => p.Local.Year).OrderByDescending(g => g.Key)
@@ -34,7 +34,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
     public async Task<ReviewDto> BuildAsync(Guid userId, int year, int? month, string? tzId, CancellationToken ct)
     {
         if (year is < 1900 or > 2200 || month is < 1 or > 12) throw new TrackingException("That isn't a valid period.");
-        var tz = Zone(tzId);
+        var tz = Zone(await tracking.ZoneIdAsync(userId, tzId, ct));
 
         var start = new DateTime(year, month ?? 1, 1);
         var end = month is null ? start.AddYears(1) : start.AddMonths(1);

@@ -3,7 +3,10 @@
 <div class="toaster" aria-live="polite">
     @foreach (var t in Toasts.Items)
     {
-        <div class="toast @(t.Error ? "toast-error" : "")" @key="t.Id">@t.Message</div>
+        <div class="toast @(t.Error ? "toast-error" : "")" @key="t.Id">
+            <span>@t.Message</span>
+            @if (t.Undo is not null) { <button class="toast-undo" @onclick="() => Toasts.UndoAsync(t)">Undo</button> }
+        </div>
     }
 </div>
 @code {

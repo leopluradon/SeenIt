@@ -99,21 +99,35 @@ public static class Fmt
 /// <summary>Little pop-up confirmations ("Added to watchlist").</summary>
 public class Toasts
 {
-    public record Toast(Guid Id, string Message, bool Error);
+    public record Toast(Guid Id, string Message, bool Error, Func<Task>? Undo = null);
     private readonly List<Toast> _items = [];
     public IReadOnlyList<Toast> Items => _items;
     public event Action? Changed;
 
-    public void Show(string message, bool error = false)
+    /// <param name="undo">Shows an Undo button that runs this (stays up longer so there's time to tap it).</param>
+    public void Show(string message, bool error = false, Func<Task>? undo = null)
     {
-        var t = new Toast(Guid.NewGuid(), message, error);
+        var t = new Toast(Guid.NewGuid(), message, error, undo);
         _items.Add(t);
         Changed?.Invoke();
-        _ = Task.Delay(error ? 5000 : 2800).ContinueWith(_ =>
+        _ = Task.Delay(undo is not null ? 7000 : error ? 5000 : 2800).ContinueWith(_ => Dismiss(t));
+    }
+
+    public void Dismiss(Toast t)
+    {
+        if (_items.Remove(t)) Changed?.Invoke();
+    }
+
+    public async Task UndoAsync(Toast t)
+    {
+        if (t.Undo is not { } undo) return;
+        Dismiss(t);
+        try
         {
-            _items.Remove(t);
-            Changed?.Invoke();
-        });
+            await undo();
+            Show("Undone");
+        }
+        catch (Exception ex) { Error(ex); }
     }
 
     public void Error(Exception ex) => Show(ex is ApiException ? ex.Message : "Something went wrong.", error: true);

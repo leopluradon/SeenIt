@@ -17,7 +17,7 @@ public record MeDto(
     bool HideSpoilers = false, bool BlurSpoilerImages = false,
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
-    DateOnly? TrackingSince = null, bool IsAdmin = false);
+    DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null);
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(
@@ -25,7 +25,8 @@ public record PreferencesRequest(
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null,          // "" clears it (back to the device's region)
     ProfileVisibility? Visibility = null,
-    string? TrackingSince = null);  // yyyy-MM-dd; "" clears it
+    string? TrackingSince = null,   // yyyy-MM-dd; "" clears it
+    string? TimeZone = null);       // IANA id, e.g. America/New_York; "" = follow the device
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }
@@ -409,6 +410,7 @@ public enum ActivityKind
     Import, ClearData,
     SignUp, AccountDeleted, PasswordChanged, PasswordReset,
     Follow, Unfollow,
+    Rematch, RestorePlays,
 }
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
@@ -588,7 +590,10 @@ public record AdminOverview(
     IReadOnlyList<AdminSetting> Config,
     int ActiveToday, int ActiveWeek, int ActionsToday,
     IReadOnlyList<CountBucket> ActivityByDay,   // last 30 days
-    int RecentProblems);
+    int RecentProblems,
+    IReadOnlyList<AdminSetting>? Health = null,  // backups, off-site copy, alerts
+    IReadOnlyList<AdminAlert>? Alerts = null);
+public record AdminAlert(DateTimeOffset At, string Subject, string Body, bool Emailed);
 
 public record AdminSetting(string Name, string Value, bool Ok);
 
@@ -612,3 +617,23 @@ public record AdminImport(
 public record AdminJellyfinEvent(DateTimeOffset At, string UserName, string? Item, string? Outcome);
 public record AdminInvite(string Code, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, string? UsedBy, DateTimeOffset? UsedAt);
 public record AdminResetLink(string Url, DateTimeOffset ExpiresAt);
+
+// ---------- Fixing data ----------
+
+/// <summary>A play as it was, so a deletion can be undone exactly (date and source included).</summary>
+public record RestorePlay(MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, DateTimeOffset WatchedAt, WatchSource Source);
+public record RemovedPlays(int Removed, IReadOnlyList<RestorePlay> Plays);
+
+/// <summary>Moves everything of yours from one TMDB title to another (a wrong match). Type is Movie or Show.</summary>
+public record RematchRequest(MediaType Type, int FromTmdbId, int ToTmdbId);
+public record RematchResult(int Plays, int Ratings, int Watchlist, int ListEntries);
+
+/// <summary>Plays of the same movie/episode within a day of each other: probably logged twice.</summary>
+public record DuplicateGroup(MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, string Title, string? PosterPath,
+    IReadOnlyList<DuplicatePlay> Plays);
+public record DuplicatePlay(Guid Id, DateTimeOffset WatchedAt, WatchSource Source);
+
+public record TimeZoneOption(string Id, string Label);
+
+/// <summary>The newest Android app on this server, for "update available" in the app.</summary>
+public record AppRelease(string Version, string Url, long Size, DateTimeOffset PublishedAt);

@@ -1,0 +1,96 @@
+@page "/duplicates"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>Possible duplicates · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Possible duplicates</h1>
+    @if (groups is { Count: > 1 })
+    {
+        <button class="btn btn-sm" disabled="@busy" @onclick="KeepFirstEverywhere">Keep the first of each</button>
+    }
+</div>
+<p class="muted small">
+    Plays of the same movie or episode within a day of each other, which usually means the same viewing was logged twice
+    (say, marked by hand and then imported). If you really did watch something twice in a day, leave it.
+</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (groups is null && error is null) { <Spinner /> }
+else if (groups is { Count: 0 }) { <Empty Title="No duplicates found." /> }
+else if (groups is not null)
+{
+    <p class="muted small">@groups.Count to check</p>
+    @foreach (var g in groups)
+    {
+        <div class="panel dup-group" @key="Key(g)">
+            <a href="@Href(g)"><img src="@Img.Poster(g.PosterPath, "w92")" alt="" loading="lazy" /></a>
+            <div>
+                <div class="dup-head">
+                    <a href="@Href(g)"><b>@g.Title</b>@(g.EpisodeNumber is { } e ? $" {Fmt.Ep(g.SeasonNumber, e)}" : "")</a>
+                    <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => KeepFirst(g)">Keep only the first</button>
+                </div>
+                <div class="plays">
+                    @foreach (var p in g.Plays)
+                    {
+                        <div class="play" @key="p.Id">
+                            <Icon Name="check" Size="16" Class="ok" />
+                            <span>@Fmt.PlayedAt(p.WatchedAt)</span>
+                            @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
+                            <button class="icon-btn" disabled="@busy" @onclick="() => Remove(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<DuplicateGroup>? groups;
+    private string? error;
+    private bool busy;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { groups = await Api.DuplicatesAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static string Key(DuplicateGroup g) => $"{g.Type}-{g.TmdbId}-{g.SeasonNumber}-{g.EpisodeNumber}-{g.Plays[0].Id}";
+
+    private static string Href(DuplicateGroup g) => g.Type == MediaType.Movie
+        ? Fmt.Href(MediaType.Movie, g.TmdbId)
+        : Fmt.EpisodeHref(g.TmdbId, g.SeasonNumber, g.EpisodeNumber);
+
+    private Task Remove(DuplicatePlay p) => Delete([p], "Play removed");
+
+    private Task KeepFirst(DuplicateGroup g) => Delete(g.Plays.Skip(1).ToList(), $"Removed {g.Plays.Count - 1} extra play{(g.Plays.Count == 2 ? "" : "s")}");
+
+    private async Task KeepFirstEverywhere()
+    {
+        var extra = groups!.SelectMany(g => g.Plays.Skip(1)).ToList();
+        await Delete(extra, $"Removed {extra.Count} extra plays");
+    }
+
+    private async Task Delete(List<DuplicatePlay> plays, string done)
+    {
+        busy = true;
+        try
+        {
+            var removed = await Api.DeleteHistoryAsync(plays.Select(p => p.Id).ToList());
+            Toasts.Show(done, undo: async () =>
+            {
+                await Api.RestorePlaysAsync(removed.Plays);
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        await Load();
+        busy = false;
+    }
+}

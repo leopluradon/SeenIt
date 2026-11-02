@@ -62,8 +62,25 @@ public static class AdminEndpoints
         });
     }
 
+    /// <summary>
+    /// The newest Android app on the server (anyone may ask; the app shows "update available").
+    /// scripts/publish-apk.sh puts SeenIt.apk and version.txt in the downloads folder.
+    /// </summary>
+    public static void MapAppRelease(this IEndpointRouteBuilder app)
+    {
+        app.MapGet("/api/app/android", (IConfiguration config) =>
+        {
+            if (config["SeenIt:DownloadsDir"] is not { Length: > 0 } dir) return Results.NotFound();
+            var apk = new FileInfo(Path.Combine(dir, "SeenIt.apk"));
+            var versionFile = Path.Combine(dir, "version.txt");
+            if (!apk.Exists || !File.Exists(versionFile)) return Results.NotFound();
+            var version = File.ReadAllText(versionFile).Trim();
+            return Results.Ok(new AppRelease(version, $"download/SeenIt.apk?v={Uri.EscapeDataString(version)}", apk.Length, apk.LastWriteTimeUtc));
+        });
+    }
+
     private static async Task<AdminOverview> OverviewAsync(AppDbContext db, RecentLogs logs, EmailService email, InviteService invites,
-        AdminService admins, IConfiguration config, CancellationToken ct)
+        AdminService admins, BackupStatus backups, AlertService alerts, IConfiguration config, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var day = now.AddDays(-1);
@@ -121,7 +138,8 @@ public static class AdminEndpoints
             await db.Activity.CountAsync(a => a.At >= day, ct),
             Enumerable.Range(0, 30).Select(i => monthStart.AddDays(i))
                 .Select(d => new CountBucket(d.ToString("d MMM"), activityDays.GetValueOrDefault(d))).ToList(),
-            recent.Count(e => e.At >= day && e.Level is "Error" or "Critical"));
+            recent.Count(e => e.At >= day && e.Level is "Error" or "Critical"),
+            backups.Health(), alerts.Recent);
     }
 
     private static async Task<List<AdminUser>> UsersAsync(AppDbContext db, AdminService admins, CancellationToken ct)

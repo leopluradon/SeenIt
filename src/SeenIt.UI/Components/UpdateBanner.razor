@@ -1,0 +1,43 @@
+@* In the Android app: says when the server has a newer APK, with a download link. *@
+@inject ApiClient Api
+@inject IPlatform Platform
+@inject IJSRuntime Js
+@if (release is { } r && !dismissed)
+{
+    <div class="update-banner" role="status">
+        <Icon Name="download" Size="18" />
+        <span>SeenIt @r.Version is available <span class="muted">(you have @Platform.AppVersion)</span></span>
+        <button class="btn btn-sm btn-primary" @onclick="Download">Download</button>
+        <button class="icon-btn" @onclick="Dismiss" aria-label="Not now"><Icon Name="x" Size="16" /></button>
+    </div>
+}
+@code {
+    private const string DismissKey = "seenit.update.dismissed";
+    private AppRelease? release;
+    private bool dismissed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Platform.AppVersion is not { } current || !Version.TryParse(current, out var mine)) return;
+        try
+        {
+            if (await Api.AndroidReleaseAsync() is { } r && Version.TryParse(r.Version, out var latest) && latest > mine)
+            {
+                release = r;
+                // "Not now" hides this version only; the next one shows again.
+                try { dismissed = await Js.InvokeAsync<string?>("localStorage.getItem", DismissKey) == r.Version; }
+                catch (JSException) { }
+            }
+        }
+        catch (ApiException) { /* no APK published, or offline */ }
+    }
+
+    private Task Download() => Platform.OpenExternalAsync(Platform.PublicUrl(release!.Url));
+
+    private async Task Dismiss()
+    {
+        dismissed = true;
+        try { await Js.InvokeVoidAsync("localStorage.setItem", DismissKey, release!.Version); }
+        catch (JSException) { }
+    }
+}

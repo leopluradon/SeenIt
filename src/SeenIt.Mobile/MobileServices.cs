@@ -154,6 +154,10 @@ public class MobilePlatform(IServerConfig server) : IPlatform
     }
 
     public string PublicUrl(string path) => new Uri(new Uri(server.Url), path.TrimStart('/')).ToString();
+
+    public string? AppVersion => Microsoft.Maui.ApplicationModel.AppInfo.Current.VersionString;
+
+    public async Task OpenExternalAsync(string url) => await Launcher.Default.OpenAsync(new Uri(url));
 }
 
 /// <summary>Pages to open from outside the web view (e.g. a tap on the home-screen widget).</summary>

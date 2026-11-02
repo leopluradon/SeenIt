@@ -99,6 +99,14 @@
                 <input id="tracking-since" type="date" value="@trackingSince" @onchange="SaveTrackingSince" />
                 @if (!string.IsNullOrEmpty(trackingSince)) { <button class="btn btn-sm btn-ghost" @onclick="ClearTrackingSince">Clear</button> }
             </div>
+            <div class="field inline">
+                <label for="timezone">Time zone</label>
+                <select id="timezone" value="@(timeZone ?? "")" @onchange="SaveTimeZone">
+                    @if (timeZone is null) { <option value="">Choose…</option> }
+                    @foreach (var z in timeZones ?? []) { <option value="@z.Id" @key="z.Id">@z.Label</option> }
+                </select>
+            </div>
+            <p class="muted small">Days, months, times of day and "on this day" are worked out in this time zone on every device.@(TimeZoneInfo.Local.Id != timeZone && timeZone is not null ? $" This device is on {TimeZoneInfo.Local.Id}." : "")</p>
         </section>
 
         <section class="panel" id="jellyfin">
@@ -288,7 +296,14 @@
             {
                 <p class="muted small">Server: @Server.Url</p>
             }
-            @if (features?.Version is { } version) { <p class="muted small">SeenIt v@(version)</p> }
+            @if (features?.Version is { } version)
+            {
+                <p class="muted small">SeenIt v@(version)@(Platform.AppVersion is { } av ? $" · app v{av}" : "")</p>
+            }
+            @if (Platform.AppVersion is null && android is { } apk)
+            {
+                <p class="small"><a href="@apk.Url" download>Get the Android app</a> <span class="muted">(v@(apk.Version), @(apk.Size / 1024 / 1024) MB)</span></p>
+            }
         </section>
 
         <section class="panel" id="account">
@@ -354,6 +369,9 @@
     private bool uploading;
     private string? displayName, currentPassword, newPassword, deletePassword, clearPassword, trackingSince;
     private ImportParts importParts = ImportParts.All, clearParts = ImportParts.All;
+    private string? timeZone;
+    private AppRelease? android;
+    private List<TimeZoneOption>? timeZones;
     private bool clearing;
     private bool hideSpoilers, blurImages;
     private List<string> tabs = [];
@@ -424,10 +442,11 @@
         hiddenSections = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         visibility = Session.Me?.Visibility ?? ProfileVisibility.Friends;
         trackingSince = Session.Me?.TrackingSince?.ToString("yyyy-MM-dd");
+        timeZone = Session.Me?.TimeZone;
         region = Session.Me?.Region;
         _ = LoadFeatures();
         _ = LoadInvites();
-        await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions());
+        await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions(), LoadTimeZones(), LoadAndroid());
         StartPolling();
     }
 
@@ -619,6 +638,31 @@
             trackingSince = value;
             Session.Update(m => m with { TrackingSince = DateOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null });
             Toasts.Show(value.Length == 0 ? "Cleared" : "Saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task LoadAndroid()
+    {
+        try { android = await Api.AndroidReleaseAsync(); } catch { android = null; }
+    }
+
+    private async Task LoadTimeZones()
+    {
+        try { timeZones = await Api.TimeZonesAsync(); }
+        catch { timeZones = []; }
+        if (timeZone is not null && timeZones.All(z => z.Id != timeZone)) timeZones.Insert(0, new TimeZoneOption(timeZone, timeZone));
+    }
+
+    private async Task SaveTimeZone(ChangeEventArgs e)
+    {
+        if (e.Value is not string { Length: > 0 } id) return;
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(TimeZone: id));
+            timeZone = id;
+            Session.Update(m => m with { TimeZone = id });
+            Toasts.Show("Time zone saved");
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

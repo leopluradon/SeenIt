@@ -284,6 +284,9 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<string>("TimeZone")
+                        .HasColumnType("text");
+
                     b.Property<DateOnly?>("TrackingSince")
                         .HasColumnType("date");
 

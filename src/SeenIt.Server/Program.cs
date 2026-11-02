@@ -93,6 +93,19 @@ builder.Services.AddScoped<PickService>();
 builder.Services.AddScoped<OnThisDayService>();
 builder.Services.AddScoped<ActivityService>();
 builder.Services.AddSingleton<AdminService>();
+builder.Services.AddSingleton<AlertService>();
+builder.Services.AddSingleton<BackupStatus>();
+builder.Services.AddHostedService<AlertWorker>();
+
+// API responses are JSON and compress ~6×; static files are already pre-compressed.
+builder.Services.AddResponseCompression(o =>
+{
+    o.EnableForHttps = true;
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    o.MimeTypes = ["application/json", "application/problem+json"];
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
 builder.Services.AddHostedService<CheckInWorker>();
 builder.Services.Configure<SmtpOptions>(config.GetSection("Smtp"));
 builder.Services.AddSingleton<EmailService>();
@@ -152,6 +165,10 @@ app.Use(async (ctx, next) =>
 if (app.Environment.IsDevelopment())
     app.UseWebAssemblyDebugging();
 
+// Not on sign-in responses (tokens): compressing secrets next to attacker-chosen input is how
+// BREACH-style attacks work.
+app.UseWhen(ctx => !ctx.Request.Path.StartsWithSegments("/api/auth"), a => a.UseResponseCompression());
+
 app.UseBlazorFrameworkFiles();
 // Most files keep the same URL across deploys (seenit.css, seenit.js, …). Without this, browsers
 // guess how long to cache them and can run old styles/scripts against a new app after a deploy;
@@ -160,6 +177,20 @@ app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache",
 });
+// The Android app, published by scripts/publish-apk.sh into the downloads folder.
+if (config["SeenIt:DownloadsDir"] is { Length: > 0 } downloads && Directory.Exists(downloads))
+{
+    var types = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+    types.Mappings[".apk"] = "application/vnd.android.package-archive";
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(downloads),
+        RequestPath = "/download",
+        ContentTypeProvider = types,
+        OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache",
+    });
+}
+
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -168,6 +199,7 @@ app.MapGet("/healthz", () => Results.Ok("ok"));
 app.MapAuth();
 app.MapApi();
 app.MapAdmin();
+app.MapAppRelease();
 app.MapFallback("/api/{**rest}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 

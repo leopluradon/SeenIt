@@ -32,6 +32,9 @@ public class AppUser : IdentityUser<Guid>
     /// </summary>
     public DateOnly? TrackingSince { get; set; }
 
+    /// <summary>IANA time zone for stats, reviews and "on this day"; null = whatever the device says.</summary>
+    public string? TimeZone { get; set; }
+
     /// <summary>Last time the app loaded the user's profile (updated at most every few minutes).</summary>
     public DateTimeOffset? LastSeenAt { get; set; }
 

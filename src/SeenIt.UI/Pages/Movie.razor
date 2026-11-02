@@ -83,6 +83,10 @@ else if (m is not null)
             <div class="links">
                 @if (m.ImdbId is not null) { <a href="@($"https://www.imdb.com/title/{m.ImdbId}")" target="_blank" rel="noopener">IMDb</a> }
                 <a href="@($"https://www.themoviedb.org/movie/{m.TmdbId}")" target="_blank" rel="noopener">TMDB</a>
+                @if (m.User is { } mine && (mine.Plays > 0 || mine.Rating is not null || mine.InWatchlist || mine.ListIds.Count > 0))
+                {
+                    <button class="link-btn" @onclick="() => fixOpen = true">Wrong title?</button>
+                }
             </div>
         </div>
     </div>
@@ -132,6 +136,7 @@ else if (m is not null)
     {
         <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Selected="user.ListIds.ToList()" />
+        <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Title="@m.Title" />
     }
 }
 
@@ -139,7 +144,7 @@ else if (m is not null)
     [Parameter] public int Id { get; set; }
     private MovieDetail? m;
     private string? error;
-    private bool busy, watchOpen, listOpen;
+    private bool busy, watchOpen, listOpen, fixOpen;
 
     protected override Task OnParametersSetAsync() => Load();
 
@@ -157,7 +162,7 @@ else if (m is not null)
         try
         {
             await action();
-            if (done is not null) Toasts.Show(done);
+            if (done is not null) Toasts.Show(done, undo: TakeUndo());
             m = await Api.MovieAsync(Id);
         }
         catch (Exception ex) { Toasts.Error(ex); }
@@ -167,15 +172,42 @@ else if (m is not null)
     private Task Watch(WatchChoice c) =>
         Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Movie, Id, c)), $"Watched {m!.Title}{Fmt.When(c)}");
 
-    private Task RemovePlay(PlayDto p) => Act(() => Api.DeleteHistoryAsync(p.Id), "Play removed");
+    private Task RemovePlay(PlayDto p) => Act(async () =>
+    {
+        var removed = await Api.DeleteHistoryAsync(p.Id);
+        undo = () => Api.RestorePlaysAsync(removed.Plays);
+    }, "Play removed");
 
-    private Task UnwatchAll() => Act(() => Api.UnwatchAsync(MediaType.Movie, Id), "Removed from history");
+    private Task UnwatchAll() => Act(async () =>
+    {
+        var removed = await Api.UnwatchAsync(MediaType.Movie, Id);
+        undo = () => Api.RestorePlaysAsync(removed.Plays);
+    }, "Removed from history");
 
     private Task ToggleWatchlist() => m!.User!.InWatchlist
-        ? Act(() => Api.RemoveFromWatchlistAsync(MediaType.Movie, Id), "Removed from watchlist")
+        ? Act(async () =>
+        {
+            await Api.RemoveFromWatchlistAsync(MediaType.Movie, Id);
+            undo = () => Api.AddToWatchlistAsync(MediaType.Movie, Id);
+        }, "Removed from watchlist")
         : Act(() => Api.AddToWatchlistAsync(MediaType.Movie, Id), "Added to watchlist");
 
     private Task Rate(int? value) => value is { } v
         ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Movie, Id, v)), $"Rated {v}/10")
-        : Act(() => Api.UnrateAsync(MediaType.Movie, Id), "Rating removed");
+        : Act(async () =>
+        {
+            var old = m!.User!.Rating;
+            await Api.UnrateAsync(MediaType.Movie, Id);
+            if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Movie, Id, o));
+        }, "Rating removed");
+
+    // Set by an action that can be undone; the toast it shows gets an Undo button.
+    private Func<Task>? undo;
+    private Func<Task>? TakeUndo()
+    {
+        if (undo is not { } u) return null;
+        undo = null;
+        return async () => { await u(); await InvokeAsync(async () => { await Load(); StateHasChanged(); }); };
+    }
+
 }

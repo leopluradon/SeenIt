@@ -24,6 +24,10 @@ services:
       SeenIt__PublicUrl: "${PUBLIC_URL:-https://seenit.vohiyo.com/}"
       # Usernames (comma-separated) that can open /admin.
       SeenIt__Admins: "${ADMINS:-leopluradon}"
+      # Backup results written by seenit-backup (for the admin page and alert emails).
+      SeenIt__StatusDir: /status
+      # The Android app, put there by scripts/publish-apk.sh, served at /download/SeenIt.apk.
+      SeenIt__DownloadsDir: /downloads
       # Optional: leave SMTP_HOST empty to turn off email (password reset).
       Smtp__Host: "${SMTP_HOST:-}"
       Smtp__Port: "${SMTP_PORT:-587}"
@@ -33,6 +37,8 @@ services:
       Smtp__Security: "${SMTP_SECURITY:-Auto}"
     volumes:
       - seenit-keys:/keys
+      - seenit-status:/status:ro
+      - ./downloads:/downloads:ro
 
   seenit-db:
     image: postgres:17-alpine
@@ -73,9 +79,11 @@ services:
       - seenit-backups:/backups
       - ./scripts/backup.sh:/backup.sh:ro
       - ./offsite:/offsite:ro
+      - seenit-status:/status
     entrypoint: ["/bin/sh", "/backup.sh"]
 
 volumes:
+  seenit-status:
   seenit-keys:
   seenit-db:
   seenit-backups:
