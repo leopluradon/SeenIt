@@ -1,12 +1,13 @@
 @page "/search"
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime Js
 <PageTitle>Search · SeenIt</PageTitle>
 
 <h1>Search</h1>
 <form class="searchbar" @onsubmit="Submit" role="search">
     <Icon Name="search" Size="18" />
-    <input type="search" @bind="input" placeholder="Movies and TV shows" aria-label="Search" autofocus />
+    <input type="search" @ref="box" @bind="input" placeholder="Movies and TV shows" aria-label="Search" enterkeyhint="search" />
     <button class="btn btn-primary" type="submit">Search</button>
 </form>
 <div class="chips">
@@ -32,9 +33,19 @@ else if (result is not null)
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "type")] public string? Type { get; set; }
     private string input = "";
+    private ElementReference box;
     private PagedResult<MediaSummary>? result;
     private bool loading;
     private string? error;
+
+    // "autofocus" only works on a full page load, not when Blazor swaps pages, so focus it here.
+    // Skipped when coming back to results, so the keyboard doesn't cover them.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !string.IsNullOrEmpty(Q)) return;
+        try { await Js.InvokeVoidAsync("seenit.focusInput", box); }
+        catch (JSException) { }
+    }
 
     protected override async Task OnParametersSetAsync()
     {

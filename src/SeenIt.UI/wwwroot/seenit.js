@@ -1,5 +1,30 @@
 // Small browser helpers for the shared SeenIt UI.
 window.seenit = {
+    // Phones only open the keyboard when focus happens during a tap; by the time the search page
+    // has rendered, that tap is over. So the tap focuses this hidden stand-in at once, and the
+    // page then moves focus to the real box, which keeps the keyboard up.
+    primeKeyboard() {
+        // Already on the search page (it won't re-render): just focus its box.
+        const existing = document.querySelector('.searchbar input[type=search]');
+        if (existing) { existing.focus({ preventScroll: true }); return; }
+        let proxy = document.getElementById('seenit-kb-proxy');
+        if (!proxy) {
+            proxy = Object.assign(document.createElement('input'), { id: 'seenit-kb-proxy', type: 'text', tabIndex: -1 });
+            proxy.setAttribute('aria-hidden', 'true');
+            // 16px stops iOS zooming in; off-screen-ish but focusable.
+            proxy.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0;pointer-events:none;';
+            document.body.appendChild(proxy);
+        }
+        proxy.focus({ preventScroll: true });
+        clearTimeout(this._proxyTimer);
+        this._proxyTimer = setTimeout(() => proxy.remove(), 2000);
+    },
+    focusInput(el) {
+        if (!el) return;
+        el.focus({ preventScroll: true });
+        const proxy = document.getElementById('seenit-kb-proxy');
+        if (proxy) proxy.remove();
+    },
     download(fileName, contentType, base64) {
         const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
         const url = URL.createObjectURL(new Blob([bytes], { type: contentType }));
@@ -90,3 +115,12 @@ window.seenit = {
         document.addEventListener('touchcancel', end);
     },
 };
+
+// Any tap on a plain link to the search page (header icon, tab bar, More menu) primes the keyboard.
+document.addEventListener('click', e => {
+    const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
+    if (!a) return;
+    const url = new URL(a.getAttribute('href'), document.baseURI);
+    const search = new URL('search', document.baseURI);
+    if (url.origin === search.origin && url.pathname === search.pathname && !url.searchParams.get('q')) window.seenit.primeKeyboard();
+}, true);
