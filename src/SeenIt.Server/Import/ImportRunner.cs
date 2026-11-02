@@ -38,7 +38,10 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         await ImportRatingsAsync(job, parsed.Ratings, ct);
         foreach (var list in parsed.Lists) await ImportListAsync(job, list, ct);
 
-        job.Message = $"Imported {job.Imported:N0}, skipped {job.Skipped:N0} already present, {job.Failed:N0} couldn't be matched.";
+        // Failed counts rows; people think in titles ("Chernobyl" in the diary twice is one title).
+        var unmatched = job.Unmatched.Count < 200 ? job.Unmatched.Count : job.Failed;
+        job.Message = $"Imported {job.Imported:N0}, skipped {job.Skipped:N0} already present"
+                      + (unmatched == 0 ? "." : $", {unmatched:N0} title{(unmatched == 1 ? "" : "s")} couldn't be matched.");
         await db.SaveChangesAsync(ct);
     }
 

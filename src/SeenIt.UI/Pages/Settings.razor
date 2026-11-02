@@ -55,7 +55,7 @@
                         <li>On letterboxd.com open <b>Settings → Data → Export your data</b>.</li>
                         <li>Upload the <code>.zip</code> as-is.</li>
                     </ol>
-                    <p class="muted small">Imports your diary, watched films, ratings (★ × 2), watchlist and lists. Films are matched by title and year.</p>
+                    <p class="muted small">Imports your diary, watched films, ratings (★ × 2), watchlist and lists. Films are matched by title and year, or through Letterboxd's own link to TMDB. TV series logged on Letterboxd can't be imported.</p>
                     <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Letterboxd export
                         <InputFile OnChange="e => Upload(ImportKind.Letterboxd, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv,text/comma-separated-values" class="visually-hidden" disabled="@uploading" />
                     </label>
@@ -82,7 +82,7 @@
                             @if (j.Message is not null) { <div class="small">@j.Message</div> }
                             @if (j.Unmatched.Count > 0)
                             {
-                                <details class="small"><summary>@j.Unmatched.Count couldn't be matched</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
+                                <details class="small"><summary>Which couldn't be matched (@j.Unmatched.Count)</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
                             }
                             <div class="muted small">@j.CreatedAt.ToLocalTime().ToString("d MMM yyyy HH:mm")</div>
                         </div>
