@@ -5,7 +5,8 @@ using SeenIt.Contracts;
 namespace SeenIt.Server.Import;
 
 /// <summary>A movie or show reference from an export, before it's matched to TMDB.</summary>
-public record ImportRef(MediaType Type, int? TmdbId, string? ImdbId, string? Title, int? Year)
+/// <param name="Url">Letterboxd's page for the film, used to find the TMDB id when the title search can't.</param>
+public record ImportRef(MediaType Type, int? TmdbId, string? ImdbId, string? Title, int? Year, string? Url = null)
 {
     public string Label => Year is { } y ? $"{Title} ({y})" : Title ?? ImdbId ?? $"#{TmdbId}";
 }

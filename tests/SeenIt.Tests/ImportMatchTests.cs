@@ -32,6 +32,25 @@ public class ImportMatchTests
             "Le Fabuleux Destin d'Amelie Poulain", 2001)?.Id);
     }
 
+    [Fact]
+    public void Letterboxd_page_gives_the_tmdb_movie_but_not_tv()
+    {
+        Assert.Equal(1271, ImportRunner.LetterboxdPageTmdbId("""<body data-tmdb-type="movie" data-tmdb-id="1271"> <a href="https://www.themoviedb.org/movie/1271/">TMDB</a>"""));
+        Assert.Null(ImportRunner.LetterboxdPageTmdbId("""<body data-tmdb-type="movie" data-tmdb-id=""> <a href="https://www.themoviedb.org/tv/87108/">TMDB</a>"""));
+        Assert.Null(ImportRunner.LetterboxdPageTmdbId("<html>Just a moment...</html>"));
+    }
+
+    [Fact]
+    public void Diary_rows_use_the_films_own_letterboxd_link()
+    {
+        var parsed = LetterboxdParser.Parse(new Dictionary<string, string>
+        {
+            ["diary.csv"] = "Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date\n2024-11-09,300,2006,https://boxd.it/7L4x7h,4,,,2024-11-02\n",
+            ["watched.csv"] = "Date,Name,Year,Letterboxd URI\n2024-01-27,300,2006,https://boxd.it/28XI\n",
+        });
+        Assert.All(parsed.History, h => Assert.Equal("https://boxd.it/28XI", h.Item.Url));
+    }
+
     private static readonly ImportRef Film = new(MediaType.Movie, 1, null, "Film", 2000);
     private static readonly DateTimeOffset Day = new(2024, 5, 10, 12, 0, 0, TimeSpan.Zero);
 

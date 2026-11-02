@@ -14,6 +14,7 @@ public static class LetterboxdParser
     {
         var result = new ParsedImport();
         var diaryFilms = new HashSet<(string, int?)>();
+        var filmUrls = new Dictionary<(string, int?), string>();
 
         string? Find(string name) => files.FirstOrDefault(f =>
             string.Equals(Path.GetFileName(f.Key), name, StringComparison.OrdinalIgnoreCase)
@@ -31,6 +32,14 @@ public static class LetterboxdParser
                 : "watched.csv";
             files = new Dictionary<string, string> { [key] = only };
         }
+
+        // Diary rows link to the diary entry; watched, ratings and watchlist rows link to the film.
+        // Use the film's link for every row of that film.
+        foreach (var file in new[] { "watched.csv", "ratings.csv", "watchlist.csv" })
+            if (Find(file) is { } text)
+                foreach (var row in Rows(text))
+                    if (ToFilm(row, null) is { Url: { } url } f) filmUrls.TryAdd(Key(f), url);
+        ImportRef? Film(Dictionary<string, string> row) => ToFilm(row, filmUrls);
 
         if (Find("diary.csv") is { } diary)
         {
@@ -76,7 +85,7 @@ public static class LetterboxdParser
         foreach (var (name, text) in files.Where(f => f.Key.Contains("lists/", StringComparison.OrdinalIgnoreCase)
                                                       && !f.Key.Contains("deleted/", StringComparison.OrdinalIgnoreCase)))
         {
-            if (ParseList(name, text) is { Items.Count: > 0 } list) result.Lists.Add(list);
+            if (ParseList(name, text, filmUrls) is { Items.Count: > 0 } list) result.Lists.Add(list);
         }
 
         return result;
@@ -86,7 +95,7 @@ public static class LetterboxdParser
     /// A list file has a preamble ("Letterboxd list export v7", a header and one row describing
     /// the list), a blank line, then the films with a Position column.
     /// </summary>
-    private static ImportList? ParseList(string fileName, string text)
+    private static ImportList? ParseList(string fileName, string text, Dictionary<(string, int?), string> filmUrls)
     {
         var lines = text.Replace("\r\n", "\n").Split('\n');
         var itemsStart = Array.FindIndex(lines, l => l.StartsWith("Position,", StringComparison.Ordinal));
@@ -103,17 +112,19 @@ public static class LetterboxdParser
         }
 
         var items = Rows(string.Join('\n', lines[itemsStart..]))
-            .Select(r => Film(r) is { } f ? new ImportListItem(f, DateTimeOffset.UtcNow) : null)
+            .Select(r => ToFilm(r, filmUrls) is { } f ? new ImportListItem(f, DateTimeOffset.UtcNow) : null)
             .OfType<ImportListItem>().ToList();
         return new ImportList(name, description, items);
     }
 
-    private static ImportRef? Film(Dictionary<string, string> row)
+    private static ImportRef? ToFilm(Dictionary<string, string> row, Dictionary<(string, int?), string>? filmUrls)
     {
         var name = row.GetValueOrDefault("Name");
         if (string.IsNullOrWhiteSpace(name)) return null;
         int? year = int.TryParse(row.GetValueOrDefault("Year"), out var y) ? y : null;
-        return new ImportRef(MediaType.Movie, null, null, name.Trim(), year);
+        var film = new ImportRef(MediaType.Movie, null, null, name.Trim(), year);
+        var own = (row.GetValueOrDefault("Letterboxd URI") ?? row.GetValueOrDefault("URL"))?.Trim();
+        return film with { Url = filmUrls?.GetValueOrDefault(Key(film)) ?? (string.IsNullOrEmpty(own) ? null : own) };
     }
 
     private static (string, int?) Key(ImportRef r) => (r.Title!.ToLowerInvariant(), r.Year);

@@ -10,7 +10,7 @@ namespace SeenIt.Server.Import;
 /// Matches parsed export rows to TMDB and writes them. Safe to re-run: plays you already have
 /// (see ImportHistoryAsync), existing watchlist entries and list items are skipped, and ratings are upserted.
 /// </summary>
-public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catalog, ILogger<ImportRunner> log)
+public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catalog, IHttpClientFactory http, ILogger<ImportRunner> log)
 {
     private readonly Dictionary<ImportRef, int?> _resolved = [];
     private readonly Dictionary<(MediaType, int), bool> _metaOk = [];
@@ -250,12 +250,45 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 if (Exact((await tmdb.SearchMovieAsync(r.Title, year, ct))?.Results, r.Title, r.Year) is { } m) return m.Id;
             if (r.Year is not null && Exact((await tmdb.SearchMovieAsync(r.Title, null, ct))?.Results, r.Title, r.Year, maxYearGap: 2) is { } any)
                 return any.Id;
-            return null;
+            // Retitled on TMDB ("Glass Onion" is "Glass Onion: A Knives Out Mystery"): Letterboxd's
+            // own page for the film names its TMDB id.
+            return await LetterboxdTmdbIdAsync(r.Url, ct);
         }
 
         var shows = await tmdb.SearchShowAsync(r.Title, r.Year, ct) is { Results.Count: > 0 } withYear
             ? withYear : await tmdb.SearchShowAsync(r.Title, null, ct);
         return Exact(shows?.Results, r.Title, r.Year, maxYearGap: 99)?.Id;
+    }
+
+    /// <summary>
+    /// Reads the TMDB id from a Letterboxd film page (boxd.it short links redirect there). Null for
+    /// anything that isn't a TMDB movie — Letterboxd also lists TV miniseries, which have no single
+    /// movie to attach a play to — or if Letterboxd can't be reached.
+    /// </summary>
+    private async Task<int?> LetterboxdTmdbIdAsync(string? url, CancellationToken ct)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps
+            || uri.Host is not ("boxd.it" or "letterboxd.com" or "www.letterboxd.com"))
+            return null;
+        try
+        {
+            var html = await http.CreateClient("letterboxd").GetStringAsync(uri, ct);
+            return LetterboxdPageTmdbId(html);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            log.LogInformation("Letterboxd lookup failed for {Url}: {Message}", url, ex.Message);
+            return null;
+        }
+    }
+
+    public static int? LetterboxdPageTmdbId(string html)
+    {
+        var type = System.Text.RegularExpressions.Regex.Match(html, @"data-tmdb-type=""(\w+)""");
+        var id = System.Text.RegularExpressions.Regex.Match(html, @"data-tmdb-id=""(\d+)""");
+        if (type.Success && type.Groups[1].Value == "movie" && id.Success) return int.Parse(id.Groups[1].Value);
+        var link = System.Text.RegularExpressions.Regex.Match(html, @"themoviedb\.org/movie/(\d+)");
+        return link.Success && !(type.Success && type.Groups[1].Value != "movie") ? int.Parse(link.Groups[1].Value) : null;
     }
 
     /// <summary>A result whose title (or original title) matches, nearest in year first.</summary>

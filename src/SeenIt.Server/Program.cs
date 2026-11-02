@@ -65,6 +65,12 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 builder.Services.AddMemoryCache();
 builder.Services.Configure<TmdbOptions>(config.GetSection("Tmdb"));
 builder.Services.AddHttpClient<TmdbClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
+// Letterboxd film pages, for imports whose titles TMDB's search can't match.
+builder.Services.AddHttpClient("letterboxd", c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(15);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; SeenIt import)");
+});
 builder.Services.AddScoped<CatalogService>();
 builder.Services.AddScoped<TrackingService>();
 builder.Services.AddScoped<ListService>();
