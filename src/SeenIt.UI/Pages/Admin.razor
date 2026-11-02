@@ -1,0 +1,423 @@
+@page "/admin"
+@page "/admin/{Tab}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject SessionState Session
+@inject Toasts Toasts
+@inject IJSRuntime Js
+@inject NavigationManager Nav
+<PageTitle>Admin · SeenIt</PageTitle>
+
+@if (Session.Me is { IsAdmin: false })
+{
+    <Empty Title="Nothing here." />
+}
+else
+{
+    <div class="page-head">
+        <h1>Admin</h1>
+        @if (overview is { } o) { <span class="pill" title="@o.Commit">v@(o.Version)</span> }
+    </div>
+
+    <nav class="segmented admin-tabs" aria-label="Admin sections">
+        @foreach (var (key, label) in Tabs)
+        {
+            <a class="@(Current == key ? "on" : "")" href="@($"admin/{key}")" @key="key">@label</a>
+        }
+    </nav>
+
+    <ErrorBox Message="@error" OnRetry="Load" />
+
+    @switch (Current)
+    {
+        case "overview":
+            @if (overview is not { } ov) { <Spinner /> }
+            else
+            {
+                <section class="stat-tiles admin-tiles">
+                    <div class="stat"><span class="stat-value">v@(ov.Version)</span><span class="stat-label">@ov.Commit@(ov.BuiltAt is { } b ? $" · built {Ago(b)}" : "")</span></div>
+                    <div class="stat"><span class="stat-value">@Uptime(ov.StartedAt)</span><span class="stat-label">up since @ov.StartedAt.ToLocalTime().ToString("d MMM HH:mm")</span></div>
+                    <div class="stat"><span class="stat-value">@ov.ActiveToday</span><span class="stat-label">active today · @ov.ActiveWeek this week</span></div>
+                    <div class="stat"><span class="stat-value">@ov.ActionsToday</span><span class="stat-label">actions in 24h</span></div>
+                    <div class="stat @(ov.RecentProblems > 0 ? "warn" : "")"><span class="stat-value">@ov.RecentProblems</span><span class="stat-label"><a href="admin/logs">errors in 24h</a></span></div>
+                    <div class="stat"><span class="stat-value">@ov.DatabaseSize</span><span class="stat-label">database · @ov.MemoryMb MB memory</span></div>
+                </section>
+                @if (ov.Subject is { } subj) { <p class="muted small">Latest change: @subj</p> }
+
+                <section class="panel">
+                    <h2>Activity, last 30 days</h2>
+                    <BarChart Data="ov.ActivityByDay" Vertical="true" LabelEvery="5" Label="Logged actions per day" />
+                </section>
+
+                <div class="stat-panels">
+                    <section class="panel">
+                        <h2>Configuration</h2>
+                        <dl class="admin-config">
+                            @foreach (var c in ov.Config)
+                            {
+                                <div @key="c.Name"><dt><span class="dot @(c.Ok ? "ok" : "warn")"></span>@c.Name</dt><dd>@c.Value</dd></div>
+                            }
+                            <div><dt><span class="dot ok"></span>Runtime</dt><dd>@ov.Runtime · @ov.Os</dd></div>
+                        </dl>
+                    </section>
+                    <section class="panel">
+                        <h2>Totals</h2>
+                        <dl class="admin-config">
+                            @foreach (var c in ov.Counts) { <div @key="c.Label"><dt>@c.Label</dt><dd>@c.Count.ToString("N0")</dd></div> }
+                        </dl>
+                    </section>
+                </div>
+
+                <section class="panel">
+                    <h2>Deployments</h2>
+                    @if (ov.Deployments.Count == 0) { <p class="muted small">None recorded yet. Each deploy is recorded the first time it starts.</p> }
+                    <table class="table admin-table">
+                        <tbody>
+                            @foreach (var d in ov.Deployments)
+                            {
+                                <tr @key="d.Commit">
+                                    <td><b>v@(d.Version)</b> <code>@d.Commit</code></td>
+                                    <td>@d.Subject</td>
+                                    <td class="muted nowrap">@d.StartedAt.ToLocalTime().ToString("d MMM yyyy HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
+            }
+            break;
+
+        case "users":
+            @if (users is null) { <Spinner /> }
+            else
+            {
+                <p class="muted small">@users.Count members</p>
+                <div class="admin-users">
+                    @foreach (var u in users)
+                    {
+                        <div class="panel admin-user" @key="u.Id">
+                            <div class="admin-user-head">
+                                <div>
+                                    <a href="@Fmt.UserHref(u.UserName)"><b>@u.UserName</b></a>
+                                    @if (u.DisplayName is { } dn) { <span class="muted"> · @dn</span> }
+                                    <div class="muted small">@u.Email</div>
+                                </div>
+                                <div class="chips">
+                                    @if (u.IsAdmin) { <span class="pill pill-ok">admin</span> }
+                                    @if (u.LockedOut) { <span class="pill pill-bad">locked out</span> }
+                                    @if (u.JellyfinActive) { <span class="pill">Jellyfin</span> }
+                                    <span class="pill">@u.Visibility</span>
+                                </div>
+                            </div>
+                            <div class="admin-user-stats small">
+                                <span><b>@u.MoviePlays.ToString("N0")</b> movie plays</span>
+                                <span><b>@u.EpisodePlays.ToString("N0")</b> episode plays</span>
+                                <span><b>@u.Ratings.ToString("N0")</b> ratings</span>
+                                <span><b>@u.Watchlist.ToString("N0")</b> watchlist</span>
+                                <span><b>@u.Lists</b> lists</span>
+                                <span><b>@u.Following</b> following · <b>@u.Followers</b> followers</span>
+                            </div>
+                            <div class="muted small">
+                                Joined @u.CreatedAt.ToLocalTime().ToString("d MMM yyyy")@(u.InvitedBy is { } by ? $" (invited by {by})" : "")
+                                · last seen @(u.LastSeenAt is { } ls ? Ago(ls) : "never")
+                                · last action @(u.LastActivityAt is { } la ? Ago(la) : "none logged")
+                                @if (u.TrackingSince is { } ts) { <span> · tracking since @ts.ToString("d MMM yyyy")</span> }
+                            </div>
+                            <div class="inline admin-actions">
+                                <a class="btn btn-sm" href="@($"admin/activity?user={Uri.EscapeDataString(u.UserName)}")">Activity</a>
+                                <button class="btn btn-sm" @onclick="() => ResetLink(u)">Password reset link</button>
+                                @if (u.LockedOut) { <button class="btn btn-sm" @onclick="() => Unlock(u)">Unlock</button> }
+                            </div>
+                            @if (resetLinks.TryGetValue(u.Id, out var link))
+                            {
+                                <div class="copy-field">
+                                    <code>@link.Url</code>
+                                    <button class="icon-btn" @onclick="() => Copy(link.Url)" aria-label="Copy link"><Icon Name="copy" Size="16" /></button>
+                                </div>
+                                <p class="muted small">Works once, until @link.ExpiresAt.ToLocalTime().ToString("HH:mm"). Send it to @u.UserName privately.</p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            break;
+
+        case "activity":
+            <div class="chips admin-filters">
+                @foreach (var (key, label) in Groups)
+                {
+                    <a class="chip @(Group == key ? "on" : "")" href="@ActivityHref(User, key)" @key="key">@label</a>
+                }
+                <select aria-label="User" value="@(User ?? "")" @onchange="e => Nav.NavigateTo(ActivityHref(e.Value as string, Group))">
+                    <option value="">Everyone</option>
+                    @foreach (var u in users ?? []) { <option value="@u.UserName" @key="u.Id">@u.UserName</option> }
+                </select>
+            </div>
+            @if (activity is not { } act) { <Spinner /> }
+            else
+            {
+                <p class="muted small">@act.Total.ToString("N0") entries</p>
+                @if (act.Items.Count == 0) { <p class="muted">Nothing logged yet.</p> }
+                <div class="admin-activity">
+                    @foreach (var a in act.Items)
+                    {
+                        <div class="admin-act" @key="a.Id">
+                            <span class="muted small nowrap" title="@a.At.ToLocalTime().ToString("d MMM yyyy HH:mm:ss")">@a.At.ToLocalTime().ToString("d MMM HH:mm")</span>
+                            <span><a href="@($"admin/activity?user={Uri.EscapeDataString(a.UserName)}")"><b>@a.UserName</b></a></span>
+                            <span class="pill pill-sm @KindClass(a.Kind)">@KindLabel(a.Kind)</span>
+                            <span class="admin-act-what">
+                                @if (a.TmdbId is { } id && a.Type is { } t)
+                                {
+                                    <a href="@Href(a, t, id)">@(a.Title ?? $"#{id}")@(a.SeasonNumber is { } s ? (a.EpisodeNumber is { } e ? $" {Fmt.Ep(s, e)}" : $" season {s}") : "")</a>
+                                }
+                                @if (a.Detail is { } d) { <span class="muted"> @d</span> }
+                            </span>
+                            @if (a.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(a.Source)</span> }
+                        </div>
+                    }
+                </div>
+                <Pager Page="act.Page" TotalPages="act.TotalPages" OnPage="p => Nav.NavigateTo(ActivityHref(User, Group, p))" />
+            }
+            break;
+
+        case "imports":
+            @if (imports is null) { <Spinner /> }
+            else
+            {
+                @if (imports.Count == 0) { <p class="muted">No imports yet.</p> }
+                <div class="imports">
+                    @foreach (var j in imports)
+                    {
+                        <div class="import-job" @key="j.Id">
+                            <div class="inline spread">
+                                <b>@j.UserName · @j.Kind · @j.FileName</b>
+                                <span class="pill @(j.Status switch { ImportStatus.Completed => "pill-ok", ImportStatus.Failed => "pill-bad", _ => "" })">@j.Status</span>
+                            </div>
+                            <div class="muted small">
+                                @j.CreatedAt.ToLocalTime().ToString("d MMM yyyy HH:mm")
+                                @if (j.StartedAt is { } s && j.FinishedAt is { } f) { <span> · took @Fmt.Duration((long)Math.Max(1, (f - s).TotalMinutes))</span> }
+                                @if (j.Parts != ImportParts.All) { <span> · @PartsPicker.Describe(j.Parts)</span> }
+                                · @j.Processed.ToString("N0")/@j.Total.ToString("N0") processed
+                            </div>
+                            @if (j.Message is not null) { <div class="small">@j.Message</div> }
+                            @if (j.Unmatched.Count > 0)
+                            {
+                                <details class="small"><summary>Unmatched (@j.Unmatched.Count)</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            break;
+
+        case "jellyfin":
+            @if (jellyfin is null) { <Spinner /> }
+            else
+            {
+                @if (jellyfin.Count == 0) { <p class="muted">No Jellyfin events yet. Only the last 50 per user are kept.</p> }
+                <table class="table admin-table">
+                    <tbody>
+                        @foreach (var e in jellyfin)
+                        {
+                            <tr>
+                                <td class="muted nowrap">@e.At.ToLocalTime().ToString("d MMM HH:mm")</td>
+                                <td><b>@e.UserName</b></td>
+                                <td>@e.Item</td>
+                                <td class="muted">@e.Outcome</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            break;
+
+        case "invites":
+            @if (invites is null) { <Spinner /> }
+            else
+            {
+                @if (invites.Count == 0) { <p class="muted">No invites yet.</p> }
+                <table class="table admin-table">
+                    <tbody>
+                        @foreach (var i in invites)
+                        {
+                            <tr @key="i.Code">
+                                <td><b>@i.CreatedBy</b></td>
+                                <td class="muted nowrap">@i.CreatedAt.ToLocalTime().ToString("d MMM yyyy")</td>
+                                <td>
+                                    @if (i.UsedAt is { } used) { <span class="pill pill-ok">used</span> <span> by @(i.UsedBy ?? "a deleted account") on @used.ToLocalTime().ToString("d MMM")</span> }
+                                    else if (i.ExpiresAt < DateTimeOffset.UtcNow) { <span class="pill">expired</span> }
+                                    else { <span class="pill">open</span> <span class="muted"> until @i.ExpiresAt.ToLocalTime().ToString("d MMM")</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            break;
+
+        case "logs":
+            @if (logs is null) { <Spinner /> }
+            else
+            {
+                <p class="muted small">Warnings and errors since the last restart (up to 300). Full logs: <code>docker logs seenit</code> on the server.</p>
+                @if (logs.Count == 0) { <p class="ok">Nothing has gone wrong since the last restart.</p> }
+                <div class="admin-logs">
+                    @foreach (var l in logs)
+                    {
+                        <details class="admin-log @(l.Level is "Error" or "Critical" ? "error" : "warn")">
+                            <summary>
+                                <span class="muted small nowrap">@l.At.ToLocalTime().ToString("d MMM HH:mm:ss")</span>
+                                <span class="pill pill-sm @(l.Level is "Error" or "Critical" ? "pill-bad" : "")">@l.Level</span>
+                                <span class="admin-log-first">@FirstLine(l.Message)</span>
+                            </summary>
+                            <div class="muted small">@l.Category</div>
+                            <pre>@l.Message</pre>
+                        </details>
+                    }
+                </div>
+            }
+            break;
+    }
+}
+
+@code {
+    [Parameter] public string? Tab { get; set; }
+    [SupplyParameterFromQuery(Name = "user")] public string? User { get; set; }
+    [SupplyParameterFromQuery(Name = "group")] public string? Group { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int? PageNumber { get; set; }
+
+    private static readonly (string, string)[] Tabs =
+    [
+        ("overview", "Overview"), ("users", "Users"), ("activity", "Activity"), ("imports", "Imports"),
+        ("jellyfin", "Jellyfin"), ("invites", "Invites"), ("logs", "Errors"),
+    ];
+    private static readonly (string?, string)[] Groups =
+        [(null, "All"), ("tracking", "Tracking"), ("ratings", "Ratings"), ("lists", "Watchlist & lists"), ("account", "Account & imports")];
+
+    private string Current => Tabs.Any(t => t.Item1 == Tab) ? Tab! : "overview";
+
+    private AdminOverview? overview;
+    private List<AdminUser>? users;
+    private AdminActivityPage? activity;
+    private List<AdminImport>? imports;
+    private List<AdminJellyfinEvent>? jellyfin;
+    private List<AdminInvite>? invites;
+    private List<AdminLogEntry>? logs;
+    private readonly Dictionary<Guid, AdminResetLink> resetLinks = [];
+    private string? error;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try
+        {
+            // The version badge is always shown, so the overview always loads.
+            overview ??= await Api.AdminOverviewAsync();
+            switch (Current)
+            {
+                case "overview": overview = await Api.AdminOverviewAsync(); break;
+                case "users": users = await Api.AdminUsersAsync(); break;
+                case "activity":
+                    activity = null;
+                    users ??= await Api.AdminUsersAsync();
+                    activity = await Api.AdminActivityAsync(User, Group, PageNumber ?? 1);
+                    break;
+                case "imports": imports = await Api.AdminImportsAsync(); break;
+                case "jellyfin": jellyfin = await Api.AdminJellyfinAsync(); break;
+                case "invites": invites = await Api.AdminInvitesAsync(); break;
+                case "logs": logs = await Api.AdminLogsAsync(); break;
+            }
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static string ActivityHref(string? user, string? group, int page = 1)
+    {
+        var q = new List<string>();
+        if (!string.IsNullOrEmpty(user)) q.Add($"user={Uri.EscapeDataString(user)}");
+        if (!string.IsNullOrEmpty(group)) q.Add($"group={group}");
+        if (page > 1) q.Add($"page={page}");
+        return "admin/activity" + (q.Count > 0 ? "?" + string.Join("&", q) : "");
+    }
+
+    private static string Href(AdminActivity a, MediaType type, int id) => type switch
+    {
+        MediaType.Movie => $"movie/{id}",
+        MediaType.Episode when a.SeasonNumber is { } s && a.EpisodeNumber is { } e => Fmt.EpisodeHref(id, s, e),
+        _ when a.SeasonNumber is { } s => $"show/{id}/season/{s}",
+        _ => $"show/{id}",
+    };
+
+    private static string KindLabel(ActivityKind k) => k switch
+    {
+        ActivityKind.Watch => "watched", ActivityKind.BulkWatch => "marked watched", ActivityKind.Unwatch => "unwatched",
+        ActivityKind.DeletePlay => "removed a play", ActivityKind.Rate => "rated", ActivityKind.Unrate => "removed rating",
+        ActivityKind.WatchlistAdd => "added to watchlist", ActivityKind.WatchlistRemove => "removed from watchlist",
+        ActivityKind.ShowStatus => "show status", ActivityKind.RewatchStart => "started rewatch", ActivityKind.RewatchStop => "stopped rewatch",
+        ActivityKind.CheckIn => "checked in", ActivityKind.CheckInCancel => "cancelled check-in",
+        ActivityKind.ListCreate => "created list", ActivityKind.ListEdit => "edited list", ActivityKind.ListDelete => "deleted list",
+        ActivityKind.ListAdd => "added to list", ActivityKind.ListRemove => "removed from list",
+        ActivityKind.Import => "import", ActivityKind.ClearData => "cleared data", ActivityKind.SignUp => "signed up",
+        ActivityKind.AccountDeleted => "deleted account", ActivityKind.PasswordChanged => "changed password",
+        ActivityKind.PasswordReset => "reset password", ActivityKind.Follow => "followed", ActivityKind.Unfollow => "unfollowed",
+        _ => k.ToString(),
+    };
+
+    private static string KindClass(ActivityKind k) => k switch
+    {
+        ActivityKind.Watch or ActivityKind.BulkWatch or ActivityKind.SignUp => "pill-ok",
+        ActivityKind.Unwatch or ActivityKind.DeletePlay or ActivityKind.ClearData or ActivityKind.AccountDeleted or ActivityKind.ListDelete => "pill-bad",
+        _ => "",
+    };
+
+    private static string Ago(DateTimeOffset when)
+    {
+        var d = DateTimeOffset.UtcNow - when;
+        return d.TotalMinutes < 1 ? "just now"
+            : d.TotalHours < 1 ? $"{(int)d.TotalMinutes}m ago"
+            : d.TotalDays < 1 ? $"{(int)d.TotalHours}h ago"
+            : d.TotalDays < 30 ? $"{(int)d.TotalDays}d ago"
+            : when.ToLocalTime().ToString("d MMM yyyy");
+    }
+
+    private static string Uptime(DateTimeOffset since)
+    {
+        var d = DateTimeOffset.UtcNow - since;
+        return d.TotalDays >= 1 ? $"{(int)d.TotalDays}d {d.Hours}h" : d.TotalHours >= 1 ? $"{(int)d.TotalHours}h {d.Minutes}m" : $"{Math.Max(0, (int)d.TotalMinutes)}m";
+    }
+
+    private static string FirstLine(string s)
+    {
+        var line = s.Split('\n', 2)[0];
+        return line.Length > 160 ? line[..160] + "…" : line;
+    }
+
+    private async Task ResetLink(AdminUser u)
+    {
+        if (!await Js.InvokeAsync<bool>("confirm", $"Create a password reset link for {u.UserName}? Anyone with the link can set a new password for this account for the next 2 hours.")) return;
+        try
+        {
+            if (await Api.AdminResetLinkAsync(u.Id) is { } link) resetLinks[u.Id] = link;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Unlock(AdminUser u)
+    {
+        try
+        {
+            await Api.AdminUnlockAsync(u.Id);
+            Toasts.Show($"{u.UserName} unlocked");
+            users = await Api.AdminUsersAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Copy(string text)
+    {
+        try { await Js.InvokeVoidAsync("navigator.clipboard.writeText", text); Toasts.Show("Copied"); }
+        catch (JSException) { Toasts.Show("Couldn't copy; select the link instead.", error: true); }
+    }
+}

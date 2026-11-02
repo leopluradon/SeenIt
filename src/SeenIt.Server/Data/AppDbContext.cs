@@ -22,6 +22,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Invite> Invites => Set<Invite>();
     public DbSet<ShowRewatch> Rewatches => Set<ShowRewatch>();
+    public DbSet<ActivityEntry> Activity => Set<ActivityEntry>();
+    public DbSet<Deployment> Deployments => Set<Deployment>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -99,6 +101,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         b.Entity<ShowRewatch>(e => e.HasIndex(x => new { x.UserId, x.ShowTmdbId }));
+        b.Entity<ActivityEntry>(e =>
+        {
+            e.HasIndex(x => x.At);
+            e.HasIndex(x => new { x.UserId, x.At });
+            e.Property(x => x.UserName).HasMaxLength(256);
+            e.Property(x => x.Detail).HasMaxLength(500);
+        });
+        b.Entity<Deployment>(e =>
+        {
+            e.Property(x => x.Version).HasMaxLength(64);
+            e.Property(x => x.Commit).HasMaxLength(64);
+            e.Property(x => x.Subject).HasMaxLength(300);
+        });
         b.Entity<Invite>(e =>
         {
             e.HasKey(x => x.Code);

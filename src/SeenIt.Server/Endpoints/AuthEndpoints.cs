@@ -29,7 +29,7 @@ public static partial class AuthEndpoints
         var g = app.MapGroup("/api/auth");
 
         g.MapPost("/register", async Task<Results<SignInHttpResult, BadRequest<ProblemInfo>>> (
-            RegisterRequest req, UserManager<AppUser> users, SignInManager<AppUser> signIn, InviteService invites) =>
+            RegisterRequest req, UserManager<AppUser> users, SignInManager<AppUser> signIn, InviteService invites, ActivityService activity) =>
         {
             var userName = req.UserName?.Trim() ?? "";
             if (!UserNamePattern().IsMatch(userName))
@@ -53,6 +53,8 @@ public static partial class AuthEndpoints
                     result.Errors.GroupBy(e => e.Code).ToDictionary(e => e.Key, e => e.Select(x => x.Description).ToArray())));
             }
             if (inviter is { } by) await invites.CompleteAsync(req.InviteCode!, by, user.Id);
+            var invitedBy = inviter is { } inv ? (await users.FindByIdAsync(inv.ToString()))?.UserName : null;
+            await activity.LogAsync(user.Id, ActivityKind.SignUp, detail: invitedBy is null ? "open sign-up" : $"invited by {invitedBy}", userName: user.UserName);
 
             var principal = await signIn.CreateUserPrincipalAsync(user);
             return TypedResults.SignIn(principal, authenticationScheme: IdentityConstants.BearerScheme);
@@ -87,7 +89,7 @@ public static partial class AuthEndpoints
             return TypedResults.SignIn(principal, authenticationScheme: IdentityConstants.BearerScheme);
         });
 
-        g.MapGet("/features", (EmailService email, InviteService invites) => new ServerFeatures(email.Enabled, invites.OpenRegistration));
+        g.MapGet("/features", (EmailService email, InviteService invites) => new ServerFeatures(email.Enabled, invites.OpenRegistration, AppInfo.Version));
 
         g.MapGet("/invite/{code}", (string code, InviteService invites) => invites.CheckAsync(code)).RequireRateLimiting("auth");
 
@@ -109,7 +111,7 @@ public static partial class AuthEndpoints
             return Results.NoContent();
         }).RequireRateLimiting("auth");
 
-        g.MapPost("/reset", async (ResetPasswordRequest req, UserManager<AppUser> users) =>
+        g.MapPost("/reset", async (ResetPasswordRequest req, UserManager<AppUser> users, ActivityService activity) =>
         {
             const string expired = "This reset link is invalid or has expired. Ask for a new one.";
             if (await users.FindByIdAsync(req.UserId.ToString()) is not { } u) return Results.BadRequest(new ProblemInfo(expired));
@@ -123,6 +125,7 @@ public static partial class AuthEndpoints
                 return Results.BadRequest(new ProblemInfo(r.Errors.Any(e => e.Code == "InvalidToken") ? expired : string.Join(" ", r.Errors.Select(e => e.Description))));
             await users.SetLockoutEndDateAsync(u, null);
             await users.ResetAccessFailedCountAsync(u);
+            await activity.LogAsync(u.Id, ActivityKind.PasswordReset, detail: "with a reset link", userName: u.UserName);
             return Results.NoContent();
         }).RequireRateLimiting("auth");
 
@@ -142,10 +145,18 @@ public static partial class AuthEndpoints
             catch (Exception ex) { return Results.BadRequest(new ProblemInfo($"Couldn't send: {ex.Message}")); }
         }).RequireRateLimiting("auth");
 
-        me.MapGet("/me", async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> (ClaimsPrincipal p, UserManager<AppUser> users) =>
-            await users.FindByIdAsync(p.UserId().ToString()) is { } u
-                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages, u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince))
-                : TypedResults.Unauthorized());
+        me.MapGet("/me", async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> (ClaimsPrincipal p, UserManager<AppUser> users, AdminService admins) =>
+        {
+            if (await users.FindByIdAsync(p.UserId().ToString()) is not { } u) return TypedResults.Unauthorized();
+            // Every app start loads /me, which makes it a cheap "last seen".
+            if (u.LastSeenAt is null || u.LastSeenAt < DateTimeOffset.UtcNow.AddMinutes(-5))
+            {
+                u.LastSeenAt = DateTimeOffset.UtcNow;
+                await users.UpdateAsync(u);
+            }
+            return TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages,
+                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName)));
+        });
 
         me.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
         {
@@ -185,12 +196,13 @@ public static partial class AuthEndpoints
             return Results.NoContent();
         });
 
-        me.MapPost("/password", async (ChangePasswordRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
+        me.MapPost("/password", async (ChangePasswordRequest req, ClaimsPrincipal p, UserManager<AppUser> users, ActivityService activity) =>
         {
             var u = await users.FindByIdAsync(p.UserId().ToString());
             if (u is null) return Results.Unauthorized();
             // Changing the password rotates the security stamp, which invalidates other devices' refresh tokens.
             var r = await users.ChangePasswordAsync(u, req.CurrentPassword, req.NewPassword);
+            if (r.Succeeded) await activity.LogAsync(p, ActivityKind.PasswordChanged);
             return r.Succeeded ? Results.NoContent()
                 : Results.BadRequest(new ProblemInfo(string.Join(" ", r.Errors.Select(e => e.Description))));
         }).RequireRateLimiting("auth");
@@ -200,28 +212,32 @@ public static partial class AuthEndpoints
         me.MapDelete("/invites/{code}", async (string code, ClaimsPrincipal p, InviteService invites) =>
             await invites.DeleteAsync(p.UserId(), code) ? Results.NoContent() : Results.NotFound());
 
-        me.MapPost("/clear", async (ClearDataRequest req, ClaimsPrincipal p, UserManager<AppUser> users, TrackingService tracking, CancellationToken ct) =>
+        me.MapPost("/clear", async (ClearDataRequest req, ClaimsPrincipal p, UserManager<AppUser> users, TrackingService tracking, ActivityService activity, CancellationToken ct) =>
         {
             var u = await users.FindByIdAsync(p.UserId().ToString());
             if (u is null) return Results.Unauthorized();
             if (!await users.CheckPasswordAsync(u, req.Password))
                 return Results.BadRequest(new ProblemInfo("Wrong password."));
-            return Results.Ok(await tracking.ClearAsync(u.Id, req.Parts & ImportParts.All, ct));
+            var r = await tracking.ClearAsync(u.Id, req.Parts & ImportParts.All, ct);
+            await activity.LogAsync(p, ActivityKind.ClearData,
+                detail: $"{req.Parts & ImportParts.All}: {r.Plays} plays, {r.Ratings} ratings, {r.Watchlist} watchlist, {r.Lists} lists");
+            return Results.Ok(r);
         }).RequireRateLimiting("auth");
 
-        me.MapPost("/delete", async (DeleteAccountRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
+        me.MapPost("/delete", async (DeleteAccountRequest req, ClaimsPrincipal p, UserManager<AppUser> users, ActivityService activity) =>
         {
             var u = await users.FindByIdAsync(p.UserId().ToString());
             if (u is null) return Results.Unauthorized();
             if (!await users.CheckPasswordAsync(u, req.Password))
                 return Results.BadRequest(new ProblemInfo("Wrong password."));
             await users.DeleteAsync(u);
+            await activity.LogAsync(u.Id, ActivityKind.AccountDeleted, detail: u.Email, userName: u.UserName);
             return Results.NoContent();
         }).RequireRateLimiting("auth");
     }
 
     /// <summary>Where links in emails point: SeenIt:PublicUrl if set, otherwise the address this request came in on.</summary>
-    private static string PublicBase(HttpContext http, IConfiguration config) =>
+    internal static string PublicBase(HttpContext http, IConfiguration config) =>
         config["SeenIt:PublicUrl"] is { Length: > 0 } url ? url.TrimEnd('/') + "/" : $"{http.Request.Scheme}://{http.Request.Host}{http.Request.PathBase}/";
 
     private static BadRequest<ProblemInfo> Bad(string message) => TypedResults.BadRequest(new ProblemInfo(message));

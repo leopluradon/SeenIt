@@ -14,8 +14,16 @@ using SeenIt.Server.Tmdb;
 var builder = WebApplication.CreateBuilder(args);
 var config = builder.Configuration;
 
-builder.Services.AddDbContext<AppDbContext>(o =>
-    o.UseNpgsql(config.GetConnectionString("Default") ?? throw new InvalidOperationException("ConnectionStrings:Default is not set.")));
+// The factory also registers AppDbContext itself as scoped; ActivityService uses the factory for
+// a separate context so logging never saves (or trips over) the caller's pending changes.
+builder.Services.AddDbContextFactory<AppDbContext>(o =>
+    o.UseNpgsql(config.GetConnectionString("Default") ?? throw new InvalidOperationException("ConnectionStrings:Default is not set.")),
+    ServiceLifetime.Scoped);
+
+// Warnings and errors, kept in memory for the admin page.
+var recentLogs = new RecentLogs();
+builder.Logging.AddProvider(recentLogs);
+builder.Services.AddSingleton(recentLogs);
 
 // Bearer tokens are data-protected, so the key ring must survive restarts or everyone is signed out.
 var dp = builder.Services.AddDataProtection().SetApplicationName("SeenIt");
@@ -83,6 +91,8 @@ builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<InviteService>();
 builder.Services.AddScoped<PickService>();
 builder.Services.AddScoped<OnThisDayService>();
+builder.Services.AddScoped<ActivityService>();
+builder.Services.AddSingleton<AdminService>();
 builder.Services.AddHostedService<CheckInWorker>();
 builder.Services.Configure<SmtpOptions>(config.GetSection("Smtp"));
 builder.Services.AddSingleton<EmailService>();
@@ -110,6 +120,14 @@ await using (var scope = app.Services.CreateAsyncScope())
             await Task.Delay(TimeSpan.FromSeconds(3));
         }
     }
+
+    // Record each new build the first time it starts, for the admin page's deployment history.
+    if (!AppInfo.IsDev && !await db.Deployments.AnyAsync(d => d.Commit == AppInfo.Commit))
+    {
+        db.Deployments.Add(new Deployment { Version = AppInfo.Version, Commit = AppInfo.Commit, Subject = AppInfo.Subject, BuiltAt = AppInfo.BuiltAt });
+        await db.SaveChangesAsync();
+    }
+    app.Logger.LogInformation("SeenIt {Version} ({Commit}) starting", AppInfo.Version, AppInfo.Commit);
 }
 
 app.UseForwardedHeaders();
@@ -149,6 +167,7 @@ app.UseAuthorization();
 app.MapGet("/healthz", () => Results.Ok("ok"));
 app.MapAuth();
 app.MapApi();
+app.MapAdmin();
 app.MapFallback("/api/{**rest}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 

@@ -109,7 +109,7 @@ public record JellyfinPayload(
     }
 }
 
-public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService tracking, CheckInService checkIns, ILogger<JellyfinService> log)
+public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService tracking, CheckInService checkIns, ActivityService activity, ILogger<JellyfinService> log)
 {
     private static readonly TimeSpan DuplicateWindow = TimeSpan.FromHours(3);
 
@@ -166,6 +166,8 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         if (dup) return $"{reason}; already recorded recently";
 
         await tracking.WatchAsync(user.Id, req with { WatchedAt = DateTimeOffset.UtcNow }, WatchSource.Jellyfin, ct);
+        await activity.LogAsync(user.Id, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
+            reason, WatchSource.Jellyfin, user.UserName);
         return $"{reason} → scrobbled";
     }
 

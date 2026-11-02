@@ -50,6 +50,7 @@
                                 <a href="friends"><Icon Name="users" Size="16" /> Friends</a>
                                 <a href="ratings"><Icon Name="star" Size="16" /> Ratings</a>
                                 <a href="settings"><Icon Name="settings" Size="16" /> Settings</a>
+                                @if (Session.Me?.IsAdmin == true) { <a href="admin"><Icon Name="shield" Size="16" /> Admin</a> }
                                 <button @onclick="Logout"><Icon Name="logout" Size="16" /> Sign out</button>
                             </div>
                         }

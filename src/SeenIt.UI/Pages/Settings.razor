@@ -288,6 +288,7 @@
             {
                 <p class="muted small">Server: @Server.Url</p>
             }
+            @if (features?.Version is { } version) { <p class="muted small">SeenIt v@(version)</p> }
         </section>
 
         <section class="panel" id="account">

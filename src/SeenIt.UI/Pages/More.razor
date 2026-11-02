@@ -20,6 +20,7 @@
     <a href="discover"><Icon Name="compass" /> Discover</a>
     <a href="search"><Icon Name="search" /> Search</a>
     <a href="settings"><Icon Name="settings" /> Settings</a>
+    @if (Session.Me?.IsAdmin == true) { <a href="admin"><Icon Name="shield" /> Admin</a> }
     <a href="settings#layout"><Icon Name="menu" /> Customize tabs</a>
     <button @onclick="Logout"><Icon Name="logout" /> Sign out</button>
 </nav>

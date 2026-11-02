@@ -65,44 +65,70 @@ public static class ApiEndpoints
 
     private static void MapTracking(RouteGroupBuilder g)
     {
-        g.MapPost("/watch", async (WatchRequest req, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
-            Results.Ok(new { added = await t.WatchAsync(p.UserId(), req, WatchSource.Manual, ct) }));
+        g.MapPost("/watch", async (WatchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var added = await t.WatchAsync(p.UserId(), req, WatchSource.Manual, ct);
+            var what = req.EpisodeNumber is null && req.Type != MediaType.Movie ? $"{added} episode{(added == 1 ? "" : "s")}" : null;
+            await a.LogAsync(p, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
+                string.Join(", ", new[] { what, ActivityService.When(req.When, req.WatchedAt) }.OfType<string>()) is { Length: > 0 } d ? d : null);
+            return Results.Ok(new { added });
+        });
 
-        g.MapPost("/watch/bulk", async (BulkWatchRequest req, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
-            Results.Ok(new { added = await t.BulkWatchAsync(p.UserId(), req, ct) }));
+        g.MapPost("/watch/bulk", async (BulkWatchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var added = await t.BulkWatchAsync(p.UserId(), req, ct);
+            await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, req.ShowTmdbId, req.SeasonNumber, null,
+                $"{added} episode{(added == 1 ? "" : "s")}" + (ActivityService.When(req.When, req.WatchedAt) is { } w ? ", " + w : ""));
+            return Results.Ok(new { added });
+        });
 
-        g.MapDelete("/watch", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
-            Results.Ok(new { removed = await t.UnwatchAsync(p.UserId(), type, tmdbId, season, episode, ct) }));
+        g.MapDelete("/watch", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var removed = await t.UnwatchAsync(p.UserId(), type, tmdbId, season, episode, ct);
+            await a.LogAsync(p, ActivityKind.Unwatch, type, tmdbId, season, episode, $"{removed} play{(removed == 1 ? "" : "s")} removed");
+            return Results.Ok(new { removed });
+        });
 
         g.MapGet("/history", (MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
                 string? sort, int? page, int? pageSize, string? tz, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.GetHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, pageSize ?? 50, tz), ct));
         g.MapGet("/history/genres", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetHistoryGenresAsync(p.UserId(), ct));
 
-        g.MapDelete("/history/{id:guid}", async (Guid id, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
-            await t.DeleteHistoryAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
-
-        g.MapGet("/watchlist", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetWatchlistAsync(p.UserId(), ct));
-        g.MapPost("/watchlist", async (WatchlistRequest req, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+        g.MapDelete("/history/{id:guid}", async (Guid id, ClaimsPrincipal p, TrackingService t, AppDbContext db, ActivityService a, CancellationToken ct) =>
         {
-            await t.AddToWatchlistAsync(p.UserId(), req.Type, req.TmdbId, ct);
+            var uid = p.UserId();
+            var play = await db.WatchEvents.AsNoTracking().FirstOrDefaultAsync(w => w.UserId == uid && w.Id == id, ct);
+            if (play is null || !await t.DeleteHistoryAsync(uid, id, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.DeletePlay, play.Type, play.TmdbId, play.SeasonNumber, play.EpisodeNumber,
+                WatchDates.IsUnknown(play.WatchedAt) ? "play with unknown date" : $"play from {play.WatchedAt:yyyy-MM-dd HH:mm} UTC");
             return Results.NoContent();
         });
-        g.MapDelete("/watchlist", async (MediaType type, int tmdbId, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+
+        g.MapGet("/watchlist", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetWatchlistAsync(p.UserId(), ct));
+        g.MapPost("/watchlist", async (WatchlistRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            await t.AddToWatchlistAsync(p.UserId(), req.Type, req.TmdbId, ct);
+            await a.LogAsync(p, ActivityKind.WatchlistAdd, req.Type, req.TmdbId);
+            return Results.NoContent();
+        });
+        g.MapDelete("/watchlist", async (MediaType type, int tmdbId, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             await t.RemoveFromWatchlistAsync(p.UserId(), type, tmdbId, ct);
+            await a.LogAsync(p, ActivityKind.WatchlistRemove, type, tmdbId);
             return Results.NoContent();
         });
 
         g.MapGet("/ratings", (MediaType? type, ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetRatingsAsync(p.UserId(), type, ct));
-        g.MapPost("/ratings", async (RatingRequest req, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+        g.MapPost("/ratings", async (RatingRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             await t.RateAsync(p.UserId(), req, ct);
+            await a.LogAsync(p, ActivityKind.Rate, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber, $"{req.Rating}/10");
             return Results.NoContent();
         });
-        g.MapDelete("/ratings", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+        g.MapDelete("/ratings", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             await t.UnrateAsync(p.UserId(), type, tmdbId, season, episode, ct);
+            await a.LogAsync(p, ActivityKind.Unrate, type, tmdbId, season, episode);
             return Results.NoContent();
         });
 
@@ -120,24 +146,37 @@ public static class ApiEndpoints
         });
         g.MapGet("/onthisday", (string? tz, ClaimsPrincipal p, OnThisDayService s, CancellationToken ct) => s.GetAsync(p.UserId(), tz, ct));
 
-        g.MapPost("/shows/{id:int}/rewatch", async (int id, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
-            Results.Ok(await t.StartRewatchAsync(p.UserId(), id, ct)));
-        g.MapDelete("/shows/{id:int}/rewatch", async (int id, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
-            await t.StopRewatchAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
+        g.MapPost("/shows/{id:int}/rewatch", async (int id, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var r = await t.StartRewatchAsync(p.UserId(), id, ct);
+            await a.LogAsync(p, ActivityKind.RewatchStart, MediaType.Show, id);
+            return Results.Ok(r);
+        });
+        g.MapDelete("/shows/{id:int}/rewatch", async (int id, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            if (!await t.StopRewatchAsync(p.UserId(), id, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.RewatchStop, MediaType.Show, id);
+            return Results.NoContent();
+        });
 
-        g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+        g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             await t.SetShowStatusAsync(p.UserId(), id, req.Status, ct);
+            await a.LogAsync(p, ActivityKind.ShowStatus, MediaType.Show, id, detail: req.Status.ToString());
             return Results.NoContent();
         });
 
         g.MapGet("/checkin", async (ClaimsPrincipal p, CheckInService c, CancellationToken ct) =>
             await c.GetAsync(p.UserId(), ct) is { } now ? Results.Ok(now) : Results.NoContent());
-        g.MapPost("/checkin", (CheckInRequest req, ClaimsPrincipal p, CheckInService c, CancellationToken ct) =>
-            c.StartAsync(p.UserId(), req, WatchSource.Manual, null, ct));
-        g.MapDelete("/checkin", async (ClaimsPrincipal p, CheckInService c, CancellationToken ct) =>
+        g.MapPost("/checkin", async (CheckInRequest req, ClaimsPrincipal p, CheckInService c, ActivityService a, CancellationToken ct) =>
         {
-            await c.CancelAsync(p.UserId(), ct);
+            var now = await c.StartAsync(p.UserId(), req, WatchSource.Manual, null, ct);
+            await a.LogAsync(p, ActivityKind.CheckIn, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber);
+            return now;
+        });
+        g.MapDelete("/checkin", async (ClaimsPrincipal p, CheckInService c, ActivityService a, CancellationToken ct) =>
+        {
+            if (await c.CancelAsync(p.UserId(), ct)) await a.LogAsync(p, ActivityKind.CheckInCancel);
             return Results.NoContent();
         });
         g.MapGet("/calendar", (DateOnly? from, int? days, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
@@ -160,19 +199,40 @@ public static class ApiEndpoints
 
         var g = app.MapGroup("/api/lists").RequireAuthorization();
         g.MapGet("", (ClaimsPrincipal p, ListService l, CancellationToken ct) => l.GetMineAsync(p.UserId(), ct));
-        g.MapPost("", async (CreateListRequest req, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
+        static Task<string?> ListName(AppDbContext db, Guid id, CancellationToken ct) =>
+            db.Lists.Where(l => l.Id == id).Select(l => l.Name).FirstOrDefaultAsync(ct);
+
+        g.MapPost("", async (CreateListRequest req, ClaimsPrincipal p, ListService l, ActivityService a, CancellationToken ct) =>
         {
             var list = await l.CreateAsync(p.UserId(), req, ct);
+            await a.LogAsync(p, ActivityKind.ListCreate, detail: $"\"{list.Name}\"" + (req.IsPublic ? " (public)" : ""));
             return Results.Ok(new { list.Id });
         });
-        g.MapPut("/{id:guid}", async (Guid id, CreateListRequest req, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
-            await l.UpdateAsync(p.UserId(), id, req, ct) ? Results.NoContent() : Results.NotFound());
-        g.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
-            await l.DeleteAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
-        g.MapPost("/{id:guid}/items", async (Guid id, ListItemRequest req, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
-            await l.AddItemAsync(p.UserId(), id, req.Type, req.TmdbId, ct) ? Results.NoContent() : Results.NotFound());
-        g.MapDelete("/{id:guid}/items", async (Guid id, MediaType type, int tmdbId, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
-            await l.RemoveItemAsync(p.UserId(), id, type, tmdbId, ct) ? Results.NoContent() : Results.NotFound());
+        g.MapPut("/{id:guid}", async (Guid id, CreateListRequest req, ClaimsPrincipal p, ListService l, ActivityService a, CancellationToken ct) =>
+        {
+            if (!await l.UpdateAsync(p.UserId(), id, req, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.ListEdit, detail: $"\"{req.Name}\"" + (req.IsPublic ? " (public)" : ""));
+            return Results.NoContent();
+        });
+        g.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal p, ListService l, AppDbContext db, ActivityService a, CancellationToken ct) =>
+        {
+            var name = await ListName(db, id, ct);
+            if (!await l.DeleteAsync(p.UserId(), id, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.ListDelete, detail: $"\"{name}\"");
+            return Results.NoContent();
+        });
+        g.MapPost("/{id:guid}/items", async (Guid id, ListItemRequest req, ClaimsPrincipal p, ListService l, AppDbContext db, ActivityService a, CancellationToken ct) =>
+        {
+            if (!await l.AddItemAsync(p.UserId(), id, req.Type, req.TmdbId, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.ListAdd, req.Type, req.TmdbId, detail: $"to \"{await ListName(db, id, ct)}\"");
+            return Results.NoContent();
+        });
+        g.MapDelete("/{id:guid}/items", async (Guid id, MediaType type, int tmdbId, ClaimsPrincipal p, ListService l, AppDbContext db, ActivityService a, CancellationToken ct) =>
+        {
+            if (!await l.RemoveItemAsync(p.UserId(), id, type, tmdbId, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.ListRemove, type, tmdbId, detail: $"from \"{await ListName(db, id, ct)}\"");
+            return Results.NoContent();
+        });
     }
 
     // ---------- Jellyfin ----------
@@ -230,7 +290,7 @@ public static class ApiEndpoints
                 .ToListAsync(ct);
         });
 
-        g.MapPost("/{kind}", async (ImportKind kind, int? parts, IFormFile file, ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
+        g.MapPost("/{kind}", async (ImportKind kind, int? parts, IFormFile file, ClaimsPrincipal p, AppDbContext db, ActivityService a, CancellationToken ct) =>
         {
             var what = (ImportParts)(parts ?? (int)ImportParts.All) & ImportParts.All;
             if ((what & (ImportParts.Movies | ImportParts.Shows)) == 0 || (what & ~(ImportParts.Movies | ImportParts.Shows)) == 0)
@@ -249,6 +309,7 @@ public static class ApiEndpoints
             var job = new ImportJob { UserId = uid, Kind = kind, Parts = what, FileName = Path.GetFileName(file.FileName), Payload = ms.ToArray(), Status = ImportStatus.Queued };
             db.ImportJobs.Add(job);
             await db.SaveChangesAsync(ct);
+            await a.LogAsync(p, ActivityKind.Import, detail: $"{kind} upload {job.FileName} ({file.Length / 1024:N0} KB), {job.Parts}");
             return Results.Ok(new { job.Id });
         }).DisableAntiforgery();
     }
@@ -266,10 +327,18 @@ public static class ApiEndpoints
         g.MapGet("/search", (string q, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.SearchAsync(p.UserId(), q, ct));
         g.MapGet("/following", async (ClaimsPrincipal p, SocialService s, CancellationToken ct) => (await s.ConnectionsAsync(p.UserId(), ct)).Following);
         g.MapGet("/followers", async (ClaimsPrincipal p, SocialService s, CancellationToken ct) => (await s.ConnectionsAsync(p.UserId(), ct)).Followers);
-        g.MapPost("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
-            await s.FollowAsync(p.UserId(), name, true, ct) ? Results.NoContent() : Results.NotFound());
-        g.MapDelete("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
-            await s.FollowAsync(p.UserId(), name, false, ct) ? Results.NoContent() : Results.NotFound());
+        g.MapPost("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, ActivityService a, CancellationToken ct) =>
+        {
+            if (!await s.FollowAsync(p.UserId(), name, true, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.Follow, detail: name);
+            return Results.NoContent();
+        });
+        g.MapDelete("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, ActivityService a, CancellationToken ct) =>
+        {
+            if (!await s.FollowAsync(p.UserId(), name, false, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.Unfollow, detail: name);
+            return Results.NoContent();
+        });
         g.MapGet("/compare/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.CompareAsync(p.UserId(), name, ct) is { } c ? Results.Ok(c) : Results.NotFound());
     }

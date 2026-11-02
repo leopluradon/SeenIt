@@ -43,7 +43,12 @@ fi
 ssh "$HOST" "test -f $DIR/.env" || { echo "Missing $HOST:$DIR/.env (copy .env.example and fill it in)."; exit 1; }
 
 git archive HEAD | ssh "$HOST" "mkdir -p $DIR/offsite && tar -x -C $DIR && echo $commit > $DIR/.deployed-commit"
-ssh "$HOST" "cd $DIR && docker compose up -d --build" 2>&1 | tail -6
+# The build records which version this is (shown on the admin page): 1.<commit count>.
+version="1.$(git rev-list --count HEAD)"
+subject=$(git log -1 --format=%s HEAD | base64 -w0)
+built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "Version $version"
+ssh "$HOST" "cd $DIR && SEENIT_VERSION=$version SEENIT_COMMIT=$commit SEENIT_BUILT_AT=$built SEENIT_SUBJECT_B64=$subject docker compose up -d --build" 2>&1 | tail -6
 
 echo "Waiting for the app..."
 for _ in $(seq 1 20); do

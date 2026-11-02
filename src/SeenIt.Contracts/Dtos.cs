@@ -17,7 +17,7 @@ public record MeDto(
     bool HideSpoilers = false, bool BlurSpoilerImages = false,
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
-    DateOnly? TrackingSince = null);
+    DateOnly? TrackingSince = null, bool IsAdmin = false);
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(
@@ -69,7 +69,7 @@ public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public record ForgotPasswordRequest(string Email);
 public record ResetPasswordRequest(Guid UserId, string Token, string NewPassword);
 /// <summary>What this server can do, so clients can hide features it isn't set up for.</summary>
-public record ServerFeatures(bool Email, bool OpenRegistration = true);
+public record ServerFeatures(bool Email, bool OpenRegistration = true, string? Version = null);
 public record InviteDto(string Code, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, string? UsedBy, DateTimeOffset? UsedAt);
 /// <summary>Public check of an invite link before signing up.</summary>
 public record InviteCheck(bool Valid, string? InvitedBy);
@@ -397,6 +397,20 @@ public record JellyfinThresholdRequest(int WatchedThresholdPercent);
 public enum ImportKind { Trakt, Letterboxd }
 public enum ImportStatus { Queued, Running, Completed, Failed }
 
+/// <summary>Kinds of entries in the admin activity log.</summary>
+public enum ActivityKind
+{
+    Watch, BulkWatch, Unwatch, DeletePlay,
+    Rate, Unrate,
+    WatchlistAdd, WatchlistRemove,
+    ShowStatus, RewatchStart, RewatchStop,
+    CheckIn, CheckInCancel,
+    ListCreate, ListEdit, ListDelete, ListAdd, ListRemove,
+    Import, ClearData,
+    SignUp, AccountDeleted, PasswordChanged, PasswordReset,
+    Follow, Unfollow,
+}
+
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
 [Flags]
 public enum ImportParts
@@ -560,3 +574,41 @@ public record PickDto(
 // ---------- On this day ----------
 
 public record OnThisDayItem(int YearsAgo, DateOnly Date, MediaType Type, int TmdbId, string Title, string? PosterPath, string Text);
+
+// ---------- Admin ----------
+
+public record AdminDeployment(string Version, string Commit, string? Subject, DateTimeOffset? BuiltAt, DateTimeOffset StartedAt);
+public record AdminLogEntry(DateTimeOffset At, string Level, string Category, string Message);
+
+public record AdminOverview(
+    string Version, string Commit, string? Subject, DateTimeOffset? BuiltAt, DateTimeOffset StartedAt,
+    string Runtime, string Os, long MemoryMb, string DatabaseSize,
+    IReadOnlyList<AdminDeployment> Deployments,
+    IReadOnlyList<CountBucket> Counts,          // users, plays, ratings, … across everyone
+    IReadOnlyList<AdminSetting> Config,
+    int ActiveToday, int ActiveWeek, int ActionsToday,
+    IReadOnlyList<CountBucket> ActivityByDay,   // last 30 days
+    int RecentProblems);
+
+public record AdminSetting(string Name, string Value, bool Ok);
+
+public record AdminUser(
+    Guid Id, string UserName, string? DisplayName, string Email, bool EmailConfirmed,
+    DateTimeOffset CreatedAt, DateTimeOffset? LastSeenAt, DateTimeOffset? LastActivityAt,
+    int MoviePlays, int EpisodePlays, int Ratings, int Watchlist, int Lists,
+    int Following, int Followers, string? InvitedBy, ProfileVisibility Visibility,
+    bool JellyfinActive, bool LockedOut, bool IsAdmin, DateOnly? TrackingSince);
+
+public record AdminActivity(
+    long Id, DateTimeOffset At, string UserName, ActivityKind Kind, WatchSource Source,
+    MediaType? Type, int? TmdbId, int? SeasonNumber, int? EpisodeNumber, string? Title, string? Detail);
+public record AdminActivityPage(IReadOnlyList<AdminActivity> Items, int Page, int TotalPages, int Total);
+
+public record AdminImport(
+    Guid Id, string UserName, ImportKind Kind, ImportParts Parts, string FileName, ImportStatus Status,
+    DateTimeOffset CreatedAt, DateTimeOffset? StartedAt, DateTimeOffset? FinishedAt,
+    int Total, int Processed, int Imported, int Skipped, int Failed, string? Message, IReadOnlyList<string> Unmatched);
+
+public record AdminJellyfinEvent(DateTimeOffset At, string UserName, string? Item, string? Outcome);
+public record AdminInvite(string Code, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, string? UsedBy, DateTimeOffset? UsedAt);
+public record AdminResetLink(string Url, DateTimeOffset ExpiresAt);

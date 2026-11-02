@@ -1,7 +1,13 @@
 # Secrets come from .env next to this file (not in git). See .env.example.
 services:
   seenit:
-    build: .
+    build:
+      context: .
+      args:
+        SEENIT_VERSION: "${SEENIT_VERSION:-dev}"
+        SEENIT_COMMIT: "${SEENIT_COMMIT:-dev}"
+        SEENIT_BUILT_AT: "${SEENIT_BUILT_AT:-}"
+        SEENIT_SUBJECT_B64: "${SEENIT_SUBJECT_B64:-}"
     image: seenit:latest
     container_name: seenit
     restart: unless-stopped
@@ -16,6 +22,8 @@ services:
       # Sign-ups need an invite link from a member unless this is true.
       SeenIt__OpenRegistration: "${OPEN_REGISTRATION:-false}"
       SeenIt__PublicUrl: "${PUBLIC_URL:-https://seenit.vohiyo.com/}"
+      # Usernames (comma-separated) that can open /admin.
+      SeenIt__Admins: "${ADMINS:-leopluradon}"
       # Optional: leave SMTP_HOST empty to turn off email (password reset).
       Smtp__Host: "${SMTP_HOST:-}"
       Smtp__Port: "${SMTP_PORT:-587}"

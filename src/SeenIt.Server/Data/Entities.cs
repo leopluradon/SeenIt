@@ -32,6 +32,9 @@ public class AppUser : IdentityUser<Guid>
     /// </summary>
     public DateOnly? TrackingSince { get; set; }
 
+    /// <summary>Last time the app loaded the user's profile (updated at most every few minutes).</summary>
+    public DateTimeOffset? LastSeenAt { get; set; }
+
     public static string NewToken() =>
         Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
 }
@@ -263,4 +266,34 @@ public class Follow
     public Guid FollowerId { get; set; }
     public Guid FolloweeId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// One thing a user did (tracking, ratings, watchlist, lists, imports, account changes), for the
+/// admin page. Not tied to the user row, so the trail survives the account being deleted.
+/// </summary>
+public class ActivityEntry
+{
+    public long Id { get; set; }
+    public DateTimeOffset At { get; set; } = DateTimeOffset.UtcNow;
+    public Guid UserId { get; set; }
+    public string UserName { get; set; } = "";
+    public ActivityKind Kind { get; set; }
+    public WatchSource Source { get; set; }
+    public MediaType? Type { get; set; }
+    public int? TmdbId { get; set; }
+    public int? SeasonNumber { get; set; }
+    public int? EpisodeNumber { get; set; }
+    public string? Detail { get; set; }
+}
+
+/// <summary>A version of the app that started up here for the first time.</summary>
+public class Deployment
+{
+    public int Id { get; set; }
+    public string Version { get; set; } = "";
+    public string Commit { get; set; } = "";
+    public string? Subject { get; set; }
+    public DateTimeOffset? BuiltAt { get; set; }
+    public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
 }

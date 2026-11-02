@@ -5,7 +5,7 @@ using SeenIt.Server.Data;
 namespace SeenIt.Server.Services;
 
 /// <summary>"Watching now": manual check-ins (recorded as a play when they finish) and live Jellyfin playback.</summary>
-public class CheckInService(AppDbContext db, CatalogService catalog, TrackingService tracking)
+public class CheckInService(AppDbContext db, CatalogService catalog, TrackingService tracking, ActivityService activity)
 {
     /// <summary>Jellyfin sessions that never sent a stop are dropped this long after they should have ended.</summary>
     private static readonly TimeSpan StaleGrace = TimeSpan.FromMinutes(30);
@@ -73,6 +73,7 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
             try
             {
                 await tracking.WatchAsync(c.UserId, new WatchRequest(c.Type, c.TmdbId, c.SeasonNumber, c.EpisodeNumber, c.EndsAt, WatchTime.Custom), WatchSource.Manual, ct);
+                await activity.LogAsync(c.UserId, ActivityKind.Watch, c.Type, c.TmdbId, c.SeasonNumber, c.EpisodeNumber, "check-in finished");
             }
             catch (TrackingException) { /* the title vanished from TMDB; nothing to record */ }
         }

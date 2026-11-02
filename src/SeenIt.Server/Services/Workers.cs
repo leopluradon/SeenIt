@@ -73,6 +73,9 @@ public class ImportWorker(IServiceScopeFactory scopes, ILogger<ImportWorker> log
         job.FinishedAt = finished;
         job.Payload = null; // Don't keep people's exports around once processed.
         await db.SaveChangesAsync(CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<ActivityService>().LogAsync(job.UserId, ActivityKind.Import,
+            detail: $"{job.Kind} {job.FileName} {status.ToString().ToLowerInvariant()}: {message}",
+            source: job.Kind == ImportKind.Trakt ? WatchSource.TraktImport : WatchSource.LetterboxdImport);
         return true;
     }
 }

@@ -42,7 +42,7 @@ public class SocialTests
         await db.SaveChangesAsync();
 
         var tracking = new TrackingService(db, null!);
-        var social = new SocialService(db, tracking, null!, new CheckInService(db, null!, tracking));
+        var social = new SocialService(db, tracking, null!, new CheckInService(db, null!, tracking, null!));
         var feed = await social.FeedAsync(Me.Id, 50, default);
 
         Assert.Equal(["friend", "open"], feed.Activity.Select(a => a.User.UserName).Order());

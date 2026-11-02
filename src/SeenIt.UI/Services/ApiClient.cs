@@ -48,6 +48,21 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task DeleteAccountAsync(DeleteAccountRequest r) => SendAsync(HttpMethod.Post, "api/auth/delete", r);
     public Task<ClearDataResult?> ClearDataAsync(ClearDataRequest r) => SendAsync<ClearDataResult>(HttpMethod.Post, "api/auth/clear", r);
 
+    // ---------- Admin ----------
+
+    public Task<AdminOverview> AdminOverviewAsync() => GetAsync<AdminOverview>("api/admin/overview");
+    public Task<List<AdminUser>> AdminUsersAsync() => GetAsync<List<AdminUser>>("api/admin/users");
+    public Task<AdminActivityPage> AdminActivityAsync(string? user, string? group, int page) =>
+        GetAsync<AdminActivityPage>($"api/admin/activity?page={page}"
+            + (string.IsNullOrEmpty(user) ? "" : $"&user={Uri.EscapeDataString(user)}")
+            + (string.IsNullOrEmpty(group) ? "" : $"&group={group}"));
+    public Task<List<AdminImport>> AdminImportsAsync() => GetAsync<List<AdminImport>>("api/admin/imports");
+    public Task<List<AdminJellyfinEvent>> AdminJellyfinAsync() => GetAsync<List<AdminJellyfinEvent>>("api/admin/jellyfin");
+    public Task<List<AdminInvite>> AdminInvitesAsync() => GetAsync<List<AdminInvite>>("api/admin/invites");
+    public Task<List<AdminLogEntry>> AdminLogsAsync() => GetAsync<List<AdminLogEntry>>("api/admin/logs");
+    public Task AdminUnlockAsync(Guid id) => SendAsync(HttpMethod.Post, $"api/admin/users/{id}/unlock", null);
+    public Task<AdminResetLink?> AdminResetLinkAsync(Guid id) => SendAsync<AdminResetLink>(HttpMethod.Post, $"api/admin/users/{id}/reset-link");
+
     // ---------- Catalogue ----------
 
     public Task<PagedResult<MediaSummary>> SearchAsync(string q, string? type = null, int page = 1) =>

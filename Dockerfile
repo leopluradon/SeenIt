@@ -15,6 +15,16 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app ./
 
+# Which build this is, shown on the admin page (scripts/deploy.sh fills these in).
+ARG SEENIT_VERSION=dev
+ARG SEENIT_COMMIT=dev
+ARG SEENIT_BUILT_AT=
+ARG SEENIT_SUBJECT_B64=
+ENV SEENIT_VERSION=$SEENIT_VERSION \
+    SEENIT_COMMIT=$SEENIT_COMMIT \
+    SEENIT_BUILT_AT=$SEENIT_BUILT_AT \
+    SEENIT_SUBJECT_B64=$SEENIT_SUBJECT_B64
+
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_gcServer=0 \
