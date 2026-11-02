@@ -7,7 +7,9 @@ namespace SeenIt.Server.Services;
 
 /// <summary>
 /// Builds month-in-review and year-in-review summaries. Periods are calendar months/years in the
-/// viewer's own time zone; plays with an unknown date are left out.
+/// viewer's own time zone; plays with an unknown date are left out, and so is everything before
+/// the user's "started tracking" day: those plays were back-filled and are dated the day they
+/// were entered, so they'd make that day look like a marathon and the years before look empty.
 /// </summary>
 public class ReviewService(AppDbContext db, TrackingService tracking)
 {
@@ -22,7 +24,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
     public async Task<List<ReviewYear>> GetPeriodsAsync(Guid userId, string? tzId, CancellationToken ct)
     {
         var tz = Zone(await tracking.ZoneIdAsync(userId, tzId, ct));
-        var plays = await LoadPlaysAsync(userId, tz, ct);
+        var plays = await LoadPlaysAsync(userId, tz, await tracking.TrackingSinceAsync(userId, ct), ct);
         var minutes = await RuntimesAsync(plays, ct);
         return plays.GroupBy(p => p.Local.Year).OrderByDescending(g => g.Key)
             .Select(y => new ReviewYear(y.Key, y.Count(), y.Sum(p => minutes(p)),
@@ -40,7 +42,9 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var end = month is null ? start.AddYears(1) : start.AddMonths(1);
         var prevStart = month is null ? start.AddYears(-1) : start.AddMonths(-1);
 
-        var all = await LoadPlaysAsync(userId, tz, ct);
+        var since = await tracking.TrackingSinceAsync(userId, ct);
+        bool Tracked(DateTime local) => since is null || DateOnly.FromDateTime(local) >= since;
+        var all = await LoadPlaysAsync(userId, tz, since, ct);
         var inPeriod = all.Where(p => p.Local >= start && p.Local < end).OrderBy(p => p.Local).ToList();
         var previous = all.Where(p => p.Local >= prevStart && p.Local < start).ToList();
 
@@ -52,7 +56,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var minutes = await RuntimesAsync(all, ct);
 
         var ratings = await db.Ratings.AsNoTracking().Where(r => r.UserId == userId).ToListAsync(ct);
-        var ratingsInPeriod = ratings.Where(r => Local(r.RatedAt, tz) is var l && l >= start && l < end).ToList();
+        var ratingsInPeriod = ratings.Where(r => Local(r.RatedAt, tz) is var l && l >= start && l < end && Tracked(l)).ToList();
         var titleRating = ratings.Where(r => r.SeasonNumber == null)
             .ToDictionary(r => (r.Type, r.TmdbId), r => r.Value);
 
@@ -66,15 +70,12 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             ps.Sum(p => minutes(p)),
             ratingCount);
 
-        var prevRatings = ratings.Count(r => Local(r.RatedAt, tz) is var l && l >= prevStart && l < start);
+        var prevRatings = ratings.Count(r => Local(r.RatedAt, tz) is var l && l >= prevStart && l < start && Tracked(l));
 
         // ----- Days, streaks, habits -----
-        // Back-filled plays (before the user's "started tracking" day) carry the day they were
-        // entered, so they'd pile onto one day; habits only look at plays logged as they happened.
-        var since = await tracking.TrackingSinceAsync(userId, ct);
-        var habit = since is null ? inPeriod : inPeriod.Where(p => DateOnly.FromDateTime(p.Local) >= since).ToList();
-        var byHabitDay = habit.GroupBy(p => DateOnly.FromDateTime(p.Local)).ToDictionary(g => g.Key, g => g.ToList());
+        var habit = inPeriod;
         var byDay = inPeriod.GroupBy(p => DateOnly.FromDateTime(p.Local)).ToDictionary(g => g.Key, g => g.ToList());
+        var byHabitDay = byDay;
         var habitDays = byHabitDay.Keys.OrderBy(d => d).ToList();
         var streak = LongestStreak(habitDays);
         var busiest = byHabitDay.OrderByDescending(d => d.Value.Count).ThenByDescending(d => d.Value.Sum(p => minutes(p)))
@@ -180,9 +181,11 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         }
 
         // ----- Firsts, rewatches, completions -----
-        var firstEver = all.GroupBy(p => (p.Type, p.TmdbId, p.Season, p.Episode)).ToDictionary(g => g.Key, g => g.Min(p => p.At));
+        // Against everything ever watched: rewatching something seen before tracking started is still a rewatch.
+        var history = since is null ? all : await LoadPlaysAsync(userId, tz, null, ct);
+        var firstEver = history.GroupBy(p => (p.Type, p.TmdbId, p.Season, p.Episode)).ToDictionary(g => g.Key, g => g.Min(p => p.At));
         var rewatches = inPeriod.Count(p => p.At > firstEver[(p.Type, p.TmdbId, p.Season, p.Episode)]);
-        var firstShowWatch = all.Where(p => p.Type == MediaType.Episode).GroupBy(p => p.TmdbId).ToDictionary(g => g.Key, g => g.Min(p => p.Local));
+        var firstShowWatch = history.Where(p => p.Type == MediaType.Episode).GroupBy(p => p.TmdbId).ToDictionary(g => g.Key, g => g.Min(p => p.Local));
         var showsStarted = firstShowWatch.Count(kv => kv.Value >= start && kv.Value < end);
 
         var periodShows = inPeriod.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
@@ -240,17 +243,19 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             longest, oldest, newest,
             bookendEntries.FirstOrDefault(b => b.Id == inPeriod.FirstOrDefault()?.Id),
             bookendEntries.FirstOrDefault(b => b.Id == inPeriod.LastOrDefault()?.Id),
-            mostRewatched);
+            mostRewatched, since);
     }
 
-    private async Task<List<Play>> LoadPlaysAsync(Guid userId, TimeZoneInfo tz, CancellationToken ct)
+    private async Task<List<Play>> LoadPlaysAsync(Guid userId, TimeZoneInfo tz, DateOnly? since, CancellationToken ct)
     {
         var unknown = WatchDates.Unknown;
         var rows = await db.WatchEvents.AsNoTracking()
             .Where(w => w.UserId == userId && w.WatchedAt != unknown)
             .Select(w => new { w.Id, w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source })
             .ToListAsync(ct);
-        return rows.Select(w => new Play(w.Id, w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, Local(w.WatchedAt, tz), w.Source)).ToList();
+        return rows.Select(w => new Play(w.Id, w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, Local(w.WatchedAt, tz), w.Source))
+            .Where(p => since is null || DateOnly.FromDateTime(p.Local) >= since)
+            .ToList();
     }
 
     /// <summary>Minutes for a play: the episode's own runtime, else the show's typical one, else the movie's.</summary>

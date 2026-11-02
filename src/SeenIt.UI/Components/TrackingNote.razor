@@ -1,8 +1,8 @@
-@* Says that habit stats start at the user's "started tracking" day, with a link to change it. *@
+@* Says that a chart or review only counts plays from the user's "started tracking" day, with a link to change it. *@
 @inject SessionState Session
 @if (Session.Me?.TrackingSince is { } since)
 {
-    <p class="muted small @(Center ? "center-text" : "")">Habits (days, times, streaks) count from @since.ToString("d MMM yyyy"), when you started tracking · <a href="settings#tracking">change</a></p>
+    <p class="muted small @(Center ? "center-text" : "")">Counting from @since.ToString("d MMM yyyy"), when you started tracking · <a href="settings#tracking">change</a></p>
 }
 @code {
     [Parameter] public bool Center { get; set; }

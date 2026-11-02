@@ -3,10 +3,11 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject SessionState Session
 <PageTitle>@(r?.Label ?? "Review") in review · SeenIt</PageTitle>
 
 <div class="review-head">
-    <button class="icon-btn" @onclick="() => Go(-1)" aria-label="Previous @(Month is null ? "year" : "month")"><Icon Name="chevron-left" /></button>
+    <button class="icon-btn" @onclick="() => Go(-1)" disabled="@AtTrackingStart" aria-label="Previous @(Month is null ? "year" : "month")"><Icon Name="chevron-left" /></button>
     <div class="review-title">
         <span class="review-kicker">@(Month is null ? "Year" : "Month") in review</span>
         <h1>@Label</h1>
@@ -29,7 +30,14 @@
 @if (r is null && error is null) { <Spinner /> }
 else if (r is not null)
 {
-    @if (r.Totals.Plays == 0)
+    @if (r.TrackingSince is { } since && PeriodEnd <= since)
+    {
+        <Empty Title="@($"Reviews start from {since:d MMMM yyyy}.")">
+            <span>That's when you started tracking; plays before it were back-filled, so they aren't reviewed.</span>
+            <a class="btn btn-sm" href="@($"review/{since.Year}" + (Month is null ? "" : $"/{since.Month}"))">Go to @(Month is null ? since.Year.ToString() : since.ToString("MMMM yyyy"))</a>
+        </Empty>
+    }
+    else if (r.Totals.Plays == 0)
     {
         <Empty Title="@($"Nothing watched in {r.Label}.")">
             @if (periods is { Count: > 0 }) { <span>Try another period:</span> <PeriodLinks Periods="periods" /> }
@@ -47,7 +55,7 @@ else if (r is not null)
             <div class="stat"><span class="stat-value">@t.Ratings.ToString("N0")</span><span class="stat-label">ratings@(r.AverageRating is { } avg ? $" · avg {avg:0.0}" : "")</span></div>
         </section>
         <p class="muted small center-text">Compared with @r.PreviousLabel · times in @r.TimeZone</p>
-        <TrackingNote Center="true" />
+        @if (r.TrackingSince is { } ts && PeriodStart <= ts) { <TrackingNote Center="true" /> }
 
         <section class="review-facts">
             <div class="fact"><b>@r.DaysActive</b><span>of @r.DaysInPeriod days with something watched</span></div>
@@ -147,6 +155,11 @@ else if (r is not null)
     private string? error;
 
     private string Label => Month is { } m ? new DateTime(Year, m, 1).ToString("MMMM yyyy") : Year.ToString();
+    private DateOnly PeriodStart => new(Year, Month ?? 1, 1);
+    private DateOnly PeriodEnd => Month is null ? PeriodStart.AddYears(1) : PeriodStart.AddMonths(1);
+    /// <summary>Nothing to review before the "started tracking" day, so don't offer to go back past it.</summary>
+    private bool AtTrackingStart => Session.Me?.TrackingSince is { } s && PeriodStart <= s;
+
     private bool IsCurrentOrFuture => Month is { } m
         ? new DateTime(Year, m, 1) >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
         : Year >= DateTime.Today.Year;

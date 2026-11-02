@@ -64,4 +64,31 @@ public class ReviewTests
         var periods = await svc.GetPeriodsAsync(User, "America/Los_Angeles", default);
         Assert.Equal([2, 3], periods.Single().Months.Select(m => m.Month));
     }
+
+    [Fact]
+    public async Task Reviews_start_at_the_tracking_date_but_rewatches_still_see_earlier_plays()
+    {
+        using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        db.Users.Add(new AppUser { Id = User, UserName = "me", TrackingSince = new DateOnly(2026, 3, 10) });
+        db.Movies.Add(new MovieMeta { TmdbId = 1, Title = "Heat", Runtime = 170 });
+        db.Movies.Add(new MovieMeta { TmdbId = 2, Title = "Ronin", Runtime = 120 });
+        void Watch(int id, DateTimeOffset at) => db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Movie, TmdbId = id, WatchedAt = at });
+        // Back-filled on 9 March: one film first seen years ago, one "watched" that day.
+        Watch(1, new(2019, 5, 1, 20, 0, 0, TimeSpan.Zero));
+        Watch(2, new(2026, 3, 9, 20, 0, 0, TimeSpan.Zero));
+        // Logged as watched from the tracking day on.
+        Watch(1, new(2026, 3, 12, 20, 0, 0, TimeSpan.Zero));
+        await db.SaveChangesAsync();
+
+        var reviews = new ReviewService(db, new TrackingService(db, null!));
+        var periods = await reviews.GetPeriodsAsync(User, "UTC", default);
+        Assert.Equal([2026], periods.Select(p => p.Year));               // no review for 2019
+        Assert.Equal([3], periods[0].Months.Select(m => m.Month));
+
+        var march = await reviews.BuildAsync(User, 2026, 3, "UTC", default);
+        Assert.Equal(1, march.Totals.Plays);                             // 9 March isn't counted
+        Assert.Equal(1, march.Rewatches);                                // Heat was seen in 2019
+        Assert.Equal(new DateOnly(2026, 3, 10), march.TrackingSince);
+        Assert.Equal(0, (await reviews.BuildAsync(User, 2019, null, "UTC", default)).Totals.Plays);
+    }
 }

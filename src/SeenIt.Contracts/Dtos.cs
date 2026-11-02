@@ -507,7 +507,8 @@ public record ReviewDto(
     ReviewItem? NewestMovie,
     HistoryEntry? FirstPlay,
     HistoryEntry? LastPlay,
-    ReviewItem? MostRewatched);
+    ReviewItem? MostRewatched,
+    DateOnly? TrackingSince = null);   // reviews only count from here (see Settings → Stats)
 
 public record ReviewMonth(int Month, int Plays, long Minutes);
 public record ReviewYear(int Year, int Plays, long Minutes, IReadOnlyList<ReviewMonth> Months);

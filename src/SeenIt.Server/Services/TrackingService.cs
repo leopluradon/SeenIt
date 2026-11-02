@@ -605,16 +605,18 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             }
         }
 
-        var now = DateTimeOffset.UtcNow;
+        // Plays per month and per weekday only count plays logged as they happened (from the user's
+        // "started tracking" day; see AppUser.TrackingSince), on the viewer's calendar.
+        var now = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz);
         var months = Enumerable.Range(0, 12).Select(i => now.AddMonths(-11 + i)).Select(d => (d.Year, d.Month)).ToList();
-        var dated = watches.Where(w => !WatchDates.IsUnknown(w.WatchedAt)).ToList();
-        var byMonth = dated.GroupBy(w => (w.WatchedAt.Year, w.WatchedAt.Month)).ToDictionary(g => g.Key, g => g.Count());
+        var tracked = watches.Where(w => !WatchDates.IsUnknown(w.WatchedAt))
+            .Select(w => TimeZoneInfo.ConvertTime(w.WatchedAt, tz).DateTime)
+            .Where(l => since is null || DateOnly.FromDateTime(l) >= since)
+            .ToList();
+        var byMonth = tracked.GroupBy(l => (l.Year, l.Month)).ToDictionary(g => g.Key, g => g.Count());
 
         var ratings = await db.Ratings.Where(r => r.UserId == userId).Select(r => r.Value).ToListAsync(ct);
-        // A habit, so only plays logged as they happened (see AppUser.TrackingSince), on the viewer's calendar.
-        var weekdays = dated.Select(w => TimeZoneInfo.ConvertTime(w.WatchedAt, tz))
-            .Where(l => since is null || DateOnly.FromDateTime(l.DateTime) >= since)
-            .GroupBy(l => l.DayOfWeek).ToDictionary(g => g.Key, g => g.Count());
+        var weekdays = tracked.GroupBy(l => l.DayOfWeek).ToDictionary(g => g.Key, g => g.Count());
 
         return new StatsDto(
             MoviesWatched: movieIds.Count,
