@@ -170,7 +170,7 @@ else
                                 {
                                     <a href="@Href(a, t, id)">@(a.Title ?? $"#{id}")@(a.SeasonNumber is { } s ? (a.EpisodeNumber is { } e ? $" {Fmt.Ep(s, e)}" : $" season {s}") : "")</a>
                                 }
-                                @if (a.Detail is { } d) { <span class="muted"> @d</span> }
+                                @if (a.Detail is { } d) { <span class="muted">@(a.TmdbId is null ? d : " · " + d)</span> }
                             </span>
                             @if (a.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(a.Source)</span> }
                         </div>
@@ -264,7 +264,7 @@ else
                 <div class="admin-logs">
                     @foreach (var l in logs)
                     {
-                        <details class="admin-log @(l.Level is "Error" or "Critical" ? "error" : "warn")">
+                        <details class="admin-log @(l.Level is "Error" or "Critical" ? "is-error" : "is-warn")">
                             <summary>
                                 <span class="muted small nowrap">@l.At.ToLocalTime().ToString("d MMM HH:mm:ss")</span>
                                 <span class="pill pill-sm @(l.Level is "Error" or "Critical" ? "pill-bad" : "")">@l.Level</span>

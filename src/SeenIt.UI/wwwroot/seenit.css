@@ -785,13 +785,13 @@ a.cast { color: var(--text); }
 .admin-act-what { min-width: 0; overflow-wrap: anywhere; }
 .admin-logs { display: flex; flex-direction: column; gap: 8px; }
 .admin-log { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: var(--radius-sm); padding: 8px 12px; }
-.admin-log.error { border-left-color: var(--accent); }
+.admin-log.is-error { border-left-color: var(--accent); }
 .admin-log summary { display: flex; gap: 10px; align-items: baseline; cursor: pointer; }
 .admin-log-first { min-width: 0; overflow-wrap: anywhere; }
 .admin-log pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; margin: 6px 0 0; color: var(--text-2); }
 @media (max-width: 700px) {
-    .admin-act { grid-template-columns: auto 1fr; gap: 4px 10px; }
-    .admin-act-what { grid-column: 1 / -1; }
+    .admin-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+    .admin-act-what { flex-basis: 100%; }
     .admin-filters select { margin-left: 0; width: 100%; }
     .admin-table td { padding: 6px 4px; font-size: .85rem; }
 }
