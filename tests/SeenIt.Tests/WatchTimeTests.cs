@@ -27,7 +27,9 @@ public class WatchTimeTests
         Assert.True(WatchDates.IsUnknown(TrackingService.PlayTime(WatchTime.Unknown, null, Past)));
         var custom = new DateTimeOffset(2023, 7, 1, 21, 30, 0, TimeSpan.FromHours(-7));
         Assert.Equal(custom, TrackingService.PlayTime(WatchTime.Custom, custom, Past));
-        // Future custom dates are clamped to now.
-        Assert.True(TrackingService.PlayTime(WatchTime.Custom, DateTimeOffset.UtcNow.AddDays(3), Past) <= DateTimeOffset.UtcNow);
+        // Future dates are kept (logging ahead); absurd ones fall back to now.
+        var soon = DateTimeOffset.UtcNow.AddDays(3);
+        Assert.Equal(soon, TrackingService.PlayTime(WatchTime.Custom, soon, Past));
+        Assert.True(TrackingService.PlayTime(WatchTime.Custom, DateTimeOffset.UtcNow.AddYears(50), Past) <= DateTimeOffset.UtcNow);
     }
 }

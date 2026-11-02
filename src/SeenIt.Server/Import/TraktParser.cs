@@ -97,7 +97,7 @@ public static class TraktParser
         if (w.TryGetProperty("movie", out var movie) && MovieRef(movie) is { } m)
         {
             var plays = Math.Clamp(Int(w, "plays") ?? 1, 1, 50);
-            for (var i = 0; i < plays; i++) result.History.Add(new ImportWatch(m, null, null, at));
+            for (var i = 0; i < plays; i++) result.History.Add(new ImportWatch(m, null, null, at, Approximate: true));
         }
         else if (w.TryGetProperty("show", out var show) && ShowRef(show) is { } s && w.TryGetProperty("seasons", out var seasons))
         {
@@ -106,7 +106,7 @@ public static class TraktParser
                 if (Int(season, "number") is not { } sn || !season.TryGetProperty("episodes", out var eps)) continue;
                 foreach (var ep in eps.EnumerateArray())
                     if (Int(ep, "number") is { } en)
-                        result.History.Add(new ImportWatch(s, sn, en, ep.TryGetProperty("last_watched_at", out _) ? Date(ep, "last_watched_at") : at));
+                        result.History.Add(new ImportWatch(s, sn, en, ep.TryGetProperty("last_watched_at", out _) ? Date(ep, "last_watched_at") : at, Approximate: true));
             }
         }
     }

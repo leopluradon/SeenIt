@@ -143,7 +143,7 @@ public static class ApiEndpoints
         g.MapGet("/calendar", (DateOnly? from, int? days, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.GetCalendarAsync(p.UserId(), from ?? DateOnly.FromDateTime(DateTime.UtcNow), days ?? 30, ct));
         g.MapGet("/dashboard", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetDashboardAsync(p.UserId(), ct));
-        g.MapGet("/stats", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetStatsAsync(p.UserId(), ct));
+        g.MapGet("/stats", (string? tz, ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetStatsAsync(p.UserId(), tz, ct));
 
         g.MapGet("/review/periods", (string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.GetPeriodsAsync(p.UserId(), tz, ct));
         g.MapGet("/review/{year:int}", (int year, string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.BuildAsync(p.UserId(), year, null, tz, ct));
@@ -226,12 +226,15 @@ public static class ApiEndpoints
             var uid = p.UserId();
             return await db.ImportJobs.Where(j => j.UserId == uid).OrderByDescending(j => j.CreatedAt).Take(20)
                 .Select(j => new ImportJobDto(j.Id, j.Kind, j.FileName, j.Status, j.CreatedAt, j.FinishedAt,
-                    j.Total, j.Processed, j.Imported, j.Skipped, j.Failed, j.Message, j.Unmatched))
+                    j.Total, j.Processed, j.Imported, j.Skipped, j.Failed, j.Message, j.Unmatched, j.Parts))
                 .ToListAsync(ct);
         });
 
-        g.MapPost("/{kind}", async (ImportKind kind, IFormFile file, ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
+        g.MapPost("/{kind}", async (ImportKind kind, int? parts, IFormFile file, ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
         {
+            var what = (ImportParts)(parts ?? (int)ImportParts.All) & ImportParts.All;
+            if ((what & (ImportParts.Movies | ImportParts.Shows)) == 0 || (what & ~(ImportParts.Movies | ImportParts.Shows)) == 0)
+                return Results.BadRequest(new ProblemInfo("Pick at least one kind of title and one kind of data to import."));
             if (file.Length == 0) return Results.BadRequest(new ProblemInfo("That file is empty."));
             if (file.Length > MaxImportBytes) return Results.BadRequest(new ProblemInfo("Exports over 50 MB aren't supported."));
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -243,7 +246,7 @@ public static class ApiEndpoints
 
             using var ms = new MemoryStream();
             await file.CopyToAsync(ms, ct);
-            var job = new ImportJob { UserId = uid, Kind = kind, FileName = Path.GetFileName(file.FileName), Payload = ms.ToArray(), Status = ImportStatus.Queued };
+            var job = new ImportJob { UserId = uid, Kind = kind, Parts = what, FileName = Path.GetFileName(file.FileName), Payload = ms.ToArray(), Status = ImportStatus.Queued };
             db.ImportJobs.Add(job);
             await db.SaveChangesAsync(ct);
             return Results.Ok(new { job.Id });

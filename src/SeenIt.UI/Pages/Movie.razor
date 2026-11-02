@@ -45,8 +45,28 @@ else if (m is not null)
                     <span>Your rating</span>
                     <RatingPicker Value="u.Rating" ValueChanged="Rate" />
                     @if (u.LastWatchedAt is { } last) { <span class="muted small">Last watched @Fmt.Relative(last)</span> }
-                    @if (u.Plays > 0) { <button class="btn btn-sm btn-ghost" @onclick="UnwatchAll"><Icon Name="trash" Size="14" /> Remove plays</button> }
                 </div>
+                @if (u.History is { Count: > 0 } plays)
+                {
+                    <div class="panel">
+                        <div class="panel-head">
+                            <h2>Your plays <span class="muted small">@plays.Count</span></h2>
+                            @if (plays.Count > 1) { <button class="btn btn-sm btn-ghost" @onclick="UnwatchAll"><Icon Name="trash" Size="14" /> Remove all</button> }
+                        </div>
+                        <div class="plays">
+                            @foreach (var p in plays)
+                            {
+                                <div class="play" @key="p.Id">
+                                    <Icon Name="check" Size="16" Class="ok" />
+                                    <span>@Fmt.PlayedAt(p.WatchedAt)</span>
+                                    @if (p.WatchedAt > DateTimeOffset.Now) { <span class="pill pill-sm">Upcoming</span> }
+                                    @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
+                                    <button class="icon-btn" disabled="@busy" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
             }
             <DetailStats Items="@([("Runtime", Fmt.Runtime(m.Runtime)), ("Released", m.ReleaseDate?.ToString("d MMM yyyy")), ("Status", m.Status), ("Genres", m.Genres.Count > 0 ? string.Join(", ", m.Genres) : null), ("Your plays", m.User is { Plays: > 0 } u2 ? $"{u2.Plays} · {Fmt.Duration((long)(m.Runtime ?? 0) * u2.Plays)}" : null)])" />
             @if (m.Overview is not null) { <p class="overview">@m.Overview</p> }
@@ -146,6 +166,8 @@ else if (m is not null)
 
     private Task Watch(WatchChoice c) =>
         Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Movie, Id, c)), $"Watched {m!.Title}{Fmt.When(c)}");
+
+    private Task RemovePlay(PlayDto p) => Act(() => Api.DeleteHistoryAsync(p.Id), "Play removed");
 
     private Task UnwatchAll() => Act(() => Api.UnwatchAsync(MediaType.Movie, Id), "Removed from history");
 

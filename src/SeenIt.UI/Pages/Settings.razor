@@ -20,6 +20,7 @@
 <div class="settings">
     <nav class="settings-nav">
         <a href="settings#imports">Import</a>
+        <a href="settings#tracking">Stats</a>
         <a href="settings#jellyfin">Jellyfin</a>
         <a href="settings#spoilers">Spoilers</a>
         <a href="settings#layout">Layout</a>
@@ -34,7 +35,8 @@
 
         <section class="panel" id="imports">
             <h2>Import</h2>
-            <p class="muted">Re-importing the same export is safe: anything already in SeenIt is skipped.</p>
+            <p class="muted small">Re-importing is safe: a play you already have (logged here, by Jellyfin or by another import, within a day of the same date) is skipped, while separate viewings are all kept. Ratings are updated; watchlist and list entries aren't doubled.</p>
+            <PartsPicker @bind-Value="importParts" Label="What to import" />
             <div class="import-grid">
                 <div class="import-card">
                     <h3>Trakt</h3>
@@ -68,6 +70,7 @@
                         <div class="import-job" @key="j.Id">
                             <div class="inline spread">
                                 <b>@j.Kind · @j.FileName</b>
+                                @if (j.Parts != ImportParts.All) { <span class="muted small">@PartsPicker.Describe(j.Parts)</span> }
                                 <span class="pill @StatusClass(j.Status)">@j.Status</span>
                             </div>
                             @if (j.Status == ImportStatus.Running && j.Total > 0)
@@ -86,6 +89,16 @@
                     }
                 </div>
             }
+        </section>
+
+        <section class="panel" id="tracking">
+            <h2>Stats</h2>
+            <p class="muted small">If you back-filled your history before logging things as you watch them, those plays are dated the day you entered them and skew habits like your favourite day of the week. Set the day you started tracking for real: day-of-week, time-of-day, streaks and busiest days only count plays from then on. Totals still count everything.</p>
+            <div class="field inline">
+                <label for="tracking-since">Started tracking</label>
+                <input id="tracking-since" type="date" value="@trackingSince" @onchange="SaveTrackingSince" />
+                @if (!string.IsNullOrEmpty(trackingSince)) { <button class="btn btn-sm btn-ghost" @onclick="ClearTrackingSince">Clear</button> }
+            </div>
         </section>
 
         <section class="panel" id="jellyfin">
@@ -291,6 +304,13 @@
                 <p class="muted small">Password reset emails go to @(Session.Me?.Email). Send yourself a test to check they arrive.</p>
                 <button class="btn" @onclick="TestEmail" disabled="@testingEmail">@(testingEmail ? "Sending…" : "Send test email")</button>
             }
+            <h3>Clear data</h3>
+            <p class="muted small">Delete some or all of what you've tracked, for a fresh start or before re-importing. Your account, settings and friends stay.</p>
+            <PartsPicker @bind-Value="clearParts" Label="What to clear" />
+            <form class="stack narrow" @onsubmit="ClearData">
+                <input type="password" placeholder="Password to confirm" @bind="clearPassword" autocomplete="current-password" aria-label="Password to confirm clearing data" />
+                <button class="btn btn-danger" type="submit" disabled="@(string.IsNullOrEmpty(clearPassword) || clearing)">@(clearing ? "Clearing…" : "Clear data")</button>
+            </form>
             <h3>Delete account</h3>
             <p class="muted small">Permanently deletes your account, history, ratings, watchlist and lists.</p>
             <form class="stack narrow" @onsubmit="DeleteAccount">
@@ -331,7 +351,9 @@
     private JellyfinSettingsDto? jf;
     private List<ImportJobDto>? imports;
     private bool uploading;
-    private string? displayName, currentPassword, newPassword, deletePassword;
+    private string? displayName, currentPassword, newPassword, deletePassword, clearPassword, trackingSince;
+    private ImportParts importParts = ImportParts.All, clearParts = ImportParts.All;
+    private bool clearing;
     private bool hideSpoilers, blurImages;
     private List<string> tabs = [];
     private HashSet<string> hiddenSections = [];
@@ -400,6 +422,7 @@
         tabs = UiLayout.Tabs(Session.Me).Select(t => t.Key).ToList();
         hiddenSections = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         visibility = Session.Me?.Visibility ?? ProfileVisibility.Friends;
+        trackingSince = Session.Me?.TrackingSince?.ToString("yyyy-MM-dd");
         region = Session.Me?.Region;
         _ = LoadFeatures();
         _ = LoadInvites();
@@ -448,7 +471,7 @@
             using var buffer = new MemoryStream();
             await stream.CopyToAsync(buffer);
             buffer.Position = 0;
-            await Api.UploadImportAsync(kind, file.Name, buffer);
+            await Api.UploadImportAsync(kind, importParts, file.Name, buffer);
             Toasts.Show($"{kind} import started");
             await LoadImports();
         }
@@ -584,6 +607,37 @@
             Toasts.Show("Password changed. Other devices will need to sign in again.");
         }
         catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task SaveTrackingSince(ChangeEventArgs e)
+    {
+        var value = e.Value as string ?? "";
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(TrackingSince: value));
+            trackingSince = value;
+            Session.Update(m => m with { TrackingSince = DateOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null });
+            Toasts.Show(value.Length == 0 ? "Cleared" : "Saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private Task ClearTrackingSince() => SaveTrackingSince(new ChangeEventArgs { Value = "" });
+
+    private async Task ClearData()
+    {
+        var what = PartsPicker.Describe(clearParts);
+        if (!await Js.InvokeAsync<bool>("confirm", $"Permanently delete {what}? This can't be undone. (Download your data first if you might want it back.)")) return;
+        clearing = true;
+        try
+        {
+            var r = await Api.ClearDataAsync(new ClearDataRequest(clearPassword!, clearParts));
+            clearPassword = null;
+            Toasts.Show(r is null ? "Cleared" : $"Cleared {r.Plays:N0} plays, {r.Ratings:N0} ratings, {r.Watchlist:N0} watchlist entries and {r.Lists:N0} list{(clearParts.HasFlag(ImportParts.Movies) && clearParts.HasFlag(ImportParts.Shows) ? "s" : " entries")}");
+            await LoadImports();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        clearing = false;
     }
 
     private async Task DeleteAccount()

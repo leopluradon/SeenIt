@@ -303,6 +303,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         UserMediaState? user = null;
         ShowProgressDto? progress = null;
         Dictionary<int, int> watchedPerSeason = [];
+        Dictionary<int, DateTimeOffset> completedPerSeason = [];
         var trackStatus = ShowTrackStatus.Watching;
         if (userId is { } uid)
         {
@@ -315,6 +316,9 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 .ToListAsync(ct);
             watchedPerSeason = watched.Select(w => (w.SeasonNumber, w.EpisodeNumber)).Distinct()
                 .GroupBy(w => w.SeasonNumber ?? 0).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var season in s.Seasons ?? [])
+                if (SeasonCompleted(watched.Where(w => w.SeasonNumber == season.SeasonNumber).Select(w => (w.EpisodeNumber ?? 0, w.WatchedAt)), season.EpisodeCount) is { } done)
+                    completedPerSeason[season.SeasonNumber] = done;
             if (watched.Count > 0)
                 progress = (await new ProgressCalculator(db).ForUserAsync(uid, [id], ct)).FirstOrDefault();
         }
@@ -327,7 +331,8 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             s.PosterPath, s.BackdropPath, s.VoteAverage, s.VoteCount, s.NumberOfSeasons, s.NumberOfEpisodes,
             (s.Seasons ?? []).OrderBy(x => x.SeasonNumber == 0 ? int.MaxValue : x.SeasonNumber)
                 .Select(x => new SeasonSummary(x.SeasonNumber, x.Name ?? $"Season {x.SeasonNumber}", x.EpisodeCount, TmdbDates.Parse(x.AirDate), x.PosterPath,
-                    watchedPerSeason.GetValueOrDefault(x.SeasonNumber))).ToList(),
+                    watchedPerSeason.GetValueOrDefault(x.SeasonNumber),
+                    completedPerSeason.TryGetValue(x.SeasonNumber, out var done) ? done : null)).ToList(),
             Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast),
             PickVideos(s.Videos),
             (s.Recommendations?.Results ?? []).Take(18).Select(x => ToSummary(x, MediaType.Show)).ToList(),
@@ -375,6 +380,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         catch (HttpRequestException ex) { log.LogInformation(ex, "No season credits for {Show} S{Season}", showId, seasonNumber); }
 
         Dictionary<int, int> plays = [];
+        List<(int Episode, DateTimeOffset WatchedAt)> seasonPlays = [];
         Dictionary<int, int> ratings = [];
         HashSet<int> rewatched = [];
         ShowRewatch? rewatch = null;
@@ -385,11 +391,11 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 rewatched = (await db.WatchEvents
                     .Where(w => w.UserId == uid && w.Type == MediaType.Episode && w.TmdbId == showId && w.SeasonNumber == seasonNumber && w.WatchedAt >= rewatch.StartedAt)
                     .Select(w => w.EpisodeNumber!.Value).ToListAsync(ct)).ToHashSet();
-            plays = await db.WatchEvents
+            seasonPlays = (await db.WatchEvents
                 .Where(w => w.UserId == uid && w.Type == MediaType.Episode && w.TmdbId == showId && w.SeasonNumber == seasonNumber)
-                .GroupBy(w => w.EpisodeNumber!.Value)
-                .Select(g => new { g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+                .Select(w => new { Episode = w.EpisodeNumber!.Value, w.WatchedAt })
+                .ToListAsync(ct)).Select(w => (w.Episode, w.WatchedAt)).ToList();
+            plays = seasonPlays.GroupBy(w => w.Episode).ToDictionary(g => g.Key, g => g.Count());
             ratings = await db.Ratings
                 .Where(r => r.UserId == uid && r.Type == MediaType.Episode && r.TmdbId == showId && r.SeasonNumber == seasonNumber)
                 .ToDictionaryAsync(r => r.EpisodeNumber!.Value, r => r.Value, ct);
@@ -401,7 +407,22 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 plays.GetValueOrDefault(e.EpisodeNumber), ratings.TryGetValue(e.EpisodeNumber, out var r) ? r : null,
                 rewatched.Contains(e.EpisodeNumber))).ToList(),
             Cast(seasonCredits?.Cast),
-            rewatch?.Number);
+            rewatch?.Number,
+            SeasonCompleted(seasonPlays, season.Episodes?.Count ?? 0));
+    }
+
+    /// <summary>
+    /// When a season was finished: the first play of whichever episode was watched last, once every
+    /// episode has a play. Null if it isn't finished, or that day isn't known (an "unknown date" play).
+    /// Rewatches don't move it.
+    /// </summary>
+    public static DateTimeOffset? SeasonCompleted(IEnumerable<(int Episode, DateTimeOffset WatchedAt)> plays, int episodeCount)
+    {
+        var firsts = plays.GroupBy(p => p.Episode)
+            .Select(g => g.Where(p => !WatchDates.IsUnknown(p.WatchedAt)).Select(p => (DateTimeOffset?)p.WatchedAt).Min())
+            .ToList();
+        if (episodeCount == 0 || firsts.Count < episodeCount || firsts.Any(f => f is null)) return null;
+        return firsts.Max();
     }
 
     public async Task<EpisodeDetail?> GetEpisodeAsync(int showId, int seasonNumber, int episodeNumber, Guid? userId, CancellationToken ct)
@@ -480,7 +501,11 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         var lists = await db.ListItems
             .Where(i => i.Type == type && i.TmdbId == id && db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId))
             .Select(i => i.ListId).ToListAsync(ct);
-        return new UserMediaState(inWatchlist, rating, plays, last, lists);
+        var history = type == MediaType.Movie
+            ? await watches.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt)
+                .Select(w => new PlayDto(w.Id, w.WatchedAt, w.Source)).ToListAsync(ct)
+            : null;
+        return new UserMediaState(inWatchlist, rating, plays, last, lists, history);
     }
 
     private static List<Video> PickVideos(TmdbVideos? v) =>

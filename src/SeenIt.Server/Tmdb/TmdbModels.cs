@@ -18,7 +18,9 @@ public record TmdbListItem(
     string? PosterPath,
     string? BackdropPath,
     double? VoteAverage,
-    string? Overview);
+    string? Overview,
+    string? OriginalTitle = null,
+    string? OriginalName = null);
 
 public record TmdbGenre(int Id, string Name);
 public record TmdbRole(string? Character, int EpisodeCount);

@@ -1,0 +1,46 @@
+@* Movies/shows × history/ratings/watchlist/lists checkboxes, for importing and for clearing data. *@
+<fieldset class="parts-picker">
+    <legend>@Label</legend>
+    <div class="parts-row">
+        @foreach (var (flag, label) in Kinds)
+        {
+            <label class="check" @key="flag"><input type="checkbox" checked="@Value.HasFlag(flag)" @onchange="e => Toggle(flag, e)" /> @label</label>
+        }
+    </div>
+    <div class="parts-row">
+        @foreach (var (flag, label) in Data)
+        {
+            <label class="check" @key="flag"><input type="checkbox" checked="@Value.HasFlag(flag)" @onchange="e => Toggle(flag, e)" /> @label</label>
+        }
+    </div>
+    @if ((Value & (ImportParts.Movies | ImportParts.Shows)) == 0 || (Value & ~(ImportParts.Movies | ImportParts.Shows)) == 0)
+    {
+        <p class="error small">Tick at least one of movies/TV shows and one kind of data.</p>
+    }
+</fieldset>
+@code {
+    [Parameter] public ImportParts Value { get; set; } = ImportParts.All;
+    [Parameter] public EventCallback<ImportParts> ValueChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "Include";
+
+    private static readonly (ImportParts, string)[] Kinds = [(ImportParts.Movies, "Movies"), (ImportParts.Shows, "TV shows")];
+    private static readonly (ImportParts, string)[] Data =
+        [(ImportParts.History, "Watch history"), (ImportParts.Ratings, "Ratings"), (ImportParts.Watchlist, "Watchlist"), (ImportParts.Lists, "Lists")];
+
+    private Task Toggle(ImportParts flag, ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(e.Value is true ? Value | flag : Value & ~flag);
+
+    /// <summary>"everything", or e.g. "movie history and ratings".</summary>
+    public static string Describe(ImportParts p)
+    {
+        if (p == ImportParts.All) return "everything";
+        var kind = (p.HasFlag(ImportParts.Movies), p.HasFlag(ImportParts.Shows)) switch
+        {
+            (true, false) => "movie ", (false, true) => "TV ", _ => "",
+        };
+        var data = Data.Where(d => p.HasFlag(d.Item1)).Select(d => d.Item2.ToLowerInvariant()).ToList();
+        if (data.Count == 4) return kind == "" ? "everything" : $"all {kind}data";
+        var list = data.Count <= 1 ? string.Join("", data) : string.Join(", ", data[..^1]) + " and " + data[^1];
+        return kind + list;
+    }
+}

@@ -160,8 +160,9 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     private static DateTimeOffset Clamp(DateTimeOffset? at)
     {
+        // Future dates are allowed (logging a planned viewing ahead); only nonsense is replaced.
         var now = DateTimeOffset.UtcNow;
-        if (at is null || at > now.AddMinutes(5)) return now;
+        if (at is null || at > now.AddYears(5)) return now;
         return at.Value < new DateTimeOffset(1900, 1, 1, 0, 0, 0, TimeSpan.Zero) ? now : at.Value.ToUniversalTime();
     }
 
@@ -448,8 +449,10 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     // ---------- Stats ----------
 
-    public async Task<StatsDto> GetStatsAsync(Guid userId, CancellationToken ct)
+    public async Task<StatsDto> GetStatsAsync(Guid userId, string? tzId, CancellationToken ct)
     {
+        var tz = ReviewService.Zone(tzId);
+        var since = await TrackingSinceAsync(userId, ct);
         var watches = await db.WatchEvents.Where(w => w.UserId == userId)
             .Select(w => new { w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt }).ToListAsync(ct);
 
@@ -485,7 +488,10 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var byMonth = dated.GroupBy(w => (w.WatchedAt.Year, w.WatchedAt.Month)).ToDictionary(g => g.Key, g => g.Count());
 
         var ratings = await db.Ratings.Where(r => r.UserId == userId).Select(r => r.Value).ToListAsync(ct);
-        var weekdays = dated.GroupBy(w => w.WatchedAt.DayOfWeek).ToDictionary(g => g.Key, g => g.Count());
+        // A habit, so only plays logged as they happened (see AppUser.TrackingSince), on the viewer's calendar.
+        var weekdays = dated.Select(w => TimeZoneInfo.ConvertTime(w.WatchedAt, tz))
+            .Where(l => since is null || DateOnly.FromDateTime(l.DateTime) >= since)
+            .GroupBy(l => l.DayOfWeek).ToDictionary(g => g.Key, g => g.Count());
 
         return new StatsDto(
             MoviesWatched: movieIds.Count,
@@ -504,7 +510,58 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             PlaysByWeekday: Enum.GetValues<DayOfWeek>().Select(d => new CountBucket(d.ToString()[..3], weekdays.GetValueOrDefault(d))).ToList());
     }
 
+    // ---------- Clearing data ----------
+
+    /// <summary>
+    /// Deletes the chosen kinds of data for movies and/or shows. History for shows also clears their
+    /// rewatches and paused/dropped status; clearing everything also forgets past imports.
+    /// </summary>
+    public async Task<ClearDataResult> ClearAsync(Guid userId, ImportParts parts, CancellationToken ct)
+    {
+        bool movies = parts.HasFlag(ImportParts.Movies), shows = parts.HasFlag(ImportParts.Shows);
+        if (!movies && !shows) return new(0, 0, 0, 0);
+        int plays = 0, ratings = 0, watchlist = 0, lists = 0;
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        if (parts.HasFlag(ImportParts.History))
+        {
+            plays = await db.WatchEvents.Where(w => w.UserId == userId
+                && (movies && w.Type == MediaType.Movie || shows && w.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+            await db.CheckIns.Where(c => c.UserId == userId
+                && (movies && c.Type == MediaType.Movie || shows && c.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+            if (shows)
+            {
+                await db.Rewatches.Where(r => r.UserId == userId).ExecuteDeleteAsync(ct);
+                await db.ShowStates.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
+            }
+        }
+        if (parts.HasFlag(ImportParts.Ratings))
+            ratings = await db.Ratings.Where(r => r.UserId == userId
+                && (movies && r.Type == MediaType.Movie || shows && r.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+        if (parts.HasFlag(ImportParts.Watchlist))
+            watchlist = await db.Watchlist.Where(w => w.UserId == userId
+                && (movies && w.Type == MediaType.Movie || shows && w.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+        if (parts.HasFlag(ImportParts.Lists))
+        {
+            if (movies && shows)
+                lists = await db.Lists.Where(l => l.UserId == userId).ExecuteDeleteAsync(ct);
+            else
+                lists = await db.ListItems.Where(i => db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId)
+                    && (movies ? i.Type == MediaType.Movie : i.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+        }
+        if (parts == ImportParts.All)
+        {
+            await db.ImportJobs.Where(j => j.UserId == userId).ExecuteDeleteAsync(ct);
+            await db.JellyfinEvents.Where(j => j.UserId == userId).ExecuteDeleteAsync(ct);
+        }
+        await tx.CommitAsync(ct);
+        return new(plays, ratings, watchlist, lists);
+    }
+
     // ---------- Helpers ----------
+
+    public Task<DateOnly?> TrackingSinceAsync(Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.TrackingSince).FirstOrDefaultAsync(ct);
 
     public async Task EnsureMetaAsync(MediaType type, int tmdbId, CancellationToken ct)
     {

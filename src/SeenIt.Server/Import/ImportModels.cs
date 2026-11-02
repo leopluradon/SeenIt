@@ -10,7 +10,8 @@ public record ImportRef(MediaType Type, int? TmdbId, string? ImdbId, string? Tit
     public string Label => Year is { } y ? $"{Title} ({y})" : Title ?? ImdbId ?? $"#{TmdbId}";
 }
 
-public record ImportWatch(ImportRef Item, int? Season, int? Episode, DateTimeOffset WatchedAt);
+/// <param name="Approximate">The date is a stand-in (when it was logged, or a "last watched" summary), not when it was seen.</param>
+public record ImportWatch(ImportRef Item, int? Season, int? Episode, DateTimeOffset WatchedAt, bool Approximate = false);
 public record ImportRating(ImportRef Item, int? Season, int? Episode, int Rating, DateTimeOffset RatedAt);
 public record ImportListItem(ImportRef Item, DateTimeOffset AddedAt);
 public record ImportList(string Name, string? Description, List<ImportListItem> Items);
@@ -21,6 +22,18 @@ public class ParsedImport
     public List<ImportListItem> Watchlist { get; } = [];
     public List<ImportRating> Ratings { get; } = [];
     public List<ImportList> Lists { get; } = [];
+
+    /// <summary>Drops whatever the user chose not to import.</summary>
+    public void Keep(ImportParts parts)
+    {
+        bool Type(ImportRef r) => r.Type == MediaType.Movie ? parts.HasFlag(ImportParts.Movies) : parts.HasFlag(ImportParts.Shows);
+        if (!parts.HasFlag(ImportParts.History)) History.Clear(); else History.RemoveAll(h => !Type(h.Item));
+        if (!parts.HasFlag(ImportParts.Ratings)) Ratings.Clear(); else Ratings.RemoveAll(r => !Type(r.Item));
+        if (!parts.HasFlag(ImportParts.Watchlist)) Watchlist.Clear(); else Watchlist.RemoveAll(w => !Type(w.Item));
+        if (!parts.HasFlag(ImportParts.Lists)) Lists.Clear();
+        foreach (var l in Lists) l.Items.RemoveAll(i => !Type(i.Item));
+        Lists.RemoveAll(l => l.Items.Count == 0);
+    }
 
     public int Total => History.Count + Watchlist.Count + Ratings.Count + Lists.Sum(l => l.Items.Count);
 }

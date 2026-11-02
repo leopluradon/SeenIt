@@ -231,6 +231,9 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<DateOnly?>("TrackingSince")
+                        .HasColumnType("date");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
 
@@ -373,6 +376,9 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.Property<string>("Message")
                         .HasColumnType("text");
+
+                    b.Property<int>("Parts")
+                        .HasColumnType("integer");
 
                     b.Property<byte[]>("Payload")
                         .HasColumnType("bytea");

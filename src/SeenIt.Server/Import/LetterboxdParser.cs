@@ -50,7 +50,7 @@ public static class LetterboxdParser
             foreach (var row in Rows(watched))
             {
                 if (Film(row) is not { } film || diaryFilms.Contains(Key(film))) continue;
-                result.History.Add(new ImportWatch(film, null, null, ParseDate(row.GetValueOrDefault("Date")) ?? DateTimeOffset.UtcNow));
+                result.History.Add(new ImportWatch(film, null, null, ParseDate(row.GetValueOrDefault("Date")) ?? DateTimeOffset.UtcNow, Approximate: true));
             }
         }
 

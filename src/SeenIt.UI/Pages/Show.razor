@@ -118,7 +118,8 @@ else if (s is not null)
                         @if (season.EpisodeCount > 0 && season.Watched >= season.EpisodeCount) { <span class="poster-badge done"><Icon Name="check" Size="14" /></span> }
                     </div>
                     <div class="poster-title">@season.Name</div>
-                    <div class="poster-sub">@season.EpisodeCount episode@(season.EpisodeCount == 1 ? "" : "s") @if (season.Watched > 0) { <span>· @season.Watched watched</span> }</div>
+                    <div class="poster-sub">@season.EpisodeCount episode@(season.EpisodeCount == 1 ? "" : "s") @if (season.Watched > 0 && season.CompletedAt is null) { <span>· @season.Watched watched</span> }</div>
+                    @if (season.CompletedAt is { } done) { <div class="poster-sub ok">Finished @done.ToLocalTime().ToString("d MMM yyyy")</div> }
                     @if (s.User is not null && season.EpisodeCount > 0) { <ProgressBar Value="season.Watched" Max="season.EpisodeCount" /> }
                 </a>
             }

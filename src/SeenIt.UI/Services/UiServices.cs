@@ -60,6 +60,10 @@ public static class Fmt
 
     public static string PlayedAt(DateTimeOffset d) =>
         WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString("d MMM yyyy, HH:mm");
+    public static string Source(WatchSource s) => s switch
+    {
+        WatchSource.Jellyfin => "Jellyfin", WatchSource.TraktImport => "Trakt", WatchSource.LetterboxdImport => "Letterboxd", _ => "",
+    };
     public static string Ep(int? s, int? e) => $"S{s:00}E{e:00}";
     public static string Runtime(int? minutes) => minutes is null or 0 ? "" : minutes < 60 ? $"{minutes}m" : $"{minutes / 60}h {minutes % 60}m";
 
@@ -74,6 +78,7 @@ public static class Fmt
     {
         if (WatchDates.IsUnknown(when)) return "date unknown";
         var d = DateTimeOffset.Now - when;
+        if (d.TotalMinutes < -1) return when.ToLocalTime().ToString("d MMM yyyy"); // logged ahead of time
         if (d.TotalMinutes < 1) return "just now";
         if (d.TotalHours < 1) return $"{(int)d.TotalMinutes}m ago";
         if (d.TotalDays < 1) return $"{(int)d.TotalHours}h ago";

@@ -39,7 +39,8 @@ else if (season is not null)
         ("Per episode", runtimes.Count > 0 ? "~" + Fmt.Runtime((int)Math.Round(runtimes.Average(x => x.Runtime!.Value))) : null),
         ("Aired", first is { } f ? (last is { } l && l != f ? $"{f:d MMM yyyy} – {l:d MMM yyyy}" : $"{f:d MMM yyyy}") : null),
         ("You've watched", watchedMinutes > 0 ? Fmt.Duration(watchedMinutes) : null),
-        ("Left to watch", watchedMinutes > 0 ? Fmt.Duration(eps.Where(x => x.Plays == 0 && x.AirDate is { } d && d <= today).Sum(x => (long)(x.Runtime ?? 0))) : null),
+        ("Completed", season.CompletedAt is { } done ? done.ToLocalTime().ToString("d MMM yyyy") : null),
+        ("Left to watch", watchedMinutes > 0 && season.CompletedAt is null ? Fmt.Duration(eps.Where(x => x.Plays == 0 && x.AirDate is { } d && d <= today).Sum(x => (long)(x.Runtime ?? 0))) : null),
     ])" />
     @if (season.Overview is not null) { <p class="overview">@season.Overview</p> }
 

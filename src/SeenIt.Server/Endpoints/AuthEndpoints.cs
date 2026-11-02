@@ -144,7 +144,7 @@ public static partial class AuthEndpoints
 
         me.MapGet("/me", async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> (ClaimsPrincipal p, UserManager<AppUser> users) =>
             await users.FindByIdAsync(p.UserId().ToString()) is { } u
-                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages, u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility))
+                ? TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages, u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince))
                 : TypedResults.Unauthorized());
 
         me.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
@@ -175,6 +175,12 @@ public static partial class AuthEndpoints
                 else return Results.BadRequest(new ProblemInfo("Pick a country from the list."));
             }
             if (req.Visibility is { } vis && Enum.IsDefined(vis)) u.Visibility = vis;
+            if (req.TrackingSince is { } since)
+            {
+                if (since.Length == 0) u.TrackingSince = null;
+                else if (DateOnly.TryParseExact(since, "yyyy-MM-dd", out var day) && day.Year >= 1900) u.TrackingSince = day;
+                else return Results.BadRequest(new ProblemInfo("That isn't a valid date."));
+            }
             await users.UpdateAsync(u);
             return Results.NoContent();
         });
@@ -193,6 +199,15 @@ public static partial class AuthEndpoints
         me.MapPost("/invites", (ClaimsPrincipal p, InviteService invites) => invites.CreateAsync(p.UserId()));
         me.MapDelete("/invites/{code}", async (string code, ClaimsPrincipal p, InviteService invites) =>
             await invites.DeleteAsync(p.UserId(), code) ? Results.NoContent() : Results.NotFound());
+
+        me.MapPost("/clear", async (ClearDataRequest req, ClaimsPrincipal p, UserManager<AppUser> users, TrackingService tracking, CancellationToken ct) =>
+        {
+            var u = await users.FindByIdAsync(p.UserId().ToString());
+            if (u is null) return Results.Unauthorized();
+            if (!await users.CheckPasswordAsync(u, req.Password))
+                return Results.BadRequest(new ProblemInfo("Wrong password."));
+            return Results.Ok(await tracking.ClearAsync(u.Id, req.Parts & ImportParts.All, ct));
+        }).RequireRateLimiting("auth");
 
         me.MapPost("/delete", async (DeleteAccountRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
         {

@@ -26,6 +26,12 @@ public class AppUser : IdentityUser<Guid>
     public string? Region { get; set; }
     public ProfileVisibility Visibility { get; set; } = ProfileVisibility.Friends;
 
+    /// <summary>
+    /// The day the user started logging as they watch. Plays before it were back-filled, so their
+    /// timestamps say when they were entered, not watched; habit stats (weekday, hour, streaks) skip them.
+    /// </summary>
+    public DateOnly? TrackingSince { get; set; }
+
     public static string NewToken() =>
         Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
 }
@@ -177,6 +183,7 @@ public class ImportJob
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
     public ImportKind Kind { get; set; }
+    public ImportParts Parts { get; set; } = ImportParts.All;
     public string FileName { get; set; } = "";
     public byte[]? Payload { get; set; }
     public ImportStatus Status { get; set; }

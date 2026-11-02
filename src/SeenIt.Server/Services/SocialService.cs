@@ -32,7 +32,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
 
     public async Task<ProfileStats> StatsAsync(Guid userId, CancellationToken ct)
     {
-        var s = await tracking.GetStatsAsync(userId, ct);
+        var s = await tracking.GetStatsAsync(userId, null, ct); // totals only; time zone doesn't matter
         return new ProfileStats(s.MoviesWatched, s.ShowsWatched, s.EpisodesWatched, s.MinutesMovies + s.MinutesEpisodes, s.Ratings);
     }
 

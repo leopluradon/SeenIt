@@ -66,7 +66,7 @@ else if (e is not null)
                             <div class="play" @key="p.Id">
                                 <Icon Name="check" Size="16" Class="ok" />
                                 <span>@Fmt.PlayedAt(p.WatchedAt)</span>
-                                @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@(p.Source switch { WatchSource.Jellyfin => "Jellyfin", WatchSource.TraktImport => "Trakt", _ => "Letterboxd" })</span> }
+                                @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
                                 <button class="icon-btn" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
                             </div>
                         }

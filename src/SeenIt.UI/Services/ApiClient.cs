@@ -46,6 +46,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task ResetPasswordAsync(ResetPasswordRequest r) => SendAsync<object>(HttpMethod.Post, "api/auth/reset", r, auth: false);
     public Task SendTestEmailAsync() => SendAsync(HttpMethod.Post, "api/auth/test-email", null);
     public Task DeleteAccountAsync(DeleteAccountRequest r) => SendAsync(HttpMethod.Post, "api/auth/delete", r);
+    public Task<ClearDataResult?> ClearDataAsync(ClearDataRequest r) => SendAsync<ClearDataResult>(HttpMethod.Post, "api/auth/clear", r);
 
     // ---------- Catalogue ----------
 
@@ -147,7 +148,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task FollowAsync(string userName, bool follow) =>
         SendAsync(follow ? HttpMethod.Post : HttpMethod.Delete, $"api/social/follow/{Uri.EscapeDataString(userName)}");
     public Task<CompareDto> CompareAsync(string userName) => GetAsync<CompareDto>($"api/social/compare/{Uri.EscapeDataString(userName)}");
-    public Task<StatsDto> StatsAsync() => GetAsync<StatsDto>("api/stats");
+    public Task<StatsDto> StatsAsync() => GetAsync<StatsDto>($"api/stats?tz={Tz}");
     public Task<List<ReviewYear>> ReviewPeriodsAsync() => GetAsync<List<ReviewYear>>($"api/review/periods?tz={Tz}");
     public Task<ReviewDto> ReviewAsync(int year, int? month) =>
         GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}");
@@ -172,13 +173,13 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task SetJellyfinThresholdAsync(int pct) => SendAsync(HttpMethod.Put, "api/jellyfin/threshold", new JellyfinThresholdRequest(pct));
 
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");
-    public async Task UploadImportAsync(ImportKind kind, string fileName, Stream content)
+    public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content)
     {
         using var form = new MultipartFormDataContent();
         var file = new StreamContent(content);
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         form.Add(file, "file", fileName);
-        using var resp = await SendRawAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/imports/{kind}") { Content = form }, auth: true);
+        using var resp = await SendRawAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/imports/{kind}?parts={(int)parts}") { Content = form }, auth: true);
         await EnsureOkAsync(resp);
     }
 

@@ -16,14 +16,16 @@ public record MeDto(
     Guid Id, string UserName, string Email, string? DisplayName, DateTimeOffset CreatedAt,
     bool HideSpoilers = false, bool BlurSpoilerImages = false,
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
-    string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends);
+    string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
+    DateOnly? TrackingSince = null);
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(
     bool? HideSpoilers = null, bool? BlurSpoilerImages = null,
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null,          // "" clears it (back to the device's region)
-    ProfileVisibility? Visibility = null);
+    ProfileVisibility? Visibility = null,
+    string? TrackingSince = null);  // yyyy-MM-dd; "" clears it
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }
@@ -72,6 +74,9 @@ public record InviteDto(string Code, DateTimeOffset CreatedAt, DateTimeOffset Ex
 /// <summary>Public check of an invite link before signing up.</summary>
 public record InviteCheck(bool Valid, string? InvitedBy);
 public record DeleteAccountRequest(string Password);
+/// <summary>Wipes the chosen data but keeps the account, its settings and friends.</summary>
+public record ClearDataRequest(string Password, ImportParts Parts);
+public record ClearDataResult(int Plays, int Ratings, int Watchlist, int Lists);
 
 // ---------- Catalogue (TMDB) ----------
 
@@ -98,7 +103,8 @@ public record UserMediaState(
     int? Rating,
     int Plays,
     DateTimeOffset? LastWatchedAt,
-    IReadOnlyList<Guid> ListIds);
+    IReadOnlyList<Guid> ListIds,
+    IReadOnlyList<PlayDto>? History = null);   // every play, newest first (movies only)
 
 public record MovieDetail(
     int TmdbId,
@@ -129,7 +135,8 @@ public record CollectionDto(int Id, string Name, string? PosterPath, string? Bac
 }
 public record CollectionPart(MediaSummary Media, DateOnly? ReleaseDate, bool Released, bool Watched);
 
-public record SeasonSummary(int SeasonNumber, string Name, int EpisodeCount, DateOnly? AirDate, string? PosterPath, int Watched);
+public record SeasonSummary(int SeasonNumber, string Name, int EpisodeCount, DateOnly? AirDate, string? PosterPath, int Watched,
+    DateTimeOffset? CompletedAt = null);   // when the last unwatched episode was first watched
 
 public record ShowDetail(
     int TmdbId,
@@ -186,7 +193,8 @@ public record SeasonDetail(
     string? PosterPath,
     IReadOnlyList<EpisodeDto> Episodes,
     IReadOnlyList<CastMember>? Cast = null,
-    int? Rewatch = null);      // number of the rewatch in progress (2 = second time through)
+    int? Rewatch = null,       // number of the rewatch in progress (2 = second time through)
+    DateTimeOffset? CompletedAt = null);
 
 // ---------- Tracking ----------
 
@@ -389,6 +397,16 @@ public record JellyfinThresholdRequest(int WatchedThresholdPercent);
 public enum ImportKind { Trakt, Letterboxd }
 public enum ImportStatus { Queued, Running, Completed, Failed }
 
+/// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
+[Flags]
+public enum ImportParts
+{
+    None = 0,
+    Movies = 1, Shows = 2,
+    History = 4, Ratings = 8, Watchlist = 16, Lists = 32,
+    All = Movies | Shows | History | Ratings | Watchlist | Lists,
+}
+
 public record ImportJobDto(
     Guid Id,
     ImportKind Kind,
@@ -402,7 +420,8 @@ public record ImportJobDto(
     int Skipped,
     int Failed,
     string? Message,
-    IReadOnlyList<string> Unmatched);
+    IReadOnlyList<string> Unmatched,
+    ImportParts Parts = ImportParts.All);
 
 // ---------- Month / year in review ----------
 

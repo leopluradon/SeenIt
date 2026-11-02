@@ -47,6 +47,7 @@ else if (r is not null)
             <div class="stat"><span class="stat-value">@t.Ratings.ToString("N0")</span><span class="stat-label">ratings@(r.AverageRating is { } avg ? $" · avg {avg:0.0}" : "")</span></div>
         </section>
         <p class="muted small center-text">Compared with @r.PreviousLabel · times in @r.TimeZone</p>
+        <TrackingNote Center="true" />
 
         <section class="review-facts">
             <div class="fact"><b>@r.DaysActive</b><span>of @r.DaysInPeriod days with something watched</span></div>

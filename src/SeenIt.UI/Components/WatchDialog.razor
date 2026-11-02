@@ -14,9 +14,12 @@
         <div class="field">
             <label for="watch-when">Other date</label>
             <div class="inline">
-                <input id="watch-when" type="datetime-local" @bind="custom" @bind:format="yyyy-MM-ddTHH:mm" max="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")" />
-                <button class="btn" @onclick="() => Pick(new WatchChoice(WatchTime.Custom, new DateTimeOffset(custom)))">Save</button>
+                @* Not @bind: Blazor hands datetime-local values over with seconds added, which a
+                   "yyyy-MM-ddTHH:mm" format then fails to parse, silently keeping the old value. *@
+                <input id="watch-when" type="datetime-local" value="@custom" @onchange="SetCustom" />
+                <button class="btn" @onclick="SaveCustom">Save</button>
             </div>
+            @if (badDate) { <p class="error small">Enter a date and time.</p> }
         </div>
     </div>
 </Modal>
@@ -28,7 +31,27 @@
     /// <summary>Marking a whole show/season: "release date" means each episode's own air date.</summary>
     [Parameter] public bool Bulk { get; set; }
     [Parameter] public EventCallback<WatchChoice> OnPick { get; set; }
-    private DateTime custom = DateTime.Now;
+    private string custom = "";
+    private bool badDate, wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        // Start from "now" each time the dialog opens, not when the page first loaded.
+        if (Open && !wasOpen) { custom = DateTime.Now.ToString("yyyy-MM-ddTHH:mm"); badDate = false; }
+        wasOpen = Open;
+    }
+
+    private void SetCustom(ChangeEventArgs e) { custom = e.Value as string ?? ""; badDate = false; }
+
+    private Task SaveCustom()
+    {
+        if (!DateTime.TryParse(custom, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var at))
+        {
+            badDate = true;
+            return Task.CompletedTask;
+        }
+        return Pick(new WatchChoice(WatchTime.Custom, new DateTimeOffset(DateTime.SpecifyKind(at, DateTimeKind.Unspecified))));
+    }
 
     private async Task Pick(WatchChoice choice)
     {

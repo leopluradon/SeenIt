@@ -69,13 +69,20 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var prevRatings = ratings.Count(r => Local(r.RatedAt, tz) is var l && l >= prevStart && l < start);
 
         // ----- Days, streaks, habits -----
+        // Back-filled plays (before the user's "started tracking" day) carry the day they were
+        // entered, so they'd pile onto one day; habits only look at plays logged as they happened.
+        var since = await tracking.TrackingSinceAsync(userId, ct);
+        var habit = since is null ? inPeriod : inPeriod.Where(p => DateOnly.FromDateTime(p.Local) >= since).ToList();
+        var byHabitDay = habit.GroupBy(p => DateOnly.FromDateTime(p.Local)).ToDictionary(g => g.Key, g => g.ToList());
         var byDay = inPeriod.GroupBy(p => DateOnly.FromDateTime(p.Local)).ToDictionary(g => g.Key, g => g.ToList());
-        var days = byDay.Keys.OrderBy(d => d).ToList();
-        var streak = LongestStreak(days);
-        var busiest = byDay.OrderByDescending(d => d.Value.Count).ThenByDescending(d => d.Value.Sum(p => minutes(p)))
+        var habitDays = byHabitDay.Keys.OrderBy(d => d).ToList();
+        var streak = LongestStreak(habitDays);
+        var busiest = byHabitDay.OrderByDescending(d => d.Value.Count).ThenByDescending(d => d.Value.Sum(p => minutes(p)))
             .Select(d => new ReviewDay(d.Key, d.Value.Count, d.Value.Sum(p => minutes(p)))).FirstOrDefault();
-        var weekdays = Enum.GetValues<DayOfWeek>().Select(d => (d, n: inPeriod.Count(p => p.Local.DayOfWeek == d))).ToList();
-        var hours = Enumerable.Range(0, 24).Select(h => (h, n: inPeriod.Count(p => p.Local.Hour == h))).ToList();
+        var weekdays = Enum.GetValues<DayOfWeek>().Select(d => (d, n: habit.Count(p => p.Local.DayOfWeek == d))).ToList();
+        // Letterboxd only records the day, so its plays have no real time of day.
+        var timed = habit.Where(p => p.Source != WatchSource.LetterboxdImport).ToList();
+        var hours = Enumerable.Range(0, 24).Select(h => (h, n: timed.Count(p => p.Local.Hour == h))).ToList();
         var daysInPeriod = (int)(end - start).TotalDays;
 
         var timeline = month is null
@@ -213,10 +220,10 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         return new ReviewDto(
             year, month, label, tz.Id,
             Totals(inPeriod, ratingsInPeriod.Count), Totals(previous, prevRatings), prevLabel,
-            days.Count, daysInPeriod, streak, busiest,
-            inPeriod.Count == 0 ? null : weekdays.MaxBy(w => w.n).d.ToString(),
-            inPeriod.Count == 0 ? null : hours.MaxBy(h => h.n).h,
-            days.Count == 0 ? 0 : Math.Round((double)inPeriod.Count / days.Count, 1),
+            byDay.Count, daysInPeriod, streak, busiest,
+            habit.Count == 0 ? null : weekdays.MaxBy(w => w.n).d.ToString(),
+            timed.Count == 0 ? null : hours.MaxBy(h => h.n).h,
+            habitDays.Count == 0 ? 0 : Math.Round((double)habit.Count / habitDays.Count, 1),
             timeline,
             weekdays.Select(w => new CountBucket(w.d.ToString()[..3], w.n)).ToList(),
             hours.Select(h => new CountBucket(h.h.ToString("00"), h.n)).ToList(),
