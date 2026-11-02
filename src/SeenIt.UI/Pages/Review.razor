@@ -32,7 +32,7 @@ else if (r is not null)
 {
     @if (r.TrackingSince is { } since && PeriodEnd <= since)
     {
-        <Empty Title="@($"Reviews start from {since:d MMMM yyyy}.")">
+        <Empty Title="@($"Reviews start from {since:MMMM d, yyyy}.")">
             <span>That's when you started tracking; plays before it were back-filled, so they aren't reviewed.</span>
             <a class="btn btn-sm" href="@($"review/{since.Year}" + (Month is null ? "" : $"/{since.Month}"))">Go to @(Month is null ? since.Year.ToString() : since.ToString("MMMM yyyy"))</a>
         </Empty>
@@ -59,10 +59,10 @@ else if (r is not null)
 
         <section class="review-facts">
             <div class="fact"><b>@r.DaysActive</b><span>of @r.DaysInPeriod days with something watched</span></div>
-            <div class="fact"><b>@r.LongestStreak.Days day@(r.LongestStreak.Days == 1 ? "" : "s")</b><span>longest streak@(r.LongestStreak.Start is { } ss && r.LongestStreak.Days > 1 ? $" ({ss:d MMM} – {r.LongestStreak.End:d MMM})" : "")</span></div>
-            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString("ddd d MMM")</b><span>busiest day: @bd.Plays plays, @Fmt.Duration(bd.Minutes)</span></div> }
+            <div class="fact"><b>@r.LongestStreak.Days day@(r.LongestStreak.Days == 1 ? "" : "s")</b><span>longest streak@(r.LongestStreak.Start is { } ss && r.LongestStreak.Days > 1 ? $" ({ss:MMM d} – {r.LongestStreak.End:MMM d})" : "")</span></div>
+            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString("ddd, MMM d")</b><span>busiest day: @bd.Plays plays, @Fmt.Duration(bd.Minutes)</span></div> }
             <div class="fact"><b>@r.AveragePlaysPerActiveDay</b><span>plays per active day</span></div>
-            @if (r.FavoriteWeekday is { } fw) { <div class="fact"><b>@(fw)s</b><span>favourite day to watch</span></div> }
+            @if (r.FavoriteWeekday is { } fw) { <div class="fact"><b>@(fw)s</b><span>favorite day to watch</span></div> }
             @if (r.PeakHour is { } ph) { <div class="fact"><b>@HourLabel(ph)</b><span>peak viewing hour</span></div> }
             <div class="fact"><b>@r.ShowsStarted</b><span>new show@(r.ShowsStarted == 1 ? "" : "s") started</span></div>
             <div class="fact"><b>@r.ShowsCompleted</b><span>show@(r.ShowsCompleted == 1 ? "" : "s") caught up on</span></div>

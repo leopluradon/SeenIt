@@ -37,7 +37,7 @@ public static partial class AuthEndpoints
             if (string.IsNullOrWhiteSpace(req.Email) || !req.Email.Contains('@'))
                 return Bad("Enter a valid email address.");
 
-            // An invite is required unless sign-ups are open; with open sign-ups it's still honoured (auto-follow).
+            // An invite is required unless sign-ups are open; with open sign-ups it's still honored (auto-follow).
             var inviter = await invites.ClaimAsync(req.InviteCode);
             if (inviter is null && !invites.OpenRegistration)
                 return Bad(string.IsNullOrWhiteSpace(req.InviteCode)
@@ -163,7 +163,7 @@ public static partial class AuthEndpoints
                 await users.UpdateAsync(u);
             }
             return TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages,
-                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName), u.TimeZone));
+                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName), u.TimeZone, u.HomeOrder));
         });
 
         me.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
@@ -184,6 +184,7 @@ public static partial class AuthEndpoints
             if (req.BlurSpoilerImages is { } blur) u.BlurSpoilerImages = blur;
             if (req.HiddenHomeSections is { } hidden)
                 u.HiddenHomeSections = hidden.Where(k => UiPrefs.HomeSections.Any(s => s.Key == k)).Distinct().ToList();
+            if (req.HomeOrder is { } order) u.HomeOrder = UiPrefs.HomeOrder(order);
             if (req.Tabs is { } tabs)
                 u.Tabs = tabs.Where(k => UiPrefs.Tabs.Any(t => t.Key == k)).Distinct().Take(UiPrefs.MaxTabs).ToList();
             if (req.Region is { } region)

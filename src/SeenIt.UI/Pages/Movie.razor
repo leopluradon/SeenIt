@@ -10,7 +10,7 @@ else if (m is not null)
 {
     <MediaHero Title="@m.Title" Year="m.ReleaseDate?.Year" Tagline="@m.Tagline" Poster="@m.PosterPath" Backdrop="@m.BackdropPath" Score="m.VoteAverage" Votes="m.VoteCount">
         <Facts>
-            @if (m.ReleaseDate is { } d) { <span>@d.ToString("d MMM yyyy")</span> }
+            @if (m.ReleaseDate is { } d) { <span>@d.ToString("MMM d, yyyy")</span> }
             @if (m.Runtime is > 0) { <span>@Fmt.Runtime(m.Runtime)</span> }
             @if (m.Genres.Count > 0) { <span>@string.Join(", ", m.Genres)</span> }
             @if (m.Status is not null and not "Released") { <span class="pill">@m.Status</span> }
@@ -68,7 +68,7 @@ else if (m is not null)
                     </div>
                 }
             }
-            <DetailStats Items="@([("Runtime", Fmt.Runtime(m.Runtime)), ("Released", m.ReleaseDate?.ToString("d MMM yyyy")), ("Status", m.Status), ("Genres", m.Genres.Count > 0 ? string.Join(", ", m.Genres) : null), ("Your plays", m.User is { Plays: > 0 } u2 ? $"{u2.Plays} · {Fmt.Duration((long)(m.Runtime ?? 0) * u2.Plays)}" : null)])" />
+            <DetailStats Items="@([("Runtime", Fmt.Runtime(m.Runtime)), ("Released", m.ReleaseDate?.ToString("MMM d, yyyy")), ("Status", m.Status), ("Genres", m.Genres.Count > 0 ? string.Join(", ", m.Genres) : null), ("Your plays", m.User is { Plays: > 0 } u2 ? $"{u2.Plays} · {Fmt.Duration((long)(m.Runtime ?? 0) * u2.Plays)}" : null)])" />
             @if (m.Overview is not null) { <p class="overview">@m.Overview</p> }
             <WhereToWatch Type="MediaType.Movie" TmdbId="Id" />
             @if (m.Crew.Count > 0)

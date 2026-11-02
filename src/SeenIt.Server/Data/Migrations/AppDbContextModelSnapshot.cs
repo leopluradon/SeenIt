@@ -240,6 +240,10 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("HideSpoilers")
                         .HasColumnType("boolean");
 
+                    b.PrimitiveCollection<List<string>>("HomeOrder")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<int>("JellyfinThresholdPercent")
                         .HasColumnType("integer");
 

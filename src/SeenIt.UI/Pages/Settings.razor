@@ -84,7 +84,7 @@
                             {
                                 <details class="small"><summary>Which couldn't be matched (@j.Unmatched.Count)</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
                             }
-                            <div class="muted small">@j.CreatedAt.ToLocalTime().ToString("d MMM yyyy HH:mm")</div>
+                            <div class="muted small">@j.CreatedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")</div>
                         </div>
                     }
                 </div>
@@ -93,7 +93,7 @@
 
         <section class="panel" id="tracking">
             <h2>Stats</h2>
-            <p class="muted small">If you back-filled your history before logging things as you watch them, those plays are dated the day you entered them and skew habits like your favourite day of the week. Set the day you started tracking for real: plays per month, day-of-week, and month and year reviews only count plays from then on (earlier years get no review). Totals still count everything.</p>
+            <p class="muted small">If you back-filled your history before logging things as you watch them, those plays are dated the day you entered them and skew habits like your favorite day of the week. Set the day you started tracking for real: plays per month, day-of-week, and month and year reviews only count plays from then on (earlier years get no review). Totals still count everything.</p>
             <div class="field inline">
                 <label for="tracking-since">Started tracking</label>
                 <input id="tracking-since" type="date" value="@trackingSince" @onchange="SaveTrackingSince" />
@@ -208,14 +208,8 @@
             <button class="btn btn-sm btn-ghost" @onclick="ResetTabs">Reset to default</button>
 
             <h3>Home page sections</h3>
-            <div class="stack">
-                @foreach (var (key, label) in UiPrefs.HomeSections)
-                {
-                    <label class="check" @key="key">
-                        <input type="checkbox" checked="@(!hiddenSections.Contains(key))" @onchange="e => ToggleSection(key, (bool)e.Value!)" /> @label
-                    </label>
-                }
-            </div>
+            <p class="muted small">What shows on your home page, top to bottom.</p>
+            <HomeSectionsEditor />
         </section>
 
         <section class="panel" id="invites">
@@ -234,7 +228,7 @@
                                 @if (i.UsedBy is { } joined) { <text>Joined: <a href="@Fmt.UserHref(joined)">@joined</a></text> }
                                 else if (i.UsedAt is not null) { <text>Used</text> }
                                 else if (expired) { <text>Expired</text> }
-                                else { <text>Unused · expires @i.ExpiresAt.ToLocalTime().ToString("d MMM")</text> }
+                                else { <text>Unused · expires @i.ExpiresAt.ToLocalTime().ToString("MMM d")</text> }
                             </span>
                             @if (i.UsedAt is null && !expired)
                             {
@@ -375,7 +369,6 @@
     private bool clearing;
     private bool hideSpoilers, blurImages;
     private List<string> tabs = [];
-    private HashSet<string> hiddenSections = [];
     private CancellationTokenSource? poll;
     private ProfileVisibility visibility;
     private string? region;
@@ -439,7 +432,6 @@
         hideSpoilers = Session.Me?.HideSpoilers ?? false;
         blurImages = Session.Me?.BlurSpoilerImages ?? false;
         tabs = UiLayout.Tabs(Session.Me).Select(t => t.Key).ToList();
-        hiddenSections = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         visibility = Session.Me?.Visibility ?? ProfileVisibility.Friends;
         trackingSince = Session.Me?.TrackingSince?.ToString("yyyy-MM-dd");
         timeZone = Session.Me?.TimeZone;
@@ -549,18 +541,6 @@
             var saved = tabs.ToList();
             Session.Update(me => me with { Tabs = saved });
             Toasts.Show("Tabs updated");
-        }
-        catch (Exception ex) { Toasts.Error(ex); }
-    }
-
-    private async Task ToggleSection(string key, bool visible)
-    {
-        if (visible) hiddenSections.Remove(key); else hiddenSections.Add(key);
-        try
-        {
-            var saved = hiddenSections.ToList();
-            await Api.SetPreferencesAsync(new PreferencesRequest(HiddenHomeSections: saved));
-            Session.Update(me => me with { HiddenHomeSections = saved });
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

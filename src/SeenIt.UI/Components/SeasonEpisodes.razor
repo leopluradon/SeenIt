@@ -30,7 +30,7 @@
                         <span class="ep-num">@e.EpisodeNumber</span>
                         <span class="ep-main">
                             <span class="ep-name"><Spoiler Watched="e.Plays > 0">@(e.Name ?? $"Episode {e.EpisodeNumber}")</Spoiler></span>
-                            <span class="muted small">@(e.AirDate?.ToString("d MMM yyyy") ?? "TBA")@(e.Runtime is > 0 ? " · " + Fmt.Runtime(e.Runtime) : "")@(current ? " · you're here" : "")</span>
+                            <span class="muted small">@(e.AirDate?.ToString("MMM d, yyyy") ?? "TBA")@(e.Runtime is > 0 ? " · " + Fmt.Runtime(e.Runtime) : "")@(current ? " · you're here" : "")</span>
                         </span>
                         @if (e.Plays > 0) { <span class="ep-check" title="@($"Watched{(e.Plays > 1 ? $" {e.Plays}×" : "")}")"><Icon Name="check" Size="16" /></span> }
                         else if (!aired) { <span class="pill pill-sm">Upcoming</span> }

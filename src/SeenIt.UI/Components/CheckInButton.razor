@@ -18,7 +18,7 @@
             var now = await Api.StartCheckInAsync(Request);
             if (now is not null)
             {
-                Toasts.Show($"Checked in · added to history at {now.EndsAt.ToLocalTime():HH:mm}");
+                Toasts.Show($"Checked in · added to history at {now.EndsAt.ToLocalTime():h:mm tt}");
                 await OnCheckedIn.InvokeAsync(now);
             }
         }

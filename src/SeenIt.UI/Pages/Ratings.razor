@@ -30,7 +30,7 @@ else if (items is not null)
         {
             <PosterCard Media="@(new MediaSummary(r.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, r.TmdbId, r.Title, null, r.PosterPath, null, null, null))"
                         Badge="@($"★ {r.Rating}")" ShowScore="false"
-                        Sub="@(r.Type == MediaType.Episode ? Fmt.Ep(r.SeasonNumber, r.EpisodeNumber) : r.RatedAt.ToLocalTime().ToString("d MMM yyyy"))"
+                        Sub="@(r.Type == MediaType.Episode ? Fmt.Ep(r.SeasonNumber, r.EpisodeNumber) : r.RatedAt.ToLocalTime().ToString("MMM d, yyyy"))"
                         @key="(r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" />
         }
     </div>

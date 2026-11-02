@@ -54,12 +54,12 @@ public static class Fmt
     {
         WatchTime.ReleaseDate => " (release date)",
         WatchTime.Unknown => " (date unknown)",
-        WatchTime.Custom when c.At is { } at => $" on {at.LocalDateTime:d MMM yyyy}",
+        WatchTime.Custom when c.At is { } at => $" on {at.LocalDateTime:MMM d, yyyy}",
         _ => "",
     };
 
     public static string PlayedAt(DateTimeOffset d) =>
-        WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString("d MMM yyyy, HH:mm");
+        WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString("MMM d, yyyy, h:mm tt");
     public static string Source(WatchSource s) => s switch
     {
         WatchSource.Jellyfin => "Jellyfin", WatchSource.TraktImport => "Trakt", WatchSource.LetterboxdImport => "Letterboxd", _ => "",
@@ -78,12 +78,12 @@ public static class Fmt
     {
         if (WatchDates.IsUnknown(when)) return "date unknown";
         var d = DateTimeOffset.Now - when;
-        if (d.TotalMinutes < -1) return when.ToLocalTime().ToString("d MMM yyyy"); // logged ahead of time
+        if (d.TotalMinutes < -1) return when.ToLocalTime().ToString("MMM d, yyyy"); // logged ahead of time
         if (d.TotalMinutes < 1) return "just now";
         if (d.TotalHours < 1) return $"{(int)d.TotalMinutes}m ago";
         if (d.TotalDays < 1) return $"{(int)d.TotalHours}h ago";
         if (d.TotalDays < 7) return $"{(int)d.TotalDays}d ago";
-        return when.ToLocalTime().ToString("d MMM yyyy");
+        return when.ToLocalTime().ToString("MMM d, yyyy");
     }
 
     public static string Day(DateOnly d)
@@ -92,7 +92,7 @@ public static class Fmt
         if (d == today) return "Today";
         if (d == today.AddDays(1)) return "Tomorrow";
         if (d == today.AddDays(-1)) return "Yesterday";
-        return d.Year == today.Year ? d.ToString("dddd, d MMM") : d.ToString("dddd, d MMM yyyy");
+        return d.Year == today.Year ? d.ToString("dddd, MMM d") : d.ToString("dddd, MMM d, yyyy");
     }
 }
 

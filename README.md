@@ -63,7 +63,7 @@ last 20 webhook events and what SeenIt did with each one, which makes setup easy
 ## Imports
 
 **Settings → Import** takes the `.zip` from Trakt (history, ratings, watchlist, lists; files are
-recognised by content, so API-shaped dumps work too) or Letterboxd (diary, watched, ratings,
+recognized by content, so API-shaped dumps work too) or Letterboxd (diary, watched, ratings,
 watchlist, lists; matched to TMDB by title and year). Imports run in the background, are safe to
 re-run (duplicates are skipped) and list anything that couldn't be matched.
 

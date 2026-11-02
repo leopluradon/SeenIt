@@ -36,7 +36,7 @@ else
             {
                 <section class="stat-tiles admin-tiles">
                     <div class="stat"><span class="stat-value">v@(ov.Version)</span><span class="stat-label">@ov.Commit@(ov.BuiltAt is { } b ? $" · built {Ago(b)}" : "")</span></div>
-                    <div class="stat"><span class="stat-value">@Uptime(ov.StartedAt)</span><span class="stat-label">up since @ov.StartedAt.ToLocalTime().ToString("d MMM HH:mm")</span></div>
+                    <div class="stat"><span class="stat-value">@Uptime(ov.StartedAt)</span><span class="stat-label">up since @ov.StartedAt.ToLocalTime().ToString("MMM d, h:mm tt")</span></div>
                     <div class="stat"><span class="stat-value">@ov.ActiveToday</span><span class="stat-label">active today · @ov.ActiveWeek this week</span></div>
                     <div class="stat"><span class="stat-value">@ov.ActionsToday</span><span class="stat-label">actions in 24h</span></div>
                     <div class="stat @(ov.RecentProblems > 0 ? "warn" : "")"><span class="stat-value">@ov.RecentProblems</span><span class="stat-label"><a href="admin/logs">errors in 24h</a></span></div>
@@ -59,7 +59,7 @@ else
                         {
                             <details class="admin-log is-warn">
                                 <summary>
-                                    <span class="muted small nowrap">@al.At.ToLocalTime().ToString("d MMM HH:mm")</span>
+                                    <span class="muted small nowrap">@al.At.ToLocalTime().ToString("MMM d, h:mm tt")</span>
                                     <span class="admin-log-first">@al.Subject</span>
                                     @if (al.Emailed) { <span class="pill pill-sm">emailed</span> }
                                 </summary>
@@ -104,7 +104,7 @@ else
                                 <tr @key="d.Commit">
                                     <td><b>v@(d.Version)</b> <code>@d.Commit</code></td>
                                     <td>@d.Subject</td>
-                                    <td class="muted nowrap">@d.StartedAt.ToLocalTime().ToString("d MMM yyyy HH:mm")</td>
+                                    <td class="muted nowrap">@d.StartedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")</td>
                                 </tr>
                             }
                         </tbody>
@@ -144,10 +144,10 @@ else
                                 <span><b>@u.Following</b> following · <b>@u.Followers</b> followers</span>
                             </div>
                             <div class="muted small">
-                                Joined @u.CreatedAt.ToLocalTime().ToString("d MMM yyyy")@(u.InvitedBy is { } by ? $" (invited by {by})" : "")
+                                Joined @u.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")@(u.InvitedBy is { } by ? $" (invited by {by})" : "")
                                 · last seen @(u.LastSeenAt is { } ls ? Ago(ls) : "never")
                                 · last action @(u.LastActivityAt is { } la ? Ago(la) : "none logged")
-                                @if (u.TrackingSince is { } ts) { <span> · tracking since @ts.ToString("d MMM yyyy")</span> }
+                                @if (u.TrackingSince is { } ts) { <span> · tracking since @ts.ToString("MMM d, yyyy")</span> }
                             </div>
                             <div class="inline admin-actions">
                                 <a class="btn btn-sm" href="@($"admin/activity?user={Uri.EscapeDataString(u.UserName)}")">Activity</a>
@@ -160,7 +160,7 @@ else
                                     <code>@link.Url</code>
                                     <button class="icon-btn" @onclick="() => Copy(link.Url)" aria-label="Copy link"><Icon Name="copy" Size="16" /></button>
                                 </div>
-                                <p class="muted small">Works once, until @link.ExpiresAt.ToLocalTime().ToString("HH:mm"). Send it to @u.UserName privately.</p>
+                                <p class="muted small">Works once, until @link.ExpiresAt.ToLocalTime().ToString("h:mm tt"). Send it to @u.UserName privately.</p>
                             }
                         </div>
                     }
@@ -188,7 +188,7 @@ else
                     @foreach (var a in act.Items)
                     {
                         <div class="admin-act" @key="a.Id">
-                            <span class="muted small nowrap" title="@a.At.ToLocalTime().ToString("d MMM yyyy HH:mm:ss")">@a.At.ToLocalTime().ToString("d MMM HH:mm")</span>
+                            <span class="muted small nowrap" title="@a.At.ToLocalTime().ToString("MMM d, yyyy, h:mm:ss tt")">@a.At.ToLocalTime().ToString("MMM d, h:mm tt")</span>
                             <span><a href="@($"admin/activity?user={Uri.EscapeDataString(a.UserName)}")"><b>@a.UserName</b></a></span>
                             <span class="pill pill-sm @KindClass(a.Kind)">@KindLabel(a.Kind)</span>
                             <span class="admin-act-what">
@@ -220,7 +220,7 @@ else
                                 <span class="pill @(j.Status switch { ImportStatus.Completed => "pill-ok", ImportStatus.Failed => "pill-bad", _ => "" })">@j.Status</span>
                             </div>
                             <div class="muted small">
-                                @j.CreatedAt.ToLocalTime().ToString("d MMM yyyy HH:mm")
+                                @j.CreatedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")
                                 @if (j.StartedAt is { } s && j.FinishedAt is { } f) { <span> · took @Fmt.Duration((long)Math.Max(1, (f - s).TotalMinutes))</span> }
                                 @if (j.Parts != ImportParts.All) { <span> · @PartsPicker.Describe(j.Parts)</span> }
                                 · @j.Processed.ToString("N0")/@j.Total.ToString("N0") processed
@@ -246,7 +246,7 @@ else
                         @foreach (var e in jellyfin)
                         {
                             <tr>
-                                <td class="muted nowrap">@e.At.ToLocalTime().ToString("d MMM HH:mm")</td>
+                                <td class="muted nowrap">@e.At.ToLocalTime().ToString("MMM d, h:mm tt")</td>
                                 <td><b>@e.UserName</b></td>
                                 <td>@e.Item</td>
                                 <td class="muted">@e.Outcome</td>
@@ -268,11 +268,11 @@ else
                         {
                             <tr @key="i.Code">
                                 <td><b>@i.CreatedBy</b></td>
-                                <td class="muted nowrap">@i.CreatedAt.ToLocalTime().ToString("d MMM yyyy")</td>
+                                <td class="muted nowrap">@i.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")</td>
                                 <td>
-                                    @if (i.UsedAt is { } used) { <span class="pill pill-ok">used</span> <span> by @(i.UsedBy ?? "a deleted account") on @used.ToLocalTime().ToString("d MMM")</span> }
+                                    @if (i.UsedAt is { } used) { <span class="pill pill-ok">used</span> <span> by @(i.UsedBy ?? "a deleted account") on @used.ToLocalTime().ToString("MMM d")</span> }
                                     else if (i.ExpiresAt < DateTimeOffset.UtcNow) { <span class="pill">expired</span> }
-                                    else { <span class="pill">open</span> <span class="muted"> until @i.ExpiresAt.ToLocalTime().ToString("d MMM")</span> }
+                                    else { <span class="pill">open</span> <span class="muted"> until @i.ExpiresAt.ToLocalTime().ToString("MMM d")</span> }
                                 </td>
                             </tr>
                         }
@@ -292,7 +292,7 @@ else
                     {
                         <details class="admin-log @(l.Level is "Error" or "Critical" ? "is-error" : "is-warn")">
                             <summary>
-                                <span class="muted small nowrap">@l.At.ToLocalTime().ToString("d MMM HH:mm:ss")</span>
+                                <span class="muted small nowrap">@l.At.ToLocalTime().ToString("MMM d, h:mm:ss tt")</span>
                                 <span class="pill pill-sm @(l.Level is "Error" or "Critical" ? "pill-bad" : "")">@l.Level</span>
                                 <span class="admin-log-first">@FirstLine(l.Message)</span>
                             </summary>
@@ -382,7 +382,7 @@ else
         ActivityKind.DeletePlay => "removed a play", ActivityKind.Rate => "rated", ActivityKind.Unrate => "removed rating",
         ActivityKind.WatchlistAdd => "added to watchlist", ActivityKind.WatchlistRemove => "removed from watchlist",
         ActivityKind.ShowStatus => "show status", ActivityKind.RewatchStart => "started rewatch", ActivityKind.RewatchStop => "stopped rewatch",
-        ActivityKind.CheckIn => "checked in", ActivityKind.CheckInCancel => "cancelled check-in",
+        ActivityKind.CheckIn => "checked in", ActivityKind.CheckInCancel => "canceled check-in",
         ActivityKind.ListCreate => "created list", ActivityKind.ListEdit => "edited list", ActivityKind.ListDelete => "deleted list",
         ActivityKind.ListAdd => "added to list", ActivityKind.ListRemove => "removed from list",
         ActivityKind.Import => "import", ActivityKind.ClearData => "cleared data", ActivityKind.SignUp => "signed up",
@@ -405,7 +405,7 @@ else
             : d.TotalHours < 1 ? $"{(int)d.TotalMinutes}m ago"
             : d.TotalDays < 1 ? $"{(int)d.TotalHours}h ago"
             : d.TotalDays < 30 ? $"{(int)d.TotalDays}d ago"
-            : when.ToLocalTime().ToString("d MMM yyyy");
+            : when.ToLocalTime().ToString("MMM d, yyyy");
     }
 
     private static string Uptime(DateTimeOffset since)

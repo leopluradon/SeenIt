@@ -66,7 +66,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task AdminUnlockAsync(Guid id) => SendAsync(HttpMethod.Post, $"api/admin/users/{id}/unlock", null);
     public Task<AdminResetLink?> AdminResetLinkAsync(Guid id) => SendAsync<AdminResetLink>(HttpMethod.Post, $"api/admin/users/{id}/reset-link");
 
-    // ---------- Catalogue ----------
+    // ---------- Catalog ----------
 
     public Task<PagedResult<MediaSummary>> SearchAsync(string q, string? type = null, int page = 1) =>
         GetAsync<PagedResult<MediaSummary>>($"api/catalog/search?q={Uri.EscapeDataString(q)}&page={page}" + (type is null ? "" : $"&type={type}"));

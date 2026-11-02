@@ -25,7 +25,7 @@ public static class ApiEndpoints
             Results.File(await export.BuildAsync(p.UserId(), ct), "application/zip", $"seenit-export-{DateTime.UtcNow:yyyy-MM-dd}.zip"));
     }
 
-    // ---------- Catalogue: public, with your own state when signed in ----------
+    // ---------- Catalog: public, with your own state when signed in ----------
 
     private static void MapCatalog(RouteGroupBuilder g)
     {

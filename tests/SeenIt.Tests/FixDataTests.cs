@@ -69,4 +69,18 @@ public class FixDataTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    [Fact]
+    public void Home_order_keeps_the_saved_order_and_slots_in_new_sections()
+    {
+        var all = UiPrefs.HomeSections.Select(s => s.Key).ToList();
+        Assert.Equal(all, UiPrefs.HomeOrder(null));
+        var saved = new List<string> { "recent", "upnext", "bogus", "recent" };   // an old save: unknown key, duplicate
+        var order = UiPrefs.HomeOrder(saved);
+        Assert.Equal(all.Count, order.Count);
+        Assert.Equal(["recent", "upnext"], order.Where(k => k is "recent" or "upnext"));
+        Assert.DoesNotContain("bogus", order);
+        // "upcoming" follows "upnext" by default, so it lands right after it.
+        Assert.Equal(order.IndexOf("upnext") + 1, order.IndexOf("upcoming"));
+    }
 }

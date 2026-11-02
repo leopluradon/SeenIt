@@ -5,7 +5,7 @@ using SeenIt.Contracts;
 namespace SeenIt.Server.Import;
 
 /// <summary>
-/// Reads a Trakt data export. Files are recognised by their contents rather than their names,
+/// Reads a Trakt data export. Files are recognized by their contents rather than their names,
 /// so both trakt.tv's own export and API-shaped dumps (sync/history, sync/watched, …) work.
 /// </summary>
 public static class TraktParser
@@ -57,7 +57,7 @@ public static class TraktParser
                 continue;
             }
             var slug = baseName.StartsWith("lists-", StringComparison.OrdinalIgnoreCase) ? baseName[6..] : baseName;
-            var (listName, desc) = listMeta.TryGetValue(slug, out var meta) ? meta : (Humanise(slug), null);
+            var (listName, desc) = listMeta.TryGetValue(slug, out var meta) ? meta : (Humanize(slug), null);
             if (parsed.Count > 0) result.Lists.Add(new ImportList(listName, desc, parsed));
         }
 
@@ -149,6 +149,6 @@ public static class TraktParser
     private static DateTimeOffset Date(JsonElement e, string prop) =>
         DateTimeOffset.TryParse(Str(e, prop), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var d) ? d.ToUniversalTime() : DateTimeOffset.UtcNow;
 
-    private static string Humanise(string slug) =>
+    private static string Humanize(string slug) =>
         CultureInfo.InvariantCulture.TextInfo.ToTitleCase(slug.Replace('-', ' ').Replace('_', ' '));
 }

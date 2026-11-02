@@ -114,7 +114,7 @@ else if (data is not null)
                                 <div class="mini-title">@h.Title</div>
                                 @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · @h.EpisodeTitle</div> }
                                 <div class="muted small">
-                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString("HH:mm"))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
+                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString("h:mm tt"))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
                                     @if (h.Source != WatchSource.Manual) { <span class="pill pill-sm">@SourceLabel(h.Source)</span> }
                                 </div>
                             </div>

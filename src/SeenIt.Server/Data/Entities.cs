@@ -19,6 +19,8 @@ public class AppUser : IdentityUser<Guid>
 
     /// <summary>Home page sections the user has hidden (keys from UiPrefs.HomeSections).</summary>
     public List<string> HiddenHomeSections { get; set; } = [];
+    /// <summary>Home page section order (keys from UiPrefs.HomeSections); empty means the default.</summary>
+    public List<string> HomeOrder { get; set; } = [];
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
     public List<string> Tabs { get; set; } = [];
 

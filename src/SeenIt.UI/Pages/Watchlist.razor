@@ -29,7 +29,7 @@ else if (items is not null)
             @foreach (var w in shown)
             {
                 var upcoming = w.ReleaseDate is { } rd && rd > DateOnly.FromDateTime(DateTime.Today);
-                <PosterCard Media="w.Media" Badge="@(upcoming ? w.ReleaseDate!.Value.ToString("d MMM") : null)" @key="(w.Media.Type, w.Media.TmdbId)" />
+                <PosterCard Media="w.Media" Badge="@(upcoming ? w.ReleaseDate!.Value.ToString("MMM d") : null)" @key="(w.Media.Type, w.Media.TmdbId)" />
             }
         </div>
     }

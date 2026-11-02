@@ -28,8 +28,8 @@ public class TraktParserTests
             ["ratings-movies.json"] = """[{"rated_at":"2024-01-01T00:00:00Z","rating":9,"type":"movie","movie":{"title":"Dune","year":2021,"ids":{"tmdb":438631}}}]""",
             ["ratings-episodes.json"] = """[{"rated_at":"2024-01-01T00:00:00Z","rating":8,"type":"episode","episode":{"season":1,"number":3},"show":{"title":"Severance","ids":{"tmdb":95396}}}]""",
             ["lists-watchlist.json"] = """[{"rank":1,"listed_at":"2024-02-01T00:00:00Z","type":"show","show":{"title":"Andor","year":2022,"ids":{"tmdb":83867}}}]""",
-            ["lists-lists.json"] = """[{"name":"Sci-fi favourites","description":"best","ids":{"trakt":5,"slug":"sci-fi-favourites"}}]""",
-            ["lists-sci-fi-favourites.json"] = """[{"rank":1,"listed_at":"2024-02-01T00:00:00Z","type":"movie","movie":{"title":"Dune","year":2021,"ids":{"tmdb":438631}}}]""",
+            ["lists-lists.json"] = """[{"name":"Sci-fi favorites","description":"best","ids":{"trakt":5,"slug":"sci-fi-favorites"}}]""",
+            ["lists-sci-fi-favorites.json"] = """[{"rank":1,"listed_at":"2024-02-01T00:00:00Z","type":"movie","movie":{"title":"Dune","year":2021,"ids":{"tmdb":438631}}}]""",
             ["user-profile.json"] = """{"username":"x"}""",
         };
 
@@ -48,7 +48,7 @@ public class TraktParserTests
         Assert.Equal(83867, p.Watchlist[0].Item.TmdbId);
 
         var list = Assert.Single(p.Lists);
-        Assert.Equal("Sci-fi favourites", list.Name);
+        Assert.Equal("Sci-fi favorites", list.Name);
         Assert.Equal("best", list.Description);
     }
 

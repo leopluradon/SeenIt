@@ -1,4 +1,4 @@
-@* A row of labelled facts, e.g. Runtime 2h 16m · Episodes 19. Empty values are skipped. *@
+@* A row of labeled facts, e.g. Runtime 2h 16m · Episodes 19. Empty values are skipped. *@
 <dl class="detail-stats">
     @foreach (var (label, value) in Items.Where(i => !string.IsNullOrEmpty(i.Value)))
     {

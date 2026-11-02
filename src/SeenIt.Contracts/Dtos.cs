@@ -17,7 +17,8 @@ public record MeDto(
     bool HideSpoilers = false, bool BlurSpoilerImages = false,
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
-    DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null);
+    DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null,
+    IReadOnlyList<string>? HomeOrder = null);
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(
@@ -26,12 +27,13 @@ public record PreferencesRequest(
     string? Region = null,          // "" clears it (back to the device's region)
     ProfileVisibility? Visibility = null,
     string? TrackingSince = null,   // yyyy-MM-dd; "" clears it
-    string? TimeZone = null);       // IANA id, e.g. America/New_York; "" = follow the device
+    string? TimeZone = null,        // IANA id, e.g. America/New_York; "" = follow the device
+    IReadOnlyList<string>? HomeOrder = null);   // home section keys, top to bottom
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }
 
-/// <summary>The customisable bits of the UI and their allowed keys.</summary>
+/// <summary>The customizable bits of the UI and their allowed keys.</summary>
 public static class UiPrefs
 {
     public static readonly (string Key, string Label)[] HomeSections =
@@ -62,6 +64,23 @@ public static class UiPrefs
         ("search", "Search", "search", "search"),
     ];
 
+    /// <summary>
+    /// Home sections top to bottom: the saved order, then any sections it doesn't mention (added
+    /// since it was saved) slotted in after the section they follow by default.
+    /// </summary>
+    public static List<string> HomeOrder(IReadOnlyList<string>? saved)
+    {
+        var order = (saved ?? []).Where(k => HomeSections.Any(s => s.Key == k)).Distinct().ToList();
+        for (var i = 0; i < HomeSections.Length; i++)
+        {
+            var key = HomeSections[i].Key;
+            if (order.Contains(key)) continue;
+            var after = i == 0 ? -1 : order.IndexOf(HomeSections[i - 1].Key);
+            order.Insert(after + 1, key);
+        }
+        return order;
+    }
+
     public const int MaxTabs = 4; // plus the fixed "More" tab
     public static readonly string[] DefaultTabs = ["home", "discover", "progress", "calendar"];
 }
@@ -79,7 +98,7 @@ public record DeleteAccountRequest(string Password);
 public record ClearDataRequest(string Password, ImportParts Parts);
 public record ClearDataResult(int Plays, int Ratings, int Watchlist, int Lists);
 
-// ---------- Catalogue (TMDB) ----------
+// ---------- Catalog (TMDB) ----------
 
 /// <summary>A poster card: enough to render a grid tile for a movie or show.</summary>
 public record MediaSummary(
@@ -547,7 +566,7 @@ public record ProfileDto(
     UserCard User, DateTimeOffset JoinedAt, bool IsMe, ProfileVisibility Visibility, bool CanView,
     int Followers, int Following,
     NowWatchingDto? NowWatching, ProfileStats? Stats,
-    IReadOnlyList<HistoryEntry> Recent, IReadOnlyList<RatingEntry> Favourites, IReadOnlyList<ListSummary> Lists);
+    IReadOnlyList<HistoryEntry> Recent, IReadOnlyList<RatingEntry> Favorites, IReadOnlyList<ListSummary> Lists);
 
 public record ActivityItem(UserCard User, HistoryEntry Entry);
 public record FriendWatching(UserCard User, NowWatchingDto Item);

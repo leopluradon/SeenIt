@@ -137,7 +137,7 @@ public static class AdminEndpoints
             await db.Users.CountAsync(u => u.LastSeenAt >= week, ct),
             await db.Activity.CountAsync(a => a.At >= day, ct),
             Enumerable.Range(0, 30).Select(i => monthStart.AddDays(i))
-                .Select(d => new CountBucket(d.ToString("d MMM"), activityDays.GetValueOrDefault(d))).ToList(),
+                .Select(d => new CountBucket(d.ToString("MMM d"), activityDays.GetValueOrDefault(d))).ToList(),
             recent.Count(e => e.At >= day && e.Level is "Error" or "Critical"),
             backups.Health(), alerts.Recent);
     }

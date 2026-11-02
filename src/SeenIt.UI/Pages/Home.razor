@@ -9,138 +9,162 @@
         <h1 class="visually-hidden">Home</h1>
         <ErrorBox Message="@error" OnRetry="LoadDashboard" />
 
-        @if (Visible("now") && now is not null)
+        @* Sections in the order the user chose (Customize home); one spinner while the dashboard loads. *@
+        @{ var waiting = false; }
+        @foreach (var key in UiPrefs.HomeOrder(Session.Me?.HomeOrder).Where(Visible))
         {
-            <section class="row-section">
-                <NowWatchingCard Item="now" OnCancel="CancelCheckIn" />
-            </section>
-        }
-
-        @if (Visible("onthisday") && onThisDay is { Count: > 0 })
-        {
-            <section class="row-section">
-                <div class="section-head">
-                    <h2>On this day</h2>
-                    <div class="section-tools"><HideButton OnHide='() => Hide("onthisday")' /></div>
-                </div>
-                <div class="otd-list">
-                    @foreach (var o in onThisDay)
-                    {
-                        <a class="otd-item" href="@Fmt.Href(o.Type, o.TmdbId)" @key="(o.Type, o.TmdbId, o.YearsAgo)">
-                            @if (Img.Poster(o.PosterPath, "w154") is { } src) { <img src="@src" alt="" loading="lazy" /> }
-                            <span class="otd-text">
-                                <span class="otd-when">@(o.YearsAgo == 1 ? "A year ago" : $"{o.YearsAgo} years ago") · @o.Date.Year</span>
-                                <b>@o.Title</b>
-                                <span class="muted small">@o.Text</span>
-                            </span>
-                        </a>
-                    }
-                </div>
-            </section>
-        }
-
-        @if (Visible("review") && reviewLinks.Count > 0)
-        {
-            <section class="review-banner">
-                <Icon Name="chart" Size="22" />
-                <div class="review-banner-links">
-                    @foreach (var (href, text) in reviewLinks) { <a href="@href">@text <Icon Name="chevron-right" Size="16" /></a> }
-                </div>
-                <HideButton OnHide='() => Hide("review")' />
-            </section>
-        }
-
-        @if (dash is null && error is null) { <Spinner /> }
-        else if (dash is not null)
-        {
-            @if (Visible("upnext"))
+            @switch (key)
             {
-                <section class="row-section">
-                    <div class="section-head">
-                        <h2>Up next</h2>
-                        <div class="section-tools"><a href="progress" class="section-more">All progress <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("upnext")' /></div>
-                    </div>
-                    @if (dash.UpNext.Count == 0)
+                case "now":
+                    @if (now is not null)
                     {
-                        <p class="muted">Start watching a show and your next episode shows up here. <a href="discover">Find something to watch</a>.</p>
+                        <section class="row-section">
+                            <NowWatchingCard Item="now" OnCancel="CancelCheckIn" />
+                        </section>
                     }
-                    else
+                    break;
+                case "onthisday":
+                    @if (onThisDay is { Count: > 0 })
                     {
-                        <div class="card-scroller">
-                            @foreach (var p in dash.UpNext) { <UpNextCard Progress="p" OnWatched="LoadDashboard" @key="p.ShowTmdbId" /> }
-                        </div>
+                        <section class="row-section">
+                            <div class="section-head">
+                                <h2>On this day</h2>
+                                <div class="section-tools"><HideButton OnHide='() => Hide("onthisday")' /></div>
+                            </div>
+                            <div class="otd-list">
+                                @foreach (var o in onThisDay)
+                                {
+                                    <a class="otd-item" href="@Fmt.Href(o.Type, o.TmdbId)" @key="(o.Type, o.TmdbId, o.YearsAgo)">
+                                        @if (Img.Poster(o.PosterPath, "w154") is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                                        <span class="otd-text">
+                                            <span class="otd-when">@(o.YearsAgo == 1 ? "A year ago" : $"{o.YearsAgo} years ago") · @o.Date.Year</span>
+                                            <b>@o.Title</b>
+                                            <span class="muted small">@o.Text</span>
+                                        </span>
+                                    </a>
+                                }
+                            </div>
+                        </section>
                     }
-                </section>
-            }
-
-            @if (Visible("upcoming") && dash.Upcoming.Count > 0)
-            {
-                <section class="row-section">
-                    <div class="section-head">
-                        <h2>Coming up</h2>
-                        <div class="section-tools"><a href="calendar" class="section-more">Calendar <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("upcoming")' /></div>
-                    </div>
-                    <div class="mini-list">
-                        @foreach (var c in dash.Upcoming)
-                        {
-                            <a class="mini-item" href="@(c.Type == MediaType.Episode ? Fmt.EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber) : Fmt.Href(c.Type, c.TmdbId))">
-                                <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
-                                <div>
-                                    <div class="mini-title">@c.Title</div>
-                                    <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }</div>
-                                </div>
-                                <span class="mini-date">@Fmt.Day(c.Date)</span>
-                            </a>
-                        }
-                    </div>
-                </section>
-            }
-
-            @if (Visible("friends") && feed is { } f && (f.Activity.Count > 0 || f.WatchingNow.Count > 0))
-            {
-                <section class="row-section">
-                    <div class="section-head">
-                        <h2>Friends' activity</h2>
-                        <div class="section-tools"><a href="friends" class="section-more">Friends <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("friends")' /></div>
-                    </div>
-                    @foreach (var w in f.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
-                    <div class="poster-scroller">
-                        @foreach (var a in f.Activity)
-                        {
-                            var h = a.Entry;
-                            <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
-                                        Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
-                                        Sub="@($"{a.User.Name} · " + (h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))"
-                                        ShowScore="false" @key="h.Id" />
-                        }
-                    </div>
-                </section>
-            }
-
-            @if (Visible("recent"))
-            {
-                <section class="row-section">
-                    <div class="section-head">
-                        <h2>Recently watched</h2>
-                        <div class="section-tools"><a href="history" class="section-more">Full history <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("recent")' /></div>
-                    </div>
-                    @if (dash.RecentHistory.Count == 0)
+                    break;
+                case "review":
+                    @if (reviewLinks.Count > 0)
                     {
-                        <p class="muted">Nothing yet. Mark something watched, connect Jellyfin, or import from Trakt or Letterboxd in <a href="settings">Settings</a>.</p>
+                        <section class="review-banner">
+                            <Icon Name="chart" Size="22" />
+                            <div class="review-banner-links">
+                                @foreach (var (href, text) in reviewLinks) { <a href="@href">@text <Icon Name="chevron-right" Size="16" /></a> }
+                            </div>
+                            <HideButton OnHide='() => Hide("review")' />
+                        </section>
                     }
-                    else
+                    break;
+                case "upnext":
+                    @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
+                    else if (dash is not null)
                     {
-                        <div class="poster-scroller">
-                            @foreach (var h in dash.RecentHistory)
+                        <section class="row-section">
+                            <div class="section-head">
+                                <h2>Up next</h2>
+                                <div class="section-tools"><a href="progress" class="section-more">All progress <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("upnext")' /></div>
+                            </div>
+                            @if (dash.UpNext.Count == 0)
                             {
-                                <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
-                                            Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
-                                            Sub="@(h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · {Fmt.Relative(h.WatchedAt)}" : Fmt.Relative(h.WatchedAt))"
-                                            ShowScore="false" @key="h.Id" />
+                                <p class="muted">Start watching a show and your next episode shows up here. <a href="discover">Find something to watch</a>.</p>
                             }
-                        </div>
+                            else
+                            {
+                                <div class="card-scroller">
+                                    @foreach (var p in dash.UpNext) { <UpNextCard Progress="p" OnWatched="LoadDashboard" @key="p.ShowTmdbId" /> }
+                                </div>
+                            }
+                        </section>
                     }
-                </section>
+                    break;
+                case "upcoming":
+                    @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
+                    else if (dash is not null)
+                    {
+                        @if (dash.Upcoming.Count > 0)
+                        {
+                            <section class="row-section">
+                                <div class="section-head">
+                                    <h2>Coming up</h2>
+                                    <div class="section-tools"><a href="calendar" class="section-more">Calendar <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("upcoming")' /></div>
+                                </div>
+                                <div class="mini-list">
+                                    @foreach (var c in dash.Upcoming)
+                                    {
+                                        <a class="mini-item" href="@(c.Type == MediaType.Episode ? Fmt.EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber) : Fmt.Href(c.Type, c.TmdbId))">
+                                            <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
+                                            <div>
+                                                <div class="mini-title">@c.Title</div>
+                                                <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }</div>
+                                            </div>
+                                            <span class="mini-date">@Fmt.Day(c.Date)</span>
+                                        </a>
+                                    }
+                                </div>
+                            </section>
+                        }
+                    }
+                    break;
+                case "friends":
+                    @if (feed is { } f && (f.Activity.Count > 0 || f.WatchingNow.Count > 0))
+                    {
+                        <section class="row-section">
+                            <div class="section-head">
+                                <h2>Friends' activity</h2>
+                                <div class="section-tools"><a href="friends" class="section-more">Friends <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("friends")' /></div>
+                            </div>
+                            @foreach (var w in f.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
+                            <div class="poster-scroller">
+                                @foreach (var a in f.Activity)
+                                {
+                                    var h = a.Entry;
+                                    <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
+                                                Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
+                                                Sub="@($"{a.User.Name} · " + (h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))"
+                                                ShowScore="false" @key="h.Id" />
+                                }
+                            </div>
+                        </section>
+                    }
+                    break;
+                case "recent":
+                    @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
+                    else if (dash is not null)
+                    {
+                        <section class="row-section">
+                            <div class="section-head">
+                                <h2>Recently watched</h2>
+                                <div class="section-tools"><a href="history" class="section-more">Full history <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("recent")' /></div>
+                            </div>
+                            @if (dash.RecentHistory.Count == 0)
+                            {
+                                <p class="muted">Nothing yet. Mark something watched, connect Jellyfin, or import from Trakt or Letterboxd in <a href="settings">Settings</a>.</p>
+                            }
+                            else
+                            {
+                                <div class="poster-scroller">
+                                    @foreach (var h in dash.RecentHistory)
+                                    {
+                                        <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
+                                                    Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
+                                                    Sub="@(h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · {Fmt.Relative(h.WatchedAt)}" : Fmt.Relative(h.WatchedAt))"
+                                                    ShowScore="false" @key="h.Id" />
+                                    }
+                                </div>
+                            }
+                        </section>
+                    }
+                    break;
+                case "trending-movies":
+                    <PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-movies"))' />
+                    break;
+                case "trending-shows":
+                    <PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-shows"))' />
+                    break;
             }
         }
     </Authorized>
@@ -157,13 +181,10 @@
     </NotAuthorized>
 </AuthorizeView>
 
-@if (Visible("trending-movies"))
+@if (!signedIn)
 {
-    <PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" OnHide="@(signedIn ? EventCallback.Factory.Create(this, () => Hide("trending-movies")) : default)" />
-}
-@if (Visible("trending-shows"))
-{
-    <PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" OnHide="@(signedIn ? EventCallback.Factory.Create(this, () => Hide("trending-shows")) : default)" />
+    <PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" />
+    <PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" />
 }
 
 @if (signedIn)
@@ -173,13 +194,8 @@
     </div>
     <Modal @bind-Open="customizeOpen" Title="Customize home">
         <div class="stack">
-            <p class="muted small">Choose what shows on your home page. This is saved to your account.</p>
-            @foreach (var (key, label) in UiPrefs.HomeSections)
-            {
-                <label class="check" @key="key">
-                    <input type="checkbox" checked="@(!hidden.Contains(key))" @onchange="e => Toggle(key, (bool)e.Value!)" /> @label
-                </label>
-            }
+            <p class="muted small">Choose what shows on your home page and in what order. This is saved to your account.</p>
+            <HomeSectionsEditor OnChanged="SectionsChanged" />
             <a href="settings#layout" class="small">Change the tabs at the bottom of the app</a>
         </div>
     </Modal>
@@ -237,7 +253,7 @@
         {
             await Api.CancelCheckInAsync();
             now = null;
-            Toasts.Show("Check-in cancelled");
+            Toasts.Show("Check-in canceled");
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }
@@ -276,6 +292,17 @@
     }
 
     private Task Hide(string key) => Toggle(key, false);
+
+    /// <summary>After the editor changes things: load whatever has just been switched on.</summary>
+    private async Task SectionsChanged()
+    {
+        var before = hidden;
+        hidden = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
+        var shown = before.Except(hidden).ToList();
+        if (shown.Any(k => k.StartsWith("trending")) && trendingMovies is null) await LoadTrending();
+        if (shown.Contains("review") && reviewLinks.Count == 0) await LoadReviewLinks();
+        if (shown.Any(k => k is "now" or "friends" or "onthisday")) await LoadExtras();
+    }
 
     private async Task Toggle(string key, bool visible)
     {

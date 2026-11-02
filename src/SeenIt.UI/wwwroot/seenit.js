@@ -37,7 +37,7 @@ window.seenit = {
     async share(title, url) {
         if (navigator.share) {
             try { await navigator.share({ title, url }); return 'shared'; }
-            catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
+            catch (e) { if (e && e.name === 'AbortError') return 'canceled'; }
         }
         try { await navigator.clipboard.writeText(url); return 'copied'; }
         catch { return 'failed'; }

@@ -1,0 +1,73 @@
+@* Show/hide and reorder the home page sections. Saved to the account. *@
+@inject ApiClient Api
+@inject SessionState Session
+@inject Toasts Toasts
+<div class="tab-editor home-editor">
+    @for (var i = 0; i < order.Count; i++)
+    {
+        var index = i;
+        var key = order[index];
+        var label = UiPrefs.HomeSections.First(s => s.Key == key).Label;
+        <div class="tab-row @(hidden.Contains(key) ? "off" : "")" @key="key">
+            <label class="check">
+                <input type="checkbox" checked="@(!hidden.Contains(key))" @onchange="e => Toggle(key, (bool)e.Value!)" />
+                <span>@label</span>
+            </label>
+            <button class="icon-btn" disabled="@(index == 0 || busy)" @onclick="() => Move(index, -1)" aria-label="Move @label up"><Icon Name="chevron-up" Size="16" /></button>
+            <button class="icon-btn" disabled="@(index == order.Count - 1 || busy)" @onclick="() => Move(index, 1)" aria-label="Move @label down"><Icon Name="chevron-down" Size="16" /></button>
+        </div>
+    }
+</div>
+<button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="Reset">Reset to default</button>
+@code {
+    /// <summary>Called after anything changes (the home page reloads what's now shown).</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private List<string> order = [];
+    private HashSet<string> hidden = [];
+    private bool busy;
+
+    protected override void OnParametersSet()
+    {
+        order = UiPrefs.HomeOrder(Session.Me?.HomeOrder);
+        hidden = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
+    }
+
+    private Task Move(int index, int step)
+    {
+        (order[index], order[index + step]) = (order[index + step], order[index]);
+        return SaveOrder();
+    }
+
+    private Task Reset()
+    {
+        order = UiPrefs.HomeSections.Select(s => s.Key).ToList();
+        hidden.Clear();
+        return Save(new PreferencesRequest(HomeOrder: order, HiddenHomeSections: []), m => m with { HomeOrder = order.ToList(), HiddenHomeSections = [] });
+    }
+
+    private Task SaveOrder()
+    {
+        var saved = order.ToList();
+        return Save(new PreferencesRequest(HomeOrder: saved), m => m with { HomeOrder = saved });
+    }
+
+    private Task Toggle(string key, bool visible)
+    {
+        if (visible) hidden.Remove(key); else hidden.Add(key);
+        var saved = hidden.ToList();
+        return Save(new PreferencesRequest(HiddenHomeSections: saved), m => m with { HiddenHomeSections = saved });
+    }
+
+    private async Task Save(PreferencesRequest request, Func<MeDto, MeDto> change)
+    {
+        busy = true;
+        try
+        {
+            await Api.SetPreferencesAsync(request);
+            Session.Update(change);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+}

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace SeenIt.Server.Tmdb;
 
-// Raw TMDB v3 response shapes. Deserialised with snake_case naming, so property names map directly.
+// Raw TMDB v3 response shapes. Deserialized with snake_case naming, so property names map directly.
 
 public record TmdbPage<T>(int Page, List<T> Results, int TotalPages, int TotalResults);
 

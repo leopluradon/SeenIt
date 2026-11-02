@@ -3,7 +3,7 @@
     <div>
         <span class="highlight-label">@Label</span>
         <b>@Entry.Title</b>
-        <span class="muted small">@(Entry.Type == MediaType.Episode ? Fmt.Ep(Entry.SeasonNumber, Entry.EpisodeNumber) + " · " : "")@Entry.WatchedAt.ToLocalTime().ToString("d MMM, h:mm tt")</span>
+        <span class="muted small">@(Entry.Type == MediaType.Episode ? Fmt.Ep(Entry.SeasonNumber, Entry.EpisodeNumber) + " · " : "")@Entry.WatchedAt.ToLocalTime().ToString("MMM d, h:mm tt")</span>
     </div>
 </a>
 @code {

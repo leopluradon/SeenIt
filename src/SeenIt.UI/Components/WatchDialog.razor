@@ -8,7 +8,7 @@
         }
         else if (ReleaseDate is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today))
         {
-            <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release date <span class="muted small">(@rd.ToString("d MMM yyyy"))</span></button>
+            <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release date <span class="muted small">(@rd.ToString("MMM d, yyyy"))</span></button>
         }
         <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Unknown))">Unknown date</button>
         <div class="field">

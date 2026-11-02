@@ -119,7 +119,7 @@ builder.Services.AddHostedService<ShowRefreshWorker>();
 var app = builder.Build();
 
 if (string.IsNullOrWhiteSpace(config["Tmdb:ReadAccessToken"]))
-    app.Logger.LogWarning("Tmdb:ReadAccessToken is not set; catalogue requests will fail.");
+    app.Logger.LogWarning("Tmdb:ReadAccessToken is not set; catalog requests will fail.");
 
 await using (var scope = app.Services.CreateAsyncScope())
 {

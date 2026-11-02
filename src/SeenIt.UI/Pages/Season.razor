@@ -37,9 +37,9 @@ else if (season is not null)
         ("Episodes", airedCount < eps.Count ? $"{airedCount} aired of {eps.Count}" : eps.Count.ToString()),
         ("Total runtime", total > 0 ? Fmt.Duration(total) : null),
         ("Per episode", runtimes.Count > 0 ? "~" + Fmt.Runtime((int)Math.Round(runtimes.Average(x => x.Runtime!.Value))) : null),
-        ("Aired", first is { } f ? (last is { } l && l != f ? $"{f:d MMM yyyy} – {l:d MMM yyyy}" : $"{f:d MMM yyyy}") : null),
+        ("Aired", first is { } f ? (last is { } l && l != f ? $"{f:MMM d, yyyy} – {l:MMM d, yyyy}" : $"{f:MMM d, yyyy}") : null),
         ("You've watched", watchedMinutes > 0 ? Fmt.Duration(watchedMinutes) : null),
-        ("Completed", season.CompletedAt is { } done ? done.ToLocalTime().ToString("d MMM yyyy") : null),
+        ("Completed", season.CompletedAt is { } done ? done.ToLocalTime().ToString("MMM d, yyyy") : null),
         ("Left to watch", watchedMinutes > 0 && season.CompletedAt is null ? Fmt.Duration(eps.Where(x => x.Plays == 0 && x.AirDate is { } d && d <= today).Sum(x => (long)(x.Runtime ?? 0))) : null),
     ])" />
     @if (season.Overview is not null) { <p class="overview">@season.Overview</p> }
@@ -56,7 +56,7 @@ else if (season is not null)
                 <div class="episode-body">
                     <div class="episode-title">
                         <a href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)"><b><Spoiler Watched="e.Plays > 0">@e.Name</Spoiler></b></a>
-                        <span class="muted small">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) @if (e.AirDate is { } ad) { <span class="dot-sep">@ad.ToString("d MMM yyyy")</span> } @if (e.Runtime is > 0) { <span class="dot-sep">@Fmt.Runtime(e.Runtime)</span> }</span>
+                        <span class="muted small">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) @if (e.AirDate is { } ad) { <span class="dot-sep">@ad.ToString("MMM d, yyyy")</span> } @if (e.Runtime is > 0) { <span class="dot-sep">@Fmt.Runtime(e.Runtime)</span> }</span>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(e.Overview)) { <Spoiler Watched="e.Plays > 0" Block="true"><p class="episode-overview">@e.Overview</p></Spoiler> }
                     <AuthorizeView>

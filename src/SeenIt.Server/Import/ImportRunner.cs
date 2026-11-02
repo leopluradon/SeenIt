@@ -248,7 +248,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             // Only an exact title counts. TMDB's first search result is often a different film
             // ("300" gave "My Poetic Works 300 Yen"), and a wrong match is worse than an unmatched
             // one, which at least gets listed. Release years differ between sources surprisingly
-            // often (300 is 2006 on Letterboxd, 2007 on TMDB), so neighbouring years are tried too.
+            // often (300 is 2006 on Letterboxd, 2007 on TMDB), so neighboring years are tried too.
             foreach (var year in r.Year is { } y ? new int?[] { y, y + 1, y - 1 } : [null])
                 if (Exact((await tmdb.SearchMovieAsync(r.Title, year, ct))?.Results, r.Title, r.Year) is { } m) return m.Id;
             if (r.Year is not null && Exact((await tmdb.SearchMovieAsync(r.Title, null, ct))?.Results, r.Title, r.Year, maxYearGap: 2) is { } any)

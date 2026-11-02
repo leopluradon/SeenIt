@@ -25,7 +25,7 @@ else if (e is not null)
             <div class="muted">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)</div>
             <h1><Spoiler Watched="Seen">@(e.Name ?? $"Episode {e.EpisodeNumber}")</Spoiler></h1>
             <div class="facts">
-                @if (e.AirDate is { } ad) { <span>@(aired ? "Aired" : "Airs") @ad.ToString("d MMM yyyy")</span> }
+                @if (e.AirDate is { } ad) { <span>@(aired ? "Aired" : "Airs") @ad.ToString("MMM d, yyyy")</span> }
                 @if (e.Runtime is > 0) { <span>@Fmt.Runtime(e.Runtime)</span> }
                 @if (!aired) { <span class="pill">Not aired yet</span> }
             </div>
