@@ -83,4 +83,23 @@ public class FixDataTests
         // "upcoming" follows "upnext" by default, so it lands right after it.
         Assert.Equal(order.IndexOf("upnext") + 1, order.IndexOf("upcoming"));
     }
+
+    [Fact]
+    public async Task On_this_day_skips_plays_before_tracking_started()
+    {
+        await using var db = Db();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        db.Users.Add(new AppUser { Id = User, UserName = "me", TimeZone = "UTC", TrackingSince = today.AddYears(-3) });
+        db.Movies.Add(new MovieMeta { TmdbId = 1, Title = "Heat" });
+        db.Movies.Add(new MovieMeta { TmdbId = 2, Title = "Ronin" });
+        DateTimeOffset Noon(DateOnly d) => new(d.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero);
+        Play(db, 1, Noon(today.AddYears(-2)));   // logged as watched: shown
+        Play(db, 2, Noon(today.AddYears(-5)));   // back-filled before tracking started: not shown
+        await db.SaveChangesAsync();
+
+        var items = await new OnThisDayService(db, new TrackingService(db, null!)).GetAsync(User, null, default);
+        var item = Assert.Single(items);
+        Assert.Equal("Heat", item.Title);
+        Assert.Equal(2, item.YearsAgo);
+    }
 }

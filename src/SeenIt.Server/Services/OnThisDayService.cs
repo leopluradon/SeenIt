@@ -4,12 +4,17 @@ using SeenIt.Server.Data;
 
 namespace SeenIt.Server.Services;
 
-/// <summary>What the user watched on today's date in earlier years, and shows they finished on this date.</summary>
+/// <summary>
+/// What the user watched on today's date in earlier years, and shows they finished on this date.
+/// Only from their "started tracking" day on: earlier plays were back-filled and carry the date
+/// they were entered, not when they were watched.
+/// </summary>
 public class OnThisDayService(AppDbContext db, TrackingService tracking)
 {
     public async Task<List<OnThisDayItem>> GetAsync(Guid userId, string? tzId, CancellationToken ct)
     {
         var tz = ReviewService.Zone(await tracking.ZoneIdAsync(userId, tzId, ct));
+        var since = await tracking.TrackingSinceAsync(userId, ct) ?? DateOnly.MinValue;
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).DateTime);
         // Pre-filter in SQL on the UTC date a day either side, then match the local date exactly.
         var days = new[] { today.AddDays(-1), today, today.AddDays(1) };
@@ -23,7 +28,7 @@ public class OnThisDayService(AppDbContext db, TrackingService tracking)
                 .Select(w => new { w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt })
                 .ToListAsync(ct))
             .Select(w => (w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, Date: DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(w.WatchedAt, tz).DateTime)))
-            .Where(w => w.Date.Month == today.Month && w.Date.Day == today.Day && w.Date.Year < today.Year)
+            .Where(w => w.Date.Month == today.Month && w.Date.Day == today.Day && w.Date.Year < today.Year && w.Date >= since)
             .ToList();
 
         var items = new List<OnThisDayItem>();
@@ -46,7 +51,7 @@ public class OnThisDayService(AppDbContext db, TrackingService tracking)
             items.Add(new OnThisDayItem(today.Year - g.Key.Year, g.First().Date, MediaType.Show, s.TmdbId, s.Name, s.PosterPath, text));
         }
 
-        items.AddRange(await FinishedOnThisDayAsync(userId, tz, today, ct));
+        items.AddRange(await FinishedOnThisDayAsync(userId, tz, today, since, ct));
 
         // Finishing a show beats watching some of it on the same day.
         return items.OrderBy(i => i.YearsAgo).ThenBy(i => i.Text.StartsWith("Finished") ? 0 : 1)
@@ -54,7 +59,7 @@ public class OnThisDayService(AppDbContext db, TrackingService tracking)
     }
 
     /// <summary>Ended shows whose final episode the user first watched on this date in an earlier year.</summary>
-    private async Task<List<OnThisDayItem>> FinishedOnThisDayAsync(Guid userId, TimeZoneInfo tz, DateOnly today, CancellationToken ct)
+    private async Task<List<OnThisDayItem>> FinishedOnThisDayAsync(Guid userId, TimeZoneInfo tz, DateOnly today, DateOnly since, CancellationToken ct)
     {
         var watchedShows = db.WatchEvents.Where(w => w.UserId == userId && w.Type == MediaType.Episode).Select(w => w.TmdbId).Distinct();
         var ended = await db.Shows.Where(s => watchedShows.Contains(s.TmdbId) && (s.Status == "Ended" || s.Status == "Canceled"))
@@ -79,7 +84,7 @@ public class OnThisDayService(AppDbContext db, TrackingService tracking)
                 .Select(w => (DateTimeOffset?)w.WatchedAt).Min();
             if (first is null) continue;
             var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(first.Value, tz).DateTime);
-            if (date.Month == today.Month && date.Day == today.Day && date.Year < today.Year)
+            if (date.Month == today.Month && date.Day == today.Day && date.Year < today.Year && date >= since)
                 result.Add(new OnThisDayItem(today.Year - date.Year, date, MediaType.Show, s.TmdbId, s.Name, s.PosterPath, "Finished the show"));
         }
         return result;
