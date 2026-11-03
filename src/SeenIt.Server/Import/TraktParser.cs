@@ -37,8 +37,12 @@ public static class TraktParser
                 watchedSummaries.AddRange(root.EnumerateArray());
             else if (first.TryGetProperty("name", out _) && first.TryGetProperty("ids", out _))
                 foreach (var l in root.EnumerateArray())
-                    if (Str(l, "ids", "slug") is { } slug)
-                        listMeta[slug] = (Str(l, "name") ?? slug, Str(l, "description"));
+                {
+                    var meta = (Str(l, "name") ?? Str(l, "ids", "slug") ?? "List", Str(l, "description"));
+                    if (Str(l, "ids", "slug") is { } slug) listMeta[slug] = meta;
+                    // Export files are named lists-list-<trakt id>-<slug>.json, so the id is the reliable key.
+                    if (Int(l, "ids", "trakt") is { } traktId) listMeta[$"#{traktId}"] = meta;
+                }
         }
 
         // Full history is better; summaries are only a fallback (using both would double-count).
@@ -56,9 +60,23 @@ public static class TraktParser
                 result.Watchlist.AddRange(parsed);
                 continue;
             }
+            if (baseName.Equals("lists-favorites", StringComparison.OrdinalIgnoreCase) || baseName.Equals("favorites", StringComparison.OrdinalIgnoreCase))
+            {
+                // Trakt favorites are ranked; keep that order.
+                result.Favorites.AddRange(items.EnumerateArray()
+                    .Select(i => (Item: Ref(i) is { } r ? new ImportListItem(r, Date(i, "listed_at")) : null, Rank: Int(i, "rank") ?? int.MaxValue))
+                    .Where(x => x.Item is not null).OrderBy(x => x.Rank).Select(x => x.Item!));
+                continue;
+            }
             var slug = baseName.StartsWith("lists-", StringComparison.OrdinalIgnoreCase) ? baseName[6..] : baseName;
-            var (listName, desc) = listMeta.TryGetValue(slug, out var meta) ? meta : (Humanize(slug), null);
-            if (parsed.Count > 0) result.Lists.Add(new ImportList(listName, desc, parsed));
+            var byId = System.Text.RegularExpressions.Regex.Match(slug, @"^list-(\d+)(-|$)");
+            var withoutId = byId.Success && slug.Length > byId.Length ? slug[byId.Length..] : slug;
+            var (listName, desc) =
+                byId.Success && listMeta.TryGetValue($"#{byId.Groups[1].Value}", out var found) ? found
+                : listMeta.TryGetValue(slug, out var bySlug) ? bySlug
+                : (Humanize(withoutId), null);
+            // Older SeenIt imports named these "List 11732618 6 12 Weekend"; a re-import renames them.
+            if (parsed.Count > 0) result.Lists.Add(new ImportList(listName, desc, parsed, Humanize(slug)));
         }
 
         return result;

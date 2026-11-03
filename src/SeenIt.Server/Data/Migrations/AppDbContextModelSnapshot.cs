@@ -427,6 +427,28 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Episodes");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.Favorite", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId", "Type", "TmdbId");
+
+                    b.ToTable("Favorites");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.Follow", b =>
                 {
                     b.Property<Guid>("FollowerId")
@@ -945,6 +967,15 @@ namespace SeenIt.Server.Data.Migrations
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.CheckIn", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Favorite", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()

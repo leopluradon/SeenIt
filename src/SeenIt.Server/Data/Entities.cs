@@ -304,3 +304,13 @@ public class Deployment
     public DateTimeOffset? BuiltAt { get; set; }
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>A favorite movie or show. Rank orders them (Trakt's favorites have an order).</summary>
+public class Favorite
+{
+    public Guid UserId { get; set; }
+    public MediaType Type { get; set; }
+    public int TmdbId { get; set; }
+    public int Rank { get; set; }
+    public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+}

@@ -505,7 +505,8 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             ? await watches.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt)
                 .Select(w => new PlayDto(w.Id, w.WatchedAt, w.Source)).ToListAsync(ct)
             : null;
-        return new UserMediaState(inWatchlist, rating, plays, last, lists, history);
+        var favorite = await db.Favorites.AnyAsync(f => f.UserId == userId && f.Type == type && f.TmdbId == id, ct);
+        return new UserMediaState(inWatchlist, rating, plays, last, lists, history, favorite);
     }
 
     private static List<Video> PickVideos(TmdbVideos? v) =>

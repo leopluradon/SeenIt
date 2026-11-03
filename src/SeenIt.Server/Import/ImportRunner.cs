@@ -37,6 +37,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         await ImportWatchlistAsync(job, parsed.Watchlist, ct);
         await ImportRatingsAsync(job, parsed.Ratings, ct);
         foreach (var list in parsed.Lists) await ImportListAsync(job, list, ct);
+        if (parsed.Favorites.Count > 0) await ImportFavoritesAsync(job, parsed.Favorites, ct);
 
         // Failed counts rows; people think in titles ("Chernobyl" in the diary twice is one title).
         var unmatched = job.Unmatched.Count < 200 ? job.Unmatched.Count : job.Failed;
@@ -173,6 +174,13 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
     {
         var name = import.Name.Length > 100 ? import.Name[..100] : import.Name;
         var list = await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.UserId == job.UserId && l.Name == name, ct);
+        if (list is null && import.LegacyName is { } legacy && legacy != name)
+        {
+            // Imported before under the name an older importer gave it: rename rather than duplicate.
+            var old = legacy.Length > 100 ? legacy[..100] : legacy;
+            list = await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.UserId == job.UserId && l.Name == old, ct);
+            if (list is not null) { list.Name = name; list.Description ??= import.Description; }
+        }
         if (list is null)
         {
             list = new UserList { UserId = job.UserId, Name = name, Description = import.Description };
@@ -199,6 +207,40 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         }
         list.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Adds favorites in the export's order, after any the user already has.</summary>
+    private async Task ImportFavoritesAsync(ImportJob job, List<ImportListItem> favorites, CancellationToken ct)
+    {
+        var existing = (await db.Favorites.Where(f => f.UserId == job.UserId).Select(f => new { f.Type, f.TmdbId }).ToListAsync(ct))
+            .Select(f => (f.Type, f.TmdbId)).ToHashSet();
+        var rank = await db.Favorites.Where(f => f.UserId == job.UserId).MaxAsync(f => (int?)f.Rank, ct) ?? 0;
+        var imported = new HashSet<(MediaType, int)>();
+        foreach (var item in favorites)
+        {
+            if (await ResolveAsync(job, item.Item, ct) is { } id)
+            {
+                imported.Add((item.Item.Type, id));
+                if (!existing.Add((item.Item.Type, id))) job.Skipped++;
+                else
+                {
+                    db.Favorites.Add(new Favorite { UserId = job.UserId, Type = item.Item.Type, TmdbId = id, Rank = ++rank, AddedAt = item.AddedAt });
+                    job.Imported++;
+                }
+            }
+            await StepAsync(job, ct);
+        }
+        await db.SaveChangesAsync(ct);
+
+        // Older imports turned Trakt's favorites into an ordinary list called "Favorites". Now that
+        // they're real favorites, drop that list if it holds nothing else.
+        if (job.Kind == ImportKind.Trakt && imported.Count > 0
+            && await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.UserId == job.UserId && l.Name == "Favorites", ct) is { } stale
+            && stale.Items.Count > 0 && stale.Items.All(i => imported.Contains((i.Type, i.TmdbId))))
+        {
+            db.Lists.Remove(stale);
+            await db.SaveChangesAsync(ct);
+        }
     }
 
     private async Task StepAsync(ImportJob job, CancellationToken ct)
@@ -241,7 +283,8 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             if (hit is not null) return hit.Id;
         }
 
-        if (string.IsNullOrWhiteSpace(r.Title)) return null;
+        // Letterboxd's profile favorites are just links.
+        if (string.IsNullOrWhiteSpace(r.Title)) return r.Type == MediaType.Movie ? await LetterboxdTmdbIdAsync(r.Url, ct) : null;
 
         if (r.Type == MediaType.Movie)
         {

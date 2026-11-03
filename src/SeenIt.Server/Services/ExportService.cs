@@ -55,6 +55,8 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
         var showStatus = await db.ShowStates.AsNoTracking().Where(s => s.UserId == userId)
             .Join(db.Shows, s => s.ShowTmdbId, m => m.TmdbId, (s, m) => new { TmdbId = s.ShowTmdbId, m.Name, Status = s.Status.ToString(), s.UpdatedAt })
             .ToListAsync(ct);
+        var favorites = (await tracking.GetFavoritesAsync(userId, ct))
+            .Select(f => new { Type = f.Media.Type.ToString().ToLowerInvariant(), f.Media.TmdbId, f.Media.Title, f.Media.Year, f.AddedAt }).ToList();
         var following = await db.Follows.Where(f => f.FollowerId == userId).Join(db.Users, f => f.FolloweeId, u => u.Id, (f, u) => u.UserName).ToListAsync(ct);
 
         using var ms = new MemoryStream();
@@ -95,6 +97,7 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
             AddJson("lists.json", myLists);
             AddJson("show-status.json", showStatus);
             AddJson("rewatches.json", rewatches);
+            AddJson("favorites.json", favorites);
         }
         return ms.ToArray();
     }

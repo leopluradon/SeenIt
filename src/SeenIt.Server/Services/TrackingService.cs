@@ -211,6 +211,10 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         if (await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == type && w.TmdbId == to, ct)) await watchQ.ExecuteDeleteAsync(ct);
         var watchlist = await watchQ.ExecuteUpdateAsync(s => s.SetProperty(w => w.TmdbId, to), ct);
 
+        var favQ = db.Favorites.Where(f => f.UserId == userId && f.Type == type && f.TmdbId == from);
+        if (await db.Favorites.AnyAsync(f => f.UserId == userId && f.Type == type && f.TmdbId == to, ct)) await favQ.ExecuteDeleteAsync(ct);
+        await favQ.ExecuteUpdateAsync(s => s.SetProperty(f => f.TmdbId, to), ct);
+
         var itemsQ = db.ListItems.Where(i => i.Type == type && i.TmdbId == from && db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId));
         await itemsQ.Where(i => db.ListItems.Any(t => t.ListId == i.ListId && t.Type == type && t.TmdbId == to)).ExecuteDeleteAsync(ct);
         var listEntries = await itemsQ.ExecuteUpdateAsync(s => s.SetProperty(i => i.TmdbId, to), ct);
@@ -455,6 +459,43 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             .OfType<WatchlistEntry>().ToList();
     }
 
+    // ---------- Favorites ----------
+
+    public async Task<List<FavoriteEntry>> GetFavoritesAsync(Guid userId, CancellationToken ct)
+    {
+        var rows = await db.Favorites.Where(f => f.UserId == userId).OrderBy(f => f.Rank).ThenBy(f => f.AddedAt).ToListAsync(ct);
+        var (movies, shows) = await LoadMetaAsync(rows.Select(r => (r.Type, r.TmdbId)), ct);
+        return rows.Select(r => r.Type == MediaType.Movie
+                ? movies.TryGetValue(r.TmdbId, out var m) ? new FavoriteEntry(CatalogService.ToSummary(m), r.AddedAt) : null
+                : shows.TryGetValue(r.TmdbId, out var s) ? new FavoriteEntry(CatalogService.ToSummary(s), r.AddedAt) : null)
+            .OfType<FavoriteEntry>().ToList();
+    }
+
+    /// <summary>Adds to the end of the user's favorites (no-op if it's already one). Returns false if it was already there.</summary>
+    public async Task<bool> AddFavoriteAsync(Guid userId, MediaType type, int tmdbId, CancellationToken ct, DateTimeOffset? addedAt = null)
+    {
+        if (type is not (MediaType.Movie or MediaType.Show)) throw new TrackingException("Only movies and shows can be favorites.");
+        await EnsureMetaAsync(type, tmdbId, ct);
+        if (await db.Favorites.AnyAsync(f => f.UserId == userId && f.Type == type && f.TmdbId == tmdbId, ct)) return false;
+        var rank = await db.Favorites.Where(f => f.UserId == userId).MaxAsync(f => (int?)f.Rank, ct) ?? 0;
+        db.Favorites.Add(new Favorite { UserId = userId, Type = type, TmdbId = tmdbId, Rank = rank + 1, AddedAt = addedAt ?? DateTimeOffset.UtcNow });
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> RemoveFavoriteAsync(Guid userId, MediaType type, int tmdbId, CancellationToken ct) =>
+        await db.Favorites.Where(f => f.UserId == userId && f.Type == type && f.TmdbId == tmdbId).ExecuteDeleteAsync(ct) > 0;
+
+    /// <summary>Puts the favorites in the given order; any not listed keep their relative order after them.</summary>
+    public async Task ReorderFavoritesAsync(Guid userId, IReadOnlyList<FavoriteRequest> order, CancellationToken ct)
+    {
+        var rows = await db.Favorites.Where(f => f.UserId == userId).OrderBy(f => f.Rank).ToListAsync(ct);
+        var ranked = order.Select(o => rows.FirstOrDefault(r => r.Type == o.Type && r.TmdbId == o.TmdbId)).OfType<Favorite>()
+            .Concat(rows).Distinct().ToList();
+        for (var i = 0; i < ranked.Count; i++) ranked[i].Rank = i + 1;
+        await db.SaveChangesAsync(ct);
+    }
+
     // ---------- Ratings ----------
 
     public async Task RateAsync(Guid userId, RatingRequest req, CancellationToken ct, DateTimeOffset? ratedAt = null)
@@ -668,10 +709,12 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 && (movies && w.Type == MediaType.Movie || shows && w.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
         if (parts.HasFlag(ImportParts.Lists))
         {
+            lists += await db.Favorites.Where(f => f.UserId == userId
+                && (movies && f.Type == MediaType.Movie || shows && f.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
             if (movies && shows)
-                lists = await db.Lists.Where(l => l.UserId == userId).ExecuteDeleteAsync(ct);
+                lists += await db.Lists.Where(l => l.UserId == userId).ExecuteDeleteAsync(ct);
             else
-                lists = await db.ListItems.Where(i => db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId)
+                lists += await db.ListItems.Where(i => db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId)
                     && (movies ? i.Type == MediaType.Movie : i.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
         }
         if (parts == ImportParts.All)

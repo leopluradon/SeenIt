@@ -24,6 +24,9 @@ else if (s is not null)
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
                     <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
                 </button>
+                <button class="btn @(u.IsFavorite ? "btn-on fav-on" : "")" disabled="@busy" @onclick="ToggleFavorite" aria-pressed="@u.IsFavorite">
+                    <Icon Name="heart" Size="18" Class="@(u.IsFavorite ? "filled" : null)" /> Favorite
+                </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
             }
             else
@@ -235,6 +238,14 @@ else if (s is not null)
         pendingEpisode = null;
         return Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, n.SeasonNumber, n.EpisodeNumber)), $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
     }
+
+    private Task ToggleFavorite() => s!.User!.IsFavorite
+        ? Act(async () =>
+        {
+            await Api.RemoveFavoriteAsync(MediaType.Show, Id);
+            undo = () => Api.AddFavoriteAsync(MediaType.Show, Id);
+        }, "Removed from favorites")
+        : Act(() => Api.AddFavoriteAsync(MediaType.Show, Id), "Added to favorites");
 
     private Task ToggleWatchlist() => s!.User!.InWatchlist
         ? Act(async () =>

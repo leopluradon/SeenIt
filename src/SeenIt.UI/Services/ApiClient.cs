@@ -114,6 +114,11 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task AddToWatchlistAsync(MediaType type, int id) => SendQueueableAsync(HttpMethod.Post, "api/watchlist", new WatchlistRequest(type, id));
     public Task RemoveFromWatchlistAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/watchlist?type={type}&tmdbId={id}");
 
+    public Task<List<FavoriteEntry>> FavoritesAsync() => GetAsync<List<FavoriteEntry>>("api/favorites");
+    public Task AddFavoriteAsync(MediaType type, int id) => SendQueueableAsync(HttpMethod.Post, "api/favorites", new FavoriteRequest(type, id));
+    public Task RemoveFavoriteAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/favorites?type={type}&tmdbId={id}");
+    public Task ReorderFavoritesAsync(IReadOnlyList<FavoriteRequest> order) => SendAsync(HttpMethod.Put, "api/favorites/order", order);
+
     public Task<List<RatingEntry>> RatingsAsync(MediaType? type = null) => GetAsync<List<RatingEntry>>("api/ratings" + (type is null ? "" : $"?type={type}"));
     public Task RateAsync(RatingRequest r) => SendQueueableAsync(HttpMethod.Post, "api/ratings", r);
     public Task UnrateAsync(MediaType type, int id, int? season = null, int? episode = null) =>

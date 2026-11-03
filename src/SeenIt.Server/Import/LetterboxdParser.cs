@@ -75,6 +75,27 @@ public static class LetterboxdParser
             }
         }
 
+        // The four "Favorite Films" on the profile are just links; name them from the other files.
+        var films = new Dictionary<string, ImportRef>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in new[] { "watched.csv", "ratings.csv", "watchlist.csv", "diary.csv" })
+            if (Find(file) is { } text)
+                foreach (var row in Rows(text))
+                    if (Film(row) is { Url: { } u } f) films.TryAdd(u, f);
+        if (Find("profile.csv") is { } profile && Rows(profile).FirstOrDefault()?.GetValueOrDefault("Favorite Films") is { Length: > 0 } favs)
+            foreach (var url in favs.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                result.Favorites.Add(new ImportListItem(films.GetValueOrDefault(url) ?? new ImportRef(MediaType.Movie, null, null, null, null, url),
+                    DateTimeOffset.UtcNow));
+
+        // Hearted films: much looser than favorites, so they come in as their own list.
+        var likes = files.FirstOrDefault(f => f.Key.Replace('\\', '/').EndsWith("likes/films.csv", StringComparison.OrdinalIgnoreCase)
+                                              && !f.Key.Contains("deleted/", StringComparison.OrdinalIgnoreCase)).Value;
+        if (likes is not null)
+        {
+            var liked = Rows(likes).Select(r => Film(r) is { } f ? new ImportListItem(f, ParseDate(r.GetValueOrDefault("Date")) ?? DateTimeOffset.UtcNow) : null)
+                .OfType<ImportListItem>().ToList();
+            if (liked.Count > 0) result.Lists.Add(new ImportList("Liked on Letterboxd", "Films you hearted on Letterboxd.", liked));
+        }
+
         if (Find("watchlist.csv") is { } watchlist)
         {
             foreach (var row in Rows(watchlist))

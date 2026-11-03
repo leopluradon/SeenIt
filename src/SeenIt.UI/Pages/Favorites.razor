@@ -1,0 +1,80 @@
+@page "/favorites"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>Favorites · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Favorites</h1>
+</div>
+<p class="muted small">Your favorite movies and shows, in your order. They're shown on your profile. Add one with the heart on any movie or show.</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items is null && error is null) { <Spinner /> }
+else if (items is { Count: 0 })
+{
+    <Empty Title="No favorites yet.">
+        <span>Tap <b>Favorite</b> on a movie or show, or import them from Trakt or Letterboxd in <a href="settings#imports">Settings</a>.</span>
+    </Empty>
+}
+else if (items is not null)
+{
+    <div class="poster-grid fav-grid">
+        @for (var i = 0; i < items.Count; i++)
+        {
+            var index = i;
+            var f = items[index];
+            <div @key="(f.Media.Type, f.Media.TmdbId)">
+                <PosterCard Media="f.Media" ShowScore="false" Badge="@($"#{index + 1}")" />
+                <div class="fav-tools">
+                    <button class="icon-btn" disabled="@(busy || index == 0)" @onclick="() => Move(index, -1)" aria-label="Move @f.Media.Title earlier"><Icon Name="chevron-left" Size="16" /></button>
+                    <button class="icon-btn" disabled="@(busy || index == items.Count - 1)" @onclick="() => Move(index, 1)" aria-label="Move @f.Media.Title later"><Icon Name="chevron-right" Size="16" /></button>
+                    <button class="icon-btn" disabled="@busy" @onclick="() => Remove(f)" aria-label="Remove @f.Media.Title from favorites"><Icon Name="x" Size="16" /></button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<FavoriteEntry>? items;
+    private string? error;
+    private bool busy;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { items = await Api.FavoritesAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Move(int index, int step)
+    {
+        busy = true;
+        (items![index], items[index + step]) = (items[index + step], items[index]);
+        try { await Api.ReorderFavoritesAsync(items.Select(f => new FavoriteRequest(f.Media.Type, f.Media.TmdbId)).ToList()); }
+        catch (Exception ex) { Toasts.Error(ex); await Load(); }
+        busy = false;
+    }
+
+    private async Task Remove(FavoriteEntry f)
+    {
+        busy = true;
+        var order = items!.Select(x => new FavoriteRequest(x.Media.Type, x.Media.TmdbId)).ToList();
+        try
+        {
+            await Api.RemoveFavoriteAsync(f.Media.Type, f.Media.TmdbId);
+            Toasts.Show($"Removed {f.Media.Title}", undo: async () =>
+            {
+                await Api.AddFavoriteAsync(f.Media.Type, f.Media.TmdbId);
+                await Api.ReorderFavoritesAsync(order);   // back in its old place
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+}

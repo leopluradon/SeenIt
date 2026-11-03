@@ -24,6 +24,9 @@ else if (m is not null)
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
                     <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
                 </button>
+                <button class="btn @(u.IsFavorite ? "btn-on fav-on" : "")" disabled="@busy" @onclick="ToggleFavorite" aria-pressed="@u.IsFavorite">
+                    <Icon Name="heart" Size="18" Class="@(u.IsFavorite ? "filled" : null)" /> Favorite
+                </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
                 @if (m.ReleaseDate is null || m.ReleaseDate <= DateOnly.FromDateTime(DateTime.Today))
                 {
@@ -183,6 +186,14 @@ else if (m is not null)
         var removed = await Api.UnwatchAsync(MediaType.Movie, Id);
         undo = () => Api.RestorePlaysAsync(removed.Plays);
     }, "Removed from history");
+
+    private Task ToggleFavorite() => m!.User!.IsFavorite
+        ? Act(async () =>
+        {
+            await Api.RemoveFavoriteAsync(MediaType.Movie, Id);
+            undo = () => Api.AddFavoriteAsync(MediaType.Movie, Id);
+        }, "Removed from favorites")
+        : Act(() => Api.AddFavoriteAsync(MediaType.Movie, Id), "Added to favorites");
 
     private Task ToggleWatchlist() => m!.User!.InWatchlist
         ? Act(async () =>

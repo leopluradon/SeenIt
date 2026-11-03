@@ -140,7 +140,8 @@ public record UserMediaState(
     int Plays,
     DateTimeOffset? LastWatchedAt,
     IReadOnlyList<Guid> ListIds,
-    IReadOnlyList<PlayDto>? History = null);   // every play, newest first (movies only)
+    IReadOnlyList<PlayDto>? History = null,    // every play, newest first (movies only)
+    bool IsFavorite = false);
 
 public record MovieDetail(
     int TmdbId,
@@ -446,6 +447,7 @@ public enum ActivityKind
     SignUp, AccountDeleted, PasswordChanged, PasswordReset,
     Follow, Unfollow,
     Rematch, RestorePlays,
+    FavoriteAdd, FavoriteRemove,
 }
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
@@ -454,7 +456,7 @@ public enum ImportParts
 {
     None = 0,
     Movies = 1, Shows = 2,
-    History = 4, Ratings = 8, Watchlist = 16, Lists = 32,
+    History = 4, Ratings = 8, Watchlist = 16, Lists = 32,   // Lists includes favorites
     All = Movies | Shows | History | Ratings | Watchlist | Lists,
 }
 
@@ -582,7 +584,12 @@ public record ProfileDto(
     UserCard User, DateTimeOffset JoinedAt, bool IsMe, ProfileVisibility Visibility, bool CanView,
     int Followers, int Following,
     NowWatchingDto? NowWatching, ProfileStats? Stats,
-    IReadOnlyList<HistoryEntry> Recent, IReadOnlyList<RatingEntry> Favorites, IReadOnlyList<ListSummary> Lists);
+    IReadOnlyList<HistoryEntry> Recent, IReadOnlyList<RatingEntry> TopRated, IReadOnlyList<ListSummary> Lists,
+    IReadOnlyList<FavoriteEntry>? Favorites = null);
+
+/// <summary>A movie or show the user marked as a favorite, in their order.</summary>
+public record FavoriteEntry(MediaSummary Media, DateTimeOffset AddedAt);
+public record FavoriteRequest(MediaType Type, int TmdbId);
 
 public record ActivityItem(UserCard User, HistoryEntry Entry);
 public record FriendWatching(UserCard User, NowWatchingDto Item);

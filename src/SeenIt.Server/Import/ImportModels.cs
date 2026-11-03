@@ -8,14 +8,15 @@ namespace SeenIt.Server.Import;
 /// <param name="Url">Letterboxd's page for the film, used to find the TMDB id when the title search can't.</param>
 public record ImportRef(MediaType Type, int? TmdbId, string? ImdbId, string? Title, int? Year, string? Url = null)
 {
-    public string Label => Year is { } y ? $"{Title} ({y})" : Title ?? ImdbId ?? $"#{TmdbId}";
+    public string Label => Year is { } y ? $"{Title} ({y})" : Title ?? ImdbId ?? Url ?? $"#{TmdbId}";
 }
 
 /// <param name="Approximate">The date is a stand-in (when it was logged, or a "last watched" summary), not when it was seen.</param>
 public record ImportWatch(ImportRef Item, int? Season, int? Episode, DateTimeOffset WatchedAt, bool Approximate = false);
 public record ImportRating(ImportRef Item, int? Season, int? Episode, int Rating, DateTimeOffset RatedAt);
 public record ImportListItem(ImportRef Item, DateTimeOffset AddedAt);
-public record ImportList(string Name, string? Description, List<ImportListItem> Items);
+/// <param name="LegacyName">What an older importer called this list, so a re-import renames it instead of duplicating it.</param>
+public record ImportList(string Name, string? Description, List<ImportListItem> Items, string? LegacyName = null);
 
 public class ParsedImport
 {
@@ -23,6 +24,8 @@ public class ParsedImport
     public List<ImportListItem> Watchlist { get; } = [];
     public List<ImportRating> Ratings { get; } = [];
     public List<ImportList> Lists { get; } = [];
+    /// <summary>Favorite movies/shows, best first.</summary>
+    public List<ImportListItem> Favorites { get; } = [];
 
     /// <summary>Drops whatever the user chose not to import.</summary>
     public void Keep(ImportParts parts)
@@ -31,12 +34,13 @@ public class ParsedImport
         if (!parts.HasFlag(ImportParts.History)) History.Clear(); else History.RemoveAll(h => !Type(h.Item));
         if (!parts.HasFlag(ImportParts.Ratings)) Ratings.Clear(); else Ratings.RemoveAll(r => !Type(r.Item));
         if (!parts.HasFlag(ImportParts.Watchlist)) Watchlist.Clear(); else Watchlist.RemoveAll(w => !Type(w.Item));
-        if (!parts.HasFlag(ImportParts.Lists)) Lists.Clear();
+        if (!parts.HasFlag(ImportParts.Lists)) { Lists.Clear(); Favorites.Clear(); }
+        Favorites.RemoveAll(f => !Type(f.Item));
         foreach (var l in Lists) l.Items.RemoveAll(i => !Type(i.Item));
         Lists.RemoveAll(l => l.Items.Count == 0);
     }
 
-    public int Total => History.Count + Watchlist.Count + Ratings.Count + Lists.Sum(l => l.Items.Count);
+    public int Total => History.Count + Watchlist.Count + Ratings.Count + Lists.Sum(l => l.Items.Count) + Favorites.Count;
 }
 
 public static class ImportFiles

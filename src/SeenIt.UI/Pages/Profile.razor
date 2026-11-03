@@ -71,12 +71,24 @@ else if (p is not null)
                 </div>
             </section>
         }
-        @if (p.Favorites.Count > 0)
+        @if (p.Favorites is { Count: > 0 } favs)
+        {
+            <section class="row-section">
+                <div class="section-head">
+                    <h2>Favorites</h2>
+                    @if (p.IsMe) { <a href="favorites" class="section-more">Edit <Icon Name="chevron-right" Size="16" /></a> }
+                </div>
+                <div class="poster-scroller">
+                    @foreach (var f in favs) { <PosterCard Media="f.Media" ShowScore="false" @key="(f.Media.Type, f.Media.TmdbId)" /> }
+                </div>
+            </section>
+        }
+        @if (p.TopRated.Count > 0)
         {
             <section class="row-section">
                 <div class="section-head"><h2>Top rated</h2></div>
                 <div class="poster-scroller">
-                    @foreach (var r in p.Favorites)
+                    @foreach (var r in p.TopRated)
                     {
                         <PosterCard Media="@(new MediaSummary(r.Type, r.TmdbId, r.Title, null, r.PosterPath, null, null, null))" Badge="@($"★ {r.Rating}")" ShowScore="false" @key="(r.Type, r.TmdbId)" />
                     }

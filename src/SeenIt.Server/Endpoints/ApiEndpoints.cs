@@ -143,6 +143,23 @@ public static class ApiEndpoints
             return Results.NoContent();
         });
 
+        g.MapGet("/favorites", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetFavoritesAsync(p.UserId(), ct));
+        g.MapPost("/favorites", async (FavoriteRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            if (await t.AddFavoriteAsync(p.UserId(), req.Type, req.TmdbId, ct)) await a.LogAsync(p, ActivityKind.FavoriteAdd, req.Type, req.TmdbId);
+            return Results.NoContent();
+        });
+        g.MapDelete("/favorites", async (MediaType type, int tmdbId, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            if (await t.RemoveFavoriteAsync(p.UserId(), type, tmdbId, ct)) await a.LogAsync(p, ActivityKind.FavoriteRemove, type, tmdbId);
+            return Results.NoContent();
+        });
+        g.MapPut("/favorites/order", async (List<FavoriteRequest> order, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+        {
+            await t.ReorderFavoritesAsync(p.UserId(), order, ct);
+            return Results.NoContent();
+        });
+
         g.MapGet("/ratings", (MediaType? type, ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetRatingsAsync(p.UserId(), type, ct));
         g.MapPost("/ratings", async (RatingRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {

@@ -54,13 +54,14 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
 
         var recentRows = await db.WatchEvents.AsNoTracking().Where(w => w.UserId == owner.Id && w.WatchedAt > WatchDates.Unknown)
             .OrderByDescending(w => w.WatchedAt).Take(24).ToListAsync(ct);
-        var favorites = (await tracking.GetRatingsAsync(owner.Id, null, ct))
+        var topRated = (await tracking.GetRatingsAsync(owner.Id, null, ct))
             .Where(r => r.Type != MediaType.Episode && r.SeasonNumber is null)
             .OrderByDescending(r => r.Rating).ThenByDescending(r => r.RatedAt).Take(18).ToList();
 
         return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, true, followers, followingCount,
             await checkIns.GetAsync(owner.Id, ct), await StatsAsync(owner.Id, ct),
-            await tracking.ToHistoryAsync(recentRows, ct), favorites, publicLists);
+            await tracking.ToHistoryAsync(recentRows, ct), topRated, publicLists,
+            await tracking.GetFavoritesAsync(owner.Id, ct));
     }
 
     public async Task<bool> FollowAsync(Guid me, string userName, bool follow, CancellationToken ct)

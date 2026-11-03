@@ -185,4 +185,36 @@ public class JellyfinPayloadTests
         Assert.False(P("""{"NotificationType":"UserDataSaved","ItemType":"Movie","SaveReason":"TogglePlayed","Played":"False"}""").Decide(90).Scrobble);
         Assert.False(P("""{"NotificationType":"UserDataSaved","ItemType":"Movie","SaveReason":"PlaybackProgress","Played":"True"}""").Decide(90).Scrobble);
     }
+
+    [Fact]
+    public void Trakt_favorites_and_list_names_from_the_real_export_layout()
+    {
+        var parsed = TraktParser.Parse(new Dictionary<string, string>
+        {
+            ["lists-lists.json"] = """[{"name":"6/12 Weekend","description":null,"ids":{"trakt":11732618,"slug":"6-12-weekend"}}]""",
+            ["lists-list-11732618-6-12-weekend.json"] = """[{"rank":1,"listed_at":"2021-06-12T00:00:00.000Z","type":"movie","movie":{"title":"Heat","year":1995,"ids":{"tmdb":949}}}]""",
+            ["lists-list-99-orphan-list.json"] = """[{"rank":1,"listed_at":"2021-06-12T00:00:00.000Z","type":"movie","movie":{"title":"Ronin","year":1998,"ids":{"tmdb":8195}}}]""",
+            ["lists-favorites.json"] = """[{"rank":2,"listed_at":"2022-09-11T03:27:36.000Z","type":"show","show":{"title":"The X-Files","year":1993,"ids":{"tmdb":4087}}}, {"rank":1,"listed_at":"2022-09-11T03:27:36.000Z","type":"show","show":{"title":"Nathan for You","year":2013,"ids":{"tmdb":58957}}}]""",
+        });
+        Assert.Equal([58957, 4087], parsed.Favorites.Select(f => f.Item.TmdbId));      // rank order
+        var named = Assert.Single(parsed.Lists, l => l.Items[0].Item.TmdbId == 949);
+        Assert.Equal("6/12 Weekend", named.Name);
+        Assert.Equal("List 11732618 6 12 Weekend", named.LegacyName);                   // what older imports called it
+        Assert.Equal("Orphan List", Assert.Single(parsed.Lists, l => l.Items[0].Item.TmdbId == 8195).Name);
+        Assert.DoesNotContain(parsed.Lists, l => l.Name.Contains("Favorites"));
+    }
+
+    [Fact]
+    public void Letterboxd_profile_favorites_are_named_from_other_files()
+    {
+        var parsed = LetterboxdParser.Parse(new Dictionary<string, string>
+        {
+            ["watched.csv"] = "Date,Name,Year,Letterboxd URI\n2024-01-27,300,2006,https://boxd.it/28XI\n",
+            ["profile.csv"] = "Date Joined,Username,Favorite Films\n2024-01-26,me,\"https://boxd.it/28XI, https://boxd.it/zzzz\"\n",
+            ["likes/films.csv"] = "Date,Name,Year,Letterboxd URI\n2024-02-01,Heat,1995,https://boxd.it/aaaa\n",
+        });
+        Assert.Equal(["300", null], parsed.Favorites.Select(f => f.Item.Title));
+        Assert.Equal("https://boxd.it/zzzz", parsed.Favorites[1].Item.Url);             // matched through Letterboxd later
+        Assert.Equal("Heat", Assert.Single(Assert.Single(parsed.Lists, l => l.Name == "Liked on Letterboxd").Items).Item.Title);
+    }
 }

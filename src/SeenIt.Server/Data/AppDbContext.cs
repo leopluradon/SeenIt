@@ -24,6 +24,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ShowRewatch> Rewatches => Set<ShowRewatch>();
     public DbSet<ActivityEntry> Activity => Set<ActivityEntry>();
     public DbSet<Deployment> Deployments => Set<Deployment>();
+    public DbSet<Favorite> Favorites => Set<Favorite>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -101,6 +102,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         b.Entity<ShowRewatch>(e => e.HasIndex(x => new { x.UserId, x.ShowTmdbId }));
+        b.Entity<Favorite>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
         b.Entity<ActivityEntry>(e =>
         {
             e.HasIndex(x => x.At);
@@ -124,7 +126,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }
