@@ -4,6 +4,7 @@
 @inject NavigationManager Nav
 @inject SessionState Session
 @inject ApiClient Api
+@inject ThemeService Theme
 
 <div class="app">
     <header class="topbar">
@@ -99,6 +100,9 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // Follow the account's theme once it's known (also after signing in on a new device).
+        if (Session.Me is { } me) await Theme.ApplyAsync(me.Theme);
+        else if (firstRender) await Theme.ApplyDeviceThemeAsync();
         if (!firstRender) return;
         self = DotNetObjectReference.Create(this);
         try { await Js.InvokeVoidAsync("seenit.pullToRefresh", self); } catch (JSException) { }

@@ -18,7 +18,7 @@ public record MeDto(
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
     DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null,
-    IReadOnlyList<string>? HomeOrder = null);
+    IReadOnlyList<string>? HomeOrder = null, string? Theme = null);
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(
@@ -28,7 +28,8 @@ public record PreferencesRequest(
     ProfileVisibility? Visibility = null,
     string? TrackingSince = null,   // yyyy-MM-dd; "" clears it
     string? TimeZone = null,        // IANA id, e.g. America/New_York; "" = follow the device
-    IReadOnlyList<string>? HomeOrder = null);   // home section keys, top to bottom
+    IReadOnlyList<string>? HomeOrder = null,    // home section keys, top to bottom
+    string? Theme = null);                      // key from UiPrefs.Themes; "" = default
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }
@@ -80,6 +81,21 @@ public static class UiPrefs
         }
         return order;
     }
+
+    /// <summary>Color themes, all dark. Colors are for the picker's swatches and the phone's system bars; the CSS has the rest.</summary>
+    public static readonly (string Key, string Name, string Bg, string Surface, string Accent)[] Themes =
+    [
+        ("seenit", "SeenIt", "#0e1014", "#1e222b", "#ec3f4f"),
+        ("midnight", "Midnight", "#0b1020", "#18213f", "#4f8cff"),
+        ("black", "True black", "#000000", "#141417", "#ec3f4f"),
+        ("forest", "Forest", "#0c120f", "#19231e", "#34b27b"),
+        ("dusk", "Dusk", "#110e1a", "#201b31", "#a660f5"),
+        ("ember", "Ember", "#14100c", "#251d17", "#f27323"),
+        ("nord", "Nord", "#1b1f27", "#2a303d", "#88c0d0"),
+    ];
+
+    public static (string Key, string Name, string Bg, string Surface, string Accent) Theme(string? key) =>
+        Themes.FirstOrDefault(t => t.Key == key) is { Key: not null } t ? t : Themes[0];
 
     public const int MaxTabs = 4; // plus the fixed "More" tab
     public static readonly string[] DefaultTabs = ["home", "discover", "progress", "calendar"];

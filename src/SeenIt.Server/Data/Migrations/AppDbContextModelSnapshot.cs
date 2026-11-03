@@ -288,6 +288,9 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<string>("Theme")
+                        .HasColumnType("text");
+
                     b.Property<string>("TimeZone")
                         .HasColumnType("text");
 

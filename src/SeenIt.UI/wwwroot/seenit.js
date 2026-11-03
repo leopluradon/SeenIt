@@ -1,5 +1,14 @@
 // Small browser helpers for the shared SeenIt UI.
 window.seenit = {
+    // Color theme: <html data-theme> drives the CSS; remembered on this device so the next start
+    // (see the snippet in index.html) paints in it straight away.
+    applyTheme(key, bg) {
+        const root = document.documentElement;
+        if (!key || key === 'seenit') delete root.dataset.theme; else root.dataset.theme = key;
+        try { if (!key || key === 'seenit') localStorage.removeItem('seenit.theme'); else localStorage.setItem('seenit.theme', key); } catch { }
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta && bg) meta.setAttribute('content', bg);
+    },
     // Phones only open the keyboard when focus happens during a tap; by the time the search page
     // has rendered, that tap is over. So the tap focuses this hidden stand-in at once, and the
     // page then moves focus to the real box, which keeps the keyboard up.

@@ -21,6 +21,8 @@ public class AppUser : IdentityUser<Guid>
     public List<string> HiddenHomeSections { get; set; } = [];
     /// <summary>Home page section order (keys from UiPrefs.HomeSections); empty means the default.</summary>
     public List<string> HomeOrder { get; set; } = [];
+    /// <summary>Color theme key (UiPrefs.Themes); null means the default.</summary>
+    public string? Theme { get; set; }
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
     public List<string> Tabs { get; set; } = [];
 

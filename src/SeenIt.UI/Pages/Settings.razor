@@ -7,6 +7,7 @@
 @inject IServerConfig Server
 @inject IJSRuntime Js
 @inject NavigationManager Nav
+@inject ThemeService Theme
 <PageTitle>Settings · SeenIt</PageTitle>
 
 <h1>Settings</h1>
@@ -23,6 +24,7 @@
         <a href="settings#tracking">Stats</a>
         <a href="settings#jellyfin">Jellyfin</a>
         <a href="settings#spoilers">Spoilers</a>
+        <a href="settings#appearance">Appearance</a>
         <a href="settings#layout">Layout</a>
         <a href="settings#invites">Invite friends</a>
         <a href="settings#privacy">Privacy</a>
@@ -173,6 +175,21 @@
                     <input type="checkbox" checked="@blurImages" disabled="@(!hideSpoilers)" @onchange="e => SavePreferences(hideSpoilers, (bool)e.Value!)" />
                     Also blur their images
                 </label>
+            </div>
+        </section>
+
+        <section class="panel" id="appearance">
+            <h2>Appearance</h2>
+            <p class="muted small">Color theme, saved to your account so it follows you to every device.</p>
+            <div class="theme-grid">
+                @foreach (var t in UiPrefs.Themes)
+                {
+                    <button class="theme-option @(Theme.Current == t.Key ? "on" : "")" @key="t.Key" @onclick="() => SetTheme(t.Key)"
+                            style="--sw-bg:@t.Bg; --sw-surface:@t.Surface; --sw-accent:@t.Accent" aria-pressed="@(Theme.Current == t.Key)">
+                        <span class="theme-swatch"><span></span><span></span><span></span></span>
+                        <span>@t.Name</span>
+                    </button>
+                }
             </div>
         </section>
 
@@ -618,6 +635,17 @@
             trackingSince = value;
             Session.Update(m => m with { TrackingSince = DateOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null });
             Toasts.Show(value.Length == 0 ? "Cleared" : "Saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task SetTheme(string key)
+    {
+        await Theme.ApplyAsync(key);   // straight away; saving follows
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(Theme: key));
+            Session.Update(m => m with { Theme = key == "seenit" ? null : key });
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

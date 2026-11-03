@@ -17,6 +17,7 @@ public static class UiServices
         services.AddScoped<SessionState>();
         services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<SessionState>());
         services.AddScoped<Toasts>();
+        services.AddScoped<ThemeService>();
         services.AddScoped<ConnectivityState>();
         if (services.All(s => s.ServiceType != typeof(IOfflineStore)))
             services.AddSingleton<IOfflineStore, NoOfflineStore>();

@@ -8,19 +8,21 @@
     <title>SeenIt</title>
     <base href="/" />
     <link rel="preconnect" href="https://image.tmdb.org" />
+    <!-- The saved color theme, before anything paints. -->
+    <script>try { var t = localStorage.getItem('seenit.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { }</script>
     <link rel="stylesheet" href="_content/SeenIt.UI/seenit.css" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
     <link rel="apple-touch-icon" href="icon-192.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <style>
-        body { background: #0e1014; }
+        body { background: var(--bg); }
         .boot { position: fixed; inset: 0; display: grid; place-items: center; }
         .boot-inner { display: grid; justify-items: center; gap: 18px; }
         .boot svg { animation: boot 1.2s ease-in-out infinite; }
         @keyframes boot { 50% { opacity: .4; } }
         /* Download progress (Blazor sets --blazor-load-percentage). Only appears if loading is slow. */
-        .boot-bar { width: 140px; height: 3px; border-radius: 3px; background: #272c37; overflow: hidden; opacity: 0; animation: boot-show .3s .6s forwards; }
-        .boot-bar > div { height: 100%; width: var(--blazor-load-percentage, 0%); background: #ec3f4f; transition: width .2s; }
+        .boot-bar { width: 140px; height: 3px; border-radius: 3px; background: var(--surface-3); overflow: hidden; opacity: 0; animation: boot-show .3s .6s forwards; }
+        .boot-bar > div { height: 100%; width: var(--blazor-load-percentage, 0%); background: var(--accent); transition: width .2s; }
         @keyframes boot-show { to { opacity: 1; } }
     </style>
 </head>

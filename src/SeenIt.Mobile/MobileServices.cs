@@ -158,6 +158,14 @@ public class MobilePlatform(IServerConfig server) : IPlatform
     public string? AppVersion => Microsoft.Maui.ApplicationModel.AppInfo.Current.VersionString;
 
     public async Task OpenExternalAsync(string url) => await Launcher.Default.OpenAsync(new Uri(url));
+
+    public void SetChromeColor(string hex) => MainThread.BeginInvokeOnMainThread(() =>
+    {
+#if ANDROID
+        // Edge-to-edge: the window background shows behind the status and navigation bars.
+        Platform.CurrentActivity?.Window?.DecorView.SetBackgroundColor(Android.Graphics.Color.ParseColor(hex));
+#endif
+    });
 }
 
 /// <summary>Pages to open from outside the web view (e.g. a tap on the home-screen widget).</summary>

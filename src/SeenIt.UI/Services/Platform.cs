@@ -17,6 +17,8 @@ public interface IPlatform
     string? AppVersion { get; }
     /// <summary>Opens a link outside SeenIt (the browser / the app that handles it).</summary>
     Task OpenExternalAsync(string url);
+    /// <summary>Colors what's around the page (the phone's status/navigation bar area) to match the theme.</summary>
+    void SetChromeColor(string hex);
 }
 
 public class BrowserPlatform(IJSRuntime js, NavigationManager nav) : IPlatform
@@ -35,6 +37,8 @@ public class BrowserPlatform(IJSRuntime js, NavigationManager nav) : IPlatform
     public string? AppVersion => null;
 
     public async Task OpenExternalAsync(string url) => await js.InvokeVoidAsync("open", url, "_blank", "noopener");
+
+    public void SetChromeColor(string hex) { } // the browser's theme-color is set with the theme
 }
 
 /// <summary>Keeps the last copy of API responses, and changes made while offline, on the device.</summary>
