@@ -82,7 +82,10 @@ window.seenit = {
             state.startX = e.touches[0].clientX; state.startY = e.touches[0].clientY;
         }, { passive: true });
 
-        document.addEventListener('touchmove', e => {
+        // A touchmove listener that may cancel scrolling makes the browser wait for JavaScript
+        // before every scroll step, which feels sticky when the app is busy. A pull can only start
+        // at the very top, so the listener is only attached while the page is scrolled to the top.
+        const onMove = e => {
             if (!state.active) return;
             const dx = e.touches[0].clientX - state.startX, dy = e.touches[0].clientY - state.startY;
             if (!state.decided) {
@@ -94,7 +97,17 @@ window.seenit = {
             e.preventDefault();
             state.pull = Math.min(max, dy * 0.5);
             show(state.pull, state.pull / threshold);
-        }, { passive: false });
+        };
+        let listening = false;
+        const sync = () => {
+            const atTop = window.scrollY <= 0;
+            if (atTop === listening || (!atTop && state.active)) return;
+            listening = atTop;
+            if (atTop) document.addEventListener('touchmove', onMove, { passive: false });
+            else document.removeEventListener('touchmove', onMove);
+        };
+        window.addEventListener('scroll', sync, { passive: true });
+        sync();
 
         const end = async () => {
             if (!state.active) return;
