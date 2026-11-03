@@ -321,8 +321,8 @@
             <h2>Account</h2>
             <h3>Change password</h3>
             <form class="stack narrow" @onsubmit="ChangePassword">
-                <input type="password" placeholder="Current password" @bind="currentPassword" autocomplete="current-password" aria-label="Current password" />
-                <input type="password" placeholder="New password" @bind="newPassword" autocomplete="new-password" minlength="8" aria-label="New password" />
+                <input type="password" placeholder="Current password" @bind="currentPassword" @bind:event="oninput" autocomplete="current-password" aria-label="Current password" />
+                <input type="password" placeholder="New password" @bind="newPassword" @bind:event="oninput" autocomplete="new-password" minlength="8" aria-label="New password" />
                 <button class="btn" type="submit" disabled="@(string.IsNullOrEmpty(currentPassword) || string.IsNullOrEmpty(newPassword))">Change password</button>
             </form>
             @if (features?.Email == true)
@@ -335,13 +335,13 @@
             <p class="muted small">Delete some or all of what you've tracked, for a fresh start or before re-importing. Your account, settings and friends stay.</p>
             <PartsPicker @bind-Value="clearParts" Label="What to clear" />
             <form class="stack narrow" @onsubmit="ClearData">
-                <input type="password" placeholder="Password to confirm" @bind="clearPassword" autocomplete="current-password" aria-label="Password to confirm clearing data" />
+                <input type="password" placeholder="Password to confirm" @bind="clearPassword" @bind:event="oninput" autocomplete="current-password" aria-label="Password to confirm clearing data" />
                 <button class="btn btn-danger" type="submit" disabled="@(string.IsNullOrEmpty(clearPassword) || clearing)">@(clearing ? "Clearing…" : "Clear data")</button>
             </form>
             <h3>Delete account</h3>
             <p class="muted small">Permanently deletes your account, history, ratings, watchlist and lists.</p>
             <form class="stack narrow" @onsubmit="DeleteAccount">
-                <input type="password" placeholder="Password to confirm" @bind="deletePassword" autocomplete="current-password" aria-label="Password to confirm deletion" />
+                <input type="password" placeholder="Password to confirm" @bind="deletePassword" @bind:event="oninput" autocomplete="current-password" aria-label="Password to confirm deletion" />
                 <button class="btn btn-danger" type="submit" disabled="@string.IsNullOrEmpty(deletePassword)">Delete my account</button>
             </form>
         </section>

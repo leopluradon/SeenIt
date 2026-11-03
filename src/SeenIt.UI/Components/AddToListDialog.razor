@@ -15,7 +15,7 @@
                 </button>
             }
             <form class="inline" @onsubmit="Create">
-                <input placeholder="New list name" @bind="newName" maxlength="100" aria-label="New list name" />
+                <input placeholder="New list name" @bind="newName" @bind:event="oninput" maxlength="100" aria-label="New list name" />
                 <button class="btn" type="submit" disabled="@string.IsNullOrWhiteSpace(newName)"><Icon Name="plus" Size="16" /> Create</button>
             </form>
         </div>

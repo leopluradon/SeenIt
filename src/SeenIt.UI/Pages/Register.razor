@@ -23,7 +23,7 @@
             <p class="muted center">SeenIt is invite-only. Open the invite link a member sent you, or paste its code here.</p>
         }
         <form class="inline invite-form" @onsubmit="CheckPasted">
-            <input placeholder="Invite code" @bind="pasted" aria-label="Invite code" autocapitalize="off" autocomplete="off" />
+            <input placeholder="Invite code" @bind="pasted" @bind:event="oninput" aria-label="Invite code" autocapitalize="off" autocomplete="off" />
             <button class="btn" type="submit" disabled="@string.IsNullOrWhiteSpace(pasted)">Continue</button>
         </form>
         <p class="muted center">Already have an account? <a href="login">Sign in</a></p>

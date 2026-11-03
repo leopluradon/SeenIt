@@ -1,7 +1,7 @@
 <form class="stack" @onsubmit="Save">
     <div class="field">
         <label for="list-name">Name</label>
-        <input id="list-name" @bind="name" maxlength="100" required />
+        <input id="list-name" @bind="name" @bind:event="oninput" maxlength="100" required />
     </div>
     <div class="field">
         <label for="list-desc">Description</label>
