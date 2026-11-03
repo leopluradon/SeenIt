@@ -251,10 +251,10 @@ html.has-ptr, html.has-ptr body { overscroll-behavior-y: contain; }
 .poster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 16px; }
 .poster-scroller, .card-scroller, .cast-scroller {
     display: grid; grid-auto-flow: column; gap: 14px; overflow-x: auto; padding-bottom: 8px;
-    scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent;
+    /* No scroll snapping: on Android it cut flings short, so a swipe moved one poster at a time. */
+    scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent;
 }
 .poster-scroller { grid-auto-columns: 150px; }
-.poster-scroller > * , .card-scroller > *, .cast-scroller > * { scroll-snap-align: start; }
 .poster-card { display: block; min-width: 0; }
 .poster-card.skeleton { aspect-ratio: 2/3; background: var(--surface-2); border-radius: var(--radius); animation: pulse 1.4s infinite; }
 @keyframes pulse { 50% { opacity: .5; } }
