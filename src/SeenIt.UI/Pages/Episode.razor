@@ -17,7 +17,7 @@ else if (e is not null)
     <div class="episode-hero">
         <div class="episode-hero-art">
             <Spoiler Watched="Seen" Image="true">
-                <div class="episode-hero-img" style="@(Img.Backdrop(e.StillPath ?? e.ShowBackdropPath) is { } bg ? $"background-image:url('{bg}')" : "")"></div>
+                <div class="episode-hero-img bg-responsive" style="@Img.BackdropStyle(e.StillPath ?? e.ShowBackdropPath)"></div>
             </Spoiler>
             @if (e.Plays is { Count: > 0 }) { <span class="poster-badge done"><Icon Name="check" Size="14" /></span> }
         </div>
@@ -67,6 +67,7 @@ else if (e is not null)
                                 <Icon Name="check" Size="16" Class="ok" />
                                 <span>@Fmt.PlayedAt(p.WatchedAt)</span>
                                 @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
+                                <button class="icon-btn" @onclick="() => editing = p" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
                                 <button class="icon-btn" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
                             </div>
                         }
@@ -110,6 +111,7 @@ else if (e is not null)
     <CastRow Cast="e.GuestStars" Title="Guest stars" />
 
     <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch" />
+    <EditPlayDialog @bind-Play="editing" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnSaved="Reload" />
 }
 
 @code {
@@ -119,6 +121,9 @@ else if (e is not null)
     private EpisodeDetail? e;
     private string? error;
     private bool busy, watchOpen;
+    private PlayDto? editing;
+
+    private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); StateHasChanged(); }
     private bool Seen => e?.Plays is { Count: > 0 };
 
     protected override Task OnParametersSetAsync() => Load();

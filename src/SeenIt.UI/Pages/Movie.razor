@@ -64,6 +64,7 @@ else if (m is not null)
                                     <span>@Fmt.PlayedAt(p.WatchedAt)</span>
                                     @if (p.WatchedAt > DateTimeOffset.Now) { <span class="pill pill-sm">Upcoming</span> }
                                     @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
+                                    <button class="icon-btn" disabled="@busy" @onclick="() => editing = p" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
                                     <button class="icon-btn" disabled="@busy" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
                                 </div>
                             }
@@ -138,6 +139,7 @@ else if (m is not null)
     @if (m.User is { } user)
     {
         <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" />
+        <EditPlayDialog @bind-Play="editing" What="@m.Title" ReleaseDate="m.ReleaseDate" OnSaved="Reload" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Title="@m.Title" />
     }
@@ -148,6 +150,9 @@ else if (m is not null)
     private MovieDetail? m;
     private string? error;
     private bool busy, watchOpen, listOpen, fixOpen;
+    private PlayDto? editing;
+
+    private async Task Reload() { m = await Api.MovieAsync(Id); StateHasChanged(); }
 
     protected override Task OnParametersSetAsync() => Load();
 

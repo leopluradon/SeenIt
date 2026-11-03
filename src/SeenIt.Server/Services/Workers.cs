@@ -124,17 +124,28 @@ public class ShowRefreshWorker(IServiceScopeFactory scopes, ILogger<ShowRefreshW
         }
         if (stale.Count > 0) log.LogInformation("Refreshed {Count} shows", stale.Count);
 
-        // Movies cached before metadata gained cast/directors/etc. (or long ago) get refetched.
+        // Movies people have watched, rated, listed or favorited: refetch ones whose details are
+        // out of date (CatalogService.MovieTtl) or from an older metadata format, oldest first. Movies
+        // only refresh on their own when someone opens them, so without this, posters, runtimes and
+        // collections shown in lists, history and stats would never change.
         List<int> movies;
         await using (var scope = scopes.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var used = db.WatchEvents.Where(w => w.Type == MediaType.Movie).Select(w => w.TmdbId)
                 .Union(db.Watchlist.Where(w => w.Type == MediaType.Movie).Select(w => w.TmdbId))
-                .Union(db.Ratings.Where(r => r.Type == MediaType.Movie).Select(r => r.TmdbId));
-            movies = await db.Movies.AsNoTracking()
-                .Where(m => used.Contains(m.TmdbId) && m.MetaVersion < MetaVersions.Current)
-                .Select(m => m.TmdbId).Take(500).ToListAsync(ct);
+                .Union(db.Ratings.Where(r => r.Type == MediaType.Movie).Select(r => r.TmdbId))
+                .Union(db.ListItems.Where(i => i.Type == MediaType.Movie).Select(i => i.TmdbId))
+                .Union(db.Favorites.Where(f => f.Type == MediaType.Movie).Select(f => f.TmdbId));
+            var weekAgo = DateTimeOffset.UtcNow.AddDays(-7);
+            var movieCandidates = await db.Movies.AsNoTracking()
+                .Where(m => used.Contains(m.TmdbId) && (m.MetaVersion < MetaVersions.Current || m.UpdatedAt < weekAgo))
+                .Select(m => new MovieMeta { TmdbId = m.TmdbId, ReleaseDate = m.ReleaseDate, UpdatedAt = m.UpdatedAt, MetaVersion = m.MetaVersion })
+                .ToListAsync(ct);
+            // A few hundred per pass (every 30 minutes) keeps well inside TMDB's rate limits.
+            movies = movieCandidates
+                .Where(m => m.MetaVersion < MetaVersions.Current || DateTimeOffset.UtcNow - m.UpdatedAt > CatalogService.MovieTtl(m))
+                .OrderBy(m => m.UpdatedAt).Take(300).Select(m => m.TmdbId).ToList();
         }
         foreach (var id in movies)
         {
@@ -142,7 +153,7 @@ public class ShowRefreshWorker(IServiceScopeFactory scopes, ILogger<ShowRefreshW
             try { await scope.ServiceProvider.GetRequiredService<CatalogService>().EnsureMovieAsync(id, ct); }
             catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "Refreshing movie {Id} failed", id); }
         }
-        if (movies.Count > 0) log.LogInformation("Backfilled metadata for {Count} movies", movies.Count);
+        if (movies.Count > 0) log.LogInformation("Refreshed {Count} movies", movies.Count);
     }
 }
 

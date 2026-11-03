@@ -14,7 +14,13 @@ namespace SeenIt.Server.Services;
 public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogService> log)
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Locks = new();
-    private static readonly TimeSpan MovieTtl = TimeSpan.FromDays(7);
+    /// <summary>
+    /// How long cached movie details are trusted: a week for anything released in the last year (or
+    /// not out yet: dates, posters and runtimes still change), a month for older films.
+    /// </summary>
+    public static TimeSpan MovieTtl(MovieMeta m) =>
+        m.ReleaseDate is { } d && d > DateOnly.FromDateTime(DateTime.UtcNow).AddYears(-1) || m.ReleaseDate is null
+            ? TimeSpan.FromDays(7) : TimeSpan.FromDays(30);
 
     public static TimeSpan ShowTtl(ShowMeta s) => s.IsOngoing ? TimeSpan.FromHours(12) : TimeSpan.FromDays(14);
 
@@ -30,7 +36,18 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         if (IsFresh(meta)) return meta;
 
         var m = await tmdb.GetMovieAsync(id, full: false, ct);
-        if (m is null) return meta;
+        if (m is null)
+        {
+            // Gone from TMDB (deleted or merged): keep what we have rather than lose people's
+            // history, and don't ask again until it's due.
+            if (meta is not null)
+            {
+                log.LogWarning("Movie {Id} ({Title}) is no longer on TMDB; keeping the cached details", id, meta.Title);
+                meta.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+            return meta;
+        }
         meta = UpsertMovie(m, meta);
         await db.SaveChangesAsync(ct);
         return meta;
@@ -63,7 +80,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         s?.EpisodesUpdatedAt is { } at && DateTimeOffset.UtcNow - at < ShowTtl(s) && s.MetaVersion >= MetaVersions.Current;
 
     private static bool IsFresh(MovieMeta? m) =>
-        m is not null && DateTimeOffset.UtcNow - m.UpdatedAt < MovieTtl && m.MetaVersion >= MetaVersions.Current;
+        m is not null && DateTimeOffset.UtcNow - m.UpdatedAt < MovieTtl(m) && m.MetaVersion >= MetaVersions.Current;
 
     public async Task<ShowMeta?> RefreshShowAsync(int id, ShowMeta? meta, CancellationToken ct)
     {
@@ -488,25 +505,33 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             Cast(e.Credits?.Cast).Where(c => e.GuestStars?.All(g => g.Id != c.Id) != false).ToList());
     }
 
+    /// <summary>
+    /// The viewer's own state for a title. One round trip for the scalar bits (it used to be seven
+    /// queries per page); lists and, for movies, the play history are a second and third.
+    /// </summary>
     private async Task<UserMediaState> GetUserStateAsync(Guid userId, MediaType type, int id, CancellationToken ct)
     {
-        var inWatchlist = await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == type && w.TmdbId == id, ct);
-        var rating = await db.Ratings
-            .Where(r => r.UserId == userId && r.Type == type && r.TmdbId == id && r.SeasonNumber == null && r.EpisodeNumber == null)
-            .Select(r => (int?)r.Value).FirstOrDefaultAsync(ct);
         var watchType = type == MediaType.Show ? MediaType.Episode : MediaType.Movie;
         var watches = db.WatchEvents.Where(w => w.UserId == userId && w.Type == watchType && w.TmdbId == id);
-        var plays = await watches.CountAsync(ct);
-        var last = await watches.MaxAsync(w => (DateTimeOffset?)w.WatchedAt, ct);
+        var state = await db.Users.Where(u => u.Id == userId).Select(u => new
+        {
+            InWatchlist = db.Watchlist.Any(w => w.UserId == userId && w.Type == type && w.TmdbId == id),
+            Rating = db.Ratings.Where(r => r.UserId == userId && r.Type == type && r.TmdbId == id && r.SeasonNumber == null && r.EpisodeNumber == null)
+                .Select(r => (int?)r.Value).FirstOrDefault(),
+            Plays = watches.Count(),
+            Last = watches.Max(w => (DateTimeOffset?)w.WatchedAt),
+            Favorite = db.Favorites.Any(f => f.UserId == userId && f.Type == type && f.TmdbId == id),
+        }).FirstOrDefaultAsync(ct);
         var lists = await db.ListItems
             .Where(i => i.Type == type && i.TmdbId == id && db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId))
             .Select(i => i.ListId).ToListAsync(ct);
-        var history = type == MediaType.Movie
-            ? await watches.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt)
-                .Select(w => new PlayDto(w.Id, w.WatchedAt, w.Source)).ToListAsync(ct)
-            : null;
-        var favorite = await db.Favorites.AnyAsync(f => f.UserId == userId && f.Type == type && f.TmdbId == id, ct);
-        return new UserMediaState(inWatchlist, rating, plays, last, lists, history, favorite);
+        List<PlayDto>? history = null;
+        if (type == MediaType.Movie)
+            history = state?.Plays > 0
+                ? await watches.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt)
+                    .Select(w => new PlayDto(w.Id, w.WatchedAt, w.Source)).ToListAsync(ct)
+                : [];
+        return new UserMediaState(state?.InWatchlist ?? false, state?.Rating, state?.Plays ?? 0, state?.Last, lists, history, state?.Favorite ?? false);
     }
 
     private static List<Video> PickVideos(TmdbVideos? v) =>

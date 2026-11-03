@@ -2,12 +2,12 @@
 <div class="hero-detail">
     @if (Img.Backdrop(Backdrop) is { } bd)
     {
-        <div class="hero-bg" style="background-image:url('@bd')"></div>
+        <div class="hero-bg bg-responsive" style="@Img.BackdropStyle(Backdrop)"></div>
     }
     <div class="hero-shade"></div>
     <div class="hero-content">
         <div class="hero-poster">
-            @if (Img.Poster(Poster, "w500") is { } p) { <img src="@p" alt="" /> }
+            @if (Img.Poster(Poster, "w500") is { } p) { <img src="@p" srcset="@Img.PosterSet(Poster, 342, 500, 780)" sizes="(max-width: 700px) 120px, 230px" alt="" /> }
         </div>
         <div class="hero-info">
             <h1>@Title @if (Year is not null) { <span class="hero-year">(@Year)</span> }</h1>

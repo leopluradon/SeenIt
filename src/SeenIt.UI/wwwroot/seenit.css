@@ -894,3 +894,10 @@ html[data-theme="nord"] {
 .btn.fav-on { color: var(--accent-hover); }
 .fav-grid .poster-card { position: relative; }
 .fav-tools { display: flex; justify-content: center; gap: 2px; margin-top: 4px; }
+
+/* Backdrops set with Img.BackdropStyle: only the image for this screen width is downloaded. */
+.bg-responsive { background-image: var(--bg-lg); }
+@media (max-width: 700px) { .bg-responsive { background-image: var(--bg-sm); } }
+.perf-table th { text-align: left; font-size: .8rem; color: var(--muted); font-weight: 600; padding: 4px 8px; }
+.perf-table td:not(:first-child), .perf-table th:not(:first-child) { text-align: right; white-space: nowrap; }
+.warn-text { color: var(--warn); }

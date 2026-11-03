@@ -1,0 +1,30 @@
+@* Change when a play happened. Open by setting Play; OnSaved reloads the page. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+<WatchDialog Open="Play is not null" OpenChanged="o => { if (!o) PlayChanged.InvokeAsync(null); }"
+             Heading="@($"When did you watch {What}?")" What="@What" ReleaseDate="ReleaseDate" Initial="Play?.WatchedAt" OnPick="Save" />
+@code {
+    [Parameter] public PlayDto? Play { get; set; }
+    [Parameter] public EventCallback<PlayDto?> PlayChanged { get; set; }
+    [Parameter] public string What { get; set; } = "this";
+    [Parameter] public DateOnly? ReleaseDate { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private async Task Save(WatchChoice c)
+    {
+        if (Play is not { } play) return;
+        try
+        {
+            var updated = await Api.EditPlayAsync(play.Id, new EditPlayRequest(c.When, c.At));
+            var before = play.WatchedAt;
+            var label = updated is null ? "" : WatchDates.IsUnknown(updated.WatchedAt) ? " to an unknown date" : $" to {Fmt.PlayedAt(updated.WatchedAt)}";
+            Toasts.Show($"Moved{label}", undo: async () =>
+            {
+                await Api.RevertPlayAsync(play.Id, before);
+                await OnSaved.InvokeAsync();
+            });
+            await OnSaved.InvokeAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

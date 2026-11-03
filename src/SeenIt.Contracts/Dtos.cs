@@ -448,6 +448,7 @@ public enum ActivityKind
     Follow, Unfollow,
     Rematch, RestorePlays,
     FavoriteAdd, FavoriteRemove,
+    EditPlay,
 }
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
@@ -635,7 +636,9 @@ public record AdminOverview(
     IReadOnlyList<CountBucket> ActivityByDay,   // last 30 days
     int RecentProblems,
     IReadOnlyList<AdminSetting>? Health = null,  // backups, off-site copy, alerts
-    IReadOnlyList<AdminAlert>? Alerts = null);
+    IReadOnlyList<AdminAlert>? Alerts = null,
+    IReadOnlyList<AdminPackage>? OutdatedPackages = null);
+public record AdminPackage(string Project, string Package, string Current, string Latest);
 public record AdminAlert(DateTimeOffset At, string Subject, string Body, bool Emailed);
 
 public record AdminSetting(string Name, string Value, bool Ok);
@@ -666,6 +669,8 @@ public record AdminResetLink(string Url, DateTimeOffset ExpiresAt);
 /// <summary>A play as it was, so a deletion can be undone exactly (date and source included).</summary>
 public record RestorePlay(MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, DateTimeOffset WatchedAt, WatchSource Source);
 public record RemovedPlays(int Removed, IReadOnlyList<RestorePlay> Plays);
+/// <summary>Changes when a play happened: a date, the release/air date, or "unknown".</summary>
+public record EditPlayRequest(WatchTime When, DateTimeOffset? WatchedAt = null);
 
 /// <summary>Moves everything of yours from one TMDB title to another (a wrong match). Type is Movie or Show.</summary>
 public record RematchRequest(MediaType Type, int FromTmdbId, int ToTmdbId);
@@ -680,3 +685,4 @@ public record TimeZoneOption(string Id, string Label);
 
 /// <summary>The newest Android app on this server, for "update available" in the app.</summary>
 public record AppRelease(string Version, string Url, long Size, DateTimeOffset PublishedAt);
+public record AdminEndpointTiming(string Route, long Count, double AvgMs, double P95Ms, double MaxMs);

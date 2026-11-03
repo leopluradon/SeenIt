@@ -1,5 +1,5 @@
 @* "When did you watch it?" Right now, on release, another date, or unknown. *@
-<Modal Open="Open" OpenChanged="OpenChanged" Title="@($"When did you watch {What}?")">
+<Modal Open="Open" OpenChanged="OpenChanged" Title="@(Heading ?? $"When did you watch {What}?")">
     <div class="stack">
         <button class="btn btn-primary btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Now))"><Icon Name="check" Size="16" /> Right now</button>
         @if (Bulk)
@@ -31,13 +31,21 @@
     /// <summary>Marking a whole show/season: "release date" means each episode's own air date.</summary>
     [Parameter] public bool Bulk { get; set; }
     [Parameter] public EventCallback<WatchChoice> OnPick { get; set; }
+    /// <summary>Where "Other date" starts (editing a play); otherwise now.</summary>
+    [Parameter] public DateTimeOffset? Initial { get; set; }
+    [Parameter] public string? Heading { get; set; }
     private string custom = "";
     private bool badDate, wasOpen;
 
     protected override void OnParametersSet()
     {
         // Start from "now" each time the dialog opens, not when the page first loaded.
-        if (Open && !wasOpen) { custom = DateTime.Now.ToString("yyyy-MM-ddTHH:mm"); badDate = false; }
+        if (Open && !wasOpen)
+        {
+            var start = Initial is { } i && !WatchDates.IsUnknown(i) ? i.LocalDateTime : DateTime.Now;
+            custom = start.ToString("yyyy-MM-ddTHH:mm");
+            badDate = false;
+        }
         wasOpen = Open;
     }
 

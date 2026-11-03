@@ -139,6 +139,24 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         return play is not null && await q.ExecuteDeleteAsync(ct) > 0 ? play : null;
     }
 
+    /// <summary>Moves one play to another date. Returns (before, after), or null if it isn't yours.</summary>
+    public async Task<(DateTimeOffset Before, PlayDto After)?> EditPlayAsync(Guid userId, Guid id, EditPlayRequest req, CancellationToken ct)
+    {
+        var play = await db.WatchEvents.FirstOrDefaultAsync(w => w.UserId == userId && w.Id == id, ct);
+        if (play is null) return null;
+        DateOnly? released = null;
+        if (req.When == WatchTime.ReleaseDate)
+            released = play.Type == MediaType.Movie
+                ? await db.Movies.Where(m => m.TmdbId == play.TmdbId).Select(m => m.ReleaseDate).FirstOrDefaultAsync(ct)
+                : await db.Episodes.Where(e => e.ShowTmdbId == play.TmdbId && e.SeasonNumber == play.SeasonNumber && e.EpisodeNumber == play.EpisodeNumber)
+                    .Select(e => e.AirDate).FirstOrDefaultAsync(ct);
+        if (req.When == WatchTime.ReleaseDate && released is null) throw new TrackingException("There's no release date to use.");
+        var before = play.WatchedAt;
+        play.WatchedAt = PlayTime(req.When, req.WatchedAt, released);
+        await db.SaveChangesAsync(ct);
+        return (before, new PlayDto(play.Id, play.WatchedAt, play.Source));
+    }
+
     /// <summary>Deletes several plays at once; returns them as they were (for undo).</summary>
     public async Task<List<RestorePlay>> DeleteHistoryAsync(Guid userId, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {

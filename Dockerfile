@@ -10,6 +10,10 @@ RUN dotnet restore src/SeenIt.Server/SeenIt.Server.csproj
 
 COPY src/ src/
 RUN dotnet publish src/SeenIt.Server/SeenIt.Server.csproj -c Release -o /app --no-restore
+# Which NuGet packages have newer versions, for the admin page (best effort: never fails the build).
+RUN for p in Server Web UI Contracts; do \
+      dotnet list src/SeenIt.$p/SeenIt.$p.csproj package --outdated --format json > /app/outdated-$p.json 2>/dev/null || echo '{}' > /app/outdated-$p.json; \
+    done
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app

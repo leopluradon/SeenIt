@@ -20,6 +20,35 @@ public static class AppInfo
 
     public static bool IsDev => Commit == "dev";
 
+    /// <summary>NuGet packages with newer versions, from `dotnet list package --outdated` at build time.</summary>
+    public static IReadOnlyList<SeenIt.Contracts.AdminPackage> OutdatedPackages { get; } = ReadOutdated();
+
+    private static List<SeenIt.Contracts.AdminPackage> ReadOutdated()
+    {
+        var list = new List<SeenIt.Contracts.AdminPackage>();
+        foreach (var file in Directory.GetFiles(AppContext.BaseDirectory, "outdated-*.json"))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file));
+                if (!doc.RootElement.TryGetProperty("projects", out var projects)) continue;
+                foreach (var p in projects.EnumerateArray())
+                {
+                    var project = Path.GetFileNameWithoutExtension(p.GetProperty("path").GetString() ?? "?");
+                    if (!p.TryGetProperty("frameworks", out var fws)) continue;
+                    foreach (var fw in fws.EnumerateArray())
+                        if (fw.TryGetProperty("topLevelPackages", out var pkgs))
+                            foreach (var pkg in pkgs.EnumerateArray())
+                                list.Add(new(project, pkg.GetProperty("id").GetString() ?? "?",
+                                    pkg.TryGetProperty("resolvedVersion", out var r) ? r.GetString() ?? "?" : "?",
+                                    pkg.TryGetProperty("latestVersion", out var l) ? l.GetString() ?? "?" : "?"));
+                }
+            }
+            catch (Exception) { /* a malformed report shouldn't stop the app */ }
+        }
+        return list.DistinctBy(p => (p.Package, p.Current, p.Latest)).OrderBy(p => p.Package).ToList();
+    }
+
     private static string? Env(string name) => Environment.GetEnvironmentVariable(name) is { Length: > 0 } v && v != "unknown" ? v.Trim() : null;
 
     private static string? TryBase64(string s)

@@ -102,6 +102,14 @@ public static class ApiEndpoints
             return Results.Ok(new RemovedPlays(1, [play]));
         });
 
+        g.MapPut("/history/{id:guid}", async (Guid id, EditPlayRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            if (await t.EditPlayAsync(p.UserId(), id, req, ct) is not { } r) return Results.NotFound();
+            string When(DateTimeOffset d) => WatchDates.IsUnknown(d) ? "unknown date" : $"{d:yyyy-MM-dd HH:mm} UTC";
+            await a.LogAsync(p, ActivityKind.EditPlay, detail: $"{When(r.Before)} → {When(r.After.WatchedAt)}");
+            return Results.Ok(r.After);
+        });
+
         g.MapPost("/history/delete", async (List<Guid> ids, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             var plays = await t.DeleteHistoryAsync(p.UserId(), ids, ct);

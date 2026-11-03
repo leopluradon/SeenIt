@@ -95,13 +95,35 @@ else
                 </div>
 
                 <section class="panel">
+                    <h2>Updates</h2>
+                    <dl class="admin-config">
+                        <div><dt><span class="dot ok"></span>Built</dt><dd>@(ov.BuiltAt is { } built ? $"{built.ToLocalTime():MMM d, yyyy, h:mm tt} ({Ago(built)})" : "unknown")</dd></div>
+                        <div><dt><span class="dot ok"></span>.NET runtime</dt><dd>@ov.Runtime</dd></div>
+                    </dl>
+                    @if (ov.OutdatedPackages is { Count: > 0 } outdated)
+                    {
+                        <p class="muted small">Newer NuGet versions are available (upgrade by changing the code and deploying):</p>
+                        <table class="table admin-table">
+                            <tbody>
+                                @foreach (var pkg in outdated)
+                                {
+                                    <tr @key="pkg.Package"><td><b>@pkg.Package</b></td><td class="muted">@pkg.Current → @pkg.Latest</td><td class="muted small">@pkg.Project</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else if (ov.OutdatedPackages is not null) { <p class="small ok">All NuGet packages are up to date.</p> }
+                    <p class="muted small">Base images (.NET and Postgres security patches) are refreshed by the weekly rebuild; see README → Updates.</p>
+                </section>
+
+                <section class="panel">
                     <h2>Deployments</h2>
                     @if (ov.Deployments.Count == 0) { <p class="muted small">None recorded yet. Each deploy is recorded the first time it starts.</p> }
                     <table class="table admin-table">
                         <tbody>
                             @foreach (var d in ov.Deployments)
                             {
-                                <tr @key="d.Commit">
+                                <tr @key="(d.Commit, d.StartedAt)">
                                     <td><b>v@(d.Version)</b> <code>@d.Commit</code></td>
                                     <td>@d.Subject</td>
                                     <td class="muted nowrap">@d.StartedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")</td>
@@ -281,6 +303,30 @@ else
             }
             break;
 
+        case "performance":
+            @if (timings is null) { <Spinner /> }
+            else
+            {
+                <p class="muted small">How long each API endpoint takes since the last restart, slowest first (95th percentile of its last 200 requests).</p>
+                @if (timings.Count == 0) { <p class="muted">No requests yet.</p> }
+                <table class="table admin-table perf-table">
+                    <thead><tr><th>Endpoint</th><th>Requests</th><th>Average</th><th>95%</th><th>Slowest</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in timings)
+                        {
+                            <tr @key="t.Route">
+                                <td><code>@t.Route</code></td>
+                                <td>@t.Count.ToString("N0")</td>
+                                <td>@t.AvgMs ms</td>
+                                <td class="@(t.P95Ms >= 1000 ? "error" : t.P95Ms >= 300 ? "warn-text" : "")">@t.P95Ms ms</td>
+                                <td class="muted">@t.MaxMs ms</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            break;
+
         case "logs":
             @if (logs is null) { <Spinner /> }
             else
@@ -315,7 +361,7 @@ else
     private static readonly (string, string)[] Tabs =
     [
         ("overview", "Overview"), ("users", "Users"), ("activity", "Activity"), ("imports", "Imports"),
-        ("jellyfin", "Jellyfin"), ("invites", "Invites"), ("logs", "Errors"),
+        ("jellyfin", "Jellyfin"), ("invites", "Invites"), ("performance", "Performance"), ("logs", "Errors"),
     ];
     private static readonly (string?, string)[] Groups =
         [(null, "All"), ("tracking", "Tracking"), ("ratings", "Ratings"), ("lists", "Watchlist & lists"), ("account", "Account & imports")];
@@ -329,6 +375,7 @@ else
     private List<AdminJellyfinEvent>? jellyfin;
     private List<AdminInvite>? invites;
     private List<AdminLogEntry>? logs;
+    private List<AdminEndpointTiming>? timings;
     private readonly Dictionary<Guid, AdminResetLink> resetLinks = [];
     private string? error;
 
@@ -354,6 +401,7 @@ else
                 case "jellyfin": jellyfin = await Api.AdminJellyfinAsync(); break;
                 case "invites": invites = await Api.AdminInvitesAsync(); break;
                 case "logs": logs = await Api.AdminLogsAsync(); break;
+                case "performance": timings = await Api.AdminPerformanceAsync(); break;
             }
         }
         catch (Exception ex) { error = ex.Message; }
@@ -388,6 +436,8 @@ else
         ActivityKind.Import => "import", ActivityKind.ClearData => "cleared data", ActivityKind.SignUp => "signed up",
         ActivityKind.AccountDeleted => "deleted account", ActivityKind.PasswordChanged => "changed password",
         ActivityKind.PasswordReset => "reset password", ActivityKind.Follow => "followed", ActivityKind.Unfollow => "unfollowed",
+        ActivityKind.Rematch => "fixed a match", ActivityKind.RestorePlays => "undid a delete",
+        ActivityKind.FavoriteAdd => "favorited", ActivityKind.FavoriteRemove => "unfavorited", ActivityKind.EditPlay => "changed a play's date",
         _ => k.ToString(),
     };
 

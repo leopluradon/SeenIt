@@ -62,6 +62,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<AdminImport>> AdminImportsAsync() => GetAsync<List<AdminImport>>("api/admin/imports");
     public Task<List<AdminJellyfinEvent>> AdminJellyfinAsync() => GetAsync<List<AdminJellyfinEvent>>("api/admin/jellyfin");
     public Task<List<AdminInvite>> AdminInvitesAsync() => GetAsync<List<AdminInvite>>("api/admin/invites");
+    public Task<List<AdminEndpointTiming>> AdminPerformanceAsync() => GetAsync<List<AdminEndpointTiming>>("api/admin/performance");
     public Task<List<AdminLogEntry>> AdminLogsAsync() => GetAsync<List<AdminLogEntry>>("api/admin/logs");
     public Task AdminUnlockAsync(Guid id) => SendAsync(HttpMethod.Post, $"api/admin/users/{id}/unlock", null);
     public Task<AdminResetLink?> AdminResetLinkAsync(Guid id) => SendAsync<AdminResetLink>(HttpMethod.Post, $"api/admin/users/{id}/reset-link");
@@ -91,6 +92,10 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         ?? new RemovedPlays(0, []);
     public async Task<RemovedPlays> DeleteHistoryAsync(IReadOnlyList<Guid> ids) =>
         await SendAsync<RemovedPlays>(HttpMethod.Post, "api/history/delete", ids) ?? new RemovedPlays(0, []);
+    public Task<PlayDto?> EditPlayAsync(Guid id, EditPlayRequest r) => SendAsync<PlayDto>(HttpMethod.Put, $"api/history/{id}", r);
+    /// <summary>Puts a play back on the date it had (undo for an edit).</summary>
+    public Task<PlayDto?> RevertPlayAsync(Guid id, DateTimeOffset before) =>
+        EditPlayAsync(id, WatchDates.IsUnknown(before) ? new EditPlayRequest(WatchTime.Unknown) : new EditPlayRequest(WatchTime.Custom, before));
     public Task RestorePlaysAsync(IReadOnlyList<RestorePlay> plays) => SendAsync(HttpMethod.Post, "api/history/restore", plays);
     public Task<RematchResult?> RematchAsync(RematchRequest r) => SendAsync<RematchResult>(HttpMethod.Post, "api/rematch", r);
     public Task<List<DuplicateGroup>> DuplicatesAsync() => GetAsync<List<DuplicateGroup>>("api/duplicates");

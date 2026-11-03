@@ -39,10 +39,10 @@ else if (pick is { } p)
 {
     var m = p.Media;
     <article class="pick-card @(busy ? "rolling" : "")">
-        <div class="pick-art" style="@(Img.Backdrop(m.BackdropPath, "w1280") is { } b ? $"background-image:url('{b}')" : "")"><div class="upnext-shade"></div></div>
+        <div class="pick-art bg-responsive" style="@Img.BackdropStyle(m.BackdropPath)"><div class="upnext-shade"></div></div>
         <div class="pick-body">
             <a class="pick-poster" href="@Fmt.Href(m.Type, m.TmdbId)">
-                @if (Img.Poster(m.PosterPath) is { } src) { <img src="@src" alt="" /> }
+                @if (Img.Poster(m.PosterPath) is { } src) { <img src="@src" srcset="@Img.PosterSet(m.PosterPath)" sizes="(max-width: 700px) 120px, 200px" alt="" /> }
             </a>
             <div class="pick-info">
                 <span class="muted small">@p.Reason</span>

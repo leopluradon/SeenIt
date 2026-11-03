@@ -38,6 +38,17 @@ public static class Img
     public static string? Backdrop(string? path, string size = "w1280") => path is null ? null : Base + size + path;
     public static string? Profile(string? path) => path is null ? null : Base + "w185" + path;
     public static string? Still(string? path) => path is null ? null : Base + "w300" + path;
+
+    /// <summary>Poster sizes for srcset: the browser takes the smallest that's sharp on this screen.</summary>
+    public static string? PosterSet(string? path, params int[] widths) =>
+        path is null ? null : string.Join(", ", (widths.Length > 0 ? widths : [185, 342, 500]).Select(w => $"{Base}w{w}{path} {w}w"));
+
+    /// <summary>
+    /// A backdrop as CSS variables: phones get the 780-wide image (it's under a dark shade anyway,
+    /// and half the download), wider screens the 1280. See .bg-responsive in seenit.css.
+    /// </summary>
+    public static string BackdropStyle(string? path) =>
+        path is null ? "" : $"--bg-sm:url('{Base}w780{path}'); --bg-lg:url('{Base}w1280{path}')";
 }
 
 public static class Fmt

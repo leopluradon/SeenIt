@@ -48,7 +48,8 @@ version="1.$(git rev-list --count HEAD)"
 subject=$(git log -1 --format=%s HEAD | base64 -w0)
 built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 echo "Version $version"
-ssh "$HOST" "cd $DIR && SEENIT_VERSION=$version SEENIT_COMMIT=$commit SEENIT_BUILT_AT=$built SEENIT_SUBJECT_B64=$subject docker compose up -d --build" 2>&1 | tail -6
+# .deployed-version lets scripts/weekly-rebuild.sh rebuild this same version later.
+ssh "$HOST" "cd $DIR && printf 'SEENIT_VERSION=%s\nSEENIT_COMMIT=%s\nSEENIT_SUBJECT_B64=%s\n' $version $commit $subject > .deployed-version && SEENIT_VERSION=$version SEENIT_COMMIT=$commit SEENIT_BUILT_AT=$built SEENIT_SUBJECT_B64=$subject docker compose up -d --build" 2>&1 | tail -6
 
 echo "Waiting for the app..."
 for _ in $(seq 1 20); do

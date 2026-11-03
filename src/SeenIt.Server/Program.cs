@@ -93,6 +93,7 @@ builder.Services.AddScoped<PickService>();
 builder.Services.AddScoped<OnThisDayService>();
 builder.Services.AddScoped<ActivityService>();
 builder.Services.AddSingleton<AdminService>();
+builder.Services.AddSingleton<EndpointTimings>();
 builder.Services.AddSingleton<AlertService>();
 builder.Services.AddSingleton<BackupStatus>();
 builder.Services.AddHostedService<AlertWorker>();
@@ -135,7 +136,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     }
 
     // Record each new build the first time it starts, for the admin page's deployment history.
-    if (!AppInfo.IsDev && !await db.Deployments.AnyAsync(d => d.Commit == AppInfo.Commit))
+    // (A weekly rebuild of the same commit counts too: it's a new build with new base images.)
+    if (!AppInfo.IsDev && !await db.Deployments.AnyAsync(d => d.Commit == AppInfo.Commit && d.BuiltAt == AppInfo.BuiltAt))
     {
         db.Deployments.Add(new Deployment { Version = AppInfo.Version, Commit = AppInfo.Commit, Subject = AppInfo.Subject, BuiltAt = AppInfo.BuiltAt });
         await db.SaveChangesAsync();
@@ -192,6 +194,7 @@ if (config["SeenIt:DownloadsDir"] is { Length: > 0 } downloads && Directory.Exis
 }
 
 app.UseRateLimiter();
+app.Use(EndpointTimings.Middleware);
 app.UseAuthentication();
 app.UseAuthorization();
 

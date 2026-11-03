@@ -119,6 +119,7 @@ else if (data is not null)
                                 </div>
                             </div>
                         </a>
+                        <button class="icon-btn" @onclick="() => editing = h" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
                         <button class="icon-btn" @onclick="() => Delete(h)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
                     </div>
                 }
@@ -128,7 +129,12 @@ else if (data is not null)
     }
 }
 
+<EditPlayDialog Play="@(editing is { } eh ? new PlayDto(eh.Id, eh.WatchedAt, eh.Source) : null)" PlayChanged="p => { if (p is null) editing = null; }"
+                What="@(editing is null ? "this" : editing.Type == MediaType.Episode ? $"{editing.Title} {Fmt.Ep(editing.SeasonNumber, editing.EpisodeNumber)}" : editing.Title)"
+                OnSaved="async () => { editing = null; await Load(); StateHasChanged(); }" />
+
 @code {
+    private HistoryEntry? editing;
     [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "source")] public string? SourceParam { get; set; }

@@ -42,6 +42,18 @@ Locally: `dotnet run --project src/SeenIt.Server` with `ConnectionStrings__Defau
 Postgres and `Tmdb__ReadAccessToken` set. Migrations apply on startup.
 `dotnet test` runs the tests (no database needed).
 
+## Updates
+
+`scripts/weekly-rebuild.sh` rebuilds the deployed version onto the latest patched .NET images and
+pulls the latest Postgres 17 patch release. Schedule it on the server once (Sundays 04:17):
+
+```sh
+(crontab -l 2>/dev/null; echo '17 4 * * 0 $HOME/seenit/scripts/weekly-rebuild.sh >> $HOME/seenit/weekly-rebuild.log 2>&1') | crontab -
+```
+
+Each rebuild shows up under Deployments on the admin page, which also lists NuGet packages with
+newer versions (those are upgraded by changing the code and deploying, not automatically).
+
 ## Backups
 
 The `seenit-backup` container dumps the database nightly at 03:00 (New York time) to the NAS

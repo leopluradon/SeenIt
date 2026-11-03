@@ -43,6 +43,7 @@ public static class AdminEndpoints
                     db.Users.Where(u => u.Id == i.UsedById).Select(u => u.UserName).FirstOrDefault(), i.UsedAt))
                 .ToListAsync(ct));
         g.MapGet("/logs", (RecentLogs logs) => logs.Snapshot());
+        g.MapGet("/performance", (EndpointTimings timings) => timings.Snapshot());
 
         g.MapPost("/users/{id:guid}/unlock", async (Guid id, UserManager<AppUser> users) =>
         {
@@ -139,7 +140,7 @@ public static class AdminEndpoints
             Enumerable.Range(0, 30).Select(i => monthStart.AddDays(i))
                 .Select(d => new CountBucket(d.ToString("MMM d"), activityDays.GetValueOrDefault(d))).ToList(),
             recent.Count(e => e.At >= day && e.Level is "Error" or "Critical"),
-            backups.Health(), alerts.Recent);
+            backups.Health(), alerts.Recent, AppInfo.OutdatedPackages);
     }
 
     private static async Task<List<AdminUser>> UsersAsync(AppDbContext db, AdminService admins, CancellationToken ct)
