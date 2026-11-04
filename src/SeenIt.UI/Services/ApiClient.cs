@@ -206,8 +206,38 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     // ---------- Integrations ----------
 
+    public Task<List<ListSearchHit>> SearchListsAsync(string q) => GetAsync<List<ListSearchHit>>($"api/lists/search?q={Uri.EscapeDataString(q)}");
+
+    // ---------- Goals ----------
+
+    public Task<List<GoalDto>> GoalsAsync(int year) => GetAsync<List<GoalDto>>($"api/goals?year={year}&tz={Tz}");
+    public Task SetGoalAsync(GoalRequest r) => SendAsync(HttpMethod.Put, "api/goals", r);
+    public Task DeleteGoalAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/goals/{id}");
+
+    // ---------- Letterboxd feed sync ----------
+
+    public Task<LetterboxdSyncDto> LetterboxdSyncAsync() => GetAsync<LetterboxdSyncDto>("api/letterboxd-sync");
+    public async Task<LetterboxdSyncDto> SetLetterboxdSyncAsync(string username) => (await SendAsync<LetterboxdSyncDto>(HttpMethod.Put, "api/letterboxd-sync", new LetterboxdSyncRequest(username)))!;
+    public async Task<LetterboxdSyncDto> LetterboxdSyncNowAsync() => (await SendAsync<LetterboxdSyncDto>(HttpMethod.Post, "api/letterboxd-sync/now"))!;
+    public Task StopLetterboxdSyncAsync() => SendAsync(HttpMethod.Delete, "api/letterboxd-sync");
+
+    // ---------- Share images ----------
+
+    public Task<byte[]> ReviewCardAsync(int year, int? month) =>
+        BytesAsync($"api/share/review/{year}?{(month is { } m ? $"month={m}&" : "")}tz={Tz}");
+    public Task<byte[]> CompareCardAsync(string a, string b) => BytesAsync($"api/share/compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}");
+    public Task<byte[]> KodiAddonAsync() => BytesAsync("api/jellyfin/kodi-addon");
+
+    private async Task<byte[]> BytesAsync(string path)
+    {
+        using var resp = await SendRawAsync(() => new HttpRequestMessage(HttpMethod.Get, path), auth: true);
+        await EnsureOkAsync(resp);
+        return await resp.Content.ReadAsByteArrayAsync();
+    }
+
     public Task<JellyfinSettingsDto> JellyfinAsync() => GetAsync<JellyfinSettingsDto>("api/jellyfin");
     public Task RegenerateJellyfinTokenAsync() => SendAsync(HttpMethod.Post, "api/jellyfin/regenerate");
+    public Task SetPlexUserAsync(string? name) => SendAsync(HttpMethod.Put, "api/jellyfin/plex-user", new PlexUserRequest(name));
     public Task SetJellyfinThresholdAsync(int pct) => SendAsync(HttpMethod.Put, "api/jellyfin/threshold", new JellyfinThresholdRequest(pct));
 
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");

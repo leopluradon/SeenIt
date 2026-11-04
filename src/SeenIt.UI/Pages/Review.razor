@@ -24,7 +24,10 @@
         }
     }
     <a class="chip" href="stats">All-time stats</a>
+    @if (r is { Totals.Plays: > 0 }) { <button class="chip" @onclick="() => shareOpen = true"><Icon Name="share" Size="14" /> Share image</button> }
 </div>
+<ShareCardDialog @bind-Open="shareOpen" Title="@($"{Label} in review")" FileName="@($"seenit-{Year}{(Month is { } sm ? $"-{sm:00}" : "")}.png")"
+                 Load="() => Api.ReviewCardAsync(Year, Month)" />
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (r is null && error is null) { <Spinner /> }
@@ -56,6 +59,14 @@ else if (r is not null)
         </section>
         <p class="muted small center-text">Compared with @r.PreviousLabel · times in @r.TimeZone</p>
         @if (r.TrackingSince is { } ts && PeriodStart <= ts) { <TrackingNote Center="true" /> }
+
+        @if (goals is { Count: > 0 })
+        {
+            <section class="row-section">
+                <div class="section-head"><h2>@Year goals</h2><div class="section-tools"><a href="@($"goals/{Year}")" class="section-more">Goals <Icon Name="chevron-right" Size="16" /></a></div></div>
+                <div class="home-goals">@foreach (var g in goals) { <GoalCard Goal="g" @key="g.Id" /> }</div>
+            </section>
+        }
 
         <section class="review-facts">
             <div class="fact"><b>@r.DaysActive</b><span>of @r.DaysInPeriod days with something watched</span></div>
@@ -153,6 +164,8 @@ else if (r is not null)
     private ReviewDto? r;
     private List<ReviewYear>? periods;
     private string? error;
+    private bool shareOpen;
+    private List<GoalDto>? goals;
 
     private string Label => Month is { } m ? new DateTime(Year, m, 1).ToString("MMMM yyyy") : Year.ToString();
     private DateOnly PeriodStart => new(Year, Month ?? 1, 1);
@@ -179,6 +192,8 @@ else if (r is not null)
         error = null;
         try { r = await Api.ReviewAsync(Year, Month); }
         catch (Exception ex) { error = ex.Message; }
+        goals = null;
+        if (Month is null) { try { goals = await Api.GoalsAsync(Year); } catch { } }
     }
 
     private void Go(int step)

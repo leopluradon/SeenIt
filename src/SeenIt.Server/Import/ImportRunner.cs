@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using SeenIt.Contracts;
 using SeenIt.Server.Data;
@@ -18,21 +19,40 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
     public async Task RunAsync(ImportJob job, CancellationToken ct)
     {
         var files = ImportFiles.Read(job.FileName, job.Payload ?? []);
-        var parsed = job.Kind == ImportKind.Trakt ? TraktParser.Parse(files) : LetterboxdParser.Parse(files);
+        var parsed = job.Kind switch
+        {
+            ImportKind.Trakt => TraktParser.Parse(files),
+            ImportKind.Letterboxd => LetterboxdParser.Parse(files),
+            ImportKind.Imdb => ImdbParser.Parse(files),
+            ImportKind.TvTime => TvTimeParser.Parse(files),
+            _ => SimklParser.Parse(files),
+        };
+        await RunAsync(job, parsed, ct);
+    }
+
+    /// <summary>Imports already-parsed rows (the Letterboxd feed sync builds them itself).</summary>
+    public async Task RunAsync(ImportJob job, ParsedImport parsed, CancellationToken ct)
+    {
         var found = parsed.Total;
         parsed.Keep(job.Parts);
         if (found > 0 && parsed.Total == 0)
             throw new InvalidDataException("Nothing in that file matched what you chose to import.");
         if (parsed.Total == 0)
-            throw new InvalidDataException(job.Kind == ImportKind.Trakt
-                ? "No Trakt history, ratings, watchlist or lists were found in that file."
-                : "No Letterboxd diary, watched, ratings, watchlist or list files were found in that file.");
+            throw new InvalidDataException(job.Kind switch
+            {
+                ImportKind.Trakt => "No Trakt history, ratings, watchlist or lists were found in that file.",
+                ImportKind.Letterboxd => "No Letterboxd diary, watched, ratings, watchlist or list files were found in that file.",
+                ImportKind.Imdb => "That doesn't look like an IMDb ratings, watchlist or list export (a CSV with a Const column).",
+                ImportKind.TvTime => "No seen_episode CSV was found. Upload TV Time's whole export zip.",
+                _ => "No movies or shows were found in that Simkl backup.",
+            });
 
         job.Total = parsed.Total;
         job.Processed = job.Imported = job.Skipped = job.Failed = 0;
         job.Unmatched = [];
         await db.SaveChangesAsync(ct);
 
+        if (parsed.Progress.Count > 0) await ExpandProgressAsync(job, parsed, ct);
         await ImportHistoryAsync(job, parsed.History, ct);
         await ImportWatchlistAsync(job, parsed.Watchlist, ct);
         await ImportRatingsAsync(job, parsed.Ratings, ct);
@@ -60,7 +80,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 .Select(w => new { w.Id, w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt }).ToListAsync(ct))
             .GroupBy(w => (w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber))
             .ToDictionary(g => g.Key, g => g.Select(w => new ExistingPlay(w.Id, w.WatchedAt)).ToList());
-        var source = job.Kind == ImportKind.Trakt ? WatchSource.TraktImport : WatchSource.LetterboxdImport;
+        var source = WatchSources.ForImport(job.Kind);
 
         // Real dates first, so a stand-in date can't take the existing play a real one would have matched.
         foreach (var w in history.OrderBy(h => h.Approximate).ThenBy(h => h.WatchedAt))
@@ -92,6 +112,36 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             await StepAsync(job, ct);
         }
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Turns "watched up to S02E05" into a play of every aired episode up to it. Only the last one
+    /// gets the export's date; the rest are "date unknown" rather than all piling onto one day.
+    /// </summary>
+    private async Task ExpandProgressAsync(ImportJob job, ParsedImport parsed, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        foreach (var p in parsed.Progress)
+        {
+            if (await ResolveAsync(job, p.Show, ct) is { } id)
+            {
+                var episodes = (await db.Episodes.AsNoTracking()
+                        .Where(e => e.ShowTmdbId == id && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today)
+                        .Select(e => new { e.SeasonNumber, e.EpisodeNumber }).ToListAsync(ct))
+                    .Where(e => (e.SeasonNumber, e.EpisodeNumber).CompareTo((p.Season, p.Episode)) <= 0)
+                    .OrderBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).ToList();
+                var known = p.Show with { TmdbId = id };
+                _resolved[known] = id;
+                for (var i = 0; i < episodes.Count; i++)
+                {
+                    var last = i == episodes.Count - 1 && p.LastWatchedAt is not null;
+                    parsed.History.Add(new ImportWatch(known, episodes[i].SeasonNumber, episodes[i].EpisodeNumber,
+                        last ? p.LastWatchedAt!.Value : WatchDates.Unknown, Approximate: !last));
+                }
+                job.Total += episodes.Count;
+            }
+            await StepAsync(job, ct);
+        }
     }
 
     public sealed class ExistingPlay(Guid? id, DateTimeOffset at)
@@ -276,9 +326,10 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
     {
         if (r.TmdbId is { } id) return id;
 
-        if (!string.IsNullOrEmpty(r.ImdbId))
+        foreach (var (external, source) in new[] { (r.ImdbId, "imdb_id"), (r.TvdbId?.ToString(CultureInfo.InvariantCulture), "tvdb_id") })
         {
-            var found = await tmdb.FindAsync(r.ImdbId, "imdb_id", ct);
+            if (string.IsNullOrEmpty(external)) continue;
+            var found = await tmdb.FindAsync(external, source, ct);
             var hit = r.Type == MediaType.Movie ? found?.MovieResults?.FirstOrDefault() : found?.TvResults?.FirstOrDefault();
             if (hit is not null) return hit.Id;
         }
@@ -303,7 +354,16 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
 
         var shows = await tmdb.SearchShowAsync(r.Title, r.Year, ct) is { Results.Count: > 0 } withYear
             ? withYear : await tmdb.SearchShowAsync(r.Title, null, ct);
-        return Exact(shows?.Results, r.Title, r.Year, maxYearGap: 99)?.Id;
+        if (Exact(shows?.Results, r.Title, r.Year, maxYearGap: 99) is { } show) return show.Id;
+
+        // TV Time and others tell same-named shows apart with a suffix TMDB doesn't use:
+        // "The Office (US)", "Doctor Who (2005)", "MasterChef (IT)".
+        var suffix = System.Text.RegularExpressions.Regex.Match(r.Title, @"^(.+?)\s*\(([^()]+)\)$");
+        if (!suffix.Success) return null;
+        var bare = suffix.Groups[1].Value;
+        int? suffixYear = int.TryParse(suffix.Groups[2].Value, out var sy) && sy is > 1900 and < 2200 ? sy : r.Year;
+        var retry = await tmdb.SearchShowAsync(bare, suffixYear, ct) is { Results.Count: > 0 } r2 ? r2 : await tmdb.SearchShowAsync(bare, null, ct);
+        return Exact(retry?.Results, bare, suffixYear, maxYearGap: suffixYear is null ? 99 : 1)?.Id;
     }
 
     /// <summary>

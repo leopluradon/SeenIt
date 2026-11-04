@@ -73,10 +73,7 @@ public static class Fmt
 
     public static string PlayedAt(DateTimeOffset d) =>
         WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString("MMM d, yyyy, h:mm tt");
-    public static string Source(WatchSource s) => s switch
-    {
-        WatchSource.Jellyfin => "Jellyfin", WatchSource.TraktImport => "Trakt", WatchSource.LetterboxdImport => "Letterboxd", _ => "",
-    };
+    public static string Source(WatchSource s) => WatchSources.Name(s);
     public static string Ep(int? s, int? e) => $"S{s:00}E{e:00}";
     public static string Runtime(int? minutes) => minutes is null or 0 ? "" : minutes < 60 ? $"{minutes}m" : $"{minutes / 60}h {minutes % 60}m";
 
@@ -110,6 +107,28 @@ public static class Fmt
         if (d == today.AddDays(1)) return "Tomorrow";
         if (d == today.AddDays(-1)) return "Yesterday";
         return d.Year == today.Year ? d.ToString("dddd, MMM d") : d.ToString("dddd, MMM d, yyyy");
+    }
+}
+
+public static class TextMatch
+{
+    /// <summary>Whether the title contains the query, ignoring case, accents and punctuation. An empty query matches everything.</summary>
+    public static bool Contains(string title, string? query)
+    {
+        var q = Fold(query);
+        return q.Length == 0 || Fold(title).Contains(q, StringComparison.Ordinal);
+    }
+
+    private static string Fold(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in s.Replace("&", " and ").Normalize(System.Text.NormalizationForm.FormD))
+        {
+            if (char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+            if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+        }
+        return sb.ToString();
     }
 }
 

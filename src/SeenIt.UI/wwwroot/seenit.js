@@ -43,6 +43,17 @@ window.seenit = {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
     },
+    /** Shares a file through the system share sheet where the browser can; otherwise downloads it. */
+    async shareFile(fileName, contentType, base64, title) {
+        const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        const file = new File([bytes], fileName, { type: contentType });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try { await navigator.share({ files: [file], title }); return 'shared'; }
+            catch (e) { if (e && e.name === 'AbortError') return 'canceled'; }
+        }
+        this.download(fileName, contentType, base64);
+        return 'downloaded';
+    },
     async share(title, url) {
         if (navigator.share) {
             try { await navigator.share({ title, url }); return 'shared'; }

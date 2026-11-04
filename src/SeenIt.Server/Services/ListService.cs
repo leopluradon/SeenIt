@@ -17,6 +17,42 @@ public class ListService(AppDbContext db, TrackingService tracking)
                 .ToList())).ToList();
     }
 
+    /// <summary>
+    /// Titles on your watchlist or any of your lists whose name contains the query (ignoring case,
+    /// accents, punctuation and a leading "The"), with where each one is.
+    /// </summary>
+    public async Task<List<ListSearchHit>> SearchAsync(Guid userId, string? query, CancellationToken ct)
+    {
+        var q = Import.ImportRunner.Normalize(query);
+        if (q.Length == 0) return [];
+
+        var watchlist = await db.Watchlist.AsNoTracking().Where(w => w.UserId == userId).Select(w => new { w.Type, w.TmdbId }).ToListAsync(ct);
+        var inLists = await db.ListItems.AsNoTracking()
+            .Join(db.Lists.Where(l => l.UserId == userId), i => i.ListId, l => l.Id, (i, l) => new { i.Type, i.TmdbId, l.Id, l.Name, l.UpdatedAt })
+            .ToListAsync(ct);
+        var keys = watchlist.Select(w => (w.Type, w.TmdbId)).Concat(inLists.Select(i => (i.Type, i.TmdbId))).Distinct().ToList();
+        if (keys.Count == 0) return [];
+
+        var (movies, shows) = await tracking.LoadMetaAsync(keys, ct);
+        var onWatchlist = watchlist.Select(w => (w.Type, w.TmdbId)).ToHashSet();
+        var listsByTitle = inLists.ToLookup(i => (i.Type, i.TmdbId));
+        var hits = new List<(ListSearchHit Hit, bool Prefix)>();
+        foreach (var key in keys)
+        {
+            MediaSummary? media = key.Type == MediaType.Movie
+                ? movies.TryGetValue(key.TmdbId, out var m) ? CatalogService.ToSummary(m) : null
+                : shows.TryGetValue(key.TmdbId, out var sh) ? CatalogService.ToSummary(sh) : null;
+            if (media is null) continue;
+            var title = Import.ImportRunner.Normalize(media.Title);
+            if (!title.Contains(q, StringComparison.Ordinal)) continue;
+            var lists = listsByTitle[key].OrderByDescending(l => l.UpdatedAt).Select(l => new ListRef(l.Id, l.Name)).ToList();
+            hits.Add((new ListSearchHit(media, onWatchlist.Contains(key), lists), title.StartsWith(q, StringComparison.Ordinal)));
+        }
+        // Titles that start with the query first, then alphabetical.
+        return hits.OrderByDescending(h => h.Prefix).ThenBy(h => h.Hit.Media.Title, StringComparer.OrdinalIgnoreCase)
+            .Take(100).Select(h => h.Hit).ToList();
+    }
+
     /// <summary>Owner sees any of their lists; anyone (signed in or not) can see a public list.</summary>
     public async Task<ListDetail?> GetAsync(Guid listId, Guid? viewerId, CancellationToken ct)
     {

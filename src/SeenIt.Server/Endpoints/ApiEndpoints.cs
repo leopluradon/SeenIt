@@ -19,6 +19,7 @@ public static class ApiEndpoints
         MapLists(app);
         MapJellyfin(app);
         MapImports(api.MapGroup("/imports"));
+        FeatureEndpoints.Map(api);
         MapSocial(app);
 
         api.MapGet("/export", async (ClaimsPrincipal p, ExportService export, CancellationToken ct) =>
@@ -299,6 +300,25 @@ public static class ApiEndpoints
             return await j.HandleAsync(token, body, ct) ? Results.Ok() : Results.NotFound();
         }).RequireRateLimiting("webhook");
 
+        // Plex posts multipart/form-data with the JSON in "payload" (and a thumbnail we don't need).
+        app.MapPost("/api/plex/webhook/{token}", async (string token, HttpRequest request, JellyfinService j, CancellationToken ct) =>
+        {
+            string? json = null;
+            if (request.HasFormContentType) json = (await request.ReadFormAsync(ct))["payload"].FirstOrDefault();
+            else { using var reader = new StreamReader(request.Body); json = await reader.ReadToEndAsync(ct); }
+            if (string.IsNullOrWhiteSpace(json)) return Results.BadRequest(new ProblemInfo("No payload."));
+            try { return await j.HandlePlexAsync(token, json, ct) ? Results.Ok() : Results.NotFound(); }
+            catch (JsonException) { return Results.BadRequest(new ProblemInfo("The payload isn't JSON.")); }
+        }).RequireRateLimiting("webhook").DisableAntiforgery();
+
+        app.MapPost("/api/kodi/webhook/{token}", async (string token, HttpRequest request, JellyfinService j, CancellationToken ct) =>
+        {
+            JsonElement body;
+            try { body = (await JsonDocument.ParseAsync(request.Body, cancellationToken: ct)).RootElement; }
+            catch (JsonException) { return Results.BadRequest(new ProblemInfo("Body must be JSON.")); }
+            return await j.HandleKodiAsync(token, body, ct) ? Results.Ok() : Results.NotFound();
+        }).RequireRateLimiting("webhook");
+
         var g = app.MapGroup("/api/jellyfin").RequireAuthorization();
         g.MapGet("", async (ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
         {
@@ -306,7 +326,24 @@ public static class ApiEndpoints
             var user = await db.Users.FirstAsync(u => u.Id == uid, ct);
             var events = await db.JellyfinEvents.Where(e => e.UserId == uid).OrderByDescending(e => e.ReceivedAt).Take(20)
                 .Select(e => new JellyfinEventDto(e.ReceivedAt, e.ItemName, e.Outcome)).ToListAsync(ct);
-            return new JellyfinSettingsDto($"/api/jellyfin/webhook/{user.JellyfinToken}", user.JellyfinThresholdPercent, events);
+            return new JellyfinSettingsDto($"/api/jellyfin/webhook/{user.JellyfinToken}", user.JellyfinThresholdPercent, events,
+                $"/api/plex/webhook/{user.JellyfinToken}", user.PlexUsername);
+        });
+        g.MapPut("/plex-user", async (PlexUserRequest req, ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
+        {
+            var uid = p.UserId();
+            var user = await db.Users.FirstAsync(u => u.Id == uid, ct);
+            user.PlexUsername = string.IsNullOrWhiteSpace(req.UserName) ? null : req.UserName.Trim()[..Math.Min(req.UserName.Trim().Length, 100)];
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+        // The Kodi add-on, with this server's address and the user's token already filled in.
+        g.MapGet("/kodi-addon", async (ClaimsPrincipal p, AppDbContext db, HttpContext http, IConfiguration config, CancellationToken ct) =>
+        {
+            var uid = p.UserId();
+            var user = await db.Users.FirstAsync(u => u.Id == uid, ct);
+            var bytes = KodiAddon.Build(AuthEndpoints.PublicBase(http, config).TrimEnd('/'), user.JellyfinToken);
+            return Results.File(bytes, "application/zip", "service.seenit.zip");
         });
         g.MapPost("/regenerate", async (ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
         {

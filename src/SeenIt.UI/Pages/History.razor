@@ -59,9 +59,10 @@
         <select id="hf-source" value="@(SourceParam ?? "")" @onchange='e => Go(source: e.Value?.ToString() ?? "")'>
             <option value="">Anything</option>
             <option value="Manual">Marked in SeenIt</option>
-            <option value="Jellyfin">Jellyfin</option>
-            <option value="TraktImport">Trakt import</option>
-            <option value="LetterboxdImport">Letterboxd import</option>
+            @foreach (var s in Enum.GetValues<WatchSource>().Where(s => s != WatchSource.Manual))
+            {
+                <option value="@s">@WatchSources.Name(s)@(WatchSources.IsScrobbler(s) ? "" : " import")</option>
+            }
         </select>
     </div>
     <div class="field">
@@ -256,11 +257,5 @@ else if (data is not null)
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    private static string SourceLabel(WatchSource s) => s switch
-    {
-        WatchSource.Jellyfin => "Jellyfin",
-        WatchSource.TraktImport => "Trakt",
-        WatchSource.LetterboxdImport => "Letterboxd",
-        _ => "",
-    };
+    private static string SourceLabel(WatchSource s) => WatchSources.Name(s);
 }

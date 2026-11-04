@@ -1,0 +1,62 @@
+@* Shows a generated share image, then shares or saves it. *@
+@inject IPlatform Platform
+@inject Toasts Toasts
+
+<Modal Open="Open" OpenChanged="OpenChanged" Title="@Title">
+    <div class="share-card">
+        @if (error is not null) { <ErrorBox Message="@error" OnRetry="Generate" /> }
+        else if (image is null) { <div class="share-wait"><Spinner /><span class="muted small">Drawing your image…</span></div> }
+        else
+        {
+            <img src="@($"data:image/png;base64,{Convert.ToBase64String(image)}")" alt="@Title" />
+            <div class="inline center">
+                <button class="btn btn-primary" @onclick="Share"><Icon Name="share" Size="16" /> Share</button>
+                <button class="btn" @onclick="Save"><Icon Name="download" Size="16" /> Save image</button>
+            </div>
+        }
+    </div>
+</Modal>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string FileName { get; set; } = "seenit.png";
+    [Parameter, EditorRequired] public Func<Task<byte[]>> Load { get; set; } = default!;
+
+    private byte[]? image;
+    private string? error;
+    private bool wasOpen;
+    private string? loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Draw when opened (and again if it's opened for something else).
+        if (Open && (!wasOpen || loadedFor != FileName)) { wasOpen = true; await Generate(); }
+        if (!Open) wasOpen = false;
+    }
+
+    private async Task Generate()
+    {
+        error = null;
+        if (loadedFor != FileName) image = null;
+        try { image = await Load(); loadedFor = FileName; }
+        catch (Exception ex) { error = ex is ApiException ? ex.Message : "Couldn't draw the image."; }
+    }
+
+    private async Task Share()
+    {
+        try
+        {
+            var result = await Platform.ShareFileAsync(FileName, "image/png", image!, Title);
+            if (result == "downloaded") Toasts.Show("Image saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Save()
+    {
+        try { await Platform.SaveFileAsync(FileName, "image/png", image!); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

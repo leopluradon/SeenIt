@@ -17,12 +17,21 @@
     <button class="chip @(sort == "release" ? "on" : "")" @onclick='() => sort = "release"'>Release date</button>
     <button class="chip @(sort == "title" ? "on" : "")" @onclick='() => sort = "title"'>Title</button>
 </div>
+@if (items is { Count: > 8 })
+{
+    <div class="searchbar">
+        <Icon Name="search" Size="18" />
+        <input type="search" @bind="find" @bind:event="oninput" placeholder="Filter your watchlist" aria-label="Filter your watchlist" />
+        <a class="btn btn-sm btn-ghost" href="lists">Search all lists</a>
+    </div>
+}
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }
 else if (items is not null)
 {
     var shown = Sorted().ToList();
-    @if (shown.Count == 0) { <Empty Title="Your watchlist is empty.">Add movies and shows you want to watch from their pages.</Empty> }
+    @if (shown.Count == 0 && !string.IsNullOrWhiteSpace(find)) { <Empty Title="@($"Nothing called “{find.Trim()}” here.")" /> }
+    else if (shown.Count == 0) { <Empty Title="Your watchlist is empty.">Add movies and shows you want to watch from their pages.</Empty> }
     else
     {
         <div class="poster-grid">
@@ -39,6 +48,7 @@ else if (items is not null)
     private string? error;
     private MediaType? filter;
     private string sort = "added";
+    private string find = "";
 
     protected override Task OnInitializedAsync() => Load();
 
@@ -51,7 +61,7 @@ else if (items is not null)
 
     private IEnumerable<WatchlistEntry> Sorted()
     {
-        var q = items!.Where(i => filter is null || i.Media.Type == filter);
+        var q = items!.Where(i => (filter is null || i.Media.Type == filter) && TextMatch.Contains(i.Media.Title, find));
         return sort switch
         {
             "release" => q.OrderBy(i => i.ReleaseDate ?? DateOnly.MaxValue),

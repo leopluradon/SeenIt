@@ -151,7 +151,7 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
     {
         var grid = Enumerable.Range(0, 7).Select(_ => new int[24]).ToArray();
         // Letterboxd only records the day, so its plays have no real time.
-        foreach (var p in c.Tracked.Where(p => p.Source != WatchSource.LetterboxdImport))
+        foreach (var p in c.Tracked.Where(p => WatchSources.HasTimeOfDay(p.Source)))
             grid[(int)p.Local.DayOfWeek][p.Local.Hour]++;
         return grid.Select(r => (IReadOnlyList<int>)r).ToList();
     }

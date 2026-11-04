@@ -28,8 +28,16 @@ else if (list is not null)
     </div>
     @if (list.Description is not null) { <p class="overview">@list.Description</p> }
     @if (list.Items.Count == 0) { <Empty Title="This list is empty.">Add movies and shows from their pages with the “Lists” button.</Empty> }
+    @if (list.Items.Count > 8)
+    {
+        <div class="searchbar">
+            <Icon Name="search" Size="18" />
+            <input type="search" @bind="find" @bind:event="oninput" placeholder="Filter this list" aria-label="Filter this list" />
+            @if (list.IsOwner) { <a class="btn btn-sm btn-ghost" href="lists">Search all lists</a> }
+        </div>
+    }
     <div class="poster-grid">
-        @foreach (var i in list.Items)
+        @foreach (var i in list.Items.Where(i => TextMatch.Contains(i.Media.Title, find)))
         {
             <div class="poster-wrap" @key="i.Id">
                 <PosterCard Media="i.Media" />
@@ -51,6 +59,7 @@ else if (list is not null)
     private ListDetail? list;
     private string? error;
     private bool editOpen;
+    private string find = "";
 
     protected override Task OnParametersSetAsync() => Load();
 

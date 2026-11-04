@@ -36,7 +36,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 });
                 await RemoveFromWatchlistAsync(userId, MediaType.Show, req.TmdbId, ct);
                 // Watching a new episode of a paused show picks it back up.
-                if (source is WatchSource.Manual or WatchSource.Jellyfin
+                if ((source == WatchSource.Manual || WatchSources.IsScrobbler(source))
                     && await db.ShowStates.FirstOrDefaultAsync(x => x.UserId == userId && x.ShowTmdbId == req.TmdbId && x.Status == ShowTrackStatus.Paused, ct) is { } paused)
                     db.ShowStates.Remove(paused);
                 await db.SaveChangesAsync(ct);

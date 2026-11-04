@@ -1,0 +1,113 @@
+@page "/goals"
+@page "/goals/{Year:int}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>Goals · SeenIt</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Goals</h1>
+        <p class="muted small">Yearly targets, counted the way your year in review counts them.</p>
+    </div>
+    <div class="inline">
+        <a class="icon-btn" href="@($"goals/{ShownYear - 1}")" aria-label="Previous year"><Icon Name="chevron-left" Size="18" /></a>
+        <b>@ShownYear</b>
+        <a class="icon-btn" href="@($"goals/{ShownYear + 1}")" aria-label="Next year"><Icon Name="chevron-right" Size="18" /></a>
+    </div>
+</div>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (goals is null && error is null) { <Spinner /> }
+else if (goals is not null)
+{
+    @if (goals.Count == 0)
+    {
+        <Empty Title="@($"No goals for {ShownYear} yet.")">Set one below, like 100 movies or 500 hours.</Empty>
+    }
+    <div class="goal-grid">
+        @foreach (var g in goals)
+        {
+            <GoalCard Goal="g" OnEdit="() => Edit(g)" OnDelete="() => Delete(g)" @key="g.Id" />
+        }
+    </div>
+
+    <section class="panel goal-form">
+        <h2>@(editing is null ? "Add a goal" : $"Change your {GoalKinds.Label(editing.Kind).ToLowerInvariant()} goal")</h2>
+        <div class="inline">
+            @if (editing is null)
+            {
+                <select @bind="kind" aria-label="Kind of goal">
+                    @foreach (var k in Enum.GetValues<GoalKind>().Where(k => goals.All(g => g.Kind != k)))
+                    {
+                        <option value="@k">@GoalKinds.Label(k)</option>
+                    }
+                </select>
+            }
+            <input type="number" min="1" max="100000" inputmode="numeric" @bind="target" aria-label="Target" class="goal-target" />
+            <span class="muted">@GoalKinds.Unit(editing?.Kind ?? kind, target) in @ShownYear</span>
+            <button class="btn btn-primary btn-sm" disabled="@(busy || target < 1 || (editing is null && goals.Any(g => g.Kind == kind)))" @onclick="Save">Save</button>
+            @if (editing is not null) { <button class="btn btn-sm btn-ghost" @onclick="Cancel">Cancel</button> }
+        </div>
+        <p class="muted small">@GoalKinds.Hint(editing?.Kind ?? kind)@(Suggestion is { } s ? $" Last year you got {s}." : "")</p>
+    </section>
+}
+
+@code {
+    [Parameter] public int? Year { get; set; }
+    private int ShownYear => Year ?? DateTime.Today.Year;
+    private List<GoalDto>? goals, lastYear;
+    private string? error;
+    private GoalDto? editing;
+    private GoalKind kind = GoalKind.Movies;
+    private int target = 100;
+    private bool busy;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        editing = null;
+        try
+        {
+            goals = await Api.GoalsAsync(ShownYear);
+            try { lastYear = await Api.GoalsAsync(ShownYear - 1); } catch { lastYear = null; }
+            kind = Enum.GetValues<GoalKind>().FirstOrDefault(k => goals.All(g => g.Kind != k));
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private string? Suggestion =>
+        lastYear?.FirstOrDefault(g => g.Kind == (editing?.Kind ?? kind)) is { } g
+            ? $"{(g.Current % 1 == 0 ? g.Current.ToString("N0") : g.Current.ToString("N1"))} {GoalKinds.Unit(g.Kind, g.Current)}"
+            : null;
+
+    private void Edit(GoalDto g) { editing = g; target = g.Target; }
+    private void Cancel() { editing = null; target = 100; }
+
+    private async Task Save()
+    {
+        busy = true;
+        try
+        {
+            await Api.SetGoalAsync(new GoalRequest(ShownYear, editing?.Kind ?? kind, target));
+            Toasts.Show("Goal saved");
+            await Load();
+            target = 100;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Delete(GoalDto g)
+    {
+        try
+        {
+            await Api.DeleteGoalAsync(g.Id);
+            goals?.Remove(g);
+            Toasts.Show("Goal deleted", undo: async () => { await Api.SetGoalAsync(new GoalRequest(g.Year, g.Kind, g.Target)); await Load(); });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

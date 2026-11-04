@@ -2,7 +2,32 @@ namespace SeenIt.Contracts;
 
 public enum MediaType { Movie, Show, Episode }
 
-public enum WatchSource { Manual, Jellyfin, TraktImport, LetterboxdImport }
+public enum WatchSource { Manual, Jellyfin, TraktImport, LetterboxdImport, Plex, Kodi, ImdbImport, TvTimeImport, SimklImport }
+
+public static class WatchSources
+{
+    /// <summary>Media servers that scrobble plays as they happen and report "watching now".</summary>
+    public static bool IsScrobbler(WatchSource s) => s is WatchSource.Jellyfin or WatchSource.Plex or WatchSource.Kodi;
+
+    /// <summary>Whether a play's time of day is real. Letterboxd only records the day; IMDb plays are dated when rated.</summary>
+    public static bool HasTimeOfDay(WatchSource s) => s is not (WatchSource.LetterboxdImport or WatchSource.ImdbImport);
+
+    public static WatchSource ForImport(ImportKind k) => k switch
+    {
+        ImportKind.Trakt => WatchSource.TraktImport, ImportKind.Letterboxd => WatchSource.LetterboxdImport,
+        ImportKind.Imdb => WatchSource.ImdbImport, ImportKind.TvTime => WatchSource.TvTimeImport, _ => WatchSource.SimklImport,
+    };
+
+    public static string Name(ImportKind k) => Name(ForImport(k));
+
+    public static string Name(WatchSource s) => s switch
+    {
+        WatchSource.Jellyfin => "Jellyfin", WatchSource.Plex => "Plex", WatchSource.Kodi => "Kodi",
+        WatchSource.TraktImport => "Trakt", WatchSource.LetterboxdImport => "Letterboxd", WatchSource.ImdbImport => "IMDb",
+        WatchSource.TvTimeImport => "TV Time", WatchSource.SimklImport => "Simkl",
+        _ => "",
+    };
+}
 
 // ---------- Auth ----------
 
@@ -42,6 +67,7 @@ public static class UiPrefs
         ("now", "Watching now"),
         ("onthisday", "On this day"),
         ("review", "Month / year in review banner"),
+        ("goals", "Goals"),
         ("upnext", "Up next"),
         ("upcoming", "Coming up"),
         ("recent", "Recently watched"),
@@ -427,11 +453,13 @@ public record ListItemRequest(MediaType Type, int TmdbId);
 
 // ---------- Integrations ----------
 
-public record JellyfinSettingsDto(string WebhookUrlPath, int WatchedThresholdPercent, IReadOnlyList<JellyfinEventDto> RecentEvents);
+public record JellyfinSettingsDto(string WebhookUrlPath, int WatchedThresholdPercent, IReadOnlyList<JellyfinEventDto> RecentEvents,
+    string PlexUrlPath = "", string? PlexUserName = null);
+public record PlexUserRequest(string? UserName);
 public record JellyfinEventDto(DateTimeOffset ReceivedAt, string? ItemName, string Outcome);
 public record JellyfinThresholdRequest(int WatchedThresholdPercent);
 
-public enum ImportKind { Trakt, Letterboxd }
+public enum ImportKind { Trakt, Letterboxd, Imdb, TvTime, Simkl }
 public enum ImportStatus { Queued, Running, Completed, Failed }
 
 /// <summary>Kinds of entries in the admin activity log.</summary>
@@ -449,6 +477,7 @@ public enum ActivityKind
     Rematch, RestorePlays,
     FavoriteAdd, FavoriteRemove,
     EditPlay,
+    GoalSet, GoalDelete, LetterboxdSync,
 }
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
@@ -736,3 +765,53 @@ public record FriendsBoard(string Period, IReadOnlyList<LeaderRow> Rows, MediaSu
 public record LeaderRow(UserCard User, long Minutes, int Plays, bool IsMe);
 
 public record Milestone(string Label, DateTimeOffset? At, MediaSummary? Item, bool BeforeTracking);
+
+// ---------- Goals ----------
+
+public enum GoalKind { Movies, NewMovies, Episodes, Hours, ShowsFinished }
+
+public static class GoalKinds
+{
+    public static string Label(GoalKind k) => k switch
+    {
+        GoalKind.Movies => "Movies",
+        GoalKind.NewMovies => "New-to-me movies",
+        GoalKind.Episodes => "Episodes",
+        GoalKind.Hours => "Hours watched",
+        _ => "Shows finished",
+    };
+
+    /// <summary>"movies", "hours"… after a number.</summary>
+    public static string Unit(GoalKind k, double n) => k switch
+    {
+        GoalKind.Movies => n == 1 ? "movie" : "movies",
+        GoalKind.NewMovies => n == 1 ? "new movie" : "new movies",
+        GoalKind.Episodes => n == 1 ? "episode" : "episodes",
+        GoalKind.Hours => n == 1 ? "hour" : "hours",
+        _ => n == 1 ? "show finished" : "shows finished",
+    };
+
+    public static string Hint(GoalKind k) => k switch
+    {
+        GoalKind.Movies => "Every movie play counts, rewatches too.",
+        GoalKind.NewMovies => "Only movies you'd never seen before.",
+        GoalKind.Episodes => "Every episode play counts.",
+        GoalKind.Hours => "Movies and episodes, by runtime.",
+        _ => "Shows you caught up on or finished this year.",
+    };
+}
+
+/// <param name="Expected">Where you'd be by today on an even pace (the target once the year is over).</param>
+public record GoalDto(Guid Id, int Year, GoalKind Kind, int Target, double Current, double Expected, bool YearOver);
+public record GoalRequest(int Year, GoalKind Kind, int Target);
+
+// ---------- Letterboxd feed sync ----------
+
+public record LetterboxdSyncDto(string? Username, DateTimeOffset? LastCheckedAt, DateTimeOffset? LastAddedAt, string? LastResult, bool LastFailed);
+public record LetterboxdSyncRequest(string Username);
+
+// ---------- Searching lists ----------
+
+/// <summary>A title found in your watchlist and/or lists.</summary>
+public record ListSearchHit(MediaSummary Media, bool OnWatchlist, IReadOnlyList<ListRef> Lists);
+public record ListRef(Guid Id, string Name);

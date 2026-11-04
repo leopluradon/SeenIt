@@ -22,7 +22,7 @@
     <nav class="settings-nav">
         <a href="settings#imports">Import</a>
         <a href="settings#tracking">Stats</a>
-        <a href="settings#jellyfin">Jellyfin</a>
+        <a href="settings#jellyfin">Media servers</a>
         <a href="settings#spoilers">Spoilers</a>
         <a href="settings#appearance">Appearance</a>
         <a href="settings#layout">Layout</a>
@@ -62,7 +62,62 @@
                         <InputFile OnChange="e => Upload(ImportKind.Letterboxd, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv,text/comma-separated-values" class="visually-hidden" disabled="@uploading" />
                     </label>
                 </div>
+                <div class="import-card">
+                    <h3>IMDb</h3>
+                    <ol class="small">
+                        <li>On imdb.com open <b>Your ratings</b>, your <b>Watchlist</b> or any list, then <b>⋯ → Export</b>.</li>
+                        <li>Upload the <code>.csv</code> files (one at a time, or zipped together). Keep the watchlist's file name containing “watchlist”.</li>
+                    </ol>
+                    <p class="muted small">Imports ratings, the watchlist and lists, matched exactly by IMDb id. Rated movies count as watched (dated when you rated them) unless you untick History.</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload IMDb export
+                        <InputFile OnChange="e => Upload(ImportKind.Imdb, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv,text/comma-separated-values" class="visually-hidden" disabled="@uploading" />
+                    </label>
+                </div>
+                <div class="import-card">
+                    <h3>TV Time</h3>
+                    <ol class="small">
+                        <li>Find the data export zip you downloaded from TV Time (its GDPR export).</li>
+                        <li>Upload the whole <code>.zip</code>.</li>
+                    </ol>
+                    <p class="muted small">Imports every episode you marked watched, with its date, and shows saved “for later” as your watchlist. Shows are matched through TheTVDB ids where the export has them. TV Time's movies can't be imported.</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload TV Time export
+                        <InputFile OnChange="e => Upload(ImportKind.TvTime, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv" class="visually-hidden" disabled="@uploading" />
+                    </label>
+                </div>
+                <div class="import-card">
+                    <h3>Simkl</h3>
+                    <ol class="small">
+                        <li>On simkl.com open <b>Settings → Backup &amp; Export</b> and download a backup.</li>
+                        <li>Upload the <code>.zip</code>, <code>.json</code> or <code>.csv</code>.</li>
+                    </ol>
+                    <p class="muted small">Imports movies, shows and anime (as shows), ratings and plan-to-watch. The JSON backup has every episode's date; the CSV only says how far you got, so those episodes come in without dates.</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Simkl backup
+                        <InputFile OnChange="e => Upload(ImportKind.Simkl, e)" accept=".zip,.json,.csv,application/zip,application/x-zip-compressed,application/json,text/csv" class="visually-hidden" disabled="@uploading" />
+                    </label>
+                </div>
             </div>
+
+            <h3 id="letterboxd-sync">Letterboxd auto-sync</h3>
+            <p class="muted small">Brings in new diary entries, ratings and likes from your public Letterboxd feed every few hours, so you can keep logging on Letterboxd. It reads the latest 50 entries, so import your full export once first for older ones. Entries you delete here aren't brought back.</p>
+            @if (lb is { Username: { } lbUser })
+            {
+                <div class="inline">
+                    <span>Syncing <a href="@($"https://letterboxd.com/{lbUser}/")" target="_blank" rel="noopener"><b>@lbUser</b></a></span>
+                    <button class="btn btn-sm" disabled="@lbBusy" @onclick="SyncLetterboxdNow">Check now</button>
+                    <button class="btn btn-sm btn-ghost" disabled="@lbBusy" @onclick="StopLetterboxd">Stop syncing</button>
+                </div>
+                <p class="small @(lb.LastFailed ? "error" : "muted")">
+                    @if (lb.LastCheckedAt is { } checkedAt) { <span>Checked <RelTime At="checkedAt" />: @lb.LastResult</span> } else { <span>Not checked yet.</span> }
+                    @if (lb.LastAddedAt is { } added) { <span> Last added something <RelTime At="added" />.</span> }
+                </p>
+            }
+            else
+            {
+                <form class="inline" @onsubmit="StartLetterboxd">
+                    <input type="text" @bind="lbName" @bind:event="oninput" placeholder="Letterboxd username" aria-label="Letterboxd username" autocapitalize="off" autocomplete="off" spellcheck="false" />
+                    <button class="btn btn-sm btn-primary" type="submit" disabled="@(lbBusy || string.IsNullOrWhiteSpace(lbName))">@(lbBusy ? "Checking…" : "Start syncing")</button>
+                </form>
+            }
             @if (imports is { Count: > 0 })
             {
                 <h3>Recent imports</h3>
@@ -71,7 +126,7 @@
                     {
                         <div class="import-job" @key="j.Id">
                             <div class="inline spread">
-                                <b>@j.Kind · @j.FileName</b>
+                                <b>@WatchSources.Name(j.Kind) · @j.FileName</b>
                                 @if (j.Parts != ImportParts.All) { <span class="muted small">@PartsPicker.Describe(j.Parts)</span> }
                                 <span class="pill @StatusClass(j.Status)">@j.Status</span>
                             </div>
@@ -112,11 +167,51 @@
         </section>
 
         <section class="panel" id="jellyfin">
-            <h2>Jellyfin</h2>
+            <h2>Media servers</h2>
             @if (jf is null) { <Spinner /> }
             else
             {
-                <p>SeenIt can scrobble whatever you watch on Jellyfin automatically using Jellyfin's <b>Webhook</b> plugin.</p>
+                <p class="muted small">SeenIt can mark what you watch on your media server automatically, and show it as “Watching now” while it plays.</p>
+                <div class="segmented server-tabs">
+                    @foreach (var s in new[] { "Jellyfin", "Plex", "Kodi" })
+                    {
+                        <button class="@(serverTab == s ? "on" : "")" @onclick="() => serverTab = s" @key="s">@s</button>
+                    }
+                </div>
+                @if (serverTab == "Plex")
+                {
+                    <ol class="steps">
+                        <li>Webhooks need <b>Plex Pass</b>. In Plex open <b>Settings → Webhooks</b> (your account settings, not the server's) and click <b>Add Webhook</b>.</li>
+                        <li>Paste your personal URL and save:
+                            <div class="copy-field">
+                                <code>@PlexUrl</code>
+                                <button class="icon-btn" @onclick="() => Copy(PlexUrl)" aria-label="Copy Plex webhook URL"><Icon Name="copy" Size="16" /></button>
+                            </div>
+                            <span class="muted small">Keep it private: anyone with it can add plays to your history.</span>
+                        </li>
+                        <li>If other people use your Plex server, enter your Plex username so only your plays count:
+                            <form class="inline" @onsubmit="SavePlexUser">
+                                <input type="text" @bind="plexUser" placeholder="Plex username (optional)" aria-label="Plex username" autocapitalize="off" autocomplete="off" spellcheck="false" />
+                                <button class="btn btn-sm" type="submit">Save</button>
+                            </form>
+                        </li>
+                    </ol>
+                    <p class="muted small">Plex says something's watched at 90%. Stopping earlier counts once you pass the percentage below.</p>
+                }
+                else if (serverTab == "Kodi")
+                {
+                    <ol class="steps">
+                        <li>Download the SeenIt add-on. It has this server's address and your token filled in.
+                            <div><button class="btn btn-sm" disabled="@kodiBusy" @onclick="DownloadKodi"><Icon Name="download" Size="16" /> Download SeenIt for Kodi</button></div>
+                        </li>
+                        <li>Copy it to the device running Kodi. In Kodi open <b>Settings → System → Add-ons</b> and turn on <b>Unknown sources</b>.</li>
+                        <li>Go to <b>Add-ons → Install from zip file</b> and pick <code>service.seenit.zip</code>.</li>
+                    </ol>
+                    <p class="muted small">Works with movies and episodes in your Kodi library on Kodi 19 or later. If you generate a new URL here, download the add-on again (or change the token in its settings).</p>
+                }
+                else
+                {
+                <p>Uses Jellyfin's <b>Webhook</b> plugin.</p>
                 <ol class="steps">
                     <li>In Jellyfin go to <b>Dashboard → Plugins → Catalog</b>, install <b>Webhook</b> and restart Jellyfin.</li>
                     <li>Open the Webhook plugin settings and click <b>Add Generic Destination</b>.</li>
@@ -137,6 +232,7 @@
                     </li>
                     <li>Add a request header <b>Content-Type</b> = <code>application/json</code>, then save.</li>
                 </ol>
+                }
                 <div class="field inline">
                     <label for="jf-threshold">Count as watched after</label>
                     <select id="jf-threshold" value="@jf.WatchedThresholdPercent" @onchange="SetThreshold">
@@ -148,7 +244,7 @@
                     <button class="btn btn-sm btn-ghost" @onclick="Regenerate">Generate a new URL</button>
                 </div>
                 <h3>Recent activity</h3>
-                @if (jf.RecentEvents.Count == 0) { <p class="muted small">Nothing received yet. Finish watching something in Jellyfin, then refresh.</p> }
+                @if (jf.RecentEvents.Count == 0) { <p class="muted small">Nothing received yet. Finish watching something, then refresh.</p> }
                 else
                 {
                     <table class="table small">
@@ -442,6 +538,60 @@
     }
 
     private string WebhookUrl => jf is null ? "" : new Uri(new Uri(Server.Url), jf.WebhookUrlPath.TrimStart('/')).ToString();
+    private string PlexUrl => jf is null ? "" : new Uri(new Uri(Server.Url), jf.PlexUrlPath.TrimStart('/')).ToString();
+    private string serverTab = "Jellyfin";
+    private string? plexUser;
+    private bool kodiBusy;
+    private LetterboxdSyncDto? lb;
+    private string? lbName;
+    private bool lbBusy;
+
+    private async Task LoadLetterboxd()
+    {
+        try { lb = await Api.LetterboxdSyncAsync(); } catch { }
+    }
+
+    private async Task StartLetterboxd()
+    {
+        lbBusy = true;
+        try
+        {
+            lb = await Api.SetLetterboxdSyncAsync(lbName ?? "");
+            Toasts.Show(lb.LastResult is { } r ? $"Syncing {lb.Username}. {r}" : $"Syncing {lb.Username}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { lbBusy = false; }
+    }
+
+    private async Task SyncLetterboxdNow()
+    {
+        lbBusy = true;
+        try { lb = await Api.LetterboxdSyncNowAsync(); Toasts.Show(lb.LastResult ?? "Checked"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { lbBusy = false; }
+    }
+
+    private async Task StopLetterboxd()
+    {
+        lbBusy = true;
+        try { await Api.StopLetterboxdSyncAsync(); lbName = lb?.Username; lb = await Api.LetterboxdSyncAsync(); Toasts.Show("Letterboxd sync stopped"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { lbBusy = false; }
+    }
+
+    private async Task SavePlexUser()
+    {
+        try { await Api.SetPlexUserAsync(plexUser); Toasts.Show(string.IsNullOrWhiteSpace(plexUser) ? "Every Plex account counts" : $"Only {plexUser.Trim()}'s plays count"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task DownloadKodi()
+    {
+        kodiBusy = true;
+        try { await Platform.SaveFileAsync("service.seenit.zip", "application/zip", await Api.KodiAddonAsync()); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { kodiBusy = false; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -455,13 +605,13 @@
         region = Session.Me?.Region;
         _ = LoadFeatures();
         _ = LoadInvites();
-        await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions(), LoadTimeZones(), LoadAndroid());
+        await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions(), LoadTimeZones(), LoadAndroid(), LoadLetterboxd());
         StartPolling();
     }
 
     private async Task LoadJellyfin()
     {
-        try { jf = await Api.JellyfinAsync(); }
+        try { jf = await Api.JellyfinAsync(); plexUser ??= jf.PlexUserName; }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
@@ -501,7 +651,7 @@
             await stream.CopyToAsync(buffer);
             buffer.Position = 0;
             await Api.UploadImportAsync(kind, importParts, file.Name, buffer);
-            Toasts.Show($"{kind} import started");
+            Toasts.Show($"{WatchSources.Name(kind)} import started");
             await LoadImports();
         }
         catch (Exception ex) { Toasts.Error(ex); }
@@ -517,7 +667,7 @@
 
     private async Task Regenerate()
     {
-        if (!await Js.InvokeAsync<bool>("confirm", "Generate a new webhook URL? The old one stops working, so you'll need to update Jellyfin.")) return;
+        if (!await Js.InvokeAsync<bool>("confirm", "Generate a new webhook URL? The old one stops working, so you'll need to update Jellyfin, Plex or the Kodi add-on.")) return;
         try { await Api.RegenerateJellyfinTokenAsync(); await LoadJellyfin(); Toasts.Show("New URL generated"); }
         catch (Exception ex) { Toasts.Error(ex); }
     }

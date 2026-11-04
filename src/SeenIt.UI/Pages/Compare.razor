@@ -12,6 +12,7 @@ else if (c is not null)
 {
     <div class="compare-head">
         <h1><a href="@Fmt.UserHref(c.A.UserName)">@c.A.Name</a> vs <a href="@Fmt.UserHref(c.B.UserName)">@c.B.Name</a></h1>
+        <button class="btn btn-sm" @onclick="() => shareOpen = true"><Icon Name="share" Size="16" /> Share image</button>
         @if (c.Compatibility is { } pct)
         {
             <div class="compat">
@@ -36,6 +37,9 @@ else if (c is not null)
         <span class="muted">In common</span>
         <span class="span2">@c.SharedMovies movie@(c.SharedMovies == 1 ? "" : "s") · @c.SharedShows show@(c.SharedShows == 1 ? "" : "s")</span>
     </div>
+
+    <ShareCardDialog @bind-Open="shareOpen" Title="@($"{c.A.Name} vs {c.B.Name}")" FileName="@($"seenit-{c.A.UserName}-{c.B.UserName}.png")"
+                     Load="() => Api.CompareCardAsync(c.A.UserName, c.B.UserName)" />
 
     @foreach (var (key, title, items) in Sections())
     {
@@ -80,6 +84,7 @@ else if (c is not null)
     private const int RowSize = 20;
     private CompareDto? c;
     private string? error;
+    private bool shareOpen;
     private readonly Dictionary<string, string> kinds = [];
     private readonly HashSet<string> open = [];
 

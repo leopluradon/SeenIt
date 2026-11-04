@@ -26,6 +26,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Deployment> Deployments => Set<Deployment>();
     public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<CollectionMeta> Collections => Set<CollectionMeta>();
+    public DbSet<Goal> Goals => Set<Goal>();
+    public DbSet<LetterboxdSync> LetterboxdSyncs => Set<LetterboxdSync>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -110,6 +112,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.OwnsMany(x => x.Parts, o => o.ToJson());
         });
         b.Entity<MovieMeta>().HasIndex(x => x.CollectionId);
+        b.Entity<Goal>(e => e.HasIndex(x => new { x.UserId, x.Year, x.Kind }).IsUnique());
+        b.Entity<LetterboxdSync>(e =>
+        {
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.Username).HasMaxLength(64);
+            e.Property(x => x.LastResult).HasMaxLength(300);
+        });
         b.Entity<ActivityEntry>(e =>
         {
             e.HasIndex(x => x.At);
@@ -133,7 +142,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

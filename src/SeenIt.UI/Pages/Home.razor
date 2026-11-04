@@ -59,6 +59,20 @@
                         </section>
                     }
                     break;
+                case "goals":
+                    @if (goals is { Count: > 0 })
+                    {
+                        <section class="row-section">
+                            <div class="section-head">
+                                <h2>@DateTime.Today.Year goals</h2>
+                                <div class="section-tools"><a href="goals" class="section-more">Goals <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("goals")' /></div>
+                            </div>
+                            <div class="home-goals">
+                                @foreach (var g in goals) { <GoalCard Goal="g" @key="g.Id" /> }
+                            </div>
+                        </section>
+                    }
+                    break;
                 case "upnext":
                     @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
                     else if (dash is not null)
@@ -213,6 +227,7 @@
     private List<(string Href, string Text)> reviewLinks = [];
     private ServerFeatures? features;
     private List<OnThisDayItem>? onThisDay;
+    private List<GoalDto>? goals;
 
     private bool Visible(string key) => !signedIn || !hidden.Contains(key);
 
@@ -245,6 +260,7 @@
         try { if (!hidden.Contains("now")) now = await Api.CheckInAsync(); } catch { }
         try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(18); } catch { }
         try { if (!hidden.Contains("onthisday")) onThisDay = await Api.OnThisDayAsync(); } catch { }
+        try { if (!hidden.Contains("goals")) goals = await Api.GoalsAsync(DateTime.Today.Year); } catch { }
     }
 
     private async Task CancelCheckIn()
@@ -301,7 +317,7 @@
         var shown = before.Except(hidden).ToList();
         if (shown.Any(k => k.StartsWith("trending")) && trendingMovies is null) await LoadTrending();
         if (shown.Contains("review") && reviewLinks.Count == 0) await LoadReviewLinks();
-        if (shown.Any(k => k is "now" or "friends" or "onthisday")) await LoadExtras();
+        if (shown.Any(k => k is "now" or "friends" or "onthisday" or "goals")) await LoadExtras();
     }
 
     private async Task Toggle(string key, bool visible)
@@ -315,7 +331,7 @@
             if (!visible) Toasts.Show("Section hidden. Bring it back with “Customize home”.");
             if (visible && key.StartsWith("trending") && trendingMovies is null) await LoadTrending();
             if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
-            if (visible && key is "now" or "friends") await LoadExtras();
+            if (visible && key is "now" or "friends" or "goals") await LoadExtras();
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

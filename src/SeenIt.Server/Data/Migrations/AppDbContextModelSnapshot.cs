@@ -277,6 +277,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("PlexUsername")
+                        .HasColumnType("text");
+
                     b.Property<string>("Region")
                         .HasMaxLength(2)
                         .HasColumnType("character varying(2)");
@@ -487,6 +490,35 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Follows");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.Goal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Target")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Year", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("Goals");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.ImportJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -606,6 +638,41 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasIndex("UserId", "ReceivedAt");
 
                     b.ToTable("JellyfinEvents");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.LetterboxdSync", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastAddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("LastFailed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastResult")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.PrimitiveCollection<List<string>>("SeenGuids")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("LetterboxdSyncs");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.MovieMeta", b =>
@@ -1057,6 +1124,15 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.Goal", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.ImportJob", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
@@ -1081,6 +1157,15 @@ namespace SeenIt.Server.Data.Migrations
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.JellyfinEvent", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.LetterboxdSync", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()

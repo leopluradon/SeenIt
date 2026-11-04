@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<settings>
+  <category label="SeenIt">
+    <setting id="server" type="text" label="SeenIt address" default="{{SERVER}}"/>
+    <setting id="token" type="text" label="Your SeenIt webhook token" default="{{TOKEN}}"/>
+  </category>
+</settings>

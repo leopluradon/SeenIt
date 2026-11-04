@@ -3,7 +3,7 @@
 <div class="now-card">
     <a href="@Href"><img src="@Img.Poster(Item.PosterPath, "w154")" alt="" /></a>
     <div class="now-body">
-        <span class="now-kicker"><Icon Name="radio" Size="14" /> @(Who is null ? "Watching now" : $"{Who} is watching")@(Item.Source == WatchSource.Jellyfin ? " on Jellyfin" : "")</span>
+        <span class="now-kicker"><Icon Name="radio" Size="14" /> @(Who is null ? "Watching now" : $"{Who} is watching")@(WatchSources.IsScrobbler(Item.Source) ? $" on {WatchSources.Name(Item.Source)}" : "")</span>
         <a href="@Href" class="mini-title">@Item.Title</a>
         @if (Item.Type == MediaType.Episode)
         {

@@ -76,7 +76,7 @@ public class ImportWorker(IServiceScopeFactory scopes, ILogger<ImportWorker> log
         await db.SaveChangesAsync(CancellationToken.None);
         await scope.ServiceProvider.GetRequiredService<ActivityService>().LogAsync(job.UserId, ActivityKind.Import,
             detail: $"{job.Kind} {job.FileName} {status.ToString().ToLowerInvariant()}: {message}",
-            source: job.Kind == ImportKind.Trakt ? WatchSource.TraktImport : WatchSource.LetterboxdImport);
+            source: WatchSources.ForImport(job.Kind));
         return true;
     }
 }

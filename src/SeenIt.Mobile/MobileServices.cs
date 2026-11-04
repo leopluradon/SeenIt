@@ -147,6 +147,14 @@ public class MobilePlatform(IServerConfig server) : IPlatform
         await Share.Default.RequestAsync(new ShareFileRequest { Title = fileName, File = new ShareFile(path, contentType) });
     }
 
+    public async Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title)
+    {
+        var path = Path.Combine(FileSystem.CacheDirectory, fileName);
+        await File.WriteAllBytesAsync(path, data);
+        await Share.Default.RequestAsync(new ShareFileRequest { Title = title, File = new ShareFile(path, contentType) });
+        return "shared";
+    }
+
     public async Task<string> ShareLinkAsync(string title, string url)
     {
         await Share.Default.RequestAsync(new ShareTextRequest { Title = title, Uri = url });

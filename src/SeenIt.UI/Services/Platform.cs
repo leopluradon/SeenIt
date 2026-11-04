@@ -9,6 +9,8 @@ public interface IPlatform
 {
     /// <summary>Saves (web: downloads; app: opens the share sheet for) a generated file.</summary>
     Task SaveFileAsync(string fileName, string contentType, byte[] data);
+    /// <summary>Opens the share sheet for a file (an image to post). Returns "shared", "downloaded" or "canceled".</summary>
+    Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title);
     /// <summary>Returns "shared", "copied" or "failed".</summary>
     Task<string> ShareLinkAsync(string title, string url);
     /// <summary>The public address of a page, for links people can open elsewhere.</summary>
@@ -25,6 +27,12 @@ public class BrowserPlatform(IJSRuntime js, NavigationManager nav) : IPlatform
 {
     public async Task SaveFileAsync(string fileName, string contentType, byte[] data) =>
         await js.InvokeVoidAsync("seenit.download", fileName, contentType, Convert.ToBase64String(data));
+
+    public async Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title)
+    {
+        try { return await js.InvokeAsync<string>("seenit.shareFile", fileName, contentType, Convert.ToBase64String(data), title); }
+        catch (JSException) { await SaveFileAsync(fileName, contentType, data); return "downloaded"; }
+    }
 
     public async Task<string> ShareLinkAsync(string title, string url)
     {

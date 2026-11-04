@@ -73,6 +73,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 builder.Services.AddMemoryCache();
 builder.Services.Configure<TmdbOptions>(config.GetSection("Tmdb"));
 builder.Services.AddHttpClient<TmdbClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
+// Posters for share images.
+builder.Services.AddHttpClient("tmdb-images", c => c.Timeout = TimeSpan.FromSeconds(10));
 // Letterboxd film pages, for imports whose titles TMDB's search can't match.
 builder.Services.AddHttpClient("letterboxd", c =>
 {
@@ -117,6 +119,10 @@ builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifes
 builder.Services.AddScoped<ImportRunner>();
 builder.Services.AddHostedService<ImportWorker>();
 builder.Services.AddHostedService<ShowRefreshWorker>();
+builder.Services.AddScoped<LetterboxdSyncService>();
+builder.Services.AddHostedService<LetterboxdSyncWorker>();
+builder.Services.AddScoped<GoalService>();
+builder.Services.AddScoped<ShareCardService>();
 
 var app = builder.Build();
 

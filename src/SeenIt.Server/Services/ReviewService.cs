@@ -18,7 +18,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
     public static TimeZoneInfo Zone(string? id) =>
         !string.IsNullOrWhiteSpace(id) && TimeZoneInfo.TryFindSystemTimeZoneById(id, out var tz) ? tz : TimeZoneInfo.Utc;
 
-    private sealed record Play(Guid Id, MediaType Type, int TmdbId, int? Season, int? Episode, DateTimeOffset At, DateTime Local, WatchSource Source);
+    internal sealed record Play(Guid Id, MediaType Type, int TmdbId, int? Season, int? Episode, DateTimeOffset At, DateTime Local, WatchSource Source);
 
     /// <summary>Which years and months have any plays, for navigation.</summary>
     public async Task<List<ReviewYear>> GetPeriodsAsync(Guid userId, string? tzId, CancellationToken ct)
@@ -82,7 +82,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             .Select(d => new ReviewDay(d.Key, d.Value.Count, d.Value.Sum(p => minutes(p)))).FirstOrDefault();
         var weekdays = Enum.GetValues<DayOfWeek>().Select(d => (d, n: habit.Count(p => p.Local.DayOfWeek == d))).ToList();
         // Letterboxd only records the day, so its plays have no real time of day.
-        var timed = habit.Where(p => p.Source != WatchSource.LetterboxdImport).ToList();
+        var timed = habit.Where(p => WatchSources.HasTimeOfDay(p.Source)).ToList();
         var hours = Enumerable.Range(0, 24).Select(h => (h, n: timed.Count(p => p.Local.Hour == h))).ToList();
         var daysInPeriod = (int)(end - start).TotalDays;
 
@@ -160,10 +160,9 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var sources = inPeriod.GroupBy(p => p.Source).OrderByDescending(g => g.Count())
             .Select(g => new CountBucket(g.Key switch
             {
-                WatchSource.Jellyfin => "Jellyfin",
-                WatchSource.TraktImport => "Trakt import",
-                WatchSource.LetterboxdImport => "Letterboxd import",
-                _ => "Marked in SeenIt",
+                WatchSource.Manual => "Marked in SeenIt",
+                var s when WatchSources.IsScrobbler(s) => WatchSources.Name(s),
+                var s => WatchSources.Name(s) + " import",
             }, g.Count())).ToList();
 
         // ----- Ratings given this period -----
@@ -246,7 +245,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             mostRewatched, since);
     }
 
-    private async Task<List<Play>> LoadPlaysAsync(Guid userId, TimeZoneInfo tz, DateOnly? since, CancellationToken ct)
+    internal async Task<List<Play>> LoadPlaysAsync(Guid userId, TimeZoneInfo tz, DateOnly? since, CancellationToken ct)
     {
         var unknown = WatchDates.Unknown;
         var rows = await db.WatchEvents.AsNoTracking()
@@ -259,7 +258,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
     }
 
     /// <summary>Minutes for a play: the episode's own runtime, else the show's typical one, else the movie's.</summary>
-    private async Task<Func<Play, long>> RuntimesAsync(List<Play> plays, CancellationToken ct)
+    internal async Task<Func<Play, long>> RuntimesAsync(List<Play> plays, CancellationToken ct)
     {
         var movieIds = plays.Where(p => p.Type == MediaType.Movie).Select(p => p.TmdbId).Distinct().ToList();
         var showIds = plays.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
@@ -287,7 +286,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         return new ReviewStreak(best, bestStart, bestEnd);
     }
 
-    private static DateTime Local(DateTimeOffset at, TimeZoneInfo tz) => TimeZoneInfo.ConvertTime(at, tz).DateTime;
+    internal static DateTime Local(DateTimeOffset at, TimeZoneInfo tz) => TimeZoneInfo.ConvertTime(at, tz).DateTime;
 
     private static string FormatMinutes(int m) => m < 60 ? $"{m}m" : $"{m / 60}h {m % 60}m";
 

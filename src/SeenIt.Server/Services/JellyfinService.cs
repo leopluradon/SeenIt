@@ -25,7 +25,11 @@ public record JellyfinPayload(
     string? SaveReason,
     bool? Played,
     DateTimeOffset? Timestamp,
-    bool? IsPaused = null)
+    bool? IsPaused = null,
+    // The show's own ids, when the sender knows them (Kodi, Plex's older agents).
+    string? SeriesTmdb = null,
+    string? SeriesTvdb = null,
+    string? SeriesImdb = null)
 {
     /// <summary>
     /// Accepts both the recommended template and "Send All Properties": keys match case-insensitively
@@ -113,27 +117,45 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
 {
     private static readonly TimeSpan DuplicateWindow = TimeSpan.FromHours(3);
 
-    public async Task<bool> HandleAsync(string token, JsonElement body, CancellationToken ct)
+    public async Task<bool> HandleAsync(string token, JsonElement body, CancellationToken ct) =>
+        await HandleAsync(token, WatchSource.Jellyfin, _ => Task.FromResult<JellyfinPayload?>(JellyfinPayload.Parse(body)), ct);
+
+    /// <summary>A Plex webhook (Plex Pass): the JSON is in the multipart form's "payload" field.</summary>
+    public async Task<bool> HandlePlexAsync(string token, string json, CancellationToken ct) =>
+        await HandleAsync(token, WatchSource.Plex, user =>
+        {
+            using var doc = JsonDocument.Parse(json);
+            return Task.FromResult(MediaServerPayloads.FromPlex(doc.RootElement, user.PlexUsername));
+        }, ct);
+
+    /// <summary>The SeenIt Kodi add-on's notifications.</summary>
+    public async Task<bool> HandleKodiAsync(string token, JsonElement body, CancellationToken ct) =>
+        await HandleAsync(token, WatchSource.Kodi, _ => Task.FromResult(MediaServerPayloads.FromKodi(body)), ct);
+
+    /// <summary>The parser returns null for events that aren't for this user (another Plex account).</summary>
+    private async Task<bool> HandleAsync(string token, WatchSource source, Func<AppUser, Task<JellyfinPayload?>> parse, CancellationToken ct)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.JellyfinToken == token, ct);
         if (user is null) return false;
 
-        var payload = JellyfinPayload.Parse(body);
+        var payload = await parse(user);
+        if (payload is null) return true;
         string outcome;
         try
         {
-            outcome = await ProcessAsync(user, payload, ct);
+            outcome = await ProcessAsync(user, payload, source, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            log.LogWarning(ex, "Jellyfin scrobble failed for {Item}", payload.DisplayName);
+            log.LogWarning(ex, "{Source} scrobble failed for {Item}", source, payload.DisplayName);
             outcome = "Error: " + ex.Message;
         }
 
         // Ignore the noisy progress pings in the visible log.
         if (payload.NotificationType is not ("PlaybackProgress" or "PlaybackStart"))
         {
-            db.JellyfinEvents.Add(new JellyfinEvent { UserId = user.Id, ItemName = payload.DisplayName, Outcome = outcome });
+            var name = source == WatchSource.Jellyfin ? payload.DisplayName : $"{WatchSources.Name(source)} · {payload.DisplayName}";
+            db.JellyfinEvents.Add(new JellyfinEvent { UserId = user.Id, ItemName = name.Length > 300 ? name[..300] : name, Outcome = outcome });
             await db.SaveChangesAsync(ct);
             var stale = await db.JellyfinEvents.Where(e => e.UserId == user.Id)
                 .OrderByDescending(e => e.ReceivedAt).Skip(50).Select(e => e.Id).ToListAsync(ct);
@@ -146,12 +168,12 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         return true;
     }
 
-    private async Task<string> ProcessAsync(AppUser user, JellyfinPayload p, CancellationToken ct)
+    private async Task<string> ProcessAsync(AppUser user, JellyfinPayload p, WatchSource source, CancellationToken ct)
     {
         if (p.NotificationType is "PlaybackStart" or "PlaybackProgress" && p.ItemType is "Movie" or "Episode")
-            return await NowPlayingAsync(user, p, ct);
+            return await NowPlayingAsync(user, p, source, ct);
         if (p.NotificationType == "PlaybackStop")
-            await checkIns.CancelAsync(user.Id, ct, WatchSource.Jellyfin);
+            await checkIns.CancelAsync(user.Id, ct, source);
 
         var (scrobble, reason) = p.Decide(user.JellyfinThresholdPercent);
         if (!scrobble) return reason;
@@ -165,14 +187,14 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
                                                      && w.WatchedAt >= since, ct);
         if (dup) return $"{reason}; already recorded recently";
 
-        await tracking.WatchAsync(user.Id, req with { WatchedAt = DateTimeOffset.UtcNow }, WatchSource.Jellyfin, ct);
+        await tracking.WatchAsync(user.Id, req with { WatchedAt = DateTimeOffset.UtcNow }, source, ct);
         await activity.LogAsync(user.Id, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
-            reason, WatchSource.Jellyfin, user.UserName);
+            reason, source, user.UserName);
         return $"{reason} → scrobbled";
     }
 
     /// <summary>Playback start/progress pings keep the user's "watching now" status current.</summary>
-    private async Task<string> NowPlayingAsync(AppUser user, JellyfinPayload p, CancellationToken ct)
+    private async Task<string> NowPlayingAsync(AppUser user, JellyfinPayload p, WatchSource source, CancellationToken ct)
     {
         var current = await db.CheckIns.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == user.Id, ct);
         DateTimeOffset? endsAt = p.RunTimeTicks is { } run and > 0
@@ -180,7 +202,7 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
             : null;
 
         // Progress pings arrive every few seconds; only touch the database when something changed.
-        if (p.NotificationType == "PlaybackProgress" && current is { Source: WatchSource.Jellyfin } && CheckInService.IsLive(current)
+        if (p.NotificationType == "PlaybackProgress" && current is not null && current.Source == source && CheckInService.IsLive(current)
             && (endsAt is null || p.IsPaused == true || Math.Abs((current.EndsAt - endsAt.Value).TotalMinutes) < 2))
             return "Still watching";
 
@@ -188,7 +210,7 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         if (req is null) return "Now playing, but couldn't match it on TMDB";
         try
         {
-            await checkIns.StartAsync(user.Id, new CheckInRequest(req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber), WatchSource.Jellyfin, endsAt, ct);
+            await checkIns.StartAsync(user.Id, new CheckInRequest(req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber), source, endsAt, ct);
         }
         catch (TrackingException ex) { return ex.Message; }
         return "Now watching";
@@ -211,7 +233,19 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
             return null;
         }
 
-        // Episodes: an episode's own provider ids, via TMDB's /find, give the show and numbering directly.
+        // Episodes: the show's own ids plus the numbering, when the sender has them.
+        if (p.SeasonNumber is { } season && p.EpisodeNumber is { } number)
+        {
+            if (int.TryParse(p.SeriesTmdb, out var showId)) return new WatchRequest(MediaType.Episode, showId, season, number);
+            foreach (var (externalId, source) in new[] { (p.SeriesTvdb, "tvdb_id"), (p.SeriesImdb, "imdb_id") })
+            {
+                if (externalId is null) continue;
+                if ((await tmdb.FindAsync(externalId, source, ct))?.TvResults?.FirstOrDefault() is { } show)
+                    return new WatchRequest(MediaType.Episode, show.Id, season, number);
+            }
+        }
+
+        // Otherwise an episode's own provider ids, via TMDB's /find, give the show and numbering directly.
         foreach (var (externalId, source) in new[] { (p.Tvdb, "tvdb_id"), (p.Imdb, "imdb_id") })
         {
             if (externalId is null) continue;

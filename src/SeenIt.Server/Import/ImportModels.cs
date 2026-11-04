@@ -6,7 +6,8 @@ namespace SeenIt.Server.Import;
 
 /// <summary>A movie or show reference from an export, before it's matched to TMDB.</summary>
 /// <param name="Url">Letterboxd's page for the film, used to find the TMDB id when the title search can't.</param>
-public record ImportRef(MediaType Type, int? TmdbId, string? ImdbId, string? Title, int? Year, string? Url = null)
+/// <param name="TvdbId">TheTVDB id (TV Time and Simkl have them), matched through TMDB's /find.</param>
+public record ImportRef(MediaType Type, int? TmdbId, string? ImdbId, string? Title, int? Year, string? Url = null, int? TvdbId = null)
 {
     public string Label => Year is { } y ? $"{Title} ({y})" : Title ?? ImdbId ?? Url ?? $"#{TmdbId}";
 }
@@ -15,6 +16,8 @@ public record ImportRef(MediaType Type, int? TmdbId, string? ImdbId, string? Tit
 public record ImportWatch(ImportRef Item, int? Season, int? Episode, DateTimeOffset WatchedAt, bool Approximate = false);
 public record ImportRating(ImportRef Item, int? Season, int? Episode, int Rating, DateTimeOffset RatedAt);
 public record ImportListItem(ImportRef Item, DateTimeOffset AddedAt);
+/// <summary>"Watched up to S02E05" (int.MaxValue for "all of it"): expanded into plays once the show's episodes are known.</summary>
+public record ImportProgress(ImportRef Show, int Season, int Episode, DateTimeOffset? LastWatchedAt);
 /// <param name="LegacyName">What an older importer called this list, so a re-import renames it instead of duplicating it.</param>
 public record ImportList(string Name, string? Description, List<ImportListItem> Items, string? LegacyName = null);
 
@@ -26,12 +29,14 @@ public class ParsedImport
     public List<ImportList> Lists { get; } = [];
     /// <summary>Favorite movies/shows, best first.</summary>
     public List<ImportListItem> Favorites { get; } = [];
+    public List<ImportProgress> Progress { get; } = [];
 
     /// <summary>Drops whatever the user chose not to import.</summary>
     public void Keep(ImportParts parts)
     {
         bool Type(ImportRef r) => r.Type == MediaType.Movie ? parts.HasFlag(ImportParts.Movies) : parts.HasFlag(ImportParts.Shows);
         if (!parts.HasFlag(ImportParts.History)) History.Clear(); else History.RemoveAll(h => !Type(h.Item));
+        if (!parts.HasFlag(ImportParts.History) || !parts.HasFlag(ImportParts.Shows)) Progress.Clear();
         if (!parts.HasFlag(ImportParts.Ratings)) Ratings.Clear(); else Ratings.RemoveAll(r => !Type(r.Item));
         if (!parts.HasFlag(ImportParts.Watchlist)) Watchlist.Clear(); else Watchlist.RemoveAll(w => !Type(w.Item));
         if (!parts.HasFlag(ImportParts.Lists)) { Lists.Clear(); Favorites.Clear(); }
@@ -40,7 +45,7 @@ public class ParsedImport
         Lists.RemoveAll(l => l.Items.Count == 0);
     }
 
-    public int Total => History.Count + Watchlist.Count + Ratings.Count + Lists.Sum(l => l.Items.Count) + Favorites.Count;
+    public int Total => History.Count + Watchlist.Count + Ratings.Count + Lists.Sum(l => l.Items.Count) + Favorites.Count + Progress.Count;
 }
 
 public static class ImportFiles

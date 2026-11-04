@@ -39,6 +39,9 @@ public class AppUser : IdentityUser<Guid>
     /// <summary>IANA time zone for stats, reviews and "on this day"; null = whatever the device says.</summary>
     public string? TimeZone { get; set; }
 
+    /// <summary>Plex account name to accept webhook events from; null accepts every account on the server.</summary>
+    public string? PlexUsername { get; set; }
+
     /// <summary>Last time the app loaded the user's profile (updated at most every few minutes).</summary>
     public DateTimeOffset? LastSeenAt { get; set; }
 
@@ -333,4 +336,29 @@ public class CollectionPartMeta
     public string Title { get; set; } = "";
     public DateOnly? ReleaseDate { get; set; }
     public string? PosterPath { get; set; }
+}
+
+/// <summary>A yearly target, e.g. 100 movies in 2027.</summary>
+public class Goal
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public int Year { get; set; }
+    public GoalKind Kind { get; set; }
+    public int Target { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>Pulls new diary entries from the user's public Letterboxd RSS feed every so often.</summary>
+public class LetterboxdSync
+{
+    public Guid UserId { get; set; }
+    public string Username { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastCheckedAt { get; set; }
+    public DateTimeOffset? LastAddedAt { get; set; }
+    public string? LastResult { get; set; }
+    public bool LastFailed { get; set; }
+    /// <summary>Feed entries already handled (newest last), so a play you delete here isn't brought back.</summary>
+    public List<string> SeenGuids { get; set; } = [];
 }

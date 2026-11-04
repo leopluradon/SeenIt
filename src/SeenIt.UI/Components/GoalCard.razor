@@ -1,0 +1,54 @@
+@* One yearly goal: progress, and whether you're on pace. *@
+<div class="goal-card @(Done ? "done" : "")">
+    <div class="goal-top">
+        <div>
+            <div class="goal-kind">@GoalKinds.Label(Goal.Kind)</div>
+            <div class="goal-count"><b>@Num(Goal.Current)</b> <span class="muted">of @Goal.Target.ToString("N0")</span></div>
+        </div>
+        @if (OnEdit.HasDelegate || OnDelete.HasDelegate)
+        {
+            <div class="inline">
+                @if (OnEdit.HasDelegate) { <button class="icon-btn" @onclick="OnEdit" aria-label="Change this goal"><Icon Name="edit" Size="16" /></button> }
+                @if (OnDelete.HasDelegate) { <button class="icon-btn" @onclick="OnDelete" aria-label="Delete this goal"><Icon Name="trash" Size="16" /></button> }
+            </div>
+        }
+    </div>
+    <div class="goal-bar">
+        <div class="goal-fill" style="width:@Pct(Goal.Current)"></div>
+        @if (!Goal.YearOver && Goal.Expected > 0) { <div class="goal-pace" style="left:@Pct(Goal.Expected)" title="Where an even pace would have you today"></div> }
+    </div>
+    <div class="goal-note small @(Behind ? "behind" : "")">@Note</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public GoalDto Goal { get; set; } = default!;
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    private bool Done => Goal.Current >= Goal.Target;
+    private bool Behind => !Done && Goal.Current < Goal.Expected - 0.5;
+
+    private string Pct(double v) =>
+        (Goal.Target <= 0 ? 0 : Math.Min(100, 100 * v / Goal.Target)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private static string Num(double n) => n % 1 == 0 ? n.ToString("N0") : n.ToString("N1");
+
+    private string Note
+    {
+        get
+        {
+            var unit = GoalKinds.Unit(Goal.Kind, 2);
+            if (Goal.YearOver)
+                return Done ? $"Done! You hit {Num(Goal.Current)} {GoalKinds.Unit(Goal.Kind, Goal.Current)}." : $"Finished {Num(Goal.Target - Goal.Current)} {unit} short.";
+            if (Done) return Goal.Current > Goal.Target ? $"Done, and {Num(Goal.Current - Goal.Target)} {unit} over." : "Done!";
+            var delta = Goal.Current - Goal.Expected;
+            var pace = delta >= 0.5 ? $"{Num(Math.Round(delta, Goal.Kind == GoalKind.Hours ? 1 : 0))} ahead of pace"
+                : delta <= -0.5 ? $"{Num(Math.Round(-delta, Goal.Kind == GoalKind.Hours ? 1 : 0))} behind pace"
+                : "Right on pace";
+            var fraction = Goal.Target > 0 ? Goal.Expected / Goal.Target : 0;
+            if (fraction < 0.05 || Goal.Current == 0) return pace + ".";
+            var projected = Goal.Current / fraction;
+            return $"{pace}. At this rate you'll reach {Num(Math.Round(projected, Goal.Kind == GoalKind.Hours ? 0 : 0))}.";
+        }
+    }
+}

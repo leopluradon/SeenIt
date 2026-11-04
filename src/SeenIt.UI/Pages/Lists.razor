@@ -9,8 +9,33 @@
     <h1>Lists</h1>
     <button class="btn btn-primary btn-sm" @onclick="() => createOpen = true"><Icon Name="plus" Size="16" /> New list</button>
 </div>
+<form class="searchbar" @onsubmit="Search" role="search">
+    <Icon Name="search" Size="18" />
+    <input type="search" @bind="query" @bind:event="oninput" @bind:after="Debounce" placeholder="Search your watchlist and all your lists" aria-label="Search your watchlist and lists" />
+</form>
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (lists is null && error is null) { <Spinner /> }
+@if (!string.IsNullOrWhiteSpace(query))
+{
+    @if (hits is null) { <Spinner /> }
+    else if (hits.Count == 0) { <Empty Title="@($"Nothing called “{query.Trim()}”.")">It isn't on your watchlist or in any of your lists.</Empty> }
+    else
+    {
+        <p class="muted small">@hits.Count @(hits.Count == 1 ? "title" : "titles") on your watchlist or lists</p>
+        <div class="search-hits">
+            @foreach (var h in hits)
+            {
+                <div class="search-hit" @key="(h.Media.Type, h.Media.TmdbId)">
+                    <PosterCard Media="h.Media" />
+                    <div class="hit-where">
+                        @if (h.OnWatchlist) { <a class="pill pill-sm" href="watchlist"><Icon Name="bookmark" Size="12" /> Watchlist</a> }
+                        @foreach (var l in h.Lists) { <a class="pill pill-sm" href="@($"lists/{l.Id}")" @key="l.Id">@l.Name</a> }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+else if (lists is null && error is null) { <Spinner /> }
 else if (lists is not null)
 {
     @if (lists.Count == 0) { <Empty Title="No lists yet.">Make lists like “Best of 2025” or “Comfort rewatches”, and share them publicly if you like.</Empty> }
@@ -38,6 +63,9 @@ else if (lists is not null)
     private List<ListSummary>? lists;
     private string? error;
     private bool createOpen;
+    private string query = "";
+    private List<ListSearchHit>? hits;
+    private CancellationTokenSource? debounce;
 
     protected override Task OnInitializedAsync() => Load();
 
@@ -46,6 +74,28 @@ else if (lists is not null)
         error = null;
         try { lists = await Api.ListsAsync(); }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Debounce()
+    {
+        debounce?.Cancel();
+        debounce = new CancellationTokenSource();
+        hits = null;
+        try { await Task.Delay(250, debounce.Token); }
+        catch (TaskCanceledException) { return; }
+        await Search();
+    }
+
+    private async Task Search()
+    {
+        var q = query.Trim();
+        if (q.Length == 0) { hits = null; return; }
+        try
+        {
+            var result = await Api.SearchListsAsync(q);
+            if (q == query.Trim()) hits = result;   // a slow answer to an older query doesn't win
+        }
+        catch (Exception ex) { hits = []; Toasts.Error(ex); }
     }
 
     private async Task Create(CreateListRequest req)
