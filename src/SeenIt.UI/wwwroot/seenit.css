@@ -498,7 +498,10 @@ a.cast { color: var(--text); }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
 .stat-value { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; }
 .stat-label { color: var(--muted); font-size: .84rem; }
-.stat-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; }
+.stat-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; align-items: start; margin-bottom: 16px; }
+/* Panels of very different heights: stack them in columns so short ones don't stretch or leave holes. */
+.stat-panels.masonry { display: block; columns: 3 340px; column-gap: 16px; }
+.stat-panels.masonry > .panel { break-inside: avoid; margin: 0 0 16px; display: inline-block; width: 100%; }
 .stat-panels > * { min-width: 0; }
 .stat-panels .panel { margin: 0; }
 .hbars { display: flex; flex-direction: column; gap: 8px; }
