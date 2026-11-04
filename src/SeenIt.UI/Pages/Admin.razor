@@ -35,7 +35,7 @@ else
             else
             {
                 <section class="stat-tiles admin-tiles">
-                    <div class="stat"><span class="stat-value">v@(ov.Version)</span><span class="stat-label">@ov.Commit@(ov.BuiltAt is { } b ? $" · built {Ago(b)}" : "")</span></div>
+                    <div class="stat"><span class="stat-value">v@(ov.Version)</span><span class="stat-label" title="@(ov.BuiltAt is { } bt ? Fmt.Exact(bt) : null)">@ov.Commit@(ov.BuiltAt is { } b ? $" · built {Ago(b)}" : "")</span></div>
                     <div class="stat"><span class="stat-value">@Uptime(ov.StartedAt)</span><span class="stat-label">up since @ov.StartedAt.ToLocalTime().ToString("MMM d, h:mm tt")</span></div>
                     <div class="stat"><span class="stat-value">@ov.ActiveToday</span><span class="stat-label">active today · @ov.ActiveWeek this week</span></div>
                     <div class="stat"><span class="stat-value">@ov.ActionsToday</span><span class="stat-label">actions in 24h</span></div>
@@ -167,8 +167,8 @@ else
                             </div>
                             <div class="muted small">
                                 Joined @u.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")@(u.InvitedBy is { } by ? $" (invited by {by})" : "")
-                                · last seen @(u.LastSeenAt is { } ls ? Ago(ls) : "never")
-                                · last action @(u.LastActivityAt is { } la ? Ago(la) : "none logged")
+                                · last seen @if (u.LastSeenAt is { } ls) { <span title="@Fmt.Exact(ls)">@Ago(ls)</span> } else { <text>never</text> }
+                                · last action @if (u.LastActivityAt is { } la) { <span title="@Fmt.Exact(la)">@Ago(la)</span> } else { <text>none logged</text> }
                                 @if (u.TrackingSince is { } ts) { <span> · tracking since @ts.ToString("MMM d, yyyy")</span> }
                             </div>
                             <div class="inline admin-actions">

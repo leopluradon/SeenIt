@@ -42,7 +42,7 @@
                             <div class="small"><a href="@Fmt.UserHref(a.User.UserName)"><b>@a.User.Name</b></a> watched</div>
                             <a href="@Href(h)" class="mini-title">@h.Title</a>
                             @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)</div> }
-                            <div class="muted small">@Fmt.Relative(h.WatchedAt)</div>
+                            <div class="muted small"><RelTime At="h.WatchedAt" /></div>
                         </div>
                     </div>
                 }

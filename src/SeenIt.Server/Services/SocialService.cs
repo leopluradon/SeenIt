@@ -125,13 +125,22 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         return new FeedDto(watching, rows.Zip(entries, (w, e) => new ActivityItem(byId[w.UserId], e)).ToList());
     }
 
-    public async Task<CompareDto?> CompareAsync(Guid me, string userName, CancellationToken ct)
+    /// <summary>Whether the viewer may see this person's profile (and so compare against it).</summary>
+    private async Task<(bool Ok, UserCard Card)> VisibleAsync(AppUser user, Guid viewer, CancellationToken ct)
     {
-        var them = await FindAsync(userName);
-        if (them is null) return null;
-        var (following, followsYou) = await RelationAsync(me, them.Id, ct);
-        if (!CanView(them, me, following && followsYou)) return null;
-        var card = new UserCard(them.UserName!, them.DisplayName, following, followsYou);
+        var (following, followsYou) = await RelationAsync(viewer, user.Id, ct);
+        return (CanView(user, viewer, following && followsYou), new UserCard(user.UserName!, user.DisplayName, following, followsYou));
+    }
+
+    /// <summary>Compares two people. The viewer can be either of them or anyone who can see both profiles.</summary>
+    public async Task<CompareDto?> CompareAsync(Guid viewer, string nameA, string nameB, CancellationToken ct)
+    {
+        var a = await FindAsync(nameA);
+        var b = await FindAsync(nameB);
+        if (a is null || b is null || a.Id == b.Id) return null;
+        var (okA, cardA) = await VisibleAsync(a, viewer, ct);
+        var (okB, cardB) = await VisibleAsync(b, viewer, ct);
+        if (!okA || !okB) return null;
 
         async Task<(Dictionary<int, DateTimeOffset> Movies, Dictionary<int, DateTimeOffset> Shows)> Watched(Guid id)
         {
@@ -140,37 +149,38 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             return (w.Where(x => x.Type == MediaType.Movie).ToDictionary(x => x.TmdbId, x => x.Last),
                     w.Where(x => x.Type == MediaType.Episode).ToDictionary(x => x.TmdbId, x => x.Last));
         }
-        var mine = await Watched(me);
-        var theirs = await Watched(them.Id);
-        var bothMovies = mine.Movies.Keys.Intersect(theirs.Movies.Keys).OrderByDescending(id => mine.Movies[id]).ToList();
-        var bothShows = mine.Shows.Keys.Intersect(theirs.Shows.Keys).OrderByDescending(id => mine.Shows[id]).ToList();
+        var aw = await Watched(a.Id);
+        var bw = await Watched(b.Id);
+        bool Seen((Dictionary<int, DateTimeOffset> Movies, Dictionary<int, DateTimeOffset> Shows) w, (MediaType Type, int Id) k) =>
+            k.Type == MediaType.Movie ? w.Movies.ContainsKey(k.Id) : w.Shows.ContainsKey(k.Id);
+
+        var watchedBoth = aw.Movies.Keys.Intersect(bw.Movies.Keys).Select(id => (Key: (MediaType.Movie, id), Last: aw.Movies[id]))
+            .Concat(aw.Shows.Keys.Intersect(bw.Shows.Keys).Select(id => (Key: (MediaType.Show, id), Last: aw.Shows[id])))
+            .OrderByDescending(x => x.Last).Select(x => x.Key).ToList();
 
         var ratings = await db.Ratings.AsNoTracking()
-            .Where(r => (r.UserId == me || r.UserId == them.Id) && r.Type != MediaType.Episode && r.SeasonNumber == null).ToListAsync(ct);
-        var myRatings = ratings.Where(r => r.UserId == me).ToDictionary(r => (r.Type, r.TmdbId), r => r.Value);
-        var theirRatings = ratings.Where(r => r.UserId == them.Id).ToDictionary(r => (r.Type, r.TmdbId), r => r.Value);
-        var shared = myRatings.Keys.Intersect(theirRatings.Keys).ToList();
+            .Where(r => (r.UserId == a.Id || r.UserId == b.Id) && r.Type != MediaType.Episode && r.SeasonNumber == null).ToListAsync(ct);
+        var ar = ratings.Where(r => r.UserId == a.Id).ToDictionary(r => (r.Type, r.TmdbId), r => r.Value);
+        var br = ratings.Where(r => r.UserId == b.Id).ToDictionary(r => (r.Type, r.TmdbId), r => r.Value);
+        var shared = ar.Keys.Intersect(br.Keys).ToList();
         int? compat = shared.Count >= 3
-            ? (int)Math.Round(100 * (1 - shared.Average(k => Math.Abs(myRatings[k] - theirRatings[k])) / 9.0))
+            ? (int)Math.Round(100 * (1 - shared.Average(k => Math.Abs(ar[k] - br[k])) / 9.0))
             : null;
+        var bLoved = br.Where(r => r.Value >= 8 && !Seen(aw, r.Key)).OrderByDescending(r => r.Value).Select(r => r.Key).ToList();
+        var aLoved = ar.Where(r => r.Value >= 8 && !Seen(bw, r.Key)).OrderByDescending(r => r.Value).Select(r => r.Key).ToList();
 
-        var loved = theirRatings.Where(r => r.Value >= 8 && !(r.Key.Type == MediaType.Movie ? mine.Movies.ContainsKey(r.Key.TmdbId) : mine.Shows.ContainsKey(r.Key.TmdbId)))
-            .OrderByDescending(r => r.Value).Select(r => r.Key).Take(18).ToList();
+        var (movies, shows) = await tracking.LoadMetaAsync(watchedBoth.Concat(shared).Concat(bLoved).Concat(aLoved).Distinct(), ct);
+        List<CompareItem> Items(IEnumerable<(MediaType Type, int Id)> keys) => keys
+            .Select(k => (k.Type == MediaType.Movie
+                    ? movies.TryGetValue(k.Id, out var m) ? CatalogService.ToSummary(m) : null
+                    : shows.TryGetValue(k.Id, out var s) ? CatalogService.ToSummary(s) : null) is { } media
+                ? new CompareItem(media, ar.TryGetValue(k, out var x) ? x : null, br.TryGetValue(k, out var y) ? y : null)
+                : null)
+            .OfType<CompareItem>().ToList();
 
-        var (movies, shows) = await tracking.LoadMetaAsync(
-            bothMovies.Take(30).Select(id => (MediaType.Movie, id))
-                .Concat(bothShows.Take(30).Select(id => (MediaType.Show, id)))
-                .Concat(shared.Concat(loved)), ct);
-        MediaSummary? Summ((MediaType Type, int Id) k) => k.Type == MediaType.Movie
-            ? movies.TryGetValue(k.Id, out var m) ? CatalogService.ToSummary(m) : null
-            : shows.TryGetValue(k.Id, out var s) ? CatalogService.ToSummary(s) : null;
-
-        return new CompareDto(card, await StatsAsync(me, ct), await StatsAsync(them.Id, ct), compat,
-            bothMovies.Count, bothShows.Count,
-            bothMovies.Take(30).Select(id => Summ((MediaType.Movie, id))).OfType<MediaSummary>().ToList(),
-            bothShows.Take(30).Select(id => Summ((MediaType.Show, id))).OfType<MediaSummary>().ToList(),
-            shared.Select(k => Summ(k) is { } media ? new RatingPair(media, myRatings[k], theirRatings[k]) : null).OfType<RatingPair>()
-                .OrderBy(p => Math.Abs(p.You - p.Them)).ThenByDescending(p => p.You + p.Them).Take(40).ToList(),
-            loved.Select(Summ).OfType<MediaSummary>().ToList());
+        var ratedBoth = Items(shared).OrderBy(i => Math.Abs(i.A!.Value - i.B!.Value)).ThenByDescending(i => i.A + i.B).ToList();
+        return new CompareDto(cardA, cardB, await StatsAsync(a.Id, ct), await StatsAsync(b.Id, ct), compat,
+            aw.Movies.Keys.Intersect(bw.Movies.Keys).Count(), aw.Shows.Keys.Intersect(bw.Shows.Keys).Count(),
+            ratedBoth, Items(watchedBoth), Items(bLoved), Items(aLoved));
     }
 }

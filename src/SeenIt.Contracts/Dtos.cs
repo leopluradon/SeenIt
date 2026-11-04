@@ -596,14 +596,17 @@ public record ActivityItem(UserCard User, HistoryEntry Entry);
 public record FriendWatching(UserCard User, NowWatchingDto Item);
 public record FeedDto(IReadOnlyList<FriendWatching> WatchingNow, IReadOnlyList<ActivityItem> Activity);
 
-public record RatingPair(MediaSummary Media, int You, int Them);
+/// <summary>Two people side by side (/compare/{a}/{b}). Every list is complete; the page pages them.</summary>
 public record CompareDto(
-    UserCard Them, ProfileStats You, ProfileStats TheirStats,
-    int? Compatibility,            // 0–100 from titles you both rated; null when there are too few
+    UserCard A, UserCard B, ProfileStats AStats, ProfileStats BStats,
+    int? Compatibility,            // 0–100 from titles both rated; null when there are too few
     int SharedMovies, int SharedShows,
-    IReadOnlyList<MediaSummary> BothMovies, IReadOnlyList<MediaSummary> BothShows,
-    IReadOnlyList<RatingPair> RatedBoth,
-    IReadOnlyList<MediaSummary> TheyLoved);   // rated 8+ by them, not watched by you
+    IReadOnlyList<CompareItem> RatedBoth,     // closest agreement first
+    IReadOnlyList<CompareItem> WatchedBoth,   // most recently watched by A first
+    IReadOnlyList<CompareItem> BLovedANot,    // rated 8+ by B, not watched by A
+    IReadOnlyList<CompareItem> ALovedBNot);
+/// <summary>A title in a comparison, with each person's rating if they rated it.</summary>
+public record CompareItem(MediaSummary Media, int? A, int? B);
 
 // ---------- Pick for me ----------
 

@@ -389,7 +389,10 @@ public static class ApiEndpoints
             await a.LogAsync(p, ActivityKind.Unfollow, detail: name);
             return Results.NoContent();
         });
+        g.MapGet("/compare/{a}/{b}", async (string a, string b, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.CompareAsync(p.UserId(), a, b, ct) is { } c ? Results.Ok(c) : Results.NotFound());
+        // Older app versions: you vs them.
         g.MapGet("/compare/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
-            await s.CompareAsync(p.UserId(), name, ct) is { } c ? Results.Ok(c) : Results.NotFound());
+            await s.CompareAsync(p.UserId(), p.Identity?.Name ?? "", name, ct) is { } c ? Results.Ok(c) : Results.NotFound());
     }
 }

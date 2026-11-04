@@ -155,7 +155,7 @@
                         <tbody>
                             @foreach (var e in jf.RecentEvents)
                             {
-                                <tr><td class="nowrap muted">@Fmt.Relative(e.ReceivedAt)</td><td>@e.ItemName</td><td>@e.Outcome</td></tr>
+                                <tr><td class="nowrap muted"><RelTime At="e.ReceivedAt" /></td><td>@e.ItemName</td><td>@e.Outcome</td></tr>
                             }
                         </tbody>
                     </table>

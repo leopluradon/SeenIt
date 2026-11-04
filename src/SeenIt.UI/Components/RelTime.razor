@@ -1,0 +1,5 @@
+@* "3d ago", with the exact date and time on hover (and for screen readers via datetime). *@
+<time datetime="@(WatchDates.IsUnknown(At) ? null : At.ToString("o"))" title="@Fmt.Exact(At)">@Fmt.Relative(At)</time>
+@code {
+    [Parameter, EditorRequired] public DateTimeOffset At { get; set; }
+}

@@ -47,7 +47,7 @@ else if (m is not null)
                 <div class="panel rate-panel">
                     <span>Your rating</span>
                     <RatingPicker Value="u.Rating" ValueChanged="Rate" />
-                    @if (u.LastWatchedAt is { } last) { <span class="muted small">Last watched @Fmt.Relative(last)</span> }
+                    @if (u.LastWatchedAt is { } last) { <span class="muted small">Last watched <RelTime At="last" /></span> }
                 </div>
                 @if (u.History is { Count: > 0 } plays)
                 {

@@ -901,3 +901,9 @@ html[data-theme="nord"] {
 .perf-table th { text-align: left; font-size: .8rem; color: var(--muted); font-weight: 600; padding: 4px 8px; }
 .perf-table td:not(:first-child), .perf-table th:not(:first-child) { text-align: right; white-space: nowrap; }
 .warn-text { color: var(--warn); }
+
+/* Compare page sections: Movies/TV toggle and "See all" */
+.segmented-sm button { padding: 4px 10px; font-size: .8rem; }
+.compare-section .section-head { flex-wrap: wrap; gap: 8px 14px; }
+.compare-section .section-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.compare-section .link-btn { text-decoration: none; display: inline-flex; align-items: center; gap: 2px; color: var(--text-2); }

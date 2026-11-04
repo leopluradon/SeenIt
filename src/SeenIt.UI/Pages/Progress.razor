@@ -55,7 +55,7 @@ else if (items is not null)
                             <div class="small">Next: <a href="@Fmt.EpisodeHref(p.ShowTmdbId, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> <Spoiler>@n.Name</Spoiler></a></div>
                         }
                         else if (p.Completed) { <div class="small ok">All caught up</div> }
-                        @if (p.LastWatchedAt is { } lw) { <div class="muted small">Last watched @Fmt.Relative(lw)@(p.Status != ShowTrackStatus.Watching ? $" · {p.Status}" : "")</div> }
+                        @if (p.LastWatchedAt is { } lw) { <div class="muted small">Last watched <RelTime At="lw" />@(p.Status != ShowTrackStatus.Watching ? $" · {p.Status}" : "")</div> }
                         @if (menuFor == p.ShowTmdbId)
                         {
                             <div class="chips progress-menu">

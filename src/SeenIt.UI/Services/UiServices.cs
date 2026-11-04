@@ -55,6 +55,7 @@ public static class Fmt
 {
     public static string Href(MediaType type, int id) => type == MediaType.Movie ? $"movie/{id}" : $"show/{id}";
     public static string UserHref(string userName) => $"u/{Uri.EscapeDataString(userName)}";
+    public static string CompareHref(string a, string b) => $"compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}";
     public static string EpisodeHref(int showId, int? season, int? episode) => $"show/{showId}/season/{season}/episode/{episode}";
 
     /// <summary>Request body for a single play from a dialog choice.</summary>
@@ -85,6 +86,10 @@ public static class Fmt
         var hours = minutes % 1440 / 60;
         return days > 0 ? $"{days}d {hours}h" : hours > 0 ? $"{hours}h {minutes % 60}m" : $"{minutes}m";
     }
+
+    /// <summary>The full date and time, for hovering over a relative one ("3d ago").</summary>
+    public static string Exact(DateTimeOffset when) =>
+        WatchDates.IsUnknown(when) ? "Date unknown" : when.ToLocalTime().ToString("dddd, MMMM d, yyyy, h:mm tt");
 
     public static string Relative(DateTimeOffset when)
     {

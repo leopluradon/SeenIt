@@ -2,6 +2,7 @@
 @inject ApiClient Api
 @inject IPlatform Platform
 @inject Toasts Toasts
+@inject SessionState Session
 <PageTitle>@(p?.User.Name ?? Name) · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" />
@@ -27,7 +28,7 @@ else if (p is not null)
                     @if (!p.IsMe)
                     {
                         <FollowButton User="p.User" UserChanged="u => p = p with { User = u }" />
-                        @if (p.CanView) { <a class="btn btn-sm" href="@($"{Fmt.UserHref(p.User.UserName)}/compare")">Compare</a> }
+                        @if (p.CanView && Session.Me is { } viewer) { <a class="btn btn-sm" href="@Fmt.CompareHref(viewer.UserName, p.User.UserName)">Compare</a> }
                     }
                     else { <a class="btn btn-sm" href="settings#privacy">Privacy</a> }
                 </Authorized>
@@ -65,7 +66,7 @@ else if (p is not null)
                     {
                         <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
                                     Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
-                                    Sub="@((h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))"
+                                    Sub="@((h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))" SubTitle="@Fmt.Exact(h.WatchedAt)"
                                     ShowScore="false" @key="h.Id" />
                     }
                 </div>

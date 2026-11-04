@@ -1,79 +1,144 @@
-@page "/u/{Name}/compare"
+@page "/compare/{A}/{B}"
+@page "/u/{B}/compare"
 @attribute [Authorize]
 @inject ApiClient Api
-<PageTitle>You vs @(c?.Them.Name ?? Name) · SeenIt</PageTitle>
+@inject SessionState Session
+@inject NavigationManager Nav
+<PageTitle>@(c is null ? "Compare" : $"{c.A.Name} vs {c.B.Name}") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (c is null && error is null) { <Spinner /> }
 else if (c is not null)
 {
     <div class="compare-head">
-        <h1>You vs <a href="@Fmt.UserHref(c.Them.UserName)">@c.Them.Name</a></h1>
+        <h1><a href="@Fmt.UserHref(c.A.UserName)">@c.A.Name</a> vs <a href="@Fmt.UserHref(c.B.UserName)">@c.B.Name</a></h1>
         @if (c.Compatibility is { } pct)
         {
             <div class="compat">
                 <span class="compat-value">@pct%</span>
-                <span class="muted small">taste match, from @c.RatedBoth.Count title@(c.RatedBoth.Count == 1 ? "" : "s") you've both rated</span>
+                <span class="muted small">taste match, from @c.RatedBoth.Count title@(c.RatedBoth.Count == 1 ? "" : "s") both rated</span>
             </div>
         }
         else
         {
-            <p class="muted small">Rate a few of the same movies or shows to see how well your tastes match.</p>
+            <p class="muted small">Rate a few of the same movies or shows to see how well these tastes match.</p>
         }
     </div>
 
     <div class="compare-table panel">
-        <div></div><b>You</b><b>@c.Them.Name</b>
-        @foreach (var (label, you, them) in Rows())
+        <div></div><b>@c.A.Name</b><b>@c.B.Name</b>
+        @foreach (var (label, a, b) in Rows())
         {
             <span class="muted">@label</span>
-            <span class="@(you.Value > them.Value ? "lead" : "")">@you.Text</span>
-            <span class="@(them.Value > you.Value ? "lead" : "")">@them.Text</span>
+            <span class="@(a.Value > b.Value ? "lead" : "")">@a.Text</span>
+            <span class="@(b.Value > a.Value ? "lead" : "")">@b.Text</span>
         }
         <span class="muted">In common</span>
         <span class="span2">@c.SharedMovies movie@(c.SharedMovies == 1 ? "" : "s") · @c.SharedShows show@(c.SharedShows == 1 ? "" : "s")</span>
     </div>
 
-    @if (c.RatedBoth.Count > 0)
+    @foreach (var (key, title, items) in Sections())
     {
-        <section class="row-section">
-            <div class="section-head"><h2>Rated by both</h2></div>
-            <div class="poster-scroller">
-                @foreach (var r in c.RatedBoth)
-                {
-                    <PosterCard Media="r.Media" ShowScore="false" Sub="@($"You ★{r.You} · {c.Them.Name} ★{r.Them}")"
-                                Badge="@(r.You == r.Them ? "Agree" : Math.Abs(r.You - r.Them) >= 4 ? "Disagree" : null)" @key="(r.Media.Type, r.Media.TmdbId)" />
-                }
+        if (items.Count == 0) continue;
+        var kind = Kind(key);
+        var shown = kind switch { "movie" => items.Where(i => i.Media.Type == MediaType.Movie).ToList(), "show" => items.Where(i => i.Media.Type == MediaType.Show).ToList(), _ => items };
+        var expanded = open.Contains(key);
+        <section class="row-section compare-section" @key="key">
+            <div class="section-head">
+                <h2>@title <span class="muted small">@shown.Count</span></h2>
+                <div class="section-tools">
+                    <div class="segmented segmented-sm">
+                        <button class="@(kind == "all" ? "on" : "")" @onclick='() => kinds[key] = "all"'>All</button>
+                        <button class="@(kind == "movie" ? "on" : "")" @onclick='() => kinds[key] = "movie"'>Movies</button>
+                        <button class="@(kind == "show" ? "on" : "")" @onclick='() => kinds[key] = "show"'>TV</button>
+                    </div>
+                    @if (shown.Count > RowSize || expanded)
+                    {
+                        <button class="section-more link-btn" @onclick="() => Toggle(key)">@(expanded ? "Show less" : $"See all {shown.Count}") <Icon Name="@(expanded ? "chevron-up" : "chevron-down")" Size="16" /></button>
+                    }
+                </div>
             </div>
+            @if (shown.Count == 0) { <p class="muted small">None.</p> }
+            else
+            {
+                <div class="@(expanded ? "poster-grid" : "poster-scroller")">
+                    @foreach (var i in expanded ? shown : shown.Take(RowSize))
+                    {
+                        <PosterCard Media="i.Media" ShowScore="false" Sub="@Ratings(i)" SubTitle="@RatingsLong(i)"
+                                    Badge="@(key == "rated" ? (i.A == i.B ? "Agree" : Math.Abs(i.A!.Value - i.B!.Value) >= 4 ? "Disagree" : null) : null)"
+                                    @key="(i.Media.Type, i.Media.TmdbId)" />
+                    }
+                </div>
+            }
         </section>
     }
-    @if (c.TheyLoved.Count > 0) { <PosterRow Title="@($"{c.Them.Name} loved, you haven't seen")" Items="c.TheyLoved" /> }
-    @if (c.BothMovies.Count > 0) { <PosterRow Title="Movies you've both watched" Items="c.BothMovies" /> }
-    @if (c.BothShows.Count > 0) { <PosterRow Title="Shows you've both watched" Items="c.BothShows" /> }
 }
 
 @code {
-    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string? A { get; set; }
+    [Parameter] public string B { get; set; } = "";
+    private const int RowSize = 20;
     private CompareDto? c;
     private string? error;
+    private readonly Dictionary<string, string> kinds = [];
+    private readonly HashSet<string> open = [];
 
-    protected override Task OnParametersSetAsync() => Load();
+    protected override async Task OnParametersSetAsync()
+    {
+        // Old links (/u/{name}/compare) compared against whoever was signed in: make that explicit.
+        if (A is null)
+        {
+            if (Session.Me is { } me) { Nav.NavigateTo(Fmt.CompareHref(me.UserName, B), replace: true); return; }
+            error = "Sign in to compare.";
+            return;
+        }
+        c = null;
+        kinds.Clear();
+        open.Clear();
+        await Load();
+    }
 
     private async Task Load()
     {
         error = null;
-        try { c = await Api.CompareAsync(Name); }
-        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "You can't compare with this person: their profile isn't visible to you."; }
+        try { c = await Api.CompareAsync(A!, B); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "These two can't be compared: one of the profiles isn't visible to you (or doesn't exist)."; }
         catch (Exception ex) { error = ex.Message; }
     }
 
+    private string Kind(string key) => kinds.GetValueOrDefault(key, "all");
+    private void Toggle(string key) { if (!open.Remove(key)) open.Add(key); }
+
+    private IEnumerable<(string Key, string Title, IReadOnlyList<CompareItem> Items)> Sections()
+    {
+        yield return ("rated", "Rated by both", c!.RatedBoth);
+        yield return ("watched", "Watched by both", c.WatchedBoth);
+        yield return ("b-loved", $"{c.B.Name} loved, {c.A.Name} hasn't seen", c.BLovedANot);
+        yield return ("a-loved", $"{c.A.Name} loved, {c.B.Name} hasn't seen", c.ALovedBNot);
+    }
+
+    /// <summary>"leo ★8 · thunder ★7", or just the one who rated it.</summary>
+    private string? Ratings(CompareItem i)
+    {
+        var parts = new List<string>();
+        if (i.A is { } a) parts.Add($"{Short(c!.A.Name)} ★{a}");
+        if (i.B is { } b) parts.Add($"{Short(c!.B.Name)} ★{b}");
+        return parts.Count == 0 ? i.Media.Year?.ToString() : string.Join(" · ", parts);
+    }
+
+    private string? RatingsLong(CompareItem i) =>
+        i.A is null && i.B is null ? null
+        : $"{c!.A.Name}: {(i.A is { } a ? $"{a}/10" : "not rated")} · {c.B.Name}: {(i.B is { } b ? $"{b}/10" : "not rated")}";
+
+    private static string Short(string name) => name.Length <= 10 ? name : name[..9] + "…";
+
     private IEnumerable<(string, (long Value, string Text), (long Value, string Text))> Rows()
     {
-        var (y, t) = (c!.You, c.TheirStats);
-        yield return ("Time watched", (y.Minutes, Fmt.Duration(y.Minutes)), (t.Minutes, Fmt.Duration(t.Minutes)));
-        yield return ("Movies", (y.Movies, y.Movies.ToString("N0")), (t.Movies, t.Movies.ToString("N0")));
-        yield return ("Shows", (y.Shows, y.Shows.ToString("N0")), (t.Shows, t.Shows.ToString("N0")));
-        yield return ("Episodes", (y.Episodes, y.Episodes.ToString("N0")), (t.Episodes, t.Episodes.ToString("N0")));
-        yield return ("Ratings", (y.Ratings, y.Ratings.ToString("N0")), (t.Ratings, t.Ratings.ToString("N0")));
+        var (a, b) = (c!.AStats, c.BStats);
+        yield return ("Time watched", (a.Minutes, Fmt.Duration(a.Minutes)), (b.Minutes, Fmt.Duration(b.Minutes)));
+        yield return ("Movies", (a.Movies, a.Movies.ToString("N0")), (b.Movies, b.Movies.ToString("N0")));
+        yield return ("Shows", (a.Shows, a.Shows.ToString("N0")), (b.Shows, b.Shows.ToString("N0")));
+        yield return ("Episodes", (a.Episodes, a.Episodes.ToString("N0")), (b.Episodes, b.Episodes.ToString("N0")));
+        yield return ("Ratings", (a.Ratings, a.Ratings.ToString("N0")), (b.Ratings, b.Ratings.ToString("N0")));
     }
 }
