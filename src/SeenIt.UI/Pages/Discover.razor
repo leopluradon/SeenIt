@@ -34,7 +34,7 @@
     private MediaType Type => TypeParam == "Show" ? MediaType.Show : MediaType.Movie;
     private string CurrentList => ListParam ?? "trending/week";
     private (string, string)[] Lists => Type == MediaType.Movie
-        ? [("trending/week", "Trending"), ("popular", "Popular"), ("now_playing", "In cinemas"), ("upcoming", "Upcoming"), ("top_rated", "Top rated")]
+        ? [("trending/week", "Trending"), ("popular", "Popular"), ("now_playing", "In theaters"), ("upcoming", "Upcoming"), ("top_rated", "Top rated")]
         : [("trending/week", "Trending"), ("popular", "Popular"), ("airing_today", "Airing today"), ("on_the_air", "On the air"), ("top_rated", "Top rated")];
 
     private readonly List<MediaSummary> items = [];
