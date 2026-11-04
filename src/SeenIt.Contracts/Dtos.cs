@@ -689,3 +689,50 @@ public record TimeZoneOption(string Id, string Label);
 /// <summary>The newest Android app on this server, for "update available" in the app.</summary>
 public record AppRelease(string Version, string Url, long Size, DateTimeOffset PublishedAt);
 public record AdminEndpointTiming(string Route, long Count, double AvgMs, double P95Ms, double MaxMs);
+
+// ---------- More stats (Stats page, below the totals) ----------
+
+public record MoreStatsDto(
+    DateOnly? TrackingSince,
+    ReleaseGapStats ReleaseGap,
+    CompletionStats Completion,
+    IReadOnlyList<HeatmapDay> Heatmap,            // last 365 days (from the tracking date), minutes per day
+    IReadOnlyList<IReadOnlyList<int>> WeekHour,   // [weekday 0=Sun][hour] plays
+    RuntimeStats Runtime,
+    EraStats Era,
+    IReadOnlyList<CountBucket> Studios,
+    FranchiseStats Franchises,
+    BacklogStats Backlog,
+    RatingsVsTmdb RatingsVsTmdb,
+    FriendsBoard Friends,
+    IReadOnlyList<Milestone> Milestones);
+
+/// <summary>How long after release you watch things (first watch of each movie/episode).</summary>
+public record ReleaseGapStats(int Count, int? MedianDays, int DayOnePercent, int NewReleasePercent, IReadOnlyList<CountBucket> Buckets);
+
+/// <summary>Shows you've started: finished, still going, paused, dropped or stalled (no play in 6 months).</summary>
+public record CompletionStats(
+    int Finished, int Watching, int Caught, int Paused, int Dropped, int Stalled,
+    int PilotOnly, double? MedianStopEpisode,
+    IReadOnlyList<CompletionRow> ByGenre, IReadOnlyList<CompletionRow> ByNetwork);
+public record CompletionRow(string Label, int Started, int Finished, int Abandoned);
+
+public record HeatmapDay(DateOnly Date, int Minutes, int Plays);
+
+public record RuntimeStats(int Movies, int? AverageMinutes, int ShortPercent, int EpicPercent, IReadOnlyList<CountBucket> AverageByYear);
+
+/// <summary>Average release year of the movies you watched, overall and per month.</summary>
+public record EraStats(int? AverageYear, IReadOnlyList<CountBucket> ByMonth);
+
+public record FranchiseStats(int Started, int Completed, IReadOnlyList<FranchiseProgress> Items);
+public record FranchiseProgress(int Id, string Name, string? PosterPath, int Seen, int Released, MediaSummary? Next);
+
+public record BacklogStats(int Shows, int Episodes, long Minutes, int MinutesPerDay, DateOnly? CaughtUpBy);
+
+public record RatingsVsTmdb(int Count, double? AverageDifference, IReadOnlyList<HotTake> Higher, IReadOnlyList<HotTake> Lower);
+public record HotTake(MediaSummary Media, int You, double Tmdb);
+
+public record FriendsBoard(string Period, IReadOnlyList<LeaderRow> Rows, MediaSummary? TopTitle, int TopTitleFriends);
+public record LeaderRow(UserCard User, long Minutes, int Plays, bool IsMe);
+
+public record Milestone(string Label, DateTimeOffset? At, MediaSummary? Item, bool BeforeTracking);

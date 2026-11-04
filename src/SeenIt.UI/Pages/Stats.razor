@@ -44,6 +44,228 @@ else if (s is not null)
         </section>
     </div>
 
+    @if (more is null) { <Spinner /> }
+    else
+    {
+        var m = more;
+        <section class="panel">
+            <h2>Every day this year</h2>
+            <div class="heatmap-wrap">
+                <div class="heatmap" style="--weeks:@Weeks(m.Heatmap)">
+                    @for (var pad = 0; pad < (int)(m.Heatmap.FirstOrDefault()?.Date.DayOfWeek ?? 0); pad++) { <span class="hm-cell hm-pad"></span> }
+                    @foreach (var d in m.Heatmap)
+                    {
+                        <span class="hm-cell hm-@Level(d.Minutes)" title="@($"{d.Date:ddd, MMM d, yyyy}: {(d.Plays == 0 ? "nothing" : $"{Fmt.Duration(d.Minutes)}, {d.Plays} play{(d.Plays == 1 ? "" : "s")}")}")"></span>
+                    }
+                </div>
+            </div>
+            <div class="hm-legend muted small">Less <span class="hm-cell hm-0"></span><span class="hm-cell hm-1"></span><span class="hm-cell hm-2"></span><span class="hm-cell hm-3"></span><span class="hm-cell hm-4"></span> More</div>
+            <TrackingNote />
+        </section>
+
+        <section class="panel">
+            <h2>When you watch</h2>
+            <div class="weekhour">
+                <span></span>
+                @for (var h = 0; h < 24; h++) { <span class="wh-hour">@(h % 3 == 0 ? HourLabel(h) : "")</span> }
+                @for (var d = 0; d < 7; d++)
+                {
+                    var day = d;
+                    <span class="wh-day">@(((DayOfWeek)day).ToString()[..3])</span>
+                    @for (var h = 0; h < 24; h++)
+                    {
+                        var n = m.WeekHour[day][h];
+                        <span class="wh-cell" style="--a:@Alpha(n, MaxWeekHour(m))" title="@($"{(DayOfWeek)day}s, {HourLabel(h)}: {n} play{(n == 1 ? "" : "s")}")"></span>
+                    }
+                }
+            </div>
+            <TrackingNote />
+        </section>
+
+        <div class="stat-panels">
+            <section class="panel">
+                <h2>How soon after release</h2>
+                @if (m.ReleaseGap.Count == 0) { <p class="muted small">Nothing yet.</p> }
+                else
+                {
+                    <div class="mini-facts">
+                        <div><b>@(m.ReleaseGap.MedianDays is { } md ? Days(md) : "–")</b><span>typical wait</span></div>
+                        <div><b>@m.ReleaseGap.DayOnePercent%</b><span>on release day</span></div>
+                        <div><b>@m.ReleaseGap.NewReleasePercent%</b><span>within a month</span></div>
+                    </div>
+                    <BarChart Data="m.ReleaseGap.Buckets" Label="First watches by time since release" />
+                    <p class="muted small">First watch of each movie and episode, against its release or air date.</p>
+                }
+            </section>
+
+            <section class="panel">
+                <h2>Finishing shows</h2>
+                @{ var cs = m.Completion; var started = cs.Finished + cs.Caught + cs.Watching + cs.Paused + cs.Dropped + cs.Stalled; }
+                @if (started == 0) { <p class="muted small">Start a show first.</p> }
+                else
+                {
+                    <div class="mini-facts">
+                        <div><b>@cs.Finished</b><span>finished</span></div>
+                        <div><b>@cs.Caught</b><span>caught up</span></div>
+                        <div><b>@cs.Watching</b><span>watching</span></div>
+                        <div><b>@(cs.Dropped + cs.Stalled)</b><span>dropped or stalled</span></div>
+                    </div>
+                    <p class="muted small">
+                        @(cs.Paused > 0 ? $"{cs.Paused} paused. " : "")Stalled means no episode in 6 months.
+                        @if (cs.MedianStopEpisode is { } stop) { <span>Shows you leave, you usually stop after episode @stop.ToString("0.#")@(cs.PilotOnly > 0 ? $"; {cs.PilotOnly} after just the first" : "").</span> }
+                    </p>
+                    @if (cs.ByGenre.Count > 0)
+                    {
+                        <table class="table completion-table">
+                            <thead><tr><th>Genre</th><th>Started</th><th>Finished</th><th>Left</th></tr></thead>
+                            <tbody>@foreach (var r in cs.ByGenre) { <tr @key="r.Label"><td>@r.Label</td><td>@r.Started</td><td>@Pct(r.Finished, r.Started)</td><td>@Pct(r.Abandoned, r.Started)</td></tr> }</tbody>
+                        </table>
+                    }
+                    @if (cs.ByNetwork.Count > 0)
+                    {
+                        <table class="table completion-table">
+                            <thead><tr><th>Network</th><th>Started</th><th>Finished</th><th>Left</th></tr></thead>
+                            <tbody>@foreach (var r in cs.ByNetwork) { <tr @key="r.Label"><td>@r.Label</td><td>@r.Started</td><td>@Pct(r.Finished, r.Started)</td><td>@Pct(r.Abandoned, r.Started)</td></tr> }</tbody>
+                        </table>
+                    }
+                }
+            </section>
+
+            <section class="panel">
+                <h2>Episodes left</h2>
+                @{ var b = m.Backlog; }
+                @if (b.Episodes == 0) { <p class="muted small">You're caught up on everything you're watching.</p> }
+                else
+                {
+                    <div class="mini-facts">
+                        <div><b>@b.Episodes.ToString("N0")</b><span>episodes in @b.Shows show@(b.Shows == 1 ? "" : "s")</span></div>
+                        <div><b>@Fmt.Duration(b.Minutes)</b><span>to watch</span></div>
+                    </div>
+                    <p class="muted small">
+                        @if (b.CaughtUpBy is { } by) { <span>At your recent pace (@Fmt.Duration(b.MinutesPerDay) a day), you'd catch up around <b>@by.ToString("MMMM yyyy")</b>.</span> }
+                        else { <span>Watch some episodes this month to see when you'd catch up.</span> }
+                    </p>
+                }
+            </section>
+
+            <section class="panel">
+                <h2>Movie length</h2>
+                @{ var rt = m.Runtime; }
+                @if (rt.Movies == 0) { <p class="muted small">Watch a movie first.</p> }
+                else
+                {
+                    <div class="mini-facts">
+                        <div><b>@(rt.AverageMinutes is { } am ? Fmt.Runtime(am) : "–")</b><span>average</span></div>
+                        <div><b>@rt.ShortPercent%</b><span>under 90 min</span></div>
+                        <div><b>@rt.EpicPercent%</b><span>2½ hours or more</span></div>
+                    </div>
+                    @if (rt.AverageByYear.Count > 1) { <BarChart Data="rt.AverageByYear" Vertical="true" Label="Average movie length (minutes) by the year you watched" /> }
+                }
+            </section>
+
+            <section class="panel">
+                <h2>Movie eras</h2>
+                @if (m.Era.AverageYear is { } ay)
+                {
+                    <div class="mini-facts"><div><b>@ay</b><span>average release year</span></div></div>
+                    <div class="era-months">
+                        @foreach (var e in m.Era.ByMonth) { <span @key="e.Label"><span class="muted small">@e.Label</span> <b>@(e.Count == 0 ? "–" : e.Count.ToString())</b></span> }
+                    </div>
+                    <p class="muted small">Average release year of the movies you watched each month.</p>
+                }
+                else { <p class="muted small">Watch a movie first.</p> }
+            </section>
+
+            <section class="panel">
+                <h2>Studios</h2>
+                @if (m.Studios.Count == 0) { <p class="muted small">Nothing yet. Movie details are still being filled in.</p> }
+                <BarChart Data="m.Studios" Label="Movie plays by studio" />
+            </section>
+        </div>
+
+        @if (m.Franchises.Items.Count > 0)
+        {
+            <section class="panel">
+                <h2>Franchises <span class="muted small">@m.Franchises.Completed of @m.Franchises.Started complete</span></h2>
+                <div class="franchise-list">
+                    @foreach (var f in m.Franchises.Items.Take(franchisesShown))
+                    {
+                        <div class="franchise" @key="f.Id">
+                            <img src="@Img.Poster(f.PosterPath, "w92")" alt="" loading="lazy" />
+                            <div>
+                                <div class="inline spread"><b>@f.Name</b><span class="muted small">@f.Seen / @f.Released</span></div>
+                                <ProgressBar Value="f.Seen" Max="f.Released" />
+                                @if (f.Next is { } next) { <div class="small">Next: <a href="@Fmt.Href(MediaType.Movie, next.TmdbId)">@next.Title</a>@(next.Year is { } y ? $" ({y})" : "")</div> }
+                                else { <div class="small ok">All seen</div> }
+                            </div>
+                        </div>
+                    }
+                </div>
+                @if (m.Franchises.Items.Count > franchisesShown) { <button class="btn btn-sm btn-ghost" @onclick="() => franchisesShown = int.MaxValue">Show all @m.Franchises.Items.Count</button> }
+            </section>
+        }
+
+        @if (m.RatingsVsTmdb.Count > 0)
+        {
+            var rv = m.RatingsVsTmdb;
+            <section class="panel">
+                <h2>You vs everyone</h2>
+                <p class="small">
+                    On average you rate <b>@Math.Abs(rv.AverageDifference ?? 0).ToString("0.0")</b> point@(Math.Abs(rv.AverageDifference ?? 0) == 1 ? "" : "s")
+                    @((rv.AverageDifference ?? 0) >= 0 ? "higher" : "lower") than TMDB users, across @rv.Count.ToString("N0") ratings.
+                </p>
+                @if (rv.Higher.Count > 0)
+                {
+                    <h3>You liked more</h3>
+                    <div class="poster-scroller">@foreach (var h in rv.Higher) { <PosterCard Media="h.Media" ShowScore="false" Sub="@($"You {h.You} · TMDB {h.Tmdb:0.0}")" @key="(h.Media.Type, h.Media.TmdbId)" /> }</div>
+                }
+                @if (rv.Lower.Count > 0)
+                {
+                    <h3>You liked less</h3>
+                    <div class="poster-scroller">@foreach (var h in rv.Lower) { <PosterCard Media="h.Media" ShowScore="false" Sub="@($"You {h.You} · TMDB {h.Tmdb:0.0}")" @key="(h.Media.Type, h.Media.TmdbId)" /> }</div>
+                }
+            </section>
+        }
+
+        @if (m.Friends.Rows.Count > 0)
+        {
+            <section class="panel">
+                <h2>Friends in @m.Friends.Period</h2>
+                <ol class="leaderboard">
+                    @foreach (var r in m.Friends.Rows)
+                    {
+                        <li class="@(r.IsMe ? "me" : "")" @key="r.User.UserName">
+                            <a href="@Fmt.UserHref(r.User.UserName)">@(r.IsMe ? "You" : r.User.Name)</a>
+                            <span class="muted small">@r.Plays play@(r.Plays == 1 ? "" : "s")</span>
+                            <b>@Fmt.Duration(r.Minutes)</b>
+                        </li>
+                    }
+                </ol>
+                @if (m.Friends.TopTitle is { } tt)
+                {
+                    <p class="small">Most watched by friends this week: <a href="@Fmt.Href(tt.Type, tt.TmdbId)">@tt.Title</a> <span class="muted">(@m.Friends.TopTitleFriends friend@(m.Friends.TopTitleFriends == 1 ? "" : "s"))</span></p>
+                }
+            </section>
+        }
+
+        @if (m.Milestones.Count > 0)
+        {
+            <section class="panel">
+                <h2>Milestones</h2>
+                <div class="milestones">
+                    @foreach (var ms in m.Milestones)
+                    {
+                        <div class="milestone">
+                            <b>@ms.Label</b>
+                            @if (ms.Item is { } it) { <a href="@Fmt.Href(it.Type, it.TmdbId)" class="small">@it.Title</a> }
+                            <span class="muted small">@(ms.BeforeTracking ? "before you started tracking" : ms.At is { } at ? at.ToLocalTime().ToString("MMM d, yyyy") : "")</span>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+    }
+
     @if (periods is { Count: > 0 })
     {
         <section class="panel review-periods">
@@ -55,6 +277,26 @@ else if (s is not null)
 @code {
     private List<ReviewYear>? periods;
     private StatsDto? s;
+    private MoreStatsDto? more;
+    private int franchisesShown = 8;
+
+    private static int Weeks(IReadOnlyList<HeatmapDay> days) =>
+        days.Count == 0 ? 1 : (int)Math.Ceiling((days.Count + (int)days[0].Date.DayOfWeek) / 7.0);
+
+    private int? maxDay;
+    private int Level(int minutes)
+    {
+        if (minutes <= 0) return 0;
+        maxDay ??= Math.Max(1, more!.Heatmap.Max(d => d.Minutes));
+        var r = (double)minutes / maxDay.Value;
+        return r < .25 ? 1 : r < .5 ? 2 : r < .75 ? 3 : 4;
+    }
+
+    private static int MaxWeekHour(MoreStatsDto m) => Math.Max(1, m.WeekHour.SelectMany(r => r).Max());
+    private static string Alpha(int n, int max) => (n == 0 ? 0 : .12 + .88 * n / max).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    private static string HourLabel(int h) => new DateTime(2000, 1, 1, h, 0, 0).ToString("h tt").ToLowerInvariant();
+    private static string Pct(int part, int whole) => whole == 0 ? "–" : $"{Math.Round(100.0 * part / whole)}%";
+    private static string Days(int d) => d switch { 0 => "same day", 1 => "1 day", < 60 => $"{d} days", < 730 => $"{Math.Round(d / 30.4)} months", _ => $"{Math.Round(d / 365.25)} years" };
     private string? error;
 
     protected override async Task OnInitializedAsync()
@@ -62,5 +304,8 @@ else if (s is not null)
         try { periods = await Api.ReviewPeriodsAsync(); } catch { periods = []; }
         try { s = await Api.StatsAsync(); }
         catch (Exception ex) { error = ex.Message; }
+        StateHasChanged();
+        try { more = await Api.MoreStatsAsync(); }
+        catch (Exception ex) { error ??= ex.Message; }
     }
 }

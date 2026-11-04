@@ -25,6 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ActivityEntry> Activity => Set<ActivityEntry>();
     public DbSet<Deployment> Deployments => Set<Deployment>();
     public DbSet<Favorite> Favorites => Set<Favorite>();
+    public DbSet<CollectionMeta> Collections => Set<CollectionMeta>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -103,6 +104,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
         b.Entity<ShowRewatch>(e => e.HasIndex(x => new { x.UserId, x.ShowTmdbId }));
         b.Entity<Favorite>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
+        b.Entity<CollectionMeta>(e =>
+        {
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.OwnsMany(x => x.Parts, o => o.ToJson());
+        });
+        b.Entity<MovieMeta>().HasIndex(x => x.CollectionId);
         b.Entity<ActivityEntry>(e =>
         {
             e.HasIndex(x => x.At);

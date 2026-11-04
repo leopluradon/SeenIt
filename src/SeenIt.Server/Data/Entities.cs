@@ -59,7 +59,7 @@ public class PersonCredit
 public static class MetaVersions
 {
     /// <summary>Bump when MovieMeta/ShowMeta gain fields, so cached rows are refetched.</summary>
-    public const int Current = 3; // 3: movie countries stored as ISO codes
+    public const int Current = 4; // 3: movie countries stored as ISO codes; 4: movie collection ids
 }
 
 public class MovieMeta
@@ -82,6 +82,8 @@ public class MovieMeta
     public List<PersonCredit> Cast { get; set; } = [];
     public List<PersonCredit> Directors { get; set; } = [];
     public int MetaVersion { get; set; }
+    /// <summary>TMDB collection (franchise) the movie belongs to, if any.</summary>
+    public int? CollectionId { get; set; }
 }
 
 public class ShowMeta
@@ -313,4 +315,22 @@ public class Favorite
     public int TmdbId { get; set; }
     public int Rank { get; set; }
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>A TMDB collection (franchise) and its movies, for franchise progress in stats.</summary>
+public class CollectionMeta
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string? PosterPath { get; set; }
+    public List<CollectionPartMeta> Parts { get; set; } = [];
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class CollectionPartMeta
+{
+    public int TmdbId { get; set; }
+    public string Title { get; set; } = "";
+    public DateOnly? ReleaseDate { get; set; }
+    public string? PosterPath { get; set; }
 }

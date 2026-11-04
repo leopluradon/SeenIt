@@ -355,6 +355,26 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("CheckIns");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.CollectionMeta", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PosterPath")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Collections");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.Deployment", b =>
                 {
                     b.Property<int>("Id")
@@ -596,6 +616,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<string>("BackdropPath")
                         .HasColumnType("text");
 
+                    b.Property<int?>("CollectionId")
+                        .HasColumnType("integer");
+
                     b.PrimitiveCollection<List<string>>("Countries")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -640,6 +663,8 @@ namespace SeenIt.Server.Data.Migrations
                         .HasColumnType("double precision");
 
                     b.HasKey("TmdbId");
+
+                    b.HasIndex("CollectionId");
 
                     b.ToTable("Movies");
                 });
@@ -973,6 +998,39 @@ namespace SeenIt.Server.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.CollectionMeta", b =>
+                {
+                    b.OwnsMany("SeenIt.Server.Data.CollectionPartMeta", "Parts", b1 =>
+                        {
+                            b1.Property<int>("CollectionMetaId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<string>("PosterPath");
+
+                            b1.Property<DateOnly?>("ReleaseDate");
+
+                            b1.Property<string>("Title")
+                                .IsRequired();
+
+                            b1.Property<int>("TmdbId");
+
+                            b1.HasKey("CollectionMetaId", "__synthesizedOrdinal");
+
+                            b1.ToTable("Collections");
+
+                            b1
+                                .ToJson("Parts")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("CollectionMetaId");
+                        });
+
+                    b.Navigation("Parts");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.Favorite", b =>

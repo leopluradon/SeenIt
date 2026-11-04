@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SeenIt.Contracts;
 using SeenIt.Server.Data;
 using SeenIt.Server.Import;
+using SeenIt.Server.Tmdb;
 
 namespace SeenIt.Server.Services;
 
@@ -154,6 +155,35 @@ public class ShowRefreshWorker(IServiceScopeFactory scopes, ILogger<ShowRefreshW
             catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "Refreshing movie {Id} failed", id); }
         }
         if (movies.Count > 0) log.LogInformation("Refreshed {Count} movies", movies.Count);
+
+        // Collections (franchises) of those movies, for franchise progress on the stats page.
+        List<int> collections;
+        await using (var scope = scopes.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var monthAgo = DateTimeOffset.UtcNow.AddDays(-30);
+            var wanted = db.Movies.Where(m => m.CollectionId != null).Select(m => m.CollectionId!.Value).Distinct();
+            collections = await wanted.Where(id => !db.Collections.Any(c => c.Id == id && c.UpdatedAt > monthAgo)).Take(100).ToListAsync(ct);
+        }
+        foreach (var id in collections)
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            try
+            {
+                var c = await scope.ServiceProvider.GetRequiredService<TmdbClient>().GetCollectionAsync(id, ct);
+                var row = await db.Collections.FirstOrDefaultAsync(x => x.Id == id, ct);
+                if (row is null) db.Collections.Add(row = new CollectionMeta { Id = id });
+                row.Name = c?.Name ?? row.Name;
+                row.PosterPath = c?.PosterPath ?? row.PosterPath;
+                if (c?.Parts is { } parts)
+                    row.Parts = parts.Select(p => new CollectionPartMeta { TmdbId = p.Id, Title = p.Title ?? p.Name ?? "", ReleaseDate = TmdbDates.Parse(p.ReleaseDate), PosterPath = p.PosterPath }).ToList();
+                row.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "Refreshing collection {Id} failed", id); }
+        }
+        if (collections.Count > 0) log.LogInformation("Refreshed {Count} collections", collections.Count);
     }
 }
 

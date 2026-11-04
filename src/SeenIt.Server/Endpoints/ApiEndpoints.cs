@@ -232,6 +232,7 @@ public static class ApiEndpoints
         g.MapGet("/calendar", (DateOnly? from, int? days, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.GetCalendarAsync(p.UserId(), from ?? DateOnly.FromDateTime(DateTime.UtcNow), days ?? 30, ct));
         g.MapGet("/dashboard", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetDashboardAsync(p.UserId(), ct));
+        g.MapGet("/stats/more", (string? tz, ClaimsPrincipal p, MoreStatsService s, CancellationToken ct) => s.GetAsync(p.UserId(), tz, ct));
         g.MapGet("/stats", (string? tz, ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetStatsAsync(p.UserId(), tz, ct));
 
         g.MapGet("/review/periods", (string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.GetPeriodsAsync(p.UserId(), tz, ct));

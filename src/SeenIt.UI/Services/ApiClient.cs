@@ -185,6 +185,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         SendAsync(follow ? HttpMethod.Post : HttpMethod.Delete, $"api/social/follow/{Uri.EscapeDataString(userName)}");
     public Task<CompareDto> CompareAsync(string a, string b) =>
         GetAsync<CompareDto>($"api/social/compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}");
+    public Task<MoreStatsDto> MoreStatsAsync() => GetAsync<MoreStatsDto>($"api/stats/more?tz={Tz}");
     public Task<StatsDto> StatsAsync() => GetAsync<StatsDto>($"api/stats?tz={Tz}");
     public Task<List<ReviewYear>> ReviewPeriodsAsync() => GetAsync<List<ReviewYear>>($"api/review/periods?tz={Tz}");
     public Task<ReviewDto> ReviewAsync(int year, int? month) =>
