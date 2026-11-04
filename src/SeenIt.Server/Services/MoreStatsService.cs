@@ -214,7 +214,10 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
 
     private async Task<BacklogStats> BacklogAsync(Guid userId, Ctx c, List<ShowProgressDto> progress, CancellationToken ct)
     {
-        var active = progress.Where(p => p.Status == ShowTrackStatus.Watching && !p.Completed && p.Aired > p.Watched).ToList();
+        // Shows you're actually watching: not finished, paused, dropped, or stalled (no episode in 6 months).
+        var staleBefore = DateTimeOffset.UtcNow.AddDays(-180);
+        var active = progress.Where(p => p.Status == ShowTrackStatus.Watching && !p.Completed && p.Aired > p.Watched
+                                         && p.LastWatchedAt is { } lw && lw >= staleBefore).ToList();
         var ids = active.Select(p => p.ShowTmdbId).ToList();
         var watched = c.All.Where(p => p.Type == MediaType.Episode && ids.Contains(p.TmdbId))
             .Select(p => (p.TmdbId, p.Season ?? 0, p.Episode ?? 0)).ToHashSet();

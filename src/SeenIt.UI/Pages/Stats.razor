@@ -133,6 +133,7 @@ else if (s is not null)
 
             <section class="panel">
                 <h2>Episodes left</h2>
+                <p class="muted small">In shows you've watched in the last 6 months.</p>
                 @{ var b = m.Backlog; }
                 @if (b.Episodes == 0) { <p class="muted small">You're caught up on everything you're watching.</p> }
                 else
