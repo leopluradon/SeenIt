@@ -343,6 +343,8 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
                 : shows.TryGetValue(firstTen.TmdbId, out var s) ? CatalogService.ToSummary(s) : null;
             list.Add(new Milestone("First 10/10", firstTen.RatedAt, media, Before(firstTen.RatedAt)));
         }
-        return list.OrderByDescending(m => m.At).ToList();
+        // Milestones reached before the "started tracking" day carry the day the plays were entered,
+        // not when they happened, so they're left out.
+        return list.Where(m => !m.BeforeTracking).OrderByDescending(m => m.At).ToList();
     }
 }

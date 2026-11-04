@@ -259,7 +259,7 @@ else if (s is not null)
                         <div class="milestone">
                             <b>@ms.Label</b>
                             @if (ms.Item is { } it) { <a href="@Fmt.Href(it.Type, it.TmdbId)" class="small">@it.Title</a> }
-                            <span class="muted small">@(ms.BeforeTracking ? "before you started tracking" : ms.At is { } at ? at.ToLocalTime().ToString("MMM d, yyyy") : "")</span>
+                            <span class="muted small">@(ms.At is { } at ? at.ToLocalTime().ToString("MMM d, yyyy") : "")</span>
                         </div>
                     }
                 </div>

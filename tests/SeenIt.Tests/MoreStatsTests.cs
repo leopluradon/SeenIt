@@ -37,8 +37,8 @@ public class MoreStatsTests
         Assert.Equal(180, m.Heatmap.Single(d => d.Date == today.AddDays(-10)).Minutes);
         Assert.Equal(3, m.Runtime.Movies);
         Assert.Equal(3, m.Studios.Single(s => s.Label == "A24").Count);   // plays: "New" once + "Old" twice
-        var first = Assert.Single(m.Milestones, x => x.Label == "1st movie");
-        Assert.True(first.BeforeTracking);
-        Assert.Equal("Backfilled", first.Item?.Title);
+        // The 1st movie was back-filled before tracking started, so it's hidden; the 2nd and 3rd aren't milestones.
+        Assert.DoesNotContain(m.Milestones, x => x.Label == "1st movie");
+        Assert.All(m.Milestones, x => Assert.False(x.BeforeTracking));
     }
 }
