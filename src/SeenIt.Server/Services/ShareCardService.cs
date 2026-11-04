@@ -54,7 +54,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         var y = Pad + 20;
         Brand(c, pal, ref y, "@" + user.UserName);
 
-        y += 150;
+        y += month is null ? 185 : 140;
         Text(c, r.Label, Pad, y, Fonts.Value.Bold, month is null ? 170 : 104, pal.Text);
         y += 70;
         Text(c, month is null ? "Year in review" : "Month in review", Pad, y, Fonts.Value.Semi, 46, pal.Accent);

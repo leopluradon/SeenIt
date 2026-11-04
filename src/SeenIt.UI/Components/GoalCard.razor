@@ -15,7 +15,7 @@
     </div>
     <div class="goal-bar">
         <div class="goal-fill" style="width:@Pct(Goal.Current)"></div>
-        @if (!Goal.YearOver && Goal.Expected > 0) { <div class="goal-pace" style="left:@Pct(Goal.Expected)" title="Where an even pace would have you today"></div> }
+        @if (!Goal.YearOver && !Done && Goal.Expected > 0) { <div class="goal-pace" style="left:@Pct(Goal.Expected)" title="Where an even pace would have you today"></div> }
     </div>
     <div class="goal-note small @(Behind ? "behind" : "")">@Note</div>
 </div>
@@ -42,13 +42,14 @@
                 return Done ? $"Done! You hit {Num(Goal.Current)} {GoalKinds.Unit(Goal.Kind, Goal.Current)}." : $"Finished {Num(Goal.Target - Goal.Current)} {unit} short.";
             if (Done) return Goal.Current > Goal.Target ? $"Done, and {Num(Goal.Current - Goal.Target)} {unit} over." : "Done!";
             var delta = Goal.Current - Goal.Expected;
-            var pace = delta >= 0.5 ? $"{Num(Math.Round(delta, Goal.Kind == GoalKind.Hours ? 1 : 0))} ahead of pace"
-                : delta <= -0.5 ? $"{Num(Math.Round(-delta, Goal.Kind == GoalKind.Hours ? 1 : 0))} behind pace"
+            var gap = Math.Round(Math.Abs(delta), Goal.Kind == GoalKind.Hours ? 1 : 0);
+            var pace = delta >= 0.5 ? $"{Num(gap)} {GoalKinds.Unit(Goal.Kind, gap)} ahead of pace"
+                : delta <= -0.5 ? $"{Num(gap)} {GoalKinds.Unit(Goal.Kind, gap)} behind pace"
                 : "Right on pace";
             var fraction = Goal.Target > 0 ? Goal.Expected / Goal.Target : 0;
             if (fraction < 0.05 || Goal.Current == 0) return pace + ".";
             var projected = Goal.Current / fraction;
-            return $"{pace}. At this rate you'll reach {Num(Math.Round(projected, Goal.Kind == GoalKind.Hours ? 0 : 0))}.";
+            return $"{pace}. At this rate you'll reach {Num(Math.Round(projected))}.";
         }
     }
 }
