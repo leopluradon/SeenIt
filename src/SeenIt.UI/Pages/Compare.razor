@@ -36,7 +36,6 @@ else if (c is not null)
         <span class="muted">In common</span>
         <span class="span2">@c.SharedMovies movie@(c.SharedMovies == 1 ? "" : "s") · @c.SharedShows show@(c.SharedShows == 1 ? "" : "s")</span>
     </div>
-    <p class="muted small">Ratings under each poster: <b>@c.A.Name</b> first, then <b>@c.B.Name</b> (– means not rated). Hover for details.</p>
 
     @foreach (var (key, title, items) in Sections())
     {
