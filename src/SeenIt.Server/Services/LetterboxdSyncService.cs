@@ -37,7 +37,7 @@ public class LetterboxdSyncService(AppDbContext db, IHttpClientFactory http, Imp
             if (string.IsNullOrEmpty(guid)) continue;
             DateOnly? watched = DateOnly.TryParseExact(item.Element(Lb + "watchedDate")?.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
             double? stars = double.TryParse(item.Element(Lb + "memberRating")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var s) && s > 0 ? s : null;
-            var published = DateTimeOffset.TryParse(item.Element("pubDate")?.Value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var p) ? p : DateTimeOffset.UtcNow;
+            var published = DateTimeOffset.TryParse(item.Element("pubDate")?.Value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var p) ? p.ToUniversalTime() : DateTimeOffset.UtcNow;
             entries.Add(new LetterboxdFeedEntry(guid, tmdbId,
                 item.Element(Lb + "filmTitle")?.Value ?? item.Element("title")?.Value ?? $"#{tmdbId}",
                 int.TryParse(item.Element(Lb + "filmYear")?.Value, out var y) ? y : null,
@@ -101,6 +101,9 @@ public class LetterboxdSyncService(AppDbContext db, IHttpClientFactory http, Imp
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 log.LogWarning(ex, "Letterboxd sync for {User} failed", sync.Username);
+                // Whatever failed to save is still pending; drop it before recording the failure.
+                db.ChangeTracker.Clear();
+                db.LetterboxdSyncs.Update(sync);
                 sync.LastFailed = true;
                 sync.LastResult = "Something went wrong adding the new entries. It'll try again later.";
                 await db.SaveChangesAsync(ct);

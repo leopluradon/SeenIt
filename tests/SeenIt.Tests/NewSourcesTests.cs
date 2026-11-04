@@ -123,6 +123,8 @@ public class NewSourcesTests
         Assert.Equal(new DateOnly(2026, 11, 3), e.Watched);
         Assert.Equal(4.5, e.Stars);
         Assert.True(e.Liked);
+        Assert.Equal(TimeSpan.Zero, e.Published.Offset);   // Postgres only takes UTC
+        Assert.Equal(new DateTimeOffset(2026, 11, 3, 14, 32, 58, TimeSpan.Zero), e.Published);
     }
 
     [Fact]

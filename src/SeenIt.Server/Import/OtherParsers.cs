@@ -35,8 +35,9 @@ internal static class ImportText
         s = s.Trim();
         if (DateTimeOffset.TryParseExact(s, DateFormats, CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var d))
-            return d.TimeOfDay == TimeSpan.Zero && !s.Contains(':') ? d.AddHours(12) : d;
-        return DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out d) ? d : null;
+            return (d.TimeOfDay == TimeSpan.Zero && !s.Contains(':') ? d.AddHours(12) : d).ToUniversalTime();
+        // Postgres stores UTC only.
+        return DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out d) ? d.ToUniversalTime() : null;
     }
 }
 
