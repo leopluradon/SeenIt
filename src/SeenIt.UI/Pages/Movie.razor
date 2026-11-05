@@ -71,10 +71,10 @@ else if (m is not null)
                         </div>
                     </div>
                 }
+                <FriendsSeen Type="MediaType.Movie" TmdbId="Id" />
             }
             <DetailStats Items="@([("Runtime", Fmt.Runtime(m.Runtime)), ("Released", m.ReleaseDate?.ToString("MMM d, yyyy")), ("Status", m.Status), ("Genres", m.Genres.Count > 0 ? string.Join(", ", m.Genres) : null), ("Your plays", m.User is { Plays: > 0 } u2 ? $"{u2.Plays} · {Fmt.Duration((long)(m.Runtime ?? 0) * u2.Plays)}" : null)])" />
             @if (m.Overview is not null) { <p class="overview">@m.Overview</p> }
-            @if (m.User is not null) { <FriendsSeen Type="MediaType.Movie" TmdbId="Id" /> }
             <WhereToWatch Type="MediaType.Movie" TmdbId="Id" />
             @if (m.Crew.Count > 0)
             {

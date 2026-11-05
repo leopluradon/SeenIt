@@ -100,11 +100,11 @@ else if (s is not null)
                     }
                 </div>
             }
+            @if (s.User is not null) { <FriendsSeen Type="MediaType.Show" TmdbId="Id" Total="s.AiredEpisodes" /> }
             @if (s.NextEpisodeToAir is { } next)
             {
                 <p class="muted">Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> <Spoiler>@next.Name</Spoiler></a> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }</p>
             }
-            @if (s.User is not null) { <FriendsSeen Type="MediaType.Show" TmdbId="Id" Total="s.AiredEpisodes" /> }
             <WhereToWatch Type="MediaType.Show" TmdbId="Id" />
             <DetailStats Items="@([
                 ("Seasons", s.Seasons.Count(x => x.SeasonNumber > 0).ToString()),
