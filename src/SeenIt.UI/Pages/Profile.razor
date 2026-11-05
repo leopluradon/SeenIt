@@ -60,7 +60,10 @@ else if (p is not null)
         @if (p.Recent.Count > 0)
         {
             <section class="row-section">
-                <div class="section-head"><h2>Recently watched</h2></div>
+                <div class="section-head">
+                    <h2>Recently watched</h2>
+                    <a href="@(p.IsMe ? "history" : $"{Fmt.UserHref(p.User.UserName)}/history")" class="section-more">All history <Icon Name="chevron-right" Size="16" /></a>
+                </div>
                 <div class="poster-scroller">
                     @foreach (var h in p.Recent)
                     {
@@ -72,17 +75,21 @@ else if (p is not null)
                 </div>
             </section>
         }
-        @if (p.Favorites is { Count: > 0 } favs)
+        @foreach (var (type, label) in new[] { (MediaType.Movie, "Favorite movies"), (MediaType.Show, "Favorite shows") })
         {
-            <section class="row-section">
-                <div class="section-head">
-                    <h2>Favorites</h2>
-                    @if (p.IsMe) { <a href="favorites" class="section-more">Edit <Icon Name="chevron-right" Size="16" /></a> }
-                </div>
-                <div class="poster-scroller">
-                    @foreach (var f in favs) { <PosterCard Media="f.Media" ShowScore="false" @key="(f.Media.Type, f.Media.TmdbId)" /> }
-                </div>
-            </section>
+            var favs = (p.Favorites ?? []).Where(f => f.Media.Type == type).Take(FavoriteLimits.PerType).ToList();
+            @if (favs.Count > 0)
+            {
+                <section class="row-section">
+                    <div class="section-head">
+                        <h2>@label</h2>
+                        @if (p.IsMe) { <a href="favorites" class="section-more">Edit <Icon Name="chevron-right" Size="16" /></a> }
+                    </div>
+                    <div class="fav-four">
+                        @foreach (var f in favs) { <PosterCard Media="f.Media" ShowScore="false" @key="(f.Media.Type, f.Media.TmdbId)" /> }
+                    </div>
+                </section>
+            }
         }
         @if (p.TopRated.Count > 0)
         {

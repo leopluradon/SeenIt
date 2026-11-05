@@ -63,6 +63,15 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             await tracking.GetFavoritesAsync(owner.Id, ct));
     }
 
+    /// <summary>The account behind a profile, if the viewer may see its history (same rule as the profile).</summary>
+    public async Task<AppUser?> ViewableAsync(string userName, Guid? viewer, CancellationToken ct)
+    {
+        var owner = await FindAsync(userName);
+        if (owner is null) return null;
+        var (following, followsYou) = await RelationAsync(viewer, owner.Id, ct);
+        return CanView(owner, viewer, following && followsYou) ? owner : null;
+    }
+
     public async Task<bool> FollowAsync(Guid me, string userName, bool follow, CancellationToken ct)
     {
         var them = await FindAsync(userName);

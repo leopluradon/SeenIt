@@ -1071,3 +1071,9 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
 .watch-scope { display: flex; }
 .watch-scope button { flex: 1; justify-content: center; text-align: center; }
 .flag { display: inline-block; vertical-align: -2px; border-radius: 2px; margin-right: 4px; object-fit: cover; box-shadow: 0 0 0 1px var(--border); }
+
+/* Four favorites per type: empty slots on the Favorites page, a fixed row of four on profiles */
+.fav-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; aspect-ratio: 2/3; border: 2px dashed var(--border); border-radius: var(--radius); color: var(--muted); text-align: center; padding: 10px; }
+.fav-empty:hover { border-color: var(--accent); color: var(--text); }
+.fav-four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; max-width: 760px; }
+@media (max-width: 600px) { .fav-four { gap: 8px; } .fav-four .poster-title { font-size: .78rem; } }

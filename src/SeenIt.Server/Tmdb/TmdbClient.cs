@@ -88,6 +88,21 @@ public class TmdbClient
     public Task<TmdbPage<TmdbListItem>?> SearchShowAsync(string query, int? year, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbListItem>>($"search/tv?query={Uri.EscapeDataString(query)}&include_adult=false" + (year is { } y ? $"&first_air_date_year={y}" : ""), TimeSpan.FromHours(6), ct);
 
+    /// <summary>
+    /// TMDB's own upcoming/now_playing lists overlap (both are date windows across every country), so
+    /// these use discover on the country's theatrical release dates: in theaters = released in the last
+    /// six weeks, upcoming = from tomorrow on.
+    /// </summary>
+    public Task<TmdbPage<TmdbListItem>?> GetTheatricalAsync(bool upcoming, string region, int page, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var range = upcoming
+            ? $"release_date.gte={today.AddDays(1):yyyy-MM-dd}&release_date.lte={today.AddMonths(6):yyyy-MM-dd}&sort_by=popularity.desc"
+            : $"release_date.gte={today.AddDays(-42):yyyy-MM-dd}&release_date.lte={today:yyyy-MM-dd}&sort_by=popularity.desc";
+        return GetAsync<TmdbPage<TmdbListItem>>(
+            $"discover/movie?region={Uri.EscapeDataString(region)}&with_release_type=2|3&include_adult=false&{range}&page={page}", TimeSpan.FromHours(1), ct);
+    }
+
     /// <summary>kind: movie|tv, list: trending/day, trending/week, popular, top_rated, upcoming, now_playing, on_the_air, airing_today.</summary>
     public Task<TmdbPage<TmdbListItem>?> GetListAsync(string kind, string list, int page, CancellationToken ct = default)
     {

@@ -47,8 +47,13 @@ public static class ApiEndpoints
                 ? Task.FromResult(new PagedResult<PersonHit>([], 1, 0, 0))
                 : c.SearchPeopleAsync(q.Trim(), page ?? 1, ct));
 
-        g.MapGet("/browse/{type}/{*list}", (MediaType type, string list, int? page, CatalogService c, CancellationToken ct) =>
-            c.BrowseAsync(type, list, page ?? 1, ct));
+        g.MapGet("/browse/{type}/{*list}", async (MediaType type, string list, int? page, string? region, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
+        {
+            // In theaters / upcoming depend on the country, like where to watch.
+            var saved = p.OptionalUserId() is { } uid ? await db.Users.Where(u => u.Id == uid).Select(u => u.Region).FirstOrDefaultAsync(ct) : null;
+            var code = saved ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r.ToUpperInvariant() : "US");
+            return await c.BrowseAsync(type, list, page ?? 1, ct, code);
+        });
 
         g.MapGet("/movie/{id:int}", async (int id, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
             await c.GetMovieAsync(id, p.OptionalUserId(), ct) is { } m ? Results.Ok(m) : Results.NotFound());
@@ -470,6 +475,15 @@ public static class ApiEndpoints
         // Profiles respect the owner's visibility setting; signed-out visitors see public ones only.
         app.MapGet("/api/users/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.GetProfileAsync(name, p.OptionalUserId(), ct) is { } profile ? Results.Ok(profile) : Results.NotFound());
+
+        // Someone's full history, read-only: visible to whoever can see their profile.
+        app.MapGet("/api/users/{name}/history", async (string name, MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
+                string? sort, int? page, int? pageSize, string? tz, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
+            await s.ViewableAsync(name, p.OptionalUserId(), ct) is { } owner
+                ? Results.Ok(await t.GetHistoryAsync(owner.Id, new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 100), tz), ct))
+                : Results.NotFound());
+        app.MapGet("/api/users/{name}/history/genres", async (string name, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
+            await s.ViewableAsync(name, p.OptionalUserId(), ct) is { } owner ? Results.Ok(await t.GetHistoryGenresAsync(owner.Id, ct)) : Results.NotFound());
 
         var g = app.MapGroup("/api/social").RequireAuthorization();
         g.MapGet("/feed", (int? take, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.FeedAsync(p.UserId(), take ?? 40, ct));

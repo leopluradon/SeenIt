@@ -7,33 +7,41 @@
 <div class="page-head">
     <h1>Favorites</h1>
 </div>
-<p class="muted small">Your favorite movies and shows, in your order. They're shown on your profile. Add one with the heart on any movie or show.</p>
+<p class="muted small">Your four favorite movies and four favorite shows, in your order. They're shown on your profile. Add one with the heart on any movie or show.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }
-else if (items is { Count: 0 })
-{
-    <Empty Title="No favorites yet.">
-        <span>Tap <b>Favorite</b> on a movie or show, or import them from Trakt or Letterboxd in <a href="settings#imports">Settings</a>.</span>
-    </Empty>
-}
 else if (items is not null)
 {
-    <div class="poster-grid fav-grid">
-        @for (var i = 0; i < items.Count; i++)
-        {
-            var index = i;
-            var f = items[index];
-            <div @key="(f.Media.Type, f.Media.TmdbId)">
-                <PosterCard Media="f.Media" ShowScore="false" Badge="@($"#{index + 1}")" />
-                <div class="fav-tools">
-                    <button class="icon-btn" disabled="@(busy || index == 0)" @onclick="() => Move(index, -1)" aria-label="Move @f.Media.Title earlier"><Icon Name="chevron-left" Size="16" /></button>
-                    <button class="icon-btn" disabled="@(busy || index == items.Count - 1)" @onclick="() => Move(index, 1)" aria-label="Move @f.Media.Title later"><Icon Name="chevron-right" Size="16" /></button>
-                    <button class="icon-btn" disabled="@busy" @onclick="() => Remove(f)" aria-label="Remove @f.Media.Title from favorites"><Icon Name="x" Size="16" /></button>
-                </div>
+    @foreach (var (type, label) in new[] { (MediaType.Movie, "Movies"), (MediaType.Show, "Shows") })
+    {
+        var group = items.Where(f => f.Media.Type == type).ToList();
+        <section class="row-section">
+            <div class="section-head"><h2>@label</h2><span class="muted small">@group.Count of @FavoriteLimits.PerType</span></div>
+            <div class="poster-grid fav-grid">
+                @for (var i = 0; i < group.Count; i++)
+                {
+                    var index = i;
+                    var f = group[index];
+                    <div @key="(f.Media.Type, f.Media.TmdbId)">
+                        <PosterCard Media="f.Media" ShowScore="false" Badge="@($"#{index + 1}")" />
+                        <div class="fav-tools">
+                            <button class="icon-btn" disabled="@(busy || index == 0)" @onclick="() => Move(type, index, -1)" aria-label="Move @f.Media.Title earlier"><Icon Name="chevron-left" Size="16" /></button>
+                            <button class="icon-btn" disabled="@(busy || index == group.Count - 1)" @onclick="() => Move(type, index, 1)" aria-label="Move @f.Media.Title later"><Icon Name="chevron-right" Size="16" /></button>
+                            <button class="icon-btn" disabled="@busy" @onclick="() => Remove(f)" aria-label="Remove @f.Media.Title from favorites"><Icon Name="x" Size="16" /></button>
+                        </div>
+                    </div>
+                }
+                @for (var i = group.Count; i < FavoriteLimits.PerType; i++)
+                {
+                    <a class="fav-empty" href="@(type == MediaType.Movie ? "discover" : "discover?type=Show")" @key="(type, i)">
+                        <Icon Name="heart" Size="20" />
+                        <span class="small">Add a favorite @(type == MediaType.Movie ? "movie" : "show")</span>
+                    </a>
+                }
             </div>
-        }
-    </div>
+        </section>
+    }
 }
 
 @code {
@@ -50,10 +58,15 @@ else if (items is not null)
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private async Task Move(int index, int step)
+    private async Task Move(MediaType type, int index, int step)
     {
         busy = true;
-        (items![index], items[index + step]) = (items[index + step], items[index]);
+        // Swap within the type; the saved order is movies then shows.
+        var group = items!.Where(f => f.Media.Type == type).ToList();
+        (group[index], group[index + step]) = (group[index + step], group[index]);
+        items = type == MediaType.Movie
+            ? [.. group, .. items.Where(f => f.Media.Type != type)]
+            : [.. items.Where(f => f.Media.Type != type), .. group];
         try { await Api.ReorderFavoritesAsync(items.Select(f => new FavoriteRequest(f.Media.Type, f.Media.TmdbId)).ToList()); }
         catch (Exception ex) { Toasts.Error(ex); await Load(); }
         busy = false;

@@ -650,6 +650,9 @@ public record ProfileDto(
 
 /// <summary>A movie or show the user marked as a favorite, in their order.</summary>
 public record FavoriteEntry(MediaSummary Media, DateTimeOffset AddedAt);
+/// <summary>Four favorite movies and four favorite shows.</summary>
+public static class FavoriteLimits { public const int PerType = 4; }
+
 public record FavoriteRequest(MediaType Type, int TmdbId);
 
 public record ActivityItem(UserCard User, HistoryEntry Entry);

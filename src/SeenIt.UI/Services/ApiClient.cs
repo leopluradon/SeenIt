@@ -81,7 +81,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<PagedResult<MediaSummary>> SearchAsync(string q, string? type = null, int page = 1) =>
         GetAsync<PagedResult<MediaSummary>>($"api/catalog/search?q={Uri.EscapeDataString(q)}&page={page}" + (type is null ? "" : $"&type={type}"));
     public Task<PagedResult<MediaSummary>> BrowseAsync(MediaType type, string list, int page = 1) =>
-        GetAsync<PagedResult<MediaSummary>>($"api/catalog/browse/{type}/{list}?page={page}");
+        GetAsync<PagedResult<MediaSummary>>($"api/catalog/browse/{type}/{list}?page={page}&region={DeviceRegion}");
     public Task<MovieDetail> MovieAsync(int id) => GetAsync<MovieDetail>($"api/catalog/movie/{id}");
     public Task<ShowDetail> ShowAsync(int id) => GetAsync<ShowDetail>($"api/catalog/show/{id}");
     public Task<SeasonDetail> SeasonAsync(int id, int season) => GetAsync<SeasonDetail>($"api/catalog/show/{id}/season/{season}");
@@ -108,7 +108,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task RestorePlaysAsync(IReadOnlyList<RestorePlay> plays) => SendAsync(HttpMethod.Post, "api/history/restore", plays);
     public Task<RematchResult?> RematchAsync(RematchRequest r) => SendAsync<RematchResult>(HttpMethod.Post, "api/rematch", r);
     public Task<List<DuplicateGroup>> DuplicatesAsync() => GetAsync<List<DuplicateGroup>>("api/duplicates");
-    public Task<HistoryPage> HistoryAsync(HistoryQuery f)
+    /// <summary>Your history, or someone else's (read-only) when userName is given.</summary>
+    public Task<HistoryPage> HistoryAsync(HistoryQuery f, string? userName = null)
     {
         var qs = new List<string> { $"page={f.Page}", $"pageSize={f.PageSize}", $"tz={Tz}" };
         if (f.Type is { } t) qs.Add($"type={t}");
@@ -118,9 +119,10 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         if (f.From is { } from) qs.Add($"from={Uri.EscapeDataString(from.ToString("O"))}");
         if (f.To is { } to) qs.Add($"to={Uri.EscapeDataString(to.ToString("O"))}");
         if (f.Oldest) qs.Add("sort=oldest");
-        return GetAsync<HistoryPage>("api/history?" + string.Join('&', qs));
+        return GetAsync<HistoryPage>((userName is null ? "api/history?" : $"api/users/{Uri.EscapeDataString(userName)}/history?") + string.Join('&', qs));
     }
-    public Task<List<string>> HistoryGenresAsync() => GetAsync<List<string>>("api/history/genres");
+    public Task<List<string>> HistoryGenresAsync(string? userName = null) =>
+        GetAsync<List<string>>(userName is null ? "api/history/genres" : $"api/users/{Uri.EscapeDataString(userName)}/history/genres");
     public async Task<RemovedPlays> DeleteHistoryAsync(Guid id) =>
         await SendAsync<RemovedPlays>(HttpMethod.Delete, $"api/history/{id}") ?? new RemovedPlays(0, []);
 

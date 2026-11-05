@@ -561,12 +561,17 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             .OfType<FavoriteEntry>().ToList();
     }
 
+    /// <summary>Up to four favorite movies and four favorite shows, Letterboxd-style.</summary>
+    public const int MaxFavorites = FavoriteLimits.PerType;
+
     /// <summary>Adds to the end of the user's favorites (no-op if it's already one). Returns false if it was already there.</summary>
     public async Task<bool> AddFavoriteAsync(Guid userId, MediaType type, int tmdbId, CancellationToken ct, DateTimeOffset? addedAt = null)
     {
         if (type is not (MediaType.Movie or MediaType.Show)) throw new TrackingException("Only movies and shows can be favorites.");
         await EnsureMetaAsync(type, tmdbId, ct);
         if (await db.Favorites.AnyAsync(f => f.UserId == userId && f.Type == type && f.TmdbId == tmdbId, ct)) return false;
+        if (await db.Favorites.CountAsync(f => f.UserId == userId && f.Type == type, ct) >= MaxFavorites)
+            throw new TrackingException($"You already have {MaxFavorites} favorite {(type == MediaType.Movie ? "movies" : "shows")}. Remove one first (Favorites page).");
         var rank = await db.Favorites.Where(f => f.UserId == userId).MaxAsync(f => (int?)f.Rank, ct) ?? 0;
         db.Favorites.Add(new Favorite { UserId = userId, Type = type, TmdbId = tmdbId, Rank = rank + 1, AddedAt = addedAt ?? DateTimeOffset.UtcNow });
         await db.SaveChangesAsync(ct);

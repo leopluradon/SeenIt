@@ -252,14 +252,17 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         return new(items, res.Page, res.TotalPages, res.TotalResults);
     }
 
-    public async Task<PagedResult<MediaSummary>> BrowseAsync(MediaType type, string list, int page, CancellationToken ct)
+    public async Task<PagedResult<MediaSummary>> BrowseAsync(MediaType type, string list, int page, CancellationToken ct, string region = "US")
     {
         var allowed = type == MediaType.Movie
             ? new[] { "trending/day", "trending/week", "popular", "top_rated", "upcoming", "now_playing" }
             : new[] { "trending/day", "trending/week", "popular", "top_rated", "on_the_air", "airing_today" };
         if (!allowed.Contains(list)) list = "trending/week";
 
-        var res = await tmdb.GetListAsync(type == MediaType.Movie ? "movie" : "tv", list, Math.Clamp(page, 1, 500), ct);
+        page = Math.Clamp(page, 1, 500);
+        var res = type == MediaType.Movie && list is "upcoming" or "now_playing"
+            ? await tmdb.GetTheatricalAsync(list == "upcoming", region, page, ct)
+            : await tmdb.GetListAsync(type == MediaType.Movie ? "movie" : "tv", list, page, ct);
         if (res is null) return new([], 1, 0, 0);
         return new(res.Results.Select(r => ToSummary(r, type)).ToList(), res.Page, res.TotalPages, res.TotalResults);
     }

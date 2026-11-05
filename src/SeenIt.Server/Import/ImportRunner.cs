@@ -286,15 +286,19 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             .Select(f => (f.Type, f.TmdbId)).ToHashSet();
         var rank = await db.Favorites.Where(f => f.UserId == job.UserId).MaxAsync(f => (int?)f.Rank, ct) ?? 0;
         var imported = new HashSet<(MediaType, int)>();
+        // Four of each at most: the export's first ones fill the free slots, the rest are skipped.
+        var counts = existing.GroupBy(e => e.Type).ToDictionary(g => g.Key, g => g.Count());
         foreach (var item in favorites)
         {
             if (await ResolveAsync(job, item.Item, ct) is { } id)
             {
                 imported.Add((item.Item.Type, id));
-                if (!existing.Add((item.Item.Type, id))) job.Skipped++;
+                if (existing.Contains((item.Item.Type, id)) || counts.GetValueOrDefault(item.Item.Type) >= TrackingService.MaxFavorites) job.Skipped++;
+                else if (!existing.Add((item.Item.Type, id))) job.Skipped++;
                 else
                 {
                     db.Favorites.Add(new Favorite { UserId = job.UserId, Type = item.Item.Type, TmdbId = id, Rank = ++rank, AddedAt = item.AddedAt, ImportJobId = Tag(job) });
+                    counts[item.Item.Type] = counts.GetValueOrDefault(item.Item.Type) + 1;
                     job.Imported++;
                 }
             }

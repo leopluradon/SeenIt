@@ -1,14 +1,17 @@
 @page "/history"
+@page "/u/{UserName}/history"
 @attribute [Authorize]
 @inject ApiClient Api
+@inject SessionState Session
 @inject Toasts Toasts
 @inject NavigationManager Nav
 @inject IJSRuntime Js
-<PageTitle>History · SeenIt</PageTitle>
+<PageTitle>@(Other is { } on ? $"{on}'s history" : "History") · SeenIt</PageTitle>
 
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 <div class="page-head">
-    <h1>History</h1>
-    <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="ToggleSelecting" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
+    <h1>@(Other is { } o ? $"{o}'s history" : "History")</h1>
+    @if (Other is null) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="ToggleSelecting" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
     <div class="segmented">
         <button class="@(Type is null ? "on" : "")" @onclick='() => Go(type: "")'>All</button>
         <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick='() => Go(type: "Movie")'>Movies</button>
@@ -18,7 +21,7 @@
 
 <form class="searchbar" @onsubmit="Submit" role="search">
     <Icon Name="search" Size="18" />
-    <input type="search" @bind="search" @bind:event="oninput" @bind:after="Debounce" placeholder="Search your history" aria-label="Search history" />
+    <input type="search" @bind="search" @bind:event="oninput" @bind:after="Debounce" placeholder="@(Other is null ? "Search your history" : "Search their history")" aria-label="Search history" />
     <button type="button" class="btn btn-sm filter-toggle @(ActiveFilters > 0 ? "btn-on" : "")" @onclick="() => filtersOpen = !filtersOpen" aria-expanded="@filtersOpen">
         Filters@(ActiveFilters > 0 ? $" · {ActiveFilters}" : "")
     </button>
@@ -129,7 +132,7 @@ else if (data is not null)
                                 </div>
                             </div>
                         </a>
-                        @if (!selecting)
+                        @if (!selecting && Other is null)
                         {
                             <button class="icon-btn" @onclick="() => editing = h" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
                             <button class="icon-btn" @onclick="() => Delete(h)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
@@ -166,6 +169,10 @@ else if (data is not null)
 
 @code {
     private HistoryEntry? editing;
+    /// <summary>Viewing someone else's history (read-only).</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private string BasePath => Other is { } n ? $"u/{Uri.EscapeDataString(n)}/history" : "history";
     [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "source")] public string? SourceParam { get; set; }
@@ -187,23 +194,31 @@ else if (data is not null)
     private bool filtersOpen;
     private CancellationTokenSource? debounce;
 
-    protected override async Task OnInitializedAsync()
-    {
-        filtersOpen = ActiveFilters > 0;
-        try { genres = await Api.HistoryGenresAsync(); } catch { /* the filter just stays empty */ }
-    }
+    private string? genresFor = "\0";
 
-    protected override Task OnParametersSetAsync()
+    protected override void OnInitialized() => filtersOpen = ActiveFilters > 0;
+
+    protected override async Task OnParametersSetAsync()
     {
         search = Q ?? "";
-        return Load();
+        if (genresFor != Other)
+        {
+            // Same page for your history and a friend's: reset when switching between them.
+            genresFor = Other;
+            selecting = false;
+            selected.Clear();
+            data = null;
+            try { genres = await Api.HistoryGenresAsync(Other); } catch { genres = []; /* the filter just stays empty */ }
+        }
+        await Load();
     }
 
     private async Task Load()
     {
         error = null;
         var (from, to) = Range();
-        try { data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", PageParam ?? 1)); }
+        try { data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", PageParam ?? 1), Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s history is private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -250,7 +265,7 @@ else if (data is not null)
             ["page"] = page is > 1 ? page : null,
         };
         if (p["period"] as string != "custom") { p["from"] = null; p["to"] = null; }
-        Nav.NavigateTo(Nav.GetUriWithQueryParameters(Nav.ToAbsoluteUri("history").ToString(), p));
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(Nav.ToAbsoluteUri(BasePath).ToString(), p));
     }
 
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
@@ -269,7 +284,7 @@ else if (data is not null)
     private void Clear()
     {
         search = "";
-        Nav.NavigateTo(Type is null ? "history" : $"history?type={Type}");
+        Nav.NavigateTo(Type is null ? BasePath : $"{BasePath}?type={Type}");
     }
 
     private bool selecting, bulkBusy, bulkDateOpen;
