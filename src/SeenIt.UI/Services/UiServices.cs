@@ -81,11 +81,8 @@ public static class Fmt
     public static string Through(int added, WatchChoice c) =>
         added == 0 ? "Already watched all of those" : $"Marked {added} episode{(added == 1 ? "" : "s")} watched{When(c)}";
 
-    /// <summary>The "everything up to here" choice in the watch dialog, unless it's the very first episode.</summary>
-    public static string? ThroughLabel(int season, int episode) => season <= 1 && episode <= 1 ? null : "Everything up to here";
-    public static string ThroughHint(int season) => season == 0
-        ? "Also marks the earlier specials you haven't watched."
-        : "Also marks every earlier episode you haven't watched, in season order (specials aside).";
+    /// <summary>Whether an "Up to here" button makes sense: not on a show's very first episode.</summary>
+    public static bool CanThrough(int season, int episode) => !(season <= 1 && episode <= 1);
 
     /// <summary>Toast text for a watch choice, e.g. "on 3 Feb 2024".</summary>
     public static string When(WatchChoice c) => c.When switch

@@ -145,7 +145,10 @@ else if (s is not null)
                 </a>
                 @if (s.User is not null && season.Watched < season.EpisodeCount && season.AirDate is { } sad && sad <= DateOnly.FromDateTime(DateTime.Today))
                 {
-                    <button class="btn btn-sm btn-ghost season-mark" disabled="@busy" @onclick="() => pendingSeason = season"><Icon Name="check" Size="14" /> Mark watched</button>
+                    <div class="season-mark">
+                        <button class="btn btn-sm" disabled="@busy" @onclick="() => { seasonThrough = false; pendingSeason = season; }" title="Mark this season watched" aria-label="@($"Mark {season.Name} watched")"><Icon Name="check" Size="14" /></button>
+                        @if (season.SeasonNumber > 1) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => { seasonThrough = true; pendingSeason = season; }" title="Mark this season and every earlier one watched">Up to here</button> }
+                    </div>
                 }
                 </div>
             }
@@ -162,8 +165,7 @@ else if (s is not null)
         <WatchDialog Open="pendingEpisode is not null" OpenChanged="o => { if (!o) pendingEpisode = null; }"
                      What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode" />
         <WatchDialog Open="pendingSeason is not null" OpenChanged="o => { if (!o) pendingSeason = null; }" What="@(pendingSeason?.Name ?? "")" Bulk="true" OnPick="WatchSeason"
-                     OnlyLabel="This season" ThroughLabel="@(pendingSeason is { SeasonNumber: > 1 } ps ? $"Seasons 1–{ps.SeasonNumber}" : null)"
-                     ThroughHint="Also marks every episode of the earlier seasons you haven't watched." />
+                     Through="seasonThrough" ThroughNote=" in the earlier seasons" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Title="@s.Name" />
     }
@@ -228,6 +230,7 @@ else if (s is not null)
     private bool busy, watchAllOpen, listOpen, fixOpen;
     private EpisodeRef? pendingEpisode;
     private SeasonSummary? pendingSeason;
+    private bool seasonThrough;
     private WatchOrdersDto? orders;
     private WatchOrderDto? order;
 

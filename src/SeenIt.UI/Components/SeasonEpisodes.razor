@@ -25,8 +25,9 @@
             {
                 var current = e.SeasonNumber == CurrentSeason && e.EpisodeNumber == CurrentEpisode;
                 var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
+                var actions = CanWatch && e.Plays == 0 && aired;
                 <li @key="(e.SeasonNumber, e.EpisodeNumber)" class="ep-item">
-                    <a class="ep-row @(current ? "current" : "") @(e.Plays > 0 ? "watched" : "") @(aired ? "" : "unaired")"
+                    <a class="ep-row @(current ? "current" : "") @(e.Plays > 0 ? "watched" : "") @(aired ? "" : "unaired") @(actions ? (Fmt.CanThrough(e.SeasonNumber, e.EpisodeNumber) ? "has-actions" : "has-action") : "")"
                        href="@Fmt.EpisodeHref(ShowId, e.SeasonNumber, e.EpisodeNumber)" aria-current="@(current ? "page" : null)">
                         <span class="ep-num">@e.EpisodeNumber</span>
                         <span class="ep-main">
@@ -36,9 +37,13 @@
                         @if (e.Plays > 0) { <span class="ep-check" title="@($"Watched{(e.Plays > 1 ? $" {e.Plays}×" : "")}")"><Icon Name="check" Size="16" /></span> }
                         else if (!aired) { <span class="pill pill-sm">Upcoming</span> }
                     </a>
-                    @if (CanWatch && e.Plays == 0 && aired)
+                    @if (actions)
                     {
-                        <button class="btn btn-sm ep-mark" disabled="@busy" @onclick="() => pending = e" title="Mark watched" aria-label="@($"Mark {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)} watched")"><Icon Name="check" Size="14" /></button>
+                        @* Over the row's right edge (not inside the link, so a tap doesn't also open the episode). *@
+                        <div class="ep-actions">
+                            @if (Fmt.CanThrough(e.SeasonNumber, e.EpisodeNumber)) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Open(e, true)" title="Mark everything up to here watched">Up to here</button> }
+                            <button class="btn btn-sm" disabled="@busy" @onclick="() => Open(e, false)" title="Mark watched" aria-label="@($"Mark {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)} watched")"><Icon Name="check" Size="14" /></button>
+                        </div>
                     }
                 </li>
             }
@@ -48,7 +53,7 @@
 </section>
 <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
              What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch"
-             ThroughLabel="@(pending is { } pt ? Fmt.ThroughLabel(pt.SeasonNumber, pt.EpisodeNumber) : null)" ThroughHint="@Fmt.ThroughHint(selected)" />
+             Through="pendingThrough" ThroughNote="@(selected == 0 ? " (specials only)" : ", in season order")" />
 @code {
     [Parameter, EditorRequired] public int ShowId { get; set; }
     [Parameter] public int CurrentSeason { get; set; }
@@ -58,7 +63,8 @@
     [Parameter] public bool CanWatch { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
     private EpisodeDto? pending;
-    private bool busy;
+    private bool busy, pendingThrough;
+    private void Open(EpisodeDto e, bool through) { pending = e; pendingThrough = through; }
     private int selected = -1;
     private SeasonDetail? season;
     private bool loading;

@@ -36,9 +36,13 @@ else if (e is not null)
             <div class="actions">
                 @if (e.Plays is { } plays)
                 {
-                    <button class="btn @(plays.Count > 0 ? "btn-watched" : "btn-primary")" disabled="@(busy || !aired)" @onclick="() => watchOpen = true">
+                    <button class="btn @(plays.Count > 0 ? "btn-watched" : "btn-primary")" disabled="@(busy || !aired)" @onclick="() => { through = false; watchOpen = true; }">
                         <Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })
                     </button>
+                    @if (plays.Count == 0 && aired && Fmt.CanThrough(Season, Number))
+                    {
+                        <button class="btn" disabled="@busy" @onclick="() => { through = true; watchOpen = true; }" title="Mark this and every earlier episode watched">Mark up to here</button>
+                    }
                     @if (aired) { <CheckInButton Request="@(new CheckInRequest(MediaType.Episode, Id, Season, Number))" /> }
                 }
                 else
@@ -111,7 +115,7 @@ else if (e is not null)
     <CastRow Cast="e.GuestStars" Title="Guest stars" />
 
     <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch"
-                 ThroughLabel="@(Seen ? null : Fmt.ThroughLabel(Season, Number))" ThroughHint="@Fmt.ThroughHint(Season)" />
+                 Through="through" ThroughNote="@(Season == 0 ? " (specials only)" : ", in season order")" />
     <EditPlayDialog @bind-Play="editing" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnSaved="Reload" />
 }
 
@@ -121,7 +125,7 @@ else if (e is not null)
     [Parameter] public int Number { get; set; }
     private EpisodeDetail? e;
     private string? error;
-    private bool busy, watchOpen;
+    private bool busy, watchOpen, through;
     private PlayDto? editing;
 
     private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); StateHasChanged(); }

@@ -16,7 +16,8 @@ else if (season is not null)
                 <span class="muted">@Watched/@Aired @(Rewatching ? "rewatched" : "watched")</span>
                 @if (Watched < Aired)
                 {
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => watchAllOpen = true"><Icon Name="check" Size="16" /> Mark season @(Rewatching ? "rewatched" : "watched")</button>
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => { seasonThrough = false; watchAllOpen = true; }"><Icon Name="check" Size="16" /> Mark season @(Rewatching ? "rewatched" : "watched")</button>
+                    @if (Number > 1) { <button class="btn btn-sm" disabled="@busy" @onclick="() => { seasonThrough = true; watchAllOpen = true; }" title="Mark this season and every earlier one watched">Up to here</button> }
                 }
                 else if (Watched > 0 && !Rewatching)
                 {
@@ -63,17 +64,19 @@ else if (season is not null)
                         <div class="episode-actions">
                             @if (Rewatching && !e.Rewatched && aired)
                             {
-                                <button class="btn btn-sm" disabled="@busy" @onclick="() => pending = e"><Icon Name="repeat" Size="14" /> Mark rewatched</button>
+                                <button class="btn btn-sm" disabled="@busy" @onclick="() => Open(e, false)"><Icon Name="repeat" Size="14" /> Mark rewatched</button>
+                                @if (Fmt.CanThrough(e.SeasonNumber, e.EpisodeNumber)) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Open(e, true)" title="Mark everything up to here rewatched">Up to here</button> }
                                 @if (e.Plays > 0) { <span class="muted small">@(e.Plays == 1 ? "Seen once" : $"Seen {e.Plays} times")</span> }
                             }
                             else if (e.Plays > 0)
                             {
-                                <button class="btn btn-sm btn-watched" disabled="@busy" @onclick="() => pending = e" title="Watch again"><Icon Name="check" Size="14" /> @(e.Plays > 1 ? $"{e.Plays} plays" : "Watched")</button>
+                                <button class="btn btn-sm btn-watched" disabled="@busy" @onclick="() => Open(e, false)" title="Watch again"><Icon Name="check" Size="14" /> @(e.Plays > 1 ? $"{e.Plays} plays" : "Watched")</button>
                                 <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Unwatch(e)" aria-label="Remove plays"><Icon Name="x" Size="14" /></button>
                             }
                             else if (aired)
                             {
-                                <button class="btn btn-sm" disabled="@busy" @onclick="() => pending = e"><Icon Name="check" Size="14" /> Mark watched</button>
+                                <button class="btn btn-sm" disabled="@busy" @onclick="() => Open(e, false)"><Icon Name="check" Size="14" /> Mark watched</button>
+                                @if (Fmt.CanThrough(e.SeasonNumber, e.EpisodeNumber)) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Open(e, true)" title="Mark everything up to here watched">Up to here</button> }
                             }
                             else
                             {
@@ -88,11 +91,10 @@ else if (season is not null)
     </div>
     <CastRow Cast="@(season.Cast ?? [])" Title="Cast this season" />
 
-    <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason"
-                 OnlyLabel="This season" ThroughLabel="@(Number > 1 ? $"Seasons 1–{Number}" : null)" ThroughHint="Also marks every episode of the earlier seasons you haven't watched." />
+    <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason" Through="seasonThrough" ThroughNote=" in the earlier seasons" />
     <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
                  What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch"
-                 ThroughLabel="@(pending is { } pt && (pt.Plays == 0 || Rewatching) ? Fmt.ThroughLabel(pt.SeasonNumber, pt.EpisodeNumber) : null)" ThroughHint="@Fmt.ThroughHint(Number)" />
+                 Through="pendingThrough" ThroughNote="@(Number == 0 ? " (specials only)" : ", in season order")" />
 }
 
 @code {
@@ -102,6 +104,8 @@ else if (season is not null)
     private string? error;
     private bool busy, watchAllOpen;
     private EpisodeDto? pending;
+    private bool pendingThrough, seasonThrough;
+    private void Open(EpisodeDto e, bool through) { pending = e; pendingThrough = through; }
 
     private int Aired => season?.Episodes.Count(e => e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today)) ?? 0;
     private int Watched => season?.Episodes.Count(Done) ?? 0;

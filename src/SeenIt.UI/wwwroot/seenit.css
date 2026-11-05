@@ -1037,15 +1037,12 @@ html[data-theme="nord"] {
 .order-part a.ep-main, .order-part a.ep-main:hover { color: var(--text); }
 .order-part.single { background: none; border: 0; padding: 0; }
 .order-part.single > summary { display: none; }
-
-/* "Just this one / Everything up to here" in the watch dialog */
-.watch-scope { display: flex; }
-.watch-scope button { flex: 1; justify-content: center; text-align: center; }
-.ep-item { display: flex; align-items: center; gap: 6px; }
-.ep-item > .ep-row { flex: 1; }
-.ep-item > .ep-mark { flex: none; align-self: stretch; padding: 0 12px; }
+.ep-item { position: relative; }
+.ep-item > .ep-row.has-actions { padding-right: 150px; }
+.ep-item > .ep-row.has-action { padding-right: 60px; }
+.ep-item > .ep-actions { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; gap: 6px; }
 .season-cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.season-mark { align-self: flex-start; }
+.season-mark { display: flex; gap: 6px; }
 .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 18px 14px; margin-bottom: 14px; }
 .people-grid .cast img, .people-grid .cast-fallback { width: 100%; height: auto; aspect-ratio: 4/5; }
 .search-members { gap: 8px; }
