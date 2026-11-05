@@ -6,8 +6,8 @@
 <div class="page-head">
     <h1>Discover</h1>
     <div class="segmented">
-        <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick="() => Go(MediaType.Movie, null)"><Icon Name="film" Size="16" /> Movies</button>
-        <button class="@(Type == MediaType.Show ? "on" : "")" @onclick="() => Go(MediaType.Show, null)"><Icon Name="tv" Size="16" /> Shows</button>
+        <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick="() => Switch(MediaType.Movie)"><Icon Name="film" Size="16" /> Movies</button>
+        <button class="@(Type == MediaType.Show ? "on" : "")" @onclick="() => Switch(MediaType.Show)"><Icon Name="tv" Size="16" /> Shows</button>
     </div>
 </div>
 <div class="chips">
@@ -47,6 +47,20 @@
         items.Clear();
         page = 0;
         return Load();
+    }
+
+    /// <summary>Movies ⇄ shows keeps the list you're on where the other side has it ("In theaters" ⇄ "On the air").</summary>
+    private void Switch(MediaType type)
+    {
+        if (type == Type) return;
+        var list = CurrentList switch
+        {
+            "now_playing" => "on_the_air",
+            "on_the_air" => "now_playing",
+            var l when l is "trending/week" or "popular" or "top_rated" => l,
+            _ => null,
+        };
+        Go(type, list == "trending/week" ? null : list);
     }
 
     private void Go(MediaType type, string? list) =>
