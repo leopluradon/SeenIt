@@ -10,8 +10,6 @@ else if (s is not null)
     <MediaHero Title="@s.Name" Year="s.FirstAirDate?.Year" Tagline="@s.Tagline" Poster="@s.PosterPath" Backdrop="@s.BackdropPath" Score="s.VoteAverage" Votes="s.VoteCount" ScoresFor="(MediaType.Show, Id)">
         <Facts>
             @if (s.Networks.Count > 0) { <span>@string.Join(", ", s.Networks)</span> }
-            <span>@s.NumberOfSeasons season@(s.NumberOfSeasons == 1 ? "" : "s") · @s.NumberOfEpisodes episodes</span>
-            @if (s.EpisodeRuntime is > 0) { <span>@Fmt.Runtime(s.EpisodeRuntime)</span> }
             @if (s.Genres.Count > 0) { <span>@string.Join(", ", s.Genres)</span> }
             @if (s.Status is not null) { <span class="pill">@s.Status</span> }
         </Facts>
