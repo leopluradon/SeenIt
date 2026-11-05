@@ -48,12 +48,13 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var inPeriod = all.Where(p => p.Local >= start && p.Local < end).OrderBy(p => p.Local).ToList();
         var previous = all.Where(p => p.Local >= prevStart && p.Local < start).ToList();
 
-        // Metadata for everything involved.
-        var movieIds = all.Where(p => p.Type == MediaType.Movie).Select(p => p.TmdbId).Distinct().ToList();
-        var showIds = all.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
+        // Full metadata (cast, crew, countries) only for what was watched in this period; the
+        // previous period just needs runtimes for its totals.
+        var movieIds = inPeriod.Where(p => p.Type == MediaType.Movie).Select(p => p.TmdbId).Distinct().ToList();
+        var showIds = inPeriod.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
         var movies = await db.Movies.AsNoTracking().Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, ct);
         var shows = await db.Shows.AsNoTracking().Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
-        var minutes = await RuntimesAsync(all, ct);
+        var minutes = await RuntimesAsync([.. inPeriod, .. previous], ct);
 
         var ratings = await db.Ratings.AsNoTracking().Where(r => r.UserId == userId).ToListAsync(ct);
         var ratingsInPeriod = ratings.Where(r => Local(r.RatedAt, tz) is var l && l >= start && l < end && Tracked(l)).ToList();
@@ -262,8 +263,11 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
     {
         var movieIds = plays.Where(p => p.Type == MediaType.Movie).Select(p => p.TmdbId).Distinct().ToList();
         var showIds = plays.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
-        var movieRuntime = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, m => m.Runtime ?? 0, ct);
-        var showRuntime = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, s => s.EpisodeRuntime ?? 0, ct);
+        // Select first: ToDictionaryAsync's value selector runs after whole rows (cast and all) are loaded.
+        var movieRuntime = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).Select(m => new { m.TmdbId, m.Runtime })
+            .ToDictionaryAsync(m => m.TmdbId, m => m.Runtime ?? 0, ct);
+        var showRuntime = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).Select(s => new { s.TmdbId, s.EpisodeRuntime })
+            .ToDictionaryAsync(s => s.TmdbId, s => s.EpisodeRuntime ?? 0, ct);
         var episodeRuntime = (await db.Episodes.Where(e => showIds.Contains(e.ShowTmdbId) && e.Runtime != null)
                 .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Runtime }).ToListAsync(ct))
             .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber), e => e.Runtime!.Value);

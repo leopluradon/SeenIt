@@ -185,8 +185,8 @@ public static class AdminEndpoints
 
         var movieIds = rows.Where(r => r.Type == MediaType.Movie && r.TmdbId != null).Select(r => r.TmdbId!.Value).Distinct().ToList();
         var showIds = rows.Where(r => r.Type is MediaType.Show or MediaType.Episode && r.TmdbId != null).Select(r => r.TmdbId!.Value).Distinct().ToList();
-        var movies = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, m => m.Title, ct);
-        var shows = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, s => s.Name, ct);
+        var movies = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).Select(m => new { m.TmdbId, m.Title }).ToDictionaryAsync(m => m.TmdbId, m => m.Title, ct);
+        var shows = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).Select(s => new { s.TmdbId, s.Name }).ToDictionaryAsync(s => s.TmdbId, s => s.Name, ct);
 
         return new AdminActivityPage(rows.Select(r => new AdminActivity(r.Id, r.At, r.UserName, r.Kind, r.Source, r.Type, r.TmdbId,
                 r.SeasonNumber, r.EpisodeNumber,

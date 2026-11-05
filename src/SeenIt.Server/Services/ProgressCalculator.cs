@@ -17,11 +17,13 @@ public class ProgressCalculator(AppDbContext db)
         if (watches.Count == 0) return [];
 
         var ids = watches.Select(w => w.TmdbId).Distinct().ToList();
-        var shows = await db.Shows.Where(s => ids.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
+        var shows = await db.Shows.AsNoTracking().Where(s => ids.Contains(s.TmdbId))
+            .Select(s => new { s.TmdbId, s.Name, s.PosterPath, s.BackdropPath }).ToDictionaryAsync(s => s.TmdbId, ct);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var episodes = await db.Episodes
-            .Where(e => ids.Contains(e.ShowTmdbId) && e.SeasonNumber > 0)
-            .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name, e.AirDate })
+        // Numbers and air dates only; names are fetched afterwards for just the "next up" episodes.
+        var episodes = await db.Episodes.AsNoTracking()
+            .Where(e => ids.Contains(e.ShowTmdbId) && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today)
+            .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.AirDate })
             .ToListAsync(ct);
         var episodesByShow = episodes.ToLookup(e => e.ShowTmdbId);
         var states = await db.ShowStates.Where(x => x.UserId == userId && ids.Contains(x.ShowTmdbId))
@@ -40,7 +42,6 @@ public class ProgressCalculator(AppDbContext db)
             var watched = group.Where(w => w.SeasonNumber > 0 && (rewatch is null || w.WatchedAt >= rewatch.StartedAt))
                 .Select(w => (S: w.SeasonNumber!.Value, E: w.EpisodeNumber!.Value)).ToHashSet();
             var aired = episodesByShow[group.Key]
-                .Where(e => e.AirDate is { } d && d <= today)
                 .OrderBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber)
                 .ToList();
 
@@ -56,11 +57,28 @@ public class ProgressCalculator(AppDbContext db)
                 show.TmdbId, show.Name, show.PosterPath, show.BackdropPath,
                 aired.Count, watchedAired,
                 group.Max(w => w.WatchedAt),
-                next is null ? null : new EpisodeRef(next.SeasonNumber, next.EpisodeNumber, next.Name, next.AirDate),
+                next is null ? null : new EpisodeRef(next.SeasonNumber, next.EpisodeNumber, null, next.AirDate),
                 aired.Count > 0 && watchedAired >= aired.Count,
                 states.GetValueOrDefault(group.Key, ShowTrackStatus.Watching),
                 rewatch?.Number,
                 completedRewatches.GetValueOrDefault(group.Key)));
+        }
+
+        // Names for the next episodes, in one query (seasons narrow it; the exact pairs are matched here).
+        var nexts = result.Where(r => r.NextEpisode is not null).ToList();
+        if (nexts.Count > 0)
+        {
+            var nextShows = nexts.Select(n => n.ShowTmdbId).ToList();
+            var nextSeasons = nexts.Select(n => n.NextEpisode!.SeasonNumber).Distinct().ToList();
+            var wanted = nexts.Select(n => (n.ShowTmdbId, n.NextEpisode!.SeasonNumber, n.NextEpisode.EpisodeNumber)).ToHashSet();
+            var names = (await db.Episodes.AsNoTracking()
+                    .Where(e => nextShows.Contains(e.ShowTmdbId) && nextSeasons.Contains(e.SeasonNumber))
+                    .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name }).ToListAsync(ct))
+                .Where(e => wanted.Contains((e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber)))
+                .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber), e => e.Name);
+            for (var i = 0; i < result.Count; i++)
+                if (result[i].NextEpisode is { } n && names.TryGetValue((result[i].ShowTmdbId, n.SeasonNumber, n.EpisodeNumber), out var name))
+                    result[i] = result[i] with { NextEpisode = n with { Name = name } };
         }
 
         return result.OrderByDescending(p => p.LastWatchedAt).ToList();

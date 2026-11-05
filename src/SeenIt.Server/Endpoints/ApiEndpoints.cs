@@ -233,12 +233,18 @@ public static class ApiEndpoints
         g.MapGet("/calendar", (DateOnly? from, int? days, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.GetCalendarAsync(p.UserId(), from ?? DateOnly.FromDateTime(DateTime.UtcNow), days ?? 30, ct));
         g.MapGet("/dashboard", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetDashboardAsync(p.UserId(), ct));
-        g.MapGet("/stats/more", (string? tz, ClaimsPrincipal p, MoreStatsService s, CancellationToken ct) => s.GetAsync(p.UserId(), tz, ct));
-        g.MapGet("/stats", (string? tz, ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetStatsAsync(p.UserId(), tz, ct));
+        // These read the whole history; they're kept until the user's plays or ratings change (UserDataCache).
+        g.MapGet("/stats/more", (string? tz, ClaimsPrincipal p, MoreStatsService s, UserDataCache c, CancellationToken ct) =>
+            c.GetAsync(p.UserId(), $"more:{tz}", () => s.GetAsync(p.UserId(), tz, ct), ct));
+        g.MapGet("/stats", (string? tz, ClaimsPrincipal p, TrackingService t, UserDataCache c, CancellationToken ct) =>
+            c.GetAsync(p.UserId(), $"stats:{tz}", () => t.GetStatsAsync(p.UserId(), tz, ct), ct));
 
-        g.MapGet("/review/periods", (string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.GetPeriodsAsync(p.UserId(), tz, ct));
-        g.MapGet("/review/{year:int}", (int year, string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.BuildAsync(p.UserId(), year, null, tz, ct));
-        g.MapGet("/review/{year:int}/{month:int}", (int year, int month, string? tz, ClaimsPrincipal p, ReviewService r, CancellationToken ct) => r.BuildAsync(p.UserId(), year, month, tz, ct));
+        g.MapGet("/review/periods", (string? tz, ClaimsPrincipal p, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            c.GetAsync(p.UserId(), $"periods:{tz}", () => r.GetPeriodsAsync(p.UserId(), tz, ct), ct));
+        g.MapGet("/review/{year:int}", (int year, string? tz, ClaimsPrincipal p, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            c.GetAsync(p.UserId(), $"review:{year}:{tz}", () => r.BuildAsync(p.UserId(), year, null, tz, ct), ct));
+        g.MapGet("/review/{year:int}/{month:int}", (int year, int month, string? tz, ClaimsPrincipal p, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            c.GetAsync(p.UserId(), $"review:{year}:{month}:{tz}", () => r.BuildAsync(p.UserId(), year, month, tz, ct), ct));
     }
 
     // ---------- Lists ----------

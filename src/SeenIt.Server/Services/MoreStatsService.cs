@@ -48,8 +48,21 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
         {
             Tz = tz, Since = since, Today = DateOnly.FromDateTime(Local(DateTimeOffset.UtcNow)),
             All = all, Dated = dated, Tracked = dated.Where(p => since is null || DateOnly.FromDateTime(p.Local) >= since).ToList(),
-            Movies = await db.Movies.AsNoTracking().Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, ct),
-            Shows = await db.Shows.AsNoTracking().Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct),
+            // Everything but cast and crew, which are large JSON columns nothing here reads.
+            Movies = await db.Movies.AsNoTracking().Where(m => movieIds.Contains(m.TmdbId))
+                .Select(m => new MovieMeta
+                {
+                    TmdbId = m.TmdbId, Title = m.Title, ReleaseDate = m.ReleaseDate, Runtime = m.Runtime, PosterPath = m.PosterPath,
+                    BackdropPath = m.BackdropPath, Genres = m.Genres, VoteAverage = m.VoteAverage, Overview = m.Overview,
+                    Studios = m.Studios, Countries = m.Countries, OriginalLanguage = m.OriginalLanguage, CollectionId = m.CollectionId,
+                }).ToDictionaryAsync(m => m.TmdbId, ct),
+            Shows = await db.Shows.AsNoTracking().Where(s => showIds.Contains(s.TmdbId))
+                .Select(s => new ShowMeta
+                {
+                    TmdbId = s.TmdbId, Name = s.Name, FirstAirDate = s.FirstAirDate, Status = s.Status, PosterPath = s.PosterPath,
+                    BackdropPath = s.BackdropPath, Genres = s.Genres, EpisodeRuntime = s.EpisodeRuntime, VoteAverage = s.VoteAverage,
+                    Overview = s.Overview, Networks = s.Networks, Countries = s.Countries, OriginalLanguage = s.OriginalLanguage,
+                }).ToDictionaryAsync(s => s.TmdbId, ct),
             Episodes = (await db.Episodes.AsNoTracking().Where(e => showIds.Contains(e.ShowTmdbId))
                     .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.AirDate, e.Runtime }).ToListAsync(ct))
                 .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber), e => new Ep(e.AirDate, e.Runtime)),

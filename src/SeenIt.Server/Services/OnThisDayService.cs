@@ -34,8 +34,10 @@ public class OnThisDayService(AppDbContext db, TrackingService tracking)
         var items = new List<OnThisDayItem>();
         var movieIds = plays.Where(p => p.Type == MediaType.Movie).Select(p => p.TmdbId).Distinct().ToList();
         var showIds = plays.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
-        var movies = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, ct);
-        var shows = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
+        var movies = await db.Movies.AsNoTracking().Where(m => movieIds.Contains(m.TmdbId))
+            .Select(m => new { m.TmdbId, m.Title, m.PosterPath }).ToDictionaryAsync(m => m.TmdbId, ct);
+        var shows = await db.Shows.AsNoTracking().Where(s => showIds.Contains(s.TmdbId))
+            .Select(s => new { s.TmdbId, s.Name, s.PosterPath }).ToDictionaryAsync(s => s.TmdbId, ct);
 
         foreach (var p in plays.Where(p => p.Type == MediaType.Movie).DistinctBy(p => (p.TmdbId, p.Date.Year)))
             if (movies.TryGetValue(p.TmdbId, out var m))

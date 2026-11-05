@@ -42,7 +42,8 @@ public class SocialTests
         await db.SaveChangesAsync();
 
         var tracking = new TrackingService(db, null!);
-        var social = new SocialService(db, tracking, null!, new CheckInService(db, null!, tracking, null!));
+        var social = new SocialService(db, tracking, null!, new CheckInService(db, null!, tracking, null!),
+            new UserDataCache(new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()), db));
         var feed = await social.FeedAsync(Me.Id, 50, default);
 
         Assert.Equal(["friend", "open"], feed.Activity.Select(a => a.User.UserName).Order());

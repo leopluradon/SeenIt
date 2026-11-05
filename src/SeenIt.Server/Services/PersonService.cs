@@ -81,7 +81,8 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         // Movies
         var movieCredits = credits.Where(c => c.MediaType == "movie" && watchedMovies.ContainsKey(c.Id)).GroupBy(c => c.Id).ToList();
         var movieIds = movieCredits.Select(g => g.Key).ToList();
-        var runtimes = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, m => m.Runtime ?? 0, ct);
+        var runtimes = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).Select(m => new { m.TmdbId, m.Runtime })
+            .ToDictionaryAsync(m => m.TmdbId, m => m.Runtime ?? 0, ct);
         foreach (var g in movieCredits)
         {
             var c = g.First();

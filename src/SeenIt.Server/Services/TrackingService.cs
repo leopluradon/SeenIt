@@ -428,10 +428,14 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     {
         var movieIds = rows.Where(r => r.Type == MediaType.Movie).Select(r => r.TmdbId).Distinct().ToList();
         var showIds = rows.Where(r => r.Type == MediaType.Episode).Select(r => r.TmdbId).Distinct().ToList();
-        var movies = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, ct);
-        var shows = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
-        var eps = (await db.Episodes.Where(e => showIds.Contains(e.ShowTmdbId))
+        var movies = await LiteMovies(movieIds).ToDictionaryAsync(m => m.TmdbId, ct);
+        var shows = await LiteShows(showIds).ToDictionaryAsync(s => s.TmdbId, ct);
+        // Only the seasons on this page, not every episode of every show (The Simpsons has 750+).
+        var seasons = rows.Where(r => r.Type == MediaType.Episode).Select(r => r.SeasonNumber ?? 0).Distinct().ToList();
+        var wanted = rows.Where(r => r.Type == MediaType.Episode).Select(r => (r.TmdbId, r.SeasonNumber ?? 0, r.EpisodeNumber ?? 0)).ToHashSet();
+        var eps = (await db.Episodes.AsNoTracking().Where(e => showIds.Contains(e.ShowTmdbId) && seasons.Contains(e.SeasonNumber))
                 .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Runtime }).ToListAsync(ct))
+            .Where(e => wanted.Contains((e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber)))
             .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber));
 
         return rows.Select(r =>
@@ -546,9 +550,19 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     public async Task<List<RatingEntry>> GetRatingsAsync(Guid userId, MediaType? type, CancellationToken ct)
     {
-        var q = db.Ratings.Where(r => r.UserId == userId);
+        var q = db.Ratings.AsNoTracking().Where(r => r.UserId == userId);
         if (type is not null) q = q.Where(r => r.Type == type);
-        var rows = await q.OrderByDescending(r => r.RatedAt).ToListAsync(ct);
+        return await RatingEntriesAsync(await q.OrderByDescending(r => r.RatedAt).ToListAsync(ct), ct);
+    }
+
+    /// <summary>A profile's best-rated movies and shows, picked in the database rather than after loading every rating.</summary>
+    public async Task<List<RatingEntry>> TopRatedAsync(Guid userId, int count, CancellationToken ct) =>
+        await RatingEntriesAsync(await db.Ratings.AsNoTracking()
+            .Where(r => r.UserId == userId && r.SeasonNumber == null && (r.Type == MediaType.Movie || r.Type == MediaType.Show))
+            .OrderByDescending(r => r.Value).ThenByDescending(r => r.RatedAt).Take(count).ToListAsync(ct), ct);
+
+    private async Task<List<RatingEntry>> RatingEntriesAsync(List<Rating> rows, CancellationToken ct)
+    {
         var (movies, shows) = await LoadMetaAsync(rows.Select(r => (r.Type == MediaType.Episode ? MediaType.Show : r.Type, r.TmdbId)), ct);
         return rows.Select(r =>
         {
@@ -578,7 +592,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var episodes = await db.Episodes
             .Where(e => showIds.Contains(e.ShowTmdbId) && e.AirDate >= from && e.AirDate < to)
             .ToListAsync(ct);
-        var shows = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
+        var shows = await LiteShows(showIds).ToDictionaryAsync(s => s.TmdbId, ct);
         var watched = (await db.WatchEvents
                 .Where(w => w.UserId == userId && w.Type == MediaType.Episode && showIds.Contains(w.TmdbId))
                 .Select(w => new { w.TmdbId, w.SeasonNumber, w.EpisodeNumber }).ToListAsync(ct))
@@ -635,14 +649,14 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     {
         var tz = ReviewService.Zone(await ZoneIdAsync(userId, tzId, ct));
         var since = await TrackingSinceAsync(userId, ct);
-        var watches = await db.WatchEvents.Where(w => w.UserId == userId)
+        var watches = await db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId)
             .Select(w => new { w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt }).ToListAsync(ct);
 
         var movieIds = watches.Where(w => w.Type == MediaType.Movie).Select(w => w.TmdbId).Distinct().ToList();
         var showIds = watches.Where(w => w.Type == MediaType.Episode).Select(w => w.TmdbId).Distinct().ToList();
-        var movies = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, ct);
-        var shows = await db.Shows.Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
-        var runtimes = (await db.Episodes.Where(e => showIds.Contains(e.ShowTmdbId))
+        var movies = await LiteMovies(movieIds).ToDictionaryAsync(m => m.TmdbId, ct);
+        var shows = await LiteShows(showIds).ToDictionaryAsync(s => s.TmdbId, ct);
+        var runtimes = (await db.Episodes.AsNoTracking().Where(e => showIds.Contains(e.ShowTmdbId) && e.Runtime != null)
                 .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Runtime }).ToListAsync(ct))
             .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber), e => e.Runtime);
 
@@ -766,7 +780,26 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var list = items.ToList();
         var movieIds = list.Where(i => i.Type == MediaType.Movie).Select(i => i.TmdbId).Distinct().ToList();
         var showIds = list.Where(i => i.Type == MediaType.Show).Select(i => i.TmdbId).Distinct().ToList();
-        return (await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, ct),
-                await db.Shows.Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct));
+        return (await LiteMovies(movieIds).ToDictionaryAsync(m => m.TmdbId, ct),
+                await LiteShows(showIds).ToDictionaryAsync(s => s.TmdbId, ct));
     }
+
+    /// <summary>
+    /// Movies with just what lists, posters and totals need: no cast, crew, studios or countries
+    /// (those are JSON columns that make loading thousands of rows slow). Not tracked; don't save them.
+    /// </summary>
+    public IQueryable<MovieMeta> LiteMovies(IReadOnlyCollection<int> ids) => db.Movies.AsNoTracking().Where(m => ids.Contains(m.TmdbId))
+        .Select(m => new MovieMeta
+        {
+            TmdbId = m.TmdbId, Title = m.Title, ReleaseDate = m.ReleaseDate, Runtime = m.Runtime, PosterPath = m.PosterPath,
+            BackdropPath = m.BackdropPath, Genres = m.Genres, VoteAverage = m.VoteAverage, Overview = m.Overview,
+        });
+
+    /// <summary>Shows with just what lists, posters and totals need (see <see cref="LiteMovies"/>).</summary>
+    public IQueryable<ShowMeta> LiteShows(IReadOnlyCollection<int> ids) => db.Shows.AsNoTracking().Where(s => ids.Contains(s.TmdbId))
+        .Select(s => new ShowMeta
+        {
+            TmdbId = s.TmdbId, Name = s.Name, FirstAirDate = s.FirstAirDate, Status = s.Status, PosterPath = s.PosterPath,
+            BackdropPath = s.BackdropPath, Genres = s.Genres, EpisodeRuntime = s.EpisodeRuntime, VoteAverage = s.VoteAverage, Overview = s.Overview,
+        });
 }

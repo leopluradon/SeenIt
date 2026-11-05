@@ -5,7 +5,7 @@ using SeenIt.Server.Data;
 namespace SeenIt.Server.Services;
 
 /// <summary>Following, profiles, the friends feed and taste comparisons.</summary>
-public class SocialService(AppDbContext db, TrackingService tracking, ListService lists, CheckInService checkIns)
+public class SocialService(AppDbContext db, TrackingService tracking, ListService lists, CheckInService checkIns, UserDataCache cache)
 {
     public Task<AppUser?> FindAsync(string userName) =>
         db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.NormalizedUserName == userName.Trim().ToUpperInvariant());
@@ -32,7 +32,8 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
 
     public async Task<ProfileStats> StatsAsync(Guid userId, CancellationToken ct)
     {
-        var s = await tracking.GetStatsAsync(userId, null, ct); // totals only; time zone doesn't matter
+        // Totals only (time zone doesn't matter), shared with the Stats page's cached copy.
+        var s = await cache.GetAsync(userId, "stats:totals", () => tracking.GetStatsAsync(userId, null, ct), ct);
         return new ProfileStats(s.MoviesWatched, s.ShowsWatched, s.EpisodesWatched, s.MinutesMovies + s.MinutesEpisodes, s.Ratings);
     }
 
@@ -54,9 +55,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
 
         var recentRows = await db.WatchEvents.AsNoTracking().Where(w => w.UserId == owner.Id && w.WatchedAt > WatchDates.Unknown)
             .OrderByDescending(w => w.WatchedAt).Take(24).ToListAsync(ct);
-        var topRated = (await tracking.GetRatingsAsync(owner.Id, null, ct))
-            .Where(r => r.Type != MediaType.Episode && r.SeasonNumber is null)
-            .OrderByDescending(r => r.Rating).ThenByDescending(r => r.RatedAt).Take(18).ToList();
+        var topRated = await tracking.TopRatedAsync(owner.Id, 18, ct);
 
         return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, true, followers, followingCount,
             await checkIns.GetAsync(owner.Id, ct), await StatsAsync(owner.Id, ct),

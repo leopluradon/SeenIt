@@ -122,6 +122,7 @@ builder.Services.AddHostedService<ShowRefreshWorker>();
 builder.Services.AddScoped<LetterboxdSyncService>();
 builder.Services.AddHostedService<LetterboxdSyncWorker>();
 builder.Services.AddScoped<GoalService>();
+builder.Services.AddScoped<UserDataCache>();
 builder.Services.AddScoped<ShareCardService>();
 
 var app = builder.Build();
