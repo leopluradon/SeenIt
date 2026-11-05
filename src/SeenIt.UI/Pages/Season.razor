@@ -7,7 +7,13 @@
 @if (season is null && error is null) { <Spinner /> }
 else if (season is not null)
 {
-    <nav class="crumbs"><a href="@($"show/{Id}")"><Icon Name="chevron-left" Size="16" /> @season.ShowName</a></nav>
+    <nav class="crumbs season-crumbs">
+        <a href="@($"show/{Id}")"><Icon Name="chevron-left" Size="16" /> @season.ShowName</a>
+        <span class="season-step">
+            @if (season.PreviousSeason is { } tp) { <a href="@($"show/{Id}/season/{tp}")" aria-label="@($"Previous: Season {tp}")"><Icon Name="chevron-left" Size="16" /> Season @tp</a> }
+            @if (season.NextSeason is { } tn) { <a href="@($"show/{Id}/season/{tn}")" aria-label="@($"Next: Season {tn}")">Season @tn <Icon Name="chevron-right" Size="16" /></a> }
+        </span>
+    </nav>
     <div class="page-head">
         <h1>@season.Name</h1>
         <AuthorizeView>
@@ -96,6 +102,23 @@ else if (season is not null)
             </article>
         }
     </div>
+    <nav class="episode-nav">
+        @if (season.PreviousSeason is { } ps)
+        {
+            <a class="episode-nav-link" href="@($"show/{Id}/season/{ps}")">
+                <Icon Name="chevron-left" Size="18" />
+                <span><span class="muted small">Previous</span><br />Season @ps</span>
+            </a>
+        }
+        else { <span></span> }
+        @if (season.NextSeason is { } ns)
+        {
+            <a class="episode-nav-link next" href="@($"show/{Id}/season/{ns}")">
+                <span><span class="muted small">Next</span><br />Season @ns</span>
+                <Icon Name="chevron-right" Size="18" />
+            </a>
+        }
+    </nav>
     <CastRow Cast="@(season.Cast ?? [])" Title="Cast this season" />
 
     <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason" Through="seasonThrough" ThroughNote=" in the earlier seasons" />

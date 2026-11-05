@@ -1091,3 +1091,6 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
 .avatar-sm { width: 28px; height: 28px; font-size: .85rem; display: grid; place-items: center; flex-shrink: 0; cursor: default; }
 .chip-toggle { display: inline-flex; align-items: center; gap: 4px; }
 .search-hint { margin: -4px 0 12px; }
+.season-crumbs { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.season-step { display: inline-flex; gap: 14px; }
+.season-step a { display: inline-flex; align-items: center; gap: 2px; }

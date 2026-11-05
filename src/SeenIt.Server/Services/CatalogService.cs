@@ -479,6 +479,11 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         var creditsTask = tmdb.GetSeasonCreditsAsync(showId, seasonNumber, ct);
         var season = await seasonTask;
         if (show is null || season is null) return null;
+        var numbers = await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == showId).Select(e => e.SeasonNumber).Distinct().ToListAsync(ct);
+        var regular = numbers.Where(n => n > 0).Order().ToList();
+        int? previous = seasonNumber > 0 && regular.LastOrDefault(n => n < seasonNumber) is var p and > 0 ? p : null;
+        int? nextSeason = seasonNumber == 0 ? (regular.Count > 0 ? regular[0] : null)
+            : regular.FirstOrDefault(n => n > seasonNumber) is var nx and > 0 ? nx : null;
         TmdbCredits? seasonCredits = null;
         try { seasonCredits = await creditsTask; }
         catch (HttpRequestException ex) { log.LogInformation(ex, "No season credits for {Show} S{Season}", showId, seasonNumber); }
@@ -517,7 +522,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             Cast(seasonCredits?.Cast),
             rewatch?.Number,
             SeasonCompleted(seasonPlays, season.Episodes?.Count ?? 0),
-            seasonRating);
+            seasonRating, previous, nextSeason);
     }
 
     /// <summary>

@@ -274,7 +274,8 @@ public record SeasonDetail(
     IReadOnlyList<CastMember>? Cast = null,
     int? Rewatch = null,       // number of the rewatch in progress (2 = second time through)
     DateTimeOffset? CompletedAt = null,
-    int? Rating = null);       // your rating of the season itself
+    int? Rating = null,        // your rating of the season itself
+    int? PreviousSeason = null, int? NextSeason = null);   // neighbors in season order (specials sit outside, except Specials → Season 1)
 
 // ---------- Tracking ----------
 
