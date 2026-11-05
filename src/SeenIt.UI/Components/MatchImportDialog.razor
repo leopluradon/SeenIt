@@ -4,7 +4,7 @@
 <Modal Open="Item is not null" OpenChanged="o => { if (!o) Close(); }" Title="@($"Find “{Item?.Label}”")">
     @if (Item is { } item)
     {
-        <p class="muted small">The import couldn't tell which @(item.Type == MediaType.Movie ? "movie" : "show") this is. Pick it and @item.Summary will come in for it.</p>
+        <p class="muted small">The import couldn't tell which @(item.Type == MediaType.Movie ? "movie" : "show") this is. Pick the right one and what the import had for it (@item.Summary) comes in.</p>
         <form class="searchbar" @onsubmit="Search">
             <Icon Name="search" Size="18" />
             <input @bind="query" placeholder="Search TMDB" aria-label="Search" />

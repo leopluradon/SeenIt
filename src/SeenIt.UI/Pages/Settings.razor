@@ -130,7 +130,7 @@
                             <div class="inline spread">
                                 <b>@WatchSources.Name(j.Kind) · @j.FileName</b>
                                 @if (j.Parts != ImportParts.All) { <span class="muted small">@PartsPicker.Describe(j.Parts)</span> }
-                                <span class="pill @StatusClass(j.Status)">@j.Status</span>
+                                @if (j.UndoneAt is not null) { <span class="pill">Undone</span> } else { <span class="pill @StatusClass(j.Status)">@j.Status</span> }
                             </div>
                             @if (j.Status == ImportStatus.Running && j.Total > 0)
                             {
