@@ -11,7 +11,7 @@
         @foreach (var part in Order.Parts)
         {
             var done = part.Episodes.Count(e => e.Watched);
-            <details class="order-part" open="@(part.Episodes.Any(e => e.IsNext) || (Order.Watched == 0 && part == Order.Parts[0]))" @key="part.Name">
+            <details class="order-part @(Order.Parts.Count == 1 ? "single" : "")" open="@(Order.Parts.Count == 1 || part.Episodes.Any(e => e.IsNext) || (Order.Watched == 0 && part == Order.Parts[0]))" @key="part.Name">
                 <summary>
                     <b>@part.Name</b>
                     <span class="muted small">@done / @part.Episodes.Count</span>

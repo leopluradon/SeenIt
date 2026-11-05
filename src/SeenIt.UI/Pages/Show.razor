@@ -64,9 +64,9 @@ else if (s is not null)
                     <label for="watch-order">Watch order</label>
                     <select id="watch-order" value="@(wo.SelectedId ?? "")" disabled="@busy" @onchange="SetOrder">
                         <option value="">TMDB's seasons</option>
-                        @foreach (var o in wo.Options) { <option value="@o.Id" @key="o.Id">@o.Name (@o.Kind · @o.Episodes episodes)</option> }
+                        @foreach (var o in wo.Options) { <option value="@o.Id" @key="o.Id">@o.Name (@o.Episodes)</option> }
                     </select>
-                    <span class="muted small">@(wo.SelectedId is null ? "Watching chronologically or in story order? Pick it and Up next follows it." : "Up next, progress and next/previous follow this order.")</span>
+                    <span class="muted small">@(wo.SelectedId is null ? "Watching chronologically or in story order? Pick it and Up next follows it." : "Up next, progress and next/previous follow this order. The episode list is below.")</span>
                 </div>
             }
             @if (s.Progress is { } p)

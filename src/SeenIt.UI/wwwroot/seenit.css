@@ -1034,3 +1034,6 @@ html[data-theme="nord"] {
 .order-part .ep-list { padding-bottom: 12px; }
 .order-part .ep-row { background: var(--surface-2); }
 .order-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.order-part a.ep-main, .order-part a.ep-main:hover { color: var(--text); }
+.order-part.single { background: none; border: 0; padding: 0; }
+.order-part.single > summary { display: none; }
