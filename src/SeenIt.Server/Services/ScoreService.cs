@@ -103,6 +103,12 @@ public class ScoreService(AppDbContext db, TmdbClient tmdb, CatalogService catal
             if (r.TryGetProperty("source", out var src) && src.GetString() is { } name) byName[name] = r;
 
         var kind = type == MediaType.Movie ? "movie" : "show";
+        // MDBList gives Metacritic's slug without the section ("/the-matrix"), which only redirects.
+        string? Metacritic(string? path) => path is null || !path.StartsWith('/') ? null
+            : path.StartsWith("/movie/") || path.StartsWith("/tv/") ? "https://www.metacritic.com" + path
+            : $"https://www.metacritic.com/{(type == MediaType.Movie ? "movie" : "tv")}{path.TrimEnd('/')}/";
+        var metacriticUrl = byName.TryGetValue("metacritic", out var mc) && mc.TryGetProperty("url", out var mu) && mu.ValueKind == JsonValueKind.String
+            ? Metacritic(mu.GetString()) : null;
         foreach (var (source, label, max, percent) in Sources)
         {
             if (!byName.TryGetValue(source, out var r)) continue;
@@ -115,9 +121,10 @@ public class ScoreService(AppDbContext db, TmdbClient tmdb, CatalogService catal
             {
                 { } x when x.StartsWith("http", StringComparison.OrdinalIgnoreCase) => x,
                 { } x when source is "tomatoes" or "popcorn" && x.StartsWith('/') => "https://www.rottentomatoes.com" + x,
-                { } x when source is "metacritic" or "metacriticuser" && x.StartsWith('/') => "https://www.metacritic.com" + x,
+                { } x when source is "metacritic" or "metacriticuser" && x.StartsWith('/') => Metacritic(x),
                 _ => source switch
                 {
+                    "metacriticuser" => metacriticUrl,
                     "letterboxd" when type == MediaType.Movie => $"https://letterboxd.com/tmdb/{tmdbId}/",
                     "trakt" => $"https://trakt.tv/search/tmdb/{tmdbId}?id_type={kind}",
                     _ => null,

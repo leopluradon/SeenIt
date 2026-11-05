@@ -24,7 +24,11 @@ public class ScoreTests
         Assert.Equal(["tomatoes", "metacritic", "letterboxd"], scores.Select(s => s.Source));
         Assert.Equal("https://www.rottentomatoes.com/m/matrix", scores[0].Url);
         Assert.True(scores[0].Percent);
-        Assert.Equal("https://www.metacritic.com/movie/the-matrix", scores[1].Url);
+        Assert.Equal("https://www.metacritic.com/movie/the-matrix", scores[1].Url);   // already has its section
+        using var bare = JsonDocument.Parse("""{ "ratings": [ { "source": "metacritic", "value": 84, "url": "/seinfeld" }, { "source": "metacriticuser", "value": 8.9 } ] }""");
+        var show = ScoreService.ParseMdbList(bare.RootElement, MediaType.Show, 1400, null);
+        Assert.Equal("https://www.metacritic.com/tv/seinfeld/", show[0].Url);
+        Assert.Equal(show[0].Url, show[1].Url);
         Assert.Equal(5, scores[2].Max);
         Assert.Null(scores[2].Votes);
         Assert.Equal("https://letterboxd.com/tmdb/603/", scores[2].Url);
