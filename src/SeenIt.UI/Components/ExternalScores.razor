@@ -21,15 +21,18 @@
 @code {
     [Parameter, EditorRequired] public MediaType Type { get; set; }
     [Parameter, EditorRequired] public int TmdbId { get; set; }
+    /// <summary>For an episode (Type = Episode, TmdbId = the show).</summary>
+    [Parameter] public int Season { get; set; }
+    [Parameter] public int Episode { get; set; }
     private List<ExternalScore>? scores;
-    private (MediaType, int) loadedFor;
+    private (MediaType, int, int, int) loadedFor;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (loadedFor == (Type, TmdbId)) return;
-        loadedFor = (Type, TmdbId);
+        if (loadedFor == (Type, TmdbId, Season, Episode)) return;
+        loadedFor = (Type, TmdbId, Season, Episode);
         scores = null;
-        try { scores = await Api.ScoresAsync(Type, TmdbId); }
+        try { scores = Type == MediaType.Episode ? await Api.EpisodeScoresAsync(TmdbId, Season, Episode) : await Api.ScoresAsync(Type, TmdbId); }
         catch { scores = null; }   // extra scores are a nicety; the page is fine without them
     }
 }

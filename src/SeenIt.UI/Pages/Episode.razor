@@ -33,6 +33,7 @@ else if (e is not null)
             {
                 <div class="score"><Icon Name="star" Size="16" /> <b>@e.VoteAverage.Value.ToString("0.0")</b> <span class="muted small">TMDB · @e.VoteCount?.ToString("N0") votes</span></div>
             }
+            <ExternalScores Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" />
             <div class="actions">
                 @if (e.Plays is { } plays)
                 {

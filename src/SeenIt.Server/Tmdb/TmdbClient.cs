@@ -76,6 +76,9 @@ public class TmdbClient
     public Task<TmdbExternalIds?> GetExternalIdsAsync(string kind, int id, CancellationToken ct = default) =>
         GetAsync<TmdbExternalIds>($"{kind}/{id}/external_ids", TimeSpan.FromDays(1), ct);
 
+    public Task<TmdbExternalIds?> GetEpisodeExternalIdsAsync(int showId, int season, int episode, CancellationToken ct = default) =>
+        GetAsync<TmdbExternalIds>($"tv/{showId}/season/{season}/episode/{episode}/external_ids", TimeSpan.FromDays(1), ct);
+
     public Task<TmdbPage<TmdbSearchPerson>?> SearchPersonAsync(string query, int page, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbSearchPerson>>($"search/person?query={Uri.EscapeDataString(query)}&page={page}&include_adult=false", TimeSpan.FromMinutes(30), ct);
 

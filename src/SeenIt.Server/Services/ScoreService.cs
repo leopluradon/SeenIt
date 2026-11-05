@@ -56,6 +56,16 @@ public class ScoreService(AppDbContext db, TmdbClient tmdb, CatalogService catal
         return scores;
     }
 
+    /// <summary>Episodes: IMDb only (MDBList and the others don't score single episodes).</summary>
+    public async Task<List<ExternalScore>> EpisodeAsync(int showId, int season, int episode, CancellationToken ct)
+    {
+        var imdbId = (await tmdb.GetEpisodeExternalIdsAsync(showId, season, episode, ct))?.ImdbId;
+        if (string.IsNullOrEmpty(imdbId)) return [];
+        return await db.ImdbRatings.AsNoTracking().FirstOrDefaultAsync(r => r.ImdbId == imdbId, ct) is { } imdb
+            ? [new ExternalScore("imdb", "IMDb", imdb.Rating, 10, false, imdb.Votes, $"https://www.imdb.com/title/{imdbId}/")]
+            : [];
+    }
+
     private async Task<List<ExternalScore>> MdbListAsync(MediaType type, int tmdbId, string? imdbId, CancellationToken ct)
     {
         var cached = await db.ExternalScores.FirstOrDefaultAsync(x => x.Type == type && x.TmdbId == tmdbId, ct);

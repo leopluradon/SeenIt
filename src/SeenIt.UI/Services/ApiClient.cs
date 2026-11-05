@@ -72,6 +72,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<ExternalScore>> ScoresAsync(MediaType type, int id) =>
         GetAsync<List<ExternalScore>>($"api/catalog/{(type == MediaType.Movie ? "movie" : "show")}/{id}/scores");
 
+    public Task<List<ExternalScore>> EpisodeScoresAsync(int showId, int season, int episode) =>
+        GetAsync<List<ExternalScore>>($"api/catalog/show/{showId}/season/{season}/episode/{episode}/scores");
+
     public Task<PagedResult<PersonHit>> SearchPeopleAsync(string q, int page = 1) =>
         GetAsync<PagedResult<PersonHit>>($"api/catalog/search/people?q={Uri.EscapeDataString(q)}&page={page}");
 

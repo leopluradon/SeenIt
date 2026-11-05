@@ -39,6 +39,8 @@ public static class ApiEndpoints
         // Other sites' scores (IMDb, Rotten Tomatoes, Metacritic...), loaded after the page.
         g.MapGet("/movie/{id:int}/scores", (int id, ScoreService s, CancellationToken ct) => s.GetAsync(MediaType.Movie, id, ct));
         g.MapGet("/show/{id:int}/scores", (int id, ScoreService s, CancellationToken ct) => s.GetAsync(MediaType.Show, id, ct));
+        g.MapGet("/show/{id:int}/season/{season:int}/episode/{episode:int}/scores", (int id, int season, int episode, ScoreService s, CancellationToken ct) =>
+            s.EpisodeAsync(id, season, episode, ct));
 
         g.MapGet("/search/people", (string q, int? page, CatalogService c, CancellationToken ct) =>
             string.IsNullOrWhiteSpace(q)
