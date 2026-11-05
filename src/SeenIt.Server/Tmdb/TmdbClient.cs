@@ -98,6 +98,12 @@ public class TmdbClient
     public Task<TmdbRegions?> GetProviderRegionsAsync(CancellationToken ct = default) =>
         GetAsync<TmdbRegions>("watch/providers/regions", TimeSpan.FromDays(1), ct);
 
+    public Task<TmdbEpisodeGroups?> GetEpisodeGroupsAsync(int showId, CancellationToken ct = default) =>
+        GetAsync<TmdbEpisodeGroups>($"tv/{showId}/episode_groups", TimeSpan.FromHours(12), ct);
+
+    public Task<TmdbEpisodeGroup?> GetEpisodeGroupAsync(string groupId, CancellationToken ct = default) =>
+        GetAsync<TmdbEpisodeGroup>($"tv/episode_group/{Uri.EscapeDataString(groupId)}", TimeSpan.FromHours(12), ct);
+
     /// <summary>source: imdb_id | tvdb_id.</summary>
     public Task<TmdbFindResult?> FindAsync(string externalId, string source, CancellationToken ct = default) =>
         GetAsync<TmdbFindResult>($"find/{Uri.EscapeDataString(externalId)}?external_source={source}", TimeSpan.FromHours(6), ct);

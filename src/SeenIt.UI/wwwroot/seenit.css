@@ -1018,3 +1018,19 @@ html[data-theme="nord"] {
     .arrange-moves { flex-direction: column; }
 }
 .bulk-spacer { height: 110px; }
+
+/* Alternative watch orders */
+.order-panel { display: flex; flex-direction: column; gap: 8px; }
+.order-panel label { font-weight: 650; }
+.order-panel select { max-width: 100%; }
+.order-desc { margin-top: -6px; }
+.order-parts { display: flex; flex-direction: column; gap: 10px; }
+.order-part { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 12px; }
+.order-part > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; cursor: pointer; list-style: none; }
+.order-part > summary::-webkit-details-marker { display: none; }
+.order-part > summary::after { content: "▾"; color: var(--muted); }
+.order-part[open] > summary::after { content: "▴"; }
+.order-part > summary b { margin-right: auto; }
+.order-part .ep-list { padding-bottom: 12px; }
+.order-part .ep-row { background: var(--surface-2); }
+.order-actions { display: flex; gap: 6px; flex-shrink: 0; }

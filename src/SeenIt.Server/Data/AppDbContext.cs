@@ -27,6 +27,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<CollectionMeta> Collections => Set<CollectionMeta>();
     public DbSet<Goal> Goals => Set<Goal>();
+    public DbSet<EpisodeOrder> EpisodeOrders => Set<EpisodeOrder>();
+    public DbSet<ShowWatchOrder> ShowWatchOrders => Set<ShowWatchOrder>();
     public DbSet<LetterboxdSync> LetterboxdSyncs => Set<LetterboxdSync>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -118,6 +120,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
         b.Entity<MovieMeta>().HasIndex(x => x.CollectionId);
         b.Entity<Goal>(e => e.HasIndex(x => new { x.UserId, x.Year, x.Kind }).IsUnique());
+        b.Entity<EpisodeOrder>(e =>
+        {
+            e.Property(x => x.Id).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(300);
+            e.HasIndex(x => x.ShowTmdbId);
+        });
+        b.Entity<ShowWatchOrder>(e =>
+        {
+            e.HasKey(x => new { x.UserId, x.ShowTmdbId });
+            e.Property(x => x.OrderId).HasMaxLength(64);
+        });
         b.Entity<LetterboxdSync>(e =>
         {
             e.HasKey(x => x.UserId);
@@ -147,7 +160,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

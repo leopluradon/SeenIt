@@ -58,6 +58,17 @@ else if (s is not null)
                     <span class="muted small">@StatusHint(s.TrackStatus)</span>
                 </div>
             }
+            @if (s.User is not null && orders is { Options.Count: > 0 } wo)
+            {
+                <div class="panel order-panel">
+                    <label for="watch-order">Watch order</label>
+                    <select id="watch-order" value="@(wo.SelectedId ?? "")" disabled="@busy" @onchange="SetOrder">
+                        <option value="">TMDB's seasons</option>
+                        @foreach (var o in wo.Options) { <option value="@o.Id" @key="o.Id">@o.Name (@o.Kind · @o.Episodes episodes)</option> }
+                    </select>
+                    <span class="muted small">@(wo.SelectedId is null ? "Watching chronologically or in story order? Pick it and Up next follows it." : "Up next, progress and next/previous follow this order.")</span>
+                </div>
+            }
             @if (s.Progress is { } p)
             {
                 <div class="panel progress-panel">
@@ -83,7 +94,7 @@ else if (s is not null)
                     @if (p.NextEpisode is { } n)
                     {
                         <div class="inline spread next-ep">
-                            <span>Next: <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> <Spoiler>@n.Name</Spoiler></a></span>
+                            <span>Next@(p.WatchOrder is { } won ? $" ({won})" : ""): <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@(n.SeasonNumber == 0 ? $"Special {n.EpisodeNumber}" : Fmt.Ep(n.SeasonNumber, n.EpisodeNumber))</b> <Spoiler>@n.Name</Spoiler></a></span>
                             <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => pendingEpisode = n"><Icon Name="check" Size="14" /> Watched</button>
                         </div>
                     }
@@ -114,8 +125,10 @@ else if (s is not null)
         </div>
     </div>
 
+    @if (order is not null) { <WatchOrderList ShowId="Id" Order="order" OnChanged="Load" /> }
+
     <section class="row-section">
-        <div class="section-head"><h2>Seasons</h2></div>
+        <div class="section-head"><h2>Seasons</h2>@if (order is not null) { <span class="muted small">as TMDB numbers them</span> }</div>
         <div class="season-grid">
             @foreach (var season in s.Seasons)
             {
@@ -205,15 +218,45 @@ else if (s is not null)
     private string? error;
     private bool busy, watchAllOpen, listOpen, fixOpen;
     private EpisodeRef? pendingEpisode;
+    private WatchOrdersDto? orders;
+    private WatchOrderDto? order;
 
     protected override Task OnParametersSetAsync() => Load();
 
     private async Task Load()
     {
         error = null;
-        if (s?.TmdbId != Id) s = null;
+        if (s?.TmdbId != Id) { s = null; orders = null; order = null; }
         try { s = await Api.ShowAsync(Id); }
         catch (Exception ex) { error = ex.Message; }
+        await LoadOrder();
+    }
+
+    private async Task LoadOrder()
+    {
+        if (s?.User is null) return;
+        try
+        {
+            orders ??= await Api.WatchOrdersAsync(Id);
+            order = orders.SelectedId is null ? null : await Api.WatchOrderAsync(Id);
+        }
+        catch { orders ??= new WatchOrdersDto([], null); }
+    }
+
+    private async Task SetOrder(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString() is { Length: > 0 } v ? v : null;
+        busy = true;
+        try
+        {
+            await Api.SetWatchOrderAsync(Id, id);
+            orders = orders! with { SelectedId = id };
+            Toasts.Show(id is null ? "Back to TMDB's seasons" : $"Watching in {orders.Options.First(o => o.Id == id).Name}");
+            s = await Api.ShowAsync(Id);
+            await LoadOrder();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
     }
 
     private async Task Act(Func<Task> action, string? done = null)
@@ -224,6 +267,7 @@ else if (s is not null)
             await action();
             if (done is not null) Toasts.Show(done, undo: TakeUndo());
             s = await Api.ShowAsync(Id);
+            if (orders?.SelectedId is not null) await LoadOrder();
         }
         catch (Exception ex) { Toasts.Error(ex); }
         busy = false;

@@ -92,4 +92,37 @@ public class ProgressTests
         Assert.Equal(1, p.RewatchesCompleted);
         Assert.True(p.Completed);
     }
+
+    [Fact]
+    public async Task An_alternative_order_drives_next_up_and_can_include_specials()
+    {
+        using var db = Db();
+        // Chronological: the special first, then S2E1 (a prequel), then season 1.
+        var parts = new List<EpisodeOrderPart>
+        {
+            new("Before", [new(0, 1), new(2, 1)]),
+            new("Then", [new(1, 1), new(1, 2), new(1, 3), new(2, 2)]),
+        };
+        db.EpisodeOrders.Add(new EpisodeOrder { Id = "g1", ShowTmdbId = 1, Name = "Chronological", PartsJson = System.Text.Json.JsonSerializer.Serialize(parts) });
+        db.ShowWatchOrders.Add(new ShowWatchOrder { UserId = User, ShowTmdbId = 1, OrderId = "g1" });
+        Watch(db, 0, 1);
+        Watch(db, 2, 1);
+        await db.SaveChangesAsync();
+
+        var p = Assert.Single(await new ProgressCalculator(db).ForUserAsync(User, null, default));
+        Assert.Equal("Chronological", p.WatchOrder);
+        Assert.Equal(5, p.Aired);      // S2E2 hasn't aired
+        Assert.Equal(2, p.Watched);    // the special counts in this order
+        Assert.Equal((1, 1), (p.NextEpisode!.SeasonNumber, p.NextEpisode.EpisodeNumber));
+        Assert.Equal("S1E1", p.NextEpisode.Name);
+    }
+
+    [Fact]
+    public void Next_up_in_an_order_goes_past_the_furthest_watched_then_back_to_gaps()
+    {
+        List<(int, int)> order = [(0, 1), (2, 1), (1, 1), (1, 2)];
+        Assert.Equal((1, 2), WatchOrderService.NextUp(order, new HashSet<(int, int)> { (2, 1), (1, 1) }));
+        Assert.Equal((0, 1), WatchOrderService.NextUp(order, new HashSet<(int, int)> { (2, 1), (1, 1), (1, 2) }));
+        Assert.Null(WatchOrderService.NextUp(order, order.ToHashSet()));
+    }
 }

@@ -456,6 +456,17 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             .Select(x => new { x.SeasonNumber, x.EpisodeNumber, x.Name, x.AirDate })
             .ToListAsync(ct);
         var index = siblings.FindIndex(x => x.SeasonNumber == seasonNumber && x.EpisodeNumber == episodeNumber);
+        // Following another order (chronological...): previous/next come from it instead.
+        if (userId is { } follower
+            && (await WatchOrderService.SequencesAsync(db, follower, [showId], ct)).TryGetValue(showId, out var order)
+            && order.Sequence.IndexOf((seasonNumber, episodeNumber)) is >= 0 and var at)
+        {
+            var all = (await db.Episodes.Where(x => x.ShowTmdbId == showId)
+                    .Select(x => new { x.SeasonNumber, x.EpisodeNumber, x.Name, x.AirDate }).ToListAsync(ct))
+                .ToDictionary(x => (x.SeasonNumber, x.EpisodeNumber));
+            siblings = order.Sequence.Where(all.ContainsKey).Select(k => all[k]).ToList();
+            index = siblings.FindIndex(x => x.SeasonNumber == seasonNumber && x.EpisodeNumber == episodeNumber);
+        }
         var watchedSet = userId is { } viewer
             ? (await db.WatchEvents.Where(w => w.UserId == viewer && w.Type == MediaType.Episode && w.TmdbId == showId)
                 .Select(w => new { w.SeasonNumber, w.EpisodeNumber }).ToListAsync(ct))

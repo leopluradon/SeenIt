@@ -246,6 +246,13 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task SetPlayDatesAsync(IReadOnlyList<PlayDate> dates) => SendAsync(HttpMethod.Post, "api/history/dates", dates);
     public Task ReorderListAsync(Guid id, IReadOnlyList<Guid> itemIds) => SendAsync(HttpMethod.Put, $"api/lists/{id}/order", new ListOrderRequest(itemIds));
     public Task SetListNoteAsync(Guid id, Guid itemId, string? note) => SendAsync(HttpMethod.Put, $"api/lists/{id}/items/{itemId}/note", new ListNoteRequest(note));
+    public Task<WatchOrdersDto> WatchOrdersAsync(int showId) => GetAsync<WatchOrdersDto>($"api/shows/{showId}/orders");
+    /// <summary>The order you follow for the show, or null for TMDB's seasons.</summary>
+    public Task<WatchOrderDto?> WatchOrderAsync(int showId) => SendAsync<WatchOrderDto>(HttpMethod.Get, $"api/shows/{showId}/order");
+    public Task SetWatchOrderAsync(int showId, string? orderId) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/order", new SetWatchOrderRequest(orderId));
+    public async Task<int> WatchThroughAsync(int showId, WatchThroughRequest r) =>
+        (await SendAsync<AddedResult>(HttpMethod.Post, $"api/shows/{showId}/order/watch-through", r))?.Added ?? 0;
+    private sealed record AddedResult(int Added);
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");
     public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content)
     {

@@ -383,3 +383,30 @@ public class LetterboxdSync
     /// <summary>Feed entries already handled (newest last), so a play you delete here isn't brought back.</summary>
     public List<string> SeenGuids { get; set; } = [];
 }
+
+/// <summary>
+/// A show's alternative episode order from TMDB (an "episode group": chronological, DVD, story
+/// arcs...), cached. Parts are stored as JSON (<see cref="EpisodeOrderPart"/>).
+/// </summary>
+public class EpisodeOrder
+{
+    public string Id { get; set; } = "";
+    public int ShowTmdbId { get; set; }
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public int Type { get; set; }
+    public string PartsJson { get; set; } = "[]";
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public record EpisodeOrderSlot(int Season, int Episode);
+public record EpisodeOrderPart(string Name, List<EpisodeOrderSlot> Episodes);
+
+/// <summary>The order a user is watching a show in. No row means TMDB's seasons.</summary>
+public class ShowWatchOrder
+{
+    public Guid UserId { get; set; }
+    public int ShowTmdbId { get; set; }
+    public string OrderId { get; set; } = "";
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}

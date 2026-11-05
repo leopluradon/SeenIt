@@ -404,7 +404,8 @@ public record ShowProgressDto(
     bool Completed,
     ShowTrackStatus Status = ShowTrackStatus.Watching,
     int? Rewatch = null,       // rewatch in progress: Watched/NextEpisode count only plays since it started
-    int RewatchesCompleted = 0);
+    int RewatchesCompleted = 0,
+    string? WatchOrder = null); // name of the alternative order being followed ("Chronological"), if any
 
 /// <summary>Paused and dropped shows are kept out of Up Next and the widget until you resume them.</summary>
 public enum ShowTrackStatus { Watching, Paused, Dropped }
@@ -482,7 +483,7 @@ public enum ActivityKind
     FavoriteAdd, FavoriteRemove,
     EditPlay,
     GoalSet, GoalDelete, LetterboxdSync,
-    ImportUndo, ImportResolve, ListReorder, ListNote,
+    ImportUndo, ImportResolve, ListReorder, ListNote, WatchOrder,
 }
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
@@ -833,3 +834,16 @@ public record LetterboxdSyncRequest(string Username);
 /// <summary>A title found in your watchlist and/or lists.</summary>
 public record ListSearchHit(MediaSummary Media, bool OnWatchlist, IReadOnlyList<ListRef> Lists);
 public record ListRef(Guid Id, string Name);
+
+// ---------- Alternative watch orders ----------
+
+/// <param name="Kind">TMDB's kind of order: "Original air date", "DVD", "Story arc"...</param>
+public record WatchOrderOption(string Id, string Name, string Kind, string? Description, int Episodes, int Parts);
+/// <param name="SelectedId">The order you're following; null for TMDB's seasons.</param>
+public record WatchOrdersDto(IReadOnlyList<WatchOrderOption> Options, string? SelectedId);
+public record WatchOrderDto(string Id, string Name, string? Description, int Aired, int Watched, IReadOnlyList<WatchOrderPart> Parts);
+public record WatchOrderPart(string Name, IReadOnlyList<WatchOrderEpisode> Episodes);
+public record WatchOrderEpisode(int Position, int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate, int? Runtime, bool Watched, bool IsNext);
+public record SetWatchOrderRequest(string? OrderId);
+/// <summary>Mark everything in the order up to and including this episode as watched.</summary>
+public record WatchThroughRequest(int SeasonNumber, int EpisodeNumber, WatchTime When, DateTimeOffset? WatchedAt = null);

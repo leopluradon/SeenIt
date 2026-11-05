@@ -224,6 +224,22 @@ public static class ApiEndpoints
             return Results.NoContent();
         });
 
+        // Alternative watch orders (TMDB episode groups).
+        g.MapGet("/shows/{id:int}/orders", (int id, ClaimsPrincipal p, WatchOrderService w, CancellationToken ct) => w.OptionsAsync(id, p.UserId(), ct));
+        g.MapGet("/shows/{id:int}/order", async (int id, ClaimsPrincipal p, WatchOrderService w, CancellationToken ct) =>
+            await w.DetailAsync(p.UserId(), id, ct) is { } order ? Results.Ok(order) : Results.NoContent());
+        g.MapPut("/shows/{id:int}/order", async (int id, SetWatchOrderRequest req, ClaimsPrincipal p, WatchOrderService w, ActivityService a, CancellationToken ct) =>
+        {
+            await w.SetAsync(p.UserId(), id, req.OrderId, ct);
+            await a.LogAsync(p, ActivityKind.WatchOrder, MediaType.Show, id, detail: req.OrderId ?? "TMDB seasons");
+            return Results.NoContent();
+        });
+        g.MapPost("/shows/{id:int}/order/watch-through", async (int id, WatchThroughRequest req, ClaimsPrincipal p, WatchOrderService w, ActivityService a, CancellationToken ct) =>
+        {
+            var n = await w.WatchThroughAsync(p.UserId(), id, req, ct);
+            if (n > 0) await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, id, req.SeasonNumber, req.EpisodeNumber, $"{n} episodes up to here in watch order");
+            return Results.Ok(new { added = n });
+        });
         g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             await t.SetShowStatusAsync(p.UserId(), id, req.Status, ct);

@@ -167,6 +167,14 @@ public record TmdbCreditDetail(string? Id, string? MediaType, TmdbCreditMedia? M
 
 public record TmdbSeason(int Id, int SeasonNumber, string? Name, string? Overview, string? PosterPath, string? AirDate, List<TmdbEpisode>? Episodes);
 
+/// <summary>/tv/{id}/episode_groups: a show's alternative orders (chronological, DVD, story arcs...).</summary>
+public record TmdbEpisodeGroups(List<TmdbEpisodeGroupSummary>? Results);
+public record TmdbEpisodeGroupSummary(string Id, string Name, string? Description, int Type, int EpisodeCount, int GroupCount);
+/// <summary>/tv/episode_group/{id}: the parts of an order and their episodes.</summary>
+public record TmdbEpisodeGroup(string Id, string Name, string? Description, int Type, List<TmdbEpisodeGroupPart>? Groups);
+public record TmdbEpisodeGroupPart(string Id, string Name, int Order, List<TmdbEpisodeGroupEpisode>? Episodes);
+public record TmdbEpisodeGroupEpisode(int Id, int ShowId, int SeasonNumber, int EpisodeNumber, string? Name, int Order);
+
 public record TmdbFindEpisode(int Id, int ShowId, int SeasonNumber, int EpisodeNumber, string? Name);
 
 public record TmdbFindResult(

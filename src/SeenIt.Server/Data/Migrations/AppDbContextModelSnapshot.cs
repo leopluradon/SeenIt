@@ -450,6 +450,40 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Episodes");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.EpisodeOrder", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("PartsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ShowTmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShowTmdbId");
+
+                    b.ToTable("EpisodeOrders");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.Favorite", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -892,6 +926,27 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasKey("UserId", "ShowTmdbId");
 
                     b.ToTable("ShowStates");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ShowWatchOrder", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ShowTmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OrderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "ShowTmdbId");
+
+                    b.ToTable("ShowWatchOrders");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.UserList", b =>
@@ -1347,6 +1402,15 @@ namespace SeenIt.Server.Data.Migrations
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.ShowState", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ShowWatchOrder", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()

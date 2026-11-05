@@ -20,9 +20,12 @@ public class ProgressCalculator(AppDbContext db)
         var shows = await db.Shows.AsNoTracking().Where(s => ids.Contains(s.TmdbId))
             .Select(s => new { s.TmdbId, s.Name, s.PosterPath, s.BackdropPath }).ToDictionaryAsync(s => s.TmdbId, ct);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // Shows watched in another order (chronological...) can include specials.
+        var orders = await WatchOrderService.SequencesAsync(db, userId, ids, ct);
+        var ordered = orders.Keys.ToList();
         // Numbers and air dates only; names are fetched afterwards for just the "next up" episodes.
         var episodes = await db.Episodes.AsNoTracking()
-            .Where(e => ids.Contains(e.ShowTmdbId) && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today)
+            .Where(e => ids.Contains(e.ShowTmdbId) && (e.SeasonNumber > 0 || ordered.Contains(e.ShowTmdbId)) && e.AirDate != null && e.AirDate <= today)
             .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.AirDate })
             .ToListAsync(ct);
         var episodesByShow = episodes.ToLookup(e => e.ShowTmdbId);
@@ -39,6 +42,26 @@ public class ProgressCalculator(AppDbContext db)
 
             // During a rewatch only plays since it started count.
             var rewatch = active.GetValueOrDefault(group.Key);
+            var order = orders.TryGetValue(group.Key, out var o) ? o : default;
+
+            if (order.Sequence is { } sequence)
+            {
+                var airedSet = episodesByShow[group.Key].Select(e => (e.SeasonNumber, e.EpisodeNumber)).ToHashSet();
+                var seen = group.Where(w => w.SeasonNumber is not null && (rewatch is null || w.WatchedAt >= rewatch.StartedAt))
+                    .Select(w => (w.SeasonNumber!.Value, w.EpisodeNumber!.Value)).ToHashSet();
+                var airedInOrder = sequence.Where(airedSet.Contains).ToList();
+                var done = airedInOrder.Count(seen.Contains);
+                var up = WatchOrderService.NextUp(airedInOrder, seen);
+                result.Add(new ShowProgressDto(
+                    show.TmdbId, show.Name, show.PosterPath, show.BackdropPath,
+                    airedInOrder.Count, done, group.Max(w => w.WatchedAt),
+                    up is { } u ? new EpisodeRef(u.Item1, u.Item2, null, null) : null,
+                    airedInOrder.Count > 0 && done >= airedInOrder.Count,
+                    states.GetValueOrDefault(group.Key, ShowTrackStatus.Watching),
+                    rewatch?.Number, completedRewatches.GetValueOrDefault(group.Key), order.Name));
+                continue;
+            }
+
             var watched = group.Where(w => w.SeasonNumber > 0 && (rewatch is null || w.WatchedAt >= rewatch.StartedAt))
                 .Select(w => (S: w.SeasonNumber!.Value, E: w.EpisodeNumber!.Value)).ToHashSet();
             var aired = episodesByShow[group.Key]
@@ -73,12 +96,12 @@ public class ProgressCalculator(AppDbContext db)
             var wanted = nexts.Select(n => (n.ShowTmdbId, n.NextEpisode!.SeasonNumber, n.NextEpisode.EpisodeNumber)).ToHashSet();
             var names = (await db.Episodes.AsNoTracking()
                     .Where(e => nextShows.Contains(e.ShowTmdbId) && nextSeasons.Contains(e.SeasonNumber))
-                    .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name }).ToListAsync(ct))
+                    .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name, e.AirDate }).ToListAsync(ct))
                 .Where(e => wanted.Contains((e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber)))
-                .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber), e => e.Name);
+                .ToDictionary(e => (e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber));
             for (var i = 0; i < result.Count; i++)
-                if (result[i].NextEpisode is { } n && names.TryGetValue((result[i].ShowTmdbId, n.SeasonNumber, n.EpisodeNumber), out var name))
-                    result[i] = result[i] with { NextEpisode = n with { Name = name } };
+                if (result[i].NextEpisode is { } n && names.TryGetValue((result[i].ShowTmdbId, n.SeasonNumber, n.EpisodeNumber), out var ep))
+                    result[i] = result[i] with { NextEpisode = n with { Name = ep.Name, AirDate = n.AirDate ?? ep.AirDate } };
         }
 
         return result.OrderByDescending(p => p.LastWatchedAt).ToList();
