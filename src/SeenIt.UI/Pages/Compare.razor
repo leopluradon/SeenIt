@@ -45,8 +45,10 @@ else if (c is not null)
     {
         if (items.Count == 0) continue;
         var kind = Kind(key);
-        var shown = kind switch { "movie" => items.Where(i => i.Media.Type == MediaType.Movie).ToList(), "show" => items.Where(i => i.Media.Type == MediaType.Show).ToList(), _ => items };
-        var expanded = open.Contains(key);
+        var find = finds.GetValueOrDefault(key, "");
+        var searching = !string.IsNullOrWhiteSpace(find);
+        var shown = items.Where(i => (kind == "all" || i.Media.Type == (kind == "movie" ? MediaType.Movie : MediaType.Show)) && TextMatch.Contains(i.Media.Title, find)).ToList();
+        var expanded = open.Contains(key) || searching;   // matches show in full
         <section class="row-section compare-section" @key="key">
             <div class="section-head">
                 <h2>@title <span class="muted small">@shown.Count</span></h2>
@@ -56,13 +58,20 @@ else if (c is not null)
                         <button class="@(kind == "movie" ? "on" : "")" @onclick='() => kinds[key] = "movie"'>Movies</button>
                         <button class="@(kind == "show" ? "on" : "")" @onclick='() => kinds[key] = "show"'>TV</button>
                     </div>
-                    @if (shown.Count > RowSize || expanded)
+                    @if (!searching && (shown.Count > RowSize || expanded))
                     {
                         <button class="section-more link-btn" @onclick="() => Toggle(key)">@(expanded ? "Show less" : $"See all {shown.Count}") <Icon Name="@(expanded ? "chevron-up" : "chevron-down")" Size="16" /></button>
                     }
                 </div>
             </div>
-            @if (shown.Count == 0) { <p class="muted small">None.</p> }
+            @if (items.Count > 1)
+            {
+                <div class="searchbar searchbar-sm compare-find">
+                    <Icon Name="search" Size="16" />
+                    <input type="search" value="@find" @oninput="e => finds[key] = e.Value?.ToString() ?? string.Empty" placeholder="Search this section" aria-label="@($"Search {title}")" />
+                </div>
+            }
+            @if (shown.Count == 0) { <p class="muted small">@(searching ? $"Nothing called “{find.Trim()}” here." : "None.")</p> }
             else
             {
                 <div class="@(expanded ? "poster-grid" : "poster-scroller")">
@@ -85,6 +94,7 @@ else if (c is not null)
     private CompareDto? c;
     private string? error;
     private bool shareOpen;
+    private readonly Dictionary<string, string> finds = [];
     private readonly Dictionary<string, string> kinds = [];
     private readonly HashSet<string> open = [];
 
@@ -100,6 +110,7 @@ else if (c is not null)
         c = null;
         kinds.Clear();
         open.Clear();
+        finds.Clear();
         await Load();
     }
 

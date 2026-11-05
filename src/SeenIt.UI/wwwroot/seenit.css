@@ -1077,3 +1077,6 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
 .fav-empty:hover { border-color: var(--accent); color: var(--text); }
 .fav-four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; max-width: 760px; }
 @media (max-width: 600px) { .fav-four { gap: 8px; } .fav-four .poster-title { font-size: .78rem; } }
+.compare-find { margin: 0 0 10px; }
+.searchbar-sm { padding: 4px 10px; }
+.searchbar-sm input { font-size: .9rem; }
