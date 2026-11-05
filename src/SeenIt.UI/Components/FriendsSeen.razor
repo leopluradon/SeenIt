@@ -52,6 +52,10 @@
             (_, 1) => "watched",
             (_, var n) => $"watched {n}×",
         };
-        return f.LastWatched is { } at ? $"{watched} · {Fmt.Day(DateOnly.FromDateTime(at.LocalDateTime))}" : watched;
+        if (f.LastWatched is not { } at) return watched;
+        var day = DateOnly.FromDateTime(at.LocalDateTime);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var when = day == today ? "today" : day == today.AddDays(-1) ? "yesterday" : day.ToString(day.Year == today.Year ? "MMM d" : "MMM d, yyyy");
+        return $"{watched} · {when}";
     }
 }
