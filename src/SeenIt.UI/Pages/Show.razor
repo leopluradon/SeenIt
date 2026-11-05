@@ -43,7 +43,9 @@ else if (s is not null)
                     <RatingPicker Value="u.Rating" ValueChanged="Rate" />
                 </div>
             }
-            @if (s.User is not null && (s.Progress is not null || s.TrackStatus != ShowTrackStatus.Watching))
+            @* Nothing to pause or drop once an ended show is finished (unless it's mid-rewatch, or already paused/dropped and needs undoing). *@
+            @if (s.User is not null && (s.Progress is not null || s.TrackStatus != ShowTrackStatus.Watching)
+                 && !(s.Status is "Ended" or "Canceled" && s.Progress is { Completed: true, Rewatch: null } && s.TrackStatus == ShowTrackStatus.Watching))
             {
                 <div class="panel status-panel">
                     <span>Status</span>
