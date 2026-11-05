@@ -1089,3 +1089,5 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
 .friends-seen-who { display: inline-flex; align-items: center; gap: 8px; color: var(--text); }
 .friends-seen-rating { margin-left: auto; }
 .avatar-sm { width: 28px; height: 28px; font-size: .85rem; display: grid; place-items: center; flex-shrink: 0; cursor: default; }
+.chip-toggle { display: inline-flex; align-items: center; gap: 4px; }
+.search-hint { margin: -4px 0 12px; }

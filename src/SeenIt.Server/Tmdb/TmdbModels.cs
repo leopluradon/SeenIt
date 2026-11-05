@@ -182,7 +182,8 @@ public record TmdbFindEpisode(int Id, int ShowId, int SeasonNumber, int EpisodeN
 public record TmdbFindResult(
     List<TmdbListItem>? MovieResults,
     List<TmdbListItem>? TvResults,
-    List<TmdbFindEpisode>? TvEpisodeResults);
+    List<TmdbFindEpisode>? TvEpisodeResults,
+    List<TmdbSearchPerson>? PersonResults = null);
 
 public static class TmdbDates
 {

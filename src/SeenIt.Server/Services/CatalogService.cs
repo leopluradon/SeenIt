@@ -243,12 +243,80 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         return new(items, res.Page, res.TotalPages, res.TotalResults);
     }
 
+    private static readonly System.Text.RegularExpressions.Regex ImdbRe = new(@"^(?:https?://)?(?:[a-z]+\.)?imdb\.com/(?:[a-z]{2}/)?(?:title|name)/((?:tt|nm)\d{5,10})|^((?:tt|nm)\d{5,10})$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private static readonly System.Text.RegularExpressions.Regex TmdbRe = new(@"^(?:https?://)?(?:www\.)?themoviedb\.org/(movie|tv|person)/(\d+)(?:-[^/?#]*)?(?:/season/(\d+)(?:/episode/(\d+))?)?",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>Null when the query isn't an id or link (search normally then).</summary>
+    public async Task<LookupResult?> LookupAsync(string query, CancellationToken ct)
+    {
+        query = query.Trim();
+        if (ImdbRe.Match(query) is { Success: true } im)
+        {
+            var id = (im.Groups[1].Success ? im.Groups[1].Value : im.Groups[2].Value).ToLowerInvariant();
+            var found = await tmdb.FindAsync(id, "imdb_id", ct);
+            var titles = (found?.MovieResults ?? []).Select(r => ToSummary(r, MediaType.Movie))
+                .Concat((found?.TvResults ?? []).Select(r => ToSummary(r, MediaType.Show))).ToList();
+            var people = (found?.PersonResults ?? []).Select(Hit).ToList();
+            var ep = found?.TvEpisodeResults?.FirstOrDefault();
+            string? go = titles.Count + people.Count == 1
+                ? titles.Count == 1 ? Href(titles[0]) : $"person/{people[0].Id}"
+                : titles.Count + people.Count == 0 && ep is not null ? $"show/{ep.ShowId}/season/{ep.SeasonNumber}/episode/{ep.EpisodeNumber}" : null;
+            return new LookupResult($"IMDb {id}", titles, people, go);
+        }
+        if (TmdbRe.Match(query) is { Success: true } tm)
+        {
+            var id = int.Parse(tm.Groups[2].Value);
+            switch (tm.Groups[1].Value.ToLowerInvariant())
+            {
+                case "movie":
+                    var movie = await MovieSummaryAsync(id, ct);
+                    return new LookupResult($"TMDB movie {id}", movie is null ? [] : [movie], [], movie is null ? null : $"movie/{id}");
+                case "tv":
+                    var show = await ShowSummaryAsync(id, ct);
+                    var go = show is null ? null
+                        : tm.Groups[4].Success ? $"show/{id}/season/{tm.Groups[3].Value}/episode/{tm.Groups[4].Value}"
+                        : tm.Groups[3].Success ? $"show/{id}/season/{tm.Groups[3].Value}"
+                        : $"show/{id}";
+                    return new LookupResult($"TMDB show {id}", show is null ? [] : [show], [], go);
+                default:
+                    var person = await tmdb.GetPersonAsync(id, ct);
+                    var hit = person is null ? null : new PersonHit(person.Id, person.Name, person.ProfilePath, person.KnownForDepartment, []);
+                    return new LookupResult($"TMDB person {id}", [], hit is null ? [] : [hit], hit is null ? null : $"person/{id}");
+            }
+        }
+        if (query.Length <= 8 && query.All(char.IsAsciiDigit) && int.TryParse(query, out var n) && n > 0)
+        {
+            // A bare number might be either kind of TMDB id (or a title like "1917"): offer both, open neither.
+            var movie = MovieSummaryAsync(n, ct);
+            var show = ShowSummaryAsync(n, ct);
+            var titles = new[] { await movie, await show }.OfType<MediaSummary>().ToList();
+            return new LookupResult($"TMDB id {n}", titles, [], null);
+        }
+        return null;
+    }
+
+    private static string Href(MediaSummary m) => m.Type == MediaType.Movie ? $"movie/{m.TmdbId}" : $"show/{m.TmdbId}";
+
+    private static PersonHit Hit(TmdbSearchPerson p) => new(p.Id, p.Name, p.ProfilePath, p.KnownForDepartment,
+        (p.KnownFor ?? []).Select(k => k.Title ?? k.Name).OfType<string>().Take(3).ToList());
+
+    private async Task<MediaSummary?> MovieSummaryAsync(int id, CancellationToken ct) =>
+        await tmdb.GetMovieAsync(id, full: false, ct) is { } m
+            ? new MediaSummary(MediaType.Movie, m.Id, m.Title, TmdbDates.Parse(m.ReleaseDate)?.Year, m.PosterPath, m.BackdropPath, m.VoteAverage, m.Overview)
+            : null;
+
+    private async Task<MediaSummary?> ShowSummaryAsync(int id, CancellationToken ct) =>
+        await tmdb.GetShowAsync(id, full: false, ct) is { } s
+            ? new MediaSummary(MediaType.Show, s.Id, s.Name, TmdbDates.Parse(s.FirstAirDate)?.Year, s.PosterPath, s.BackdropPath, s.VoteAverage, s.Overview)
+            : null;
+
     public async Task<PagedResult<PersonHit>> SearchPeopleAsync(string query, int page, CancellationToken ct)
     {
         var res = await tmdb.SearchPersonAsync(query, page, ct);
         if (res is null) return new([], 1, 0, 0);
-        var items = res.Results.Select(p => new PersonHit(p.Id, p.Name, p.ProfilePath, p.KnownForDepartment,
-            (p.KnownFor ?? []).Select(k => k.Title ?? k.Name).OfType<string>().Take(3).ToList())).ToList();
+        var items = res.Results.Select(Hit).ToList();
         return new(items, res.Page, res.TotalPages, res.TotalResults);
     }
 

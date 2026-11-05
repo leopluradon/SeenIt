@@ -75,6 +75,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<ExternalScore>> EpisodeScoresAsync(int showId, int season, int episode) =>
         GetAsync<List<ExternalScore>>($"api/catalog/show/{showId}/season/{season}/episode/{episode}/scores");
 
+    /// <summary>An IMDb/TMDB id or link; null when the query isn't one.</summary>
+    public Task<LookupResult?> LookupAsync(string q) => SendAsync<LookupResult>(HttpMethod.Get, $"api/catalog/lookup?q={Uri.EscapeDataString(q)}");
+
     public Task<PagedResult<PersonHit>> SearchPeopleAsync(string q, int page = 1) =>
         GetAsync<PagedResult<PersonHit>>($"api/catalog/search/people?q={Uri.EscapeDataString(q)}&page={page}");
 

@@ -42,6 +42,9 @@ public static class ApiEndpoints
         g.MapGet("/show/{id:int}/season/{season:int}/episode/{episode:int}/scores", (int id, int season, int episode, ScoreService s, CancellationToken ct) =>
             s.EpisodeAsync(id, season, episode, ct));
 
+        g.MapGet("/lookup", async (string q, CatalogService c, CancellationToken ct) =>
+            string.IsNullOrWhiteSpace(q) || await c.LookupAsync(q, ct) is not { } found ? Results.NoContent() : Results.Ok(found));
+
         g.MapGet("/search/people", (string q, int? page, CatalogService c, CancellationToken ct) =>
             string.IsNullOrWhiteSpace(q)
                 ? Task.FromResult(new PagedResult<PersonHit>([], 1, 0, 0))

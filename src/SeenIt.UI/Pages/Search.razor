@@ -17,28 +17,57 @@
     <button class="chip @(Type == "show" ? "on" : "")" @onclick='() => Go(Q, "show")'>Shows</button>
     <button class="chip @(Type == "people" ? "on" : "")" @onclick='() => Go(Q, "people")'>People</button>
     @if (Session.Me is not null) { <button class="chip @(Type == "members" ? "on" : "")" @onclick='() => Go(Q, "members")'>Members</button> }
+    <button class="chip chip-toggle @(Exact ? "on" : "")" aria-pressed="@Exact" @onclick="() => Go(Q, Type, !Exact)" title="Only results named exactly what you typed">
+        @if (Exact) { <Icon Name="check" Size="14" /> } Exact match
+    </button>
 </div>
+<p class="muted small search-hint">Also takes an IMDb or TMDB id or link, like tt0133093 or themoviedb.org/tv/1400.</p>
 
 <ErrorBox Message="@error" />
 @if (loading) { <Spinner /> }
 else if (!string.IsNullOrWhiteSpace(Q))
 {
     var all = Type is null;
-    var nothing = (titles?.Items.Count ?? 0) == 0 && (people?.Items.Count ?? 0) == 0 && (members?.Count ?? 0) == 0;
-    @if (nothing && error is null) { <Empty Title="@($"No results for “{Q}”")" /> }
+    var titleItems = titles?.Items.Where(m => !Exact || TextMatch.Same(m.Title, Q)).ToList() ?? [];
+    var peopleItems = people?.Items.Where(p => !Exact || TextMatch.Same(p.Name, Q)).ToList() ?? [];
+    var memberItems = members?.Where(u => !Exact || TextMatch.Same(u.UserName, Q) || TextMatch.Same(u.Name, Q)).ToList() ?? [];
+    var nothing = titleItems.Count == 0 && peopleItems.Count == 0 && memberItems.Count == 0 && lookup is not { Titles.Count: > 0 } && lookup is not { People.Count: > 0 };
+    @if (nothing && error is null) { <Empty Title="@(Exact ? $"Nothing called exactly “{Q}”" : $"No results for “{Q}”")" /> }
 
-    @if (members is { Count: > 0 })
+    @if (lookup is { } lk && (lk.Titles.Count > 0 || lk.People.Count > 0))
+    {
+        <section class="row-section">
+            <div class="section-head"><h2>@lk.Label</h2></div>
+            <div class="poster-grid">
+                @foreach (var m in lk.Titles) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
+                @foreach (var p in lk.People)
+                {
+                    <a class="cast" href="@($"person/{p.Id}")" @key="p.Id">
+                        @if (Img.Profile(p.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                        else { <div class="cast-fallback">@p.Name[..1]</div> }
+                        <div class="cast-name">@p.Name</div>
+                    </a>
+                }
+            </div>
+        </section>
+    }
+    else if (lookup is { } none && none.Titles.Count == 0 && none.People.Count == 0 && !none.Label.StartsWith("TMDB id"))
+    {
+        <Empty Title="@($"Nothing on TMDB for {none.Label}")" />
+    }
+
+    @if (memberItems.Count > 0)
     {
         <section class="row-section">
             @if (all)
             {
                 <div class="section-head">
                     <h2>Members</h2>
-                    @if (members.Count > MembersShown) { <button class="btn btn-sm btn-ghost" @onclick='() => Go(Q, "members")'>All @members.Count</button> }
+                    @if (memberItems.Count > MembersShown) { <button class="btn btn-sm btn-ghost" @onclick='() => Go(Q, "members")'>All @memberItems.Count</button> }
                 </div>
             }
             <div class="stack search-members">
-                @foreach (var u in all ? members.Take(MembersShown) : members)
+                @foreach (var u in all ? memberItems.Take(MembersShown) : memberItems)
                 {
                     <UserRow User="u" UserChanged="Changed" @key="u.UserName" />
                 }
@@ -46,18 +75,18 @@ else if (!string.IsNullOrWhiteSpace(Q))
         </section>
     }
 
-    @if (people is { Items.Count: > 0 })
+    @if (people is not null && peopleItems.Count > 0)
     {
         <section class="row-section">
             @if (all)
             {
                 <div class="section-head">
                     <h2>People</h2>
-                    @if (people.TotalResults > people.Items.Count || people.Items.Count > PeopleShown) { <button class="btn btn-sm btn-ghost" @onclick='() => Go(Q, "people")'>More people</button> }
+                    @if (people.TotalResults > people.Items.Count || peopleItems.Count > PeopleShown) { <button class="btn btn-sm btn-ghost" @onclick='() => Go(Q, "people")'>More people</button> }
                 </div>
             }
             <div class="@(all ? "cast-scroller" : "people-grid")">
-                @foreach (var p in all ? people.Items.Take(PeopleShown) : people.Items)
+                @foreach (var p in all ? peopleItems.Take(PeopleShown) : peopleItems)
                 {
                     <a class="cast" href="@($"person/{p.Id}")" @key="p.Id">
                         @if (Img.Profile(p.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
@@ -74,12 +103,12 @@ else if (!string.IsNullOrWhiteSpace(Q))
         </section>
     }
 
-    @if (titles is { Items.Count: > 0 })
+    @if (titleItems.Count > 0)
     {
         <section class="row-section">
-            @if (all && (people?.Items.Count > 0 || members?.Count > 0)) { <div class="section-head"><h2>Movies & shows</h2></div> }
+            @if (all && (peopleItems.Count > 0 || memberItems.Count > 0 || lookup is { Titles.Count: > 0 })) { <div class="section-head"><h2>Movies & shows</h2></div> }
             <div class="poster-grid">
-                @foreach (var m in titles.Items) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
+                @foreach (var m in titleItems) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
             </div>
         </section>
     }
@@ -88,6 +117,9 @@ else if (!string.IsNullOrWhiteSpace(Q))
 @code {
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "type")] public string? Type { get; set; }
+    [SupplyParameterFromQuery(Name = "exact")] public string? ExactParam { get; set; }
+    private bool Exact => ExactParam == "1";
+    private LookupResult? lookup;
     private const int PeopleShown = 12, MembersShown = 4;
     private string input = "";
     private ElementReference box;
@@ -112,10 +144,15 @@ else if (!string.IsNullOrWhiteSpace(Q))
         titles = null;
         people = null;
         members = null;
+        lookup = null;
         error = null;
         if (string.IsNullOrWhiteSpace(Q)) return;
         loading = true;
         var q = Q.Trim();
+        // An IMDb/TMDB id or link: open it straight away when it's one thing, or list what it matches.
+        try { lookup = await Api.LookupAsync(q); } catch { lookup = null; }
+        if (lookup?.Go is { } go) { Nav.NavigateTo(go, replace: true); return; }
+        if (lookup is not null && !lookup.Label.StartsWith("TMDB id")) { loading = false; return; }   // a link isn't a title to search for
         var signedIn = Session.Me is not null;
         // Each kind loads on its own, so one failing (or being slow) doesn't hide the others.
         var titleTask = Type is null or "movie" or "show" ? Api.SearchAsync(q, Type) : null;
@@ -163,11 +200,13 @@ else if (!string.IsNullOrWhiteSpace(Q))
         if (i >= 0) members[i] = u;
     }
 
-    private void Submit() => Go(input, Type);
+    private void Submit() => Go(input, Type, Exact);
 
-    private void Go(string? q, string? type)
+    private void Go(string? q, string? type) => Go(q, type, Exact);
+
+    private void Go(string? q, string? type, bool exact)
     {
         if (string.IsNullOrWhiteSpace(q)) return;
-        Nav.NavigateTo($"search?q={Uri.EscapeDataString(q.Trim())}" + (type is null ? "" : $"&type={type}"));
+        Nav.NavigateTo($"search?q={Uri.EscapeDataString(q.Trim())}" + (type is null ? "" : $"&type={type}") + (exact ? "&exact=1" : ""));
     }
 }

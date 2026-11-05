@@ -162,6 +162,12 @@ public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int TotalPages, i
 /// </summary>
 public record ExternalScore(string Source, string Name, double Value, double Max, bool Percent, int? Votes, string? Url);
 
+/// <summary>
+/// What a search for an id or link found: an IMDb id/URL (tt…, nm…), a TMDB URL, or a bare number
+/// (tried as a TMDB movie and show id). Go is the page to open when it's one unambiguous thing.
+/// </summary>
+public record LookupResult(string Label, IReadOnlyList<MediaSummary> Titles, IReadOnlyList<PersonHit> People, string? Go);
+
 /// <summary>A person from search, with what they're best known for.</summary>
 public record PersonHit(int Id, string Name, string? ProfilePath, string? Department, IReadOnlyList<string> KnownFor);
 

@@ -141,6 +141,13 @@ public static class TextMatch
         return q.Length == 0 || Fold(title).Contains(q, StringComparison.Ordinal);
     }
 
+    /// <summary>The whole title equals the query, ignoring case, accents and punctuation ("exact match").</summary>
+    public static bool Same(string title, string? query)
+    {
+        var q = Fold(query);
+        return q.Length > 0 && Fold(title) == q;
+    }
+
     private static string Fold(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return "";
