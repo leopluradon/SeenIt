@@ -5,7 +5,7 @@
     <section class="panel where-to-watch">
         <div class="section-head">
             <h2>Where to watch</h2>
-            <a class="muted small" href="settings#region" title="Change country">@Flag(d.Region) @d.Region</a>
+            <a class="muted small" href="settings#region" title="Change country">@if (d.Region.Length == 2 && d.Region.All(char.IsAsciiLetter)) { <img class="flag" src="@($"https://flagcdn.com/{d.Region.ToLowerInvariant()}.svg")" alt="" width="20" height="15" onerror="this.remove()" /> } @d.Region</a>
         </div>
         @foreach (var (label, items) in Groups(d))
         {
@@ -49,7 +49,4 @@ else if (data is { IsEmpty: true } && ShowEmpty)
         new (string, IReadOnlyList<ProviderDto>)[] { ("Stream", d.Stream), ("Free", d.Free), ("With ads", d.Ads), ("Rent", d.Rent), ("Buy", d.Buy) }
             .Where(g => g.Item2.Count > 0);
 
-    private static string Flag(string region) => region.Length == 2
-        ? string.Concat(region.ToUpperInvariant().Select(c => char.ConvertFromUtf32(0x1F1E6 + c - 'A')))
-        : "";
 }

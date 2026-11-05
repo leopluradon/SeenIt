@@ -1070,3 +1070,4 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
 /* "Season N only / Seasons 1–N" in the up-to-here dialog */
 .watch-scope { display: flex; }
 .watch-scope button { flex: 1; justify-content: center; text-align: center; }
+.flag { display: inline-block; vertical-align: -2px; border-radius: 2px; margin-right: 4px; object-fit: cover; box-shadow: 0 0 0 1px var(--border); }
