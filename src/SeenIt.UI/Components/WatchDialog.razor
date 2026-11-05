@@ -1,7 +1,15 @@
 @* "When did you watch it?" Right now, on release, another date, or unknown. *@
 <Modal Open="Open" OpenChanged="OpenChanged" Title="@(Heading ?? (Through ? $"When did you watch everything up to {What}?" : $"When did you watch {What}?"))">
     <div class="stack">
-        @if (Through) { <p class="muted small">Also marks every earlier episode you haven't watched@(ThroughNote).</p> }
+        @if (Through && ScopeSeason is > 1 and var sn)
+        {
+            <div class="segmented watch-scope" role="radiogroup" aria-label="How far back">
+                <button type="button" role="radio" aria-checked="@seasonOnly" class="@(seasonOnly ? "on" : "")" @onclick="() => seasonOnly = true">Season @sn only</button>
+                <button type="button" role="radio" aria-checked="@(!seasonOnly)" class="@(seasonOnly ? "" : "on")" @onclick="() => seasonOnly = false">Seasons 1–@sn</button>
+            </div>
+            <p class="muted small">Also marks the earlier episodes you haven't watched @(seasonOnly ? $"in season {sn}" : $"in seasons 1–{sn}").</p>
+        }
+        else if (Through) { <p class="muted small">Also marks every earlier episode you haven't watched@(ThroughNote).</p> }
         <button class="btn btn-primary btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Now))"><Icon Name="check" Size="16" /> Right now</button>
         @if (Bulk || Through)
         {
@@ -39,8 +47,10 @@
     [Parameter] public bool Through { get; set; }
     /// <summary>Appended to the "Also marks every earlier episode" line, e.g. " in season order".</summary>
     [Parameter] public string ThroughNote { get; set; } = ", in season order";
+    /// <summary>With Through: the episode's season. Above 1 it offers "Season N only" or "Seasons 1–N".</summary>
+    [Parameter] public int? ScopeSeason { get; set; }
     private string custom = "";
-    private bool badDate, wasOpen;
+    private bool badDate, wasOpen, seasonOnly = true;
 
     protected override void OnParametersSet()
     {
@@ -50,6 +60,7 @@
             var start = Initial is { } i && !WatchDates.IsUnknown(i) ? i.LocalDateTime : DateTime.Now;
             custom = start.ToString("yyyy-MM-ddTHH:mm");
             badDate = false;
+            seasonOnly = true;   // the narrower choice: marking too much is the harder mistake to undo
         }
         wasOpen = Open;
     }
@@ -70,7 +81,7 @@
     {
         // Start the pick before closing: handlers read which item was pending synchronously,
         // and the parent may clear that when the dialog closes.
-        var picked = OnPick.InvokeAsync(choice with { Through = Through });
+        var picked = OnPick.InvokeAsync(choice with { Through = Through, SeasonOnly = Through && ScopeSeason is > 1 && seasonOnly });
         await OpenChanged.InvokeAsync(false);
         await picked;
     }

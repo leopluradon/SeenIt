@@ -276,7 +276,8 @@ public enum WatchTime { Now, ReleaseDate, Custom, Unknown }
 
 /// <summary>What the "when did you watch it?" dialog returns.</summary>
 /// <summary>Through: also mark everything before it (when the dialog offered that).</summary>
-public record WatchChoice(WatchTime When, DateTimeOffset? At = null, bool Through = false);
+/// SeasonOnly: "up to here" stays within the episode's season.
+public record WatchChoice(WatchTime When, DateTimeOffset? At = null, bool Through = false, bool SeasonOnly = false);
 
 public record WatchRequest(
     MediaType Type,
@@ -861,4 +862,5 @@ public record SetWatchOrderRequest(string? OrderId);
 /// as watched: in the watch order you follow when InOrder is set, otherwise in TMDB's season order
 /// (specials only up to a special).
 /// </summary>
-public record WatchThroughRequest(int SeasonNumber, int? EpisodeNumber, WatchTime When, DateTimeOffset? WatchedAt = null, bool InOrder = false);
+public record WatchThroughRequest(int SeasonNumber, int? EpisodeNumber, WatchTime When, DateTimeOffset? WatchedAt = null, bool InOrder = false,
+    bool SeasonOnly = false);   // TMDB order only: start from the season's first episode, not the show's

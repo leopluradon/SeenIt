@@ -1,5 +1,20 @@
 // Small browser helpers for the shared SeenIt UI.
 window.seenit = {
+    // Escape closes the dialog on top. Each open dialog registers here; the newest one wins.
+    _dialogs: [],
+    dialogOpened(id, dotnet) {
+        this._dialogs = this._dialogs.filter(d => d.id !== id);
+        this._dialogs.push({ id, dotnet });
+        if (!this._escBound) {
+            this._escBound = true;
+            document.addEventListener('keydown', e => {
+                if (e.key !== 'Escape' || e.defaultPrevented || !this._dialogs.length) return;
+                e.preventDefault();
+                this._dialogs[this._dialogs.length - 1].dotnet.invokeMethodAsync('Escape');
+            });
+        }
+    },
+    dialogClosed(id) { this._dialogs = this._dialogs.filter(d => d.id !== id); },
     // Color theme: <html data-theme> drives the CSS; remembered on this device so the next start
     // (see the snippet in index.html) paints in it straight away.
     applyTheme(key, bg) {

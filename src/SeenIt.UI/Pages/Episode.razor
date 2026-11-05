@@ -115,7 +115,7 @@ else if (e is not null)
     <CastRow Cast="e.GuestStars" Title="Guest stars" />
 
     <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch"
-                 Through="through" ThroughNote="@(Season == 0 ? " (specials only)" : ", in season order")" />
+                 Through="through" ThroughNote="@(Season == 0 ? " (specials only)" : ", in season order")" ScopeSeason="@(Season > 1 && Number > 1 ? Season : null)" />
     <EditPlayDialog @bind-Play="editing" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnSaved="Reload" />
 }
 
@@ -155,7 +155,7 @@ else if (e is not null)
     }
 
     private Task Watch(WatchChoice c) => c.Through
-        ? Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Season, Number, c.When, c.At)), c)))
+        ? Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Season, Number, c.When, c.At, SeasonOnly: c.SeasonOnly)), c)))
         : Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
 
     private Task RemovePlay(PlayDto p) => Act(async () =>

@@ -1066,3 +1066,7 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
 .rating-picker.stars .star button.left { left: 0; }
 .rating-picker.stars .star button.right { right: 0; }
 .rating-picker.stars .rating-value { margin-left: 6px; }
+
+/* "Season N only / Seasons 1–N" in the up-to-here dialog */
+.watch-scope { display: flex; }
+.watch-scope button { flex: 1; justify-content: center; text-align: center; }

@@ -1,3 +1,5 @@
+@implements IAsyncDisposable
+@inject IJSRuntime Js
 @if (Open)
 {
     <div class="modal-backdrop" @onclick="Close"></div>
@@ -14,5 +16,35 @@
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
     [Parameter] public string Title { get; set; } = "";
     [Parameter] public RenderFragment? ChildContent { get; set; }
+    private readonly string id = Guid.NewGuid().ToString("N");
+    private DotNetObjectReference<Modal>? self;
+    private bool registered;
+
     private Task Close() => OpenChanged.InvokeAsync(false);
+
+    /// <summary>Called from seenit.js when Escape is pressed and this is the dialog on top.</summary>
+    [JSInvokable] public Task Escape() => InvokeAsync(Close);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open == registered) return;
+        registered = Open;
+        try
+        {
+            if (Open) await Js.InvokeVoidAsync("seenit.dialogOpened", id, self ??= DotNetObjectReference.Create(this));
+            else await Js.InvokeVoidAsync("seenit.dialogClosed", id);
+        }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }   // prerendering, no JS yet
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (registered)
+        {
+            try { await Js.InvokeVoidAsync("seenit.dialogClosed", id); }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException) { }
+        }
+        self?.Dispose();
+    }
 }

@@ -53,7 +53,8 @@
 </section>
 <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
              What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch"
-             Through="pendingThrough" ThroughNote="@(selected == 0 ? " (specials only)" : ", in season order")" />
+             Through="pendingThrough" ThroughNote="@(selected == 0 ? " (specials only)" : ", in season order")"
+             ScopeSeason="@(pending is { SeasonNumber: > 1, EpisodeNumber: > 1 } ps ? ps.SeasonNumber : null)" />
 @code {
     [Parameter, EditorRequired] public int ShowId { get; set; }
     [Parameter] public int CurrentSeason { get; set; }
@@ -91,7 +92,7 @@
         busy = true;
         try
         {
-            if (c.Through) Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At)), c));
+            if (c.Through) Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At, SeasonOnly: c.SeasonOnly)), c));
             else
             {
                 await Api.WatchAsync(Fmt.Watch(MediaType.Episode, ShowId, c, e.SeasonNumber, e.EpisodeNumber));

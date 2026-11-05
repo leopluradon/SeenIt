@@ -163,7 +163,7 @@ public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService 
             // TMDB's order: seasons then episodes. Specials only lead up to other specials.
             var specials = req.SeasonNumber == 0;
             sequence = (await db.Episodes.AsNoTracking()
-                    .Where(e => e.ShowTmdbId == showId && (specials ? e.SeasonNumber == 0 : e.SeasonNumber > 0))
+                    .Where(e => e.ShowTmdbId == showId && (specials ? e.SeasonNumber == 0 : req.SeasonOnly ? e.SeasonNumber == req.SeasonNumber : e.SeasonNumber > 0))
                     .Select(e => new { e.SeasonNumber, e.EpisodeNumber }).ToListAsync(ct))
                 .OrderBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).Select(e => (e.SeasonNumber, e.EpisodeNumber)).ToList();
         }
