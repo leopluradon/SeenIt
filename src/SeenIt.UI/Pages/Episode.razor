@@ -105,12 +105,13 @@ else if (e is not null)
         }
     </nav>
 
-    <SeasonEpisodes ShowId="Id" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" />
+    <SeasonEpisodes ShowId="Id" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" OnChanged="Reload" CanWatch="e.Plays is not null" />
 
     <CastRow Cast="@(e.Cast ?? [])" Title="Cast" />
     <CastRow Cast="e.GuestStars" Title="Guest stars" />
 
-    <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch" />
+    <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch"
+                 ThroughLabel="@(Seen ? null : Fmt.ThroughLabel(Season, Number))" ThroughHint="@Fmt.ThroughHint(Season)" />
     <EditPlayDialog @bind-Play="editing" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnSaved="Reload" />
 }
 
@@ -149,8 +150,9 @@ else if (e is not null)
         busy = false;
     }
 
-    private Task Watch(WatchChoice c) =>
-        Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
+    private Task Watch(WatchChoice c) => c.Through
+        ? Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Season, Number, c.When, c.At)), c)))
+        : Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
 
     private Task RemovePlay(PlayDto p) => Act(async () =>
     {
@@ -159,7 +161,7 @@ else if (e is not null)
     }, "Play removed");
 
     private Task Rate(int? value) => value is { } v
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, v, Season, Number)), $"Rated {v}/10")
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, v, Season, Number)), $"Rated {Fmt.Rating(v)}")
         : Act(async () =>
         {
             var old = e!.Rating;

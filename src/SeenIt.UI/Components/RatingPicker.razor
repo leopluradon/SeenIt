@@ -1,14 +1,40 @@
-@* 1–10 rating, shown as ten pips; click the current value again to clear. *@
-<div class="rating-picker @(Compact ? "compact" : "")" role="radiogroup" aria-label="Your rating" @onmouseleave="() => hover = null">
-    @for (var i = 1; i <= 10; i++)
-    {
-        var n = i;
-        <button type="button" role="radio" aria-checked="@(Value == n)" aria-label="@n out of 10"
-                class="pip @((hover ?? Value) >= n ? "on" : "")"
-                @onmouseenter="() => hover = n" @onclick="() => Pick(n)"></button>
-    }
-    <span class="rating-value">@((hover ?? Value)?.ToString() ?? "–")</span>
-</div>
+@* 1–10 rating: ten pips, or five stars with halves when the user picked 5-star ratings
+   (stored as 1–10 either way). Click the current value again to clear. *@
+@if (Fmt.FiveStars)
+{
+    <div class="rating-picker stars @(Compact ? "compact" : "")" role="radiogroup" aria-label="Your rating" @onmouseleave="() => hover = null">
+        @for (var star = 1; star <= 5; star++)
+        {
+            var full = star * 2;
+            var shown = hover ?? Value ?? 0;
+            var fill = shown >= full ? "full" : shown == full - 1 ? "half" : "";
+            <span class="star @fill">
+                <Icon Name="star" Size="@(Compact ? 18 : 24)" />
+                <span class="star-fill" aria-hidden="true"><Icon Name="star" Size="@(Compact ? 18 : 24)" /></span>
+                @for (var h = 1; h >= 0; h--)
+                {
+                    var n = full - h;
+                    <button type="button" role="radio" aria-checked="@(Value == n)" aria-label="@($"{Fmt.Stars(n)} stars")"
+                            class="@(h == 1 ? "left" : "right")" @onmouseenter="() => hover = n" @onclick="() => Pick(n)"></button>
+                }
+            </span>
+        }
+        <span class="rating-value">@((hover ?? Value) is { } v ? Fmt.Stars(v) : "–")</span>
+    </div>
+}
+else
+{
+    <div class="rating-picker @(Compact ? "compact" : "")" role="radiogroup" aria-label="Your rating" @onmouseleave="() => hover = null">
+        @for (var i = 1; i <= 10; i++)
+        {
+            var n = i;
+            <button type="button" role="radio" aria-checked="@(Value == n)" aria-label="@n out of 10"
+                    class="pip @((hover ?? Value) >= n ? "on" : "")"
+                    @onmouseenter="() => hover = n" @onclick="() => Pick(n)"></button>
+        }
+        <span class="rating-value">@((hover ?? Value)?.ToString() ?? "–")</span>
+    </div>
+}
 @code {
     [Parameter] public int? Value { get; set; }
     [Parameter] public EventCallback<int?> ValueChanged { get; set; }

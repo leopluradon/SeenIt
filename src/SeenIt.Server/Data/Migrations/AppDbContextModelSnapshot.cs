@@ -233,6 +233,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("FiveStarRatings")
+                        .HasColumnType("boolean");
+
                     b.PrimitiveCollection<List<string>>("HiddenHomeSections")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -484,6 +487,26 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("EpisodeOrders");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.ExternalScoreCache", b =>
+                {
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("FetchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Json")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Type", "TmdbId");
+
+                    b.ToTable("ExternalScores");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.Favorite", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -554,6 +577,23 @@ namespace SeenIt.Server.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Goals");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ImdbRating", b =>
+                {
+                    b.Property<string>("ImdbId")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<double>("Rating")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("Votes")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ImdbId");
+
+                    b.ToTable("ImdbRatings");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.ImportJob", b =>
@@ -820,6 +860,21 @@ namespace SeenIt.Server.Data.Migrations
                     NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber"), false);
 
                     b.ToTable("Ratings");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ServerState", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("ServerState");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.ShowMeta", b =>

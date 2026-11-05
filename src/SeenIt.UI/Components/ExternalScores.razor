@@ -1,0 +1,35 @@
+@* Scores from IMDb, Rotten Tomatoes, Metacritic, Letterboxd... loaded after the page itself. *@
+@inject ApiClient Api
+@if (scores is { Count: > 0 })
+{
+    <div class="ext-scores">
+        @foreach (var s in scores)
+        {
+            var text = s.Percent ? $"{s.Value:0}%" : s.Max == 100 ? $"{s.Value:0}" : $"{s.Value:0.0#}";
+            var title = $"{s.Name}: {text}{(s.Percent ? "" : $" out of {s.Max:0}")}{(s.Votes is { } v ? $" · {v:N0} votes" : "")}";
+            @if (s.Url is { } url)
+            {
+                <a class="ext-score src-@s.Source" href="@url" target="_blank" rel="noopener noreferrer" title="@title"><b>@text</b> <span>@s.Name</span></a>
+            }
+            else
+            {
+                <span class="ext-score src-@s.Source" title="@title"><b>@text</b> <span>@s.Name</span></span>
+            }
+        }
+    </div>
+}
+@code {
+    [Parameter, EditorRequired] public MediaType Type { get; set; }
+    [Parameter, EditorRequired] public int TmdbId { get; set; }
+    private List<ExternalScore>? scores;
+    private (MediaType, int) loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedFor == (Type, TmdbId)) return;
+        loadedFor = (Type, TmdbId);
+        scores = null;
+        try { scores = await Api.ScoresAsync(Type, TmdbId); }
+        catch { scores = null; }   // extra scores are a nicety; the page is fine without them
+    }
+}

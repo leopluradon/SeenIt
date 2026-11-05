@@ -36,6 +36,15 @@ public static class ApiEndpoints
                 ? Task.FromResult(new PagedResult<MediaSummary>([], 1, 0, 0))
                 : c.SearchAsync(q.Trim(), type, page ?? 1, ct));
 
+        // Other sites' scores (IMDb, Rotten Tomatoes, Metacritic...), loaded after the page.
+        g.MapGet("/movie/{id:int}/scores", (int id, ScoreService s, CancellationToken ct) => s.GetAsync(MediaType.Movie, id, ct));
+        g.MapGet("/show/{id:int}/scores", (int id, ScoreService s, CancellationToken ct) => s.GetAsync(MediaType.Show, id, ct));
+
+        g.MapGet("/search/people", (string q, int? page, CatalogService c, CancellationToken ct) =>
+            string.IsNullOrWhiteSpace(q)
+                ? Task.FromResult(new PagedResult<PersonHit>([], 1, 0, 0))
+                : c.SearchPeopleAsync(q.Trim(), page ?? 1, ct));
+
         g.MapGet("/browse/{type}/{*list}", (MediaType type, string list, int? page, CatalogService c, CancellationToken ct) =>
             c.BrowseAsync(type, list, page ?? 1, ct));
 
@@ -234,10 +243,11 @@ public static class ApiEndpoints
             await a.LogAsync(p, ActivityKind.WatchOrder, MediaType.Show, id, detail: req.OrderId ?? "TMDB seasons");
             return Results.NoContent();
         });
-        g.MapPost("/shows/{id:int}/order/watch-through", async (int id, WatchThroughRequest req, ClaimsPrincipal p, WatchOrderService w, ActivityService a, CancellationToken ct) =>
+        g.MapPost("/shows/{id:int}/watch-through", async (int id, WatchThroughRequest req, ClaimsPrincipal p, WatchOrderService w, ActivityService a, CancellationToken ct) =>
         {
             var n = await w.WatchThroughAsync(p.UserId(), id, req, ct);
-            if (n > 0) await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, id, req.SeasonNumber, req.EpisodeNumber, $"{n} episodes up to here in watch order");
+            if (n > 0) await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, id, req.SeasonNumber, req.EpisodeNumber,
+                $"{n} episodes up to here{(req.InOrder ? " in watch order" : "")}");
             return Results.Ok(new { added = n });
         });
         g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>

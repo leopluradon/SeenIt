@@ -62,6 +62,31 @@ public static class Fmt
     public static WatchRequest Watch(MediaType type, int id, WatchChoice c, int? season = null, int? episode = null) =>
         new(type, id, season, episode, c.At, c.When);
 
+    /// <summary>The signed-in user shows ratings as 0.5–5 stars (stored as 1–10 either way).</summary>
+    public static bool FiveStars { get; set; }
+
+    /// <summary>A rating in the user's scale: "8/10" or "4/5".</summary>
+    public static string Rating(int r) => FiveStars ? $"{Stars(r)}/5" : $"{r}/10";
+    /// <summary>The number alone: "8", or "4.5" in stars.</summary>
+    public static string Stars(int r) => FiveStars ? (r / 2.0).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) : r.ToString();
+    /// <summary>Poster badge: "★ 8" or "★ 4.5".</summary>
+    public static string RatingBadge(int r) => $"★ {Stars(r)}";
+    /// <summary>An average or difference of 1–10 ratings, in the user's scale.</summary>
+    public static string Avg(double v) => (FiveStars ? v / 2 : v).ToString("0.0");
+    /// <summary>Rating distribution buckets labeled "1".."10", relabeled for stars.</summary>
+    public static IReadOnlyList<CountBucket> RatingBuckets(IReadOnlyList<CountBucket> b) =>
+        FiveStars ? b.Select(x => int.TryParse(x.Label, out var n) ? x with { Label = Stars(n) } : x).ToList() : b;
+
+    /// <summary>Toast text after "everything up to here".</summary>
+    public static string Through(int added, WatchChoice c) =>
+        added == 0 ? "Already watched all of those" : $"Marked {added} episode{(added == 1 ? "" : "s")} watched{When(c)}";
+
+    /// <summary>The "everything up to here" choice in the watch dialog, unless it's the very first episode.</summary>
+    public static string? ThroughLabel(int season, int episode) => season <= 1 && episode <= 1 ? null : "Everything up to here";
+    public static string ThroughHint(int season) => season == 0
+        ? "Also marks the earlier specials you haven't watched."
+        : "Also marks every earlier episode you haven't watched, in season order (specials aside).";
+
     /// <summary>Toast text for a watch choice, e.g. "on 3 Feb 2024".</summary>
     public static string When(WatchChoice c) => c.When switch
     {

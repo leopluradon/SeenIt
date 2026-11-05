@@ -17,6 +17,7 @@
             {
                 <div class="score"><Icon Name="star" Size="16" /> <b>@Score.Value.ToString("0.0")</b> <span class="muted small">TMDB · @Votes?.ToString("N0") votes</span></div>
             }
+            @if (ScoresFor is { } sf) { <ExternalScores Type="sf.Type" TmdbId="sf.Id" /> }
             <div class="actions">@Actions</div>
         </div>
     </div>
@@ -29,6 +30,8 @@
     [Parameter] public string? Backdrop { get; set; }
     [Parameter] public double? Score { get; set; }
     [Parameter] public int? Votes { get; set; }
+    /// <summary>Also show other sites' scores for this title.</summary>
+    [Parameter] public (MediaType Type, int Id)? ScoresFor { get; set; }
     [Parameter] public RenderFragment? Facts { get; set; }
     [Parameter] public RenderFragment? Actions { get; set; }
 }

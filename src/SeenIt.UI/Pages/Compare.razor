@@ -126,11 +126,11 @@ else if (c is not null)
     private static string? Ratings(CompareItem i) =>
         i.A is null && i.B is null ? i.Media.Year?.ToString() : $"{Star(i.A)} · {Star(i.B)}";
 
-    private static string Star(int? r) => r is { } v ? $"★{v}" : "–";
+    private static string Star(int? r) => r is { } v ? $"★{Fmt.Stars(v)}" : "–";
 
     private string? RatingsLong(CompareItem i) =>
         i.A is null && i.B is null ? null
-        : $"{c!.A.Name}: {(i.A is { } a ? $"{a}/10" : "not rated")} · {c.B.Name}: {(i.B is { } b ? $"{b}/10" : "not rated")}";
+        : $"{c!.A.Name}: {(i.A is { } a ? Fmt.Rating(a) : "not rated")} · {c.B.Name}: {(i.B is { } b ? Fmt.Rating(b) : "not rated")}";
 
 
     private IEnumerable<(string, (long Value, string Text), (long Value, string Text))> Rows()

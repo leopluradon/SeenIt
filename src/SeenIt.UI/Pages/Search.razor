@@ -2,40 +2,99 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @inject IJSRuntime Js
+@inject SessionState Session
 <PageTitle>Search · SeenIt</PageTitle>
 
 <h1>Search</h1>
 <form class="searchbar" @onsubmit="Submit" role="search">
     <Icon Name="search" Size="18" />
-    <input type="search" @ref="box" @bind="input" placeholder="Movies and TV shows" aria-label="Search" enterkeyhint="search" />
+    <input type="search" @ref="box" @bind="input" placeholder="@(Session.Me is null ? "Movies, shows and people" : "Movies, shows, people and members")" aria-label="Search" enterkeyhint="search" />
     <button class="btn btn-primary" type="submit">Search</button>
 </form>
 <div class="chips">
     <button class="chip @(Type is null ? "on" : "")" @onclick='() => Go(Q, null)'>All</button>
     <button class="chip @(Type == "movie" ? "on" : "")" @onclick='() => Go(Q, "movie")'>Movies</button>
     <button class="chip @(Type == "show" ? "on" : "")" @onclick='() => Go(Q, "show")'>Shows</button>
+    <button class="chip @(Type == "people" ? "on" : "")" @onclick='() => Go(Q, "people")'>People</button>
+    @if (Session.Me is not null) { <button class="chip @(Type == "members" ? "on" : "")" @onclick='() => Go(Q, "members")'>Members</button> }
 </div>
 
 <ErrorBox Message="@error" />
 @if (loading) { <Spinner /> }
-else if (result is not null)
+else if (!string.IsNullOrWhiteSpace(Q))
 {
-    @if (result.Items.Count == 0) { <Empty Title="@($"No results for “{Q}”")" /> }
-    else
+    var all = Type is null;
+    var nothing = (titles?.Items.Count ?? 0) == 0 && (people?.Items.Count ?? 0) == 0 && (members?.Count ?? 0) == 0;
+    @if (nothing && error is null) { <Empty Title="@($"No results for “{Q}”")" /> }
+
+    @if (members is { Count: > 0 })
     {
-        <div class="poster-grid">
-            @foreach (var m in result.Items) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
-        </div>
+        <section class="row-section">
+            @if (all)
+            {
+                <div class="section-head">
+                    <h2>Members</h2>
+                    @if (members.Count > MembersShown) { <button class="btn btn-sm btn-ghost" @onclick='() => Go(Q, "members")'>All @members.Count</button> }
+                </div>
+            }
+            <div class="stack search-members">
+                @foreach (var u in all ? members.Take(MembersShown) : members)
+                {
+                    <UserRow User="u" UserChanged="Changed" @key="u.UserName" />
+                }
+            </div>
+        </section>
+    }
+
+    @if (people is { Items.Count: > 0 })
+    {
+        <section class="row-section">
+            @if (all)
+            {
+                <div class="section-head">
+                    <h2>People</h2>
+                    @if (people.TotalResults > people.Items.Count || people.Items.Count > PeopleShown) { <button class="btn btn-sm btn-ghost" @onclick='() => Go(Q, "people")'>More people</button> }
+                </div>
+            }
+            <div class="@(all ? "cast-scroller" : "people-grid")">
+                @foreach (var p in all ? people.Items.Take(PeopleShown) : people.Items)
+                {
+                    <a class="cast" href="@($"person/{p.Id}")" @key="p.Id">
+                        @if (Img.Profile(p.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                        else { <div class="cast-fallback">@p.Name[..1]</div> }
+                        <div class="cast-name">@p.Name</div>
+                        <div class="cast-role muted small">@PersonSub(p)</div>
+                    </a>
+                }
+            </div>
+            @if (!all && people.Page < people.TotalPages)
+            {
+                <button class="btn btn-block" disabled="@more" @onclick="MorePeople">@(more ? "Loading…" : "Show more")</button>
+            }
+        </section>
+    }
+
+    @if (titles is { Items.Count: > 0 })
+    {
+        <section class="row-section">
+            @if (all && (people?.Items.Count > 0 || members?.Count > 0)) { <div class="section-head"><h2>Movies & shows</h2></div> }
+            <div class="poster-grid">
+                @foreach (var m in titles.Items) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
+            </div>
+        </section>
     }
 }
 
 @code {
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "type")] public string? Type { get; set; }
+    private const int PeopleShown = 12, MembersShown = 4;
     private string input = "";
     private ElementReference box;
-    private PagedResult<MediaSummary>? result;
-    private bool loading;
+    private PagedResult<MediaSummary>? titles;
+    private PagedResult<PersonHit>? people;
+    private List<UserCard>? members;
+    private bool loading, more;
     private string? error;
 
     // "autofocus" only works on a full page load, not when Blazor swaps pages, so focus it here.
@@ -50,13 +109,58 @@ else if (result is not null)
     protected override async Task OnParametersSetAsync()
     {
         input = Q ?? "";
-        result = null;
+        titles = null;
+        people = null;
+        members = null;
         error = null;
         if (string.IsNullOrWhiteSpace(Q)) return;
         loading = true;
-        try { result = await Api.SearchAsync(Q, Type); }
+        var q = Q.Trim();
+        var signedIn = Session.Me is not null;
+        // Each kind loads on its own, so one failing (or being slow) doesn't hide the others.
+        var titleTask = Type is null or "movie" or "show" ? Api.SearchAsync(q, Type) : null;
+        var peopleTask = Type is null or "people" ? Api.SearchPeopleAsync(q) : null;
+        var memberTask = signedIn && Type is null or "members" && q.Length >= 2 ? Api.SearchUsersAsync(q) : null;
+        try { if (titleTask is not null) titles = await titleTask; }
         catch (Exception ex) { error = ex.Message; }
+        try { if (peopleTask is not null) people = await peopleTask; }
+        catch (Exception ex) { error ??= ex.Message; }
+        try { if (memberTask is not null) members = await memberTask; }
+        catch (Exception ex) { if (Type == "members") error ??= ex.Message; }
         loading = false;
+    }
+
+    private static string PersonSub(PersonHit p) =>
+        string.Join(" · ", new[] { Dept(p.Department), p.KnownFor.FirstOrDefault() }.Where(x => !string.IsNullOrEmpty(x)));
+
+    private static string? Dept(string? d) => d switch
+    {
+        "Acting" => "Actor",
+        "Directing" => "Director",
+        "Writing" => "Writer",
+        "Production" => "Producer",
+        null or "" => null,
+        _ => d,
+    };
+
+    private async Task MorePeople()
+    {
+        if (people is null || string.IsNullOrWhiteSpace(Q)) return;
+        more = true;
+        try
+        {
+            var next = await Api.SearchPeopleAsync(Q.Trim(), people.Page + 1);
+            people = next with { Items = [.. people.Items, .. next.Items.Where(n => people.Items.All(p => p.Id != n.Id))] };
+        }
+        catch (Exception ex) { error = ex.Message; }
+        more = false;
+    }
+
+    private void Changed(UserCard u)
+    {
+        if (members is null) return;
+        var i = members.FindIndex(m => m.UserName == u.UserName);
+        if (i >= 0) members[i] = u;
     }
 
     private void Submit() => Go(input, Type);

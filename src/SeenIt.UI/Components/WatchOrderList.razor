@@ -29,10 +29,9 @@
                             @if (!e.Watched && aired)
                             {
                                 <div class="order-actions">
-                                    <button class="btn btn-sm" disabled="@busy" @onclick="() => pending = e" title="Mark watched">
+                                    <button class="btn btn-sm" disabled="@busy" @onclick="() => pending = e" title="Mark watched" aria-label="@($"Mark {Label(e)} watched")">
                                         <Icon Name="check" Size="14" />
                                     </button>
-                                    @if (e.Position > 1) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => through = e" title="Mark everything up to here watched">Up to here</button> }
                                 </div>
                             }
                         </li>
@@ -44,15 +43,14 @@
 </section>
 
 <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
-             What="@(pending is { } p ? Label(p) : "")" ReleaseDate="pending?.AirDate" OnPick="WatchOne" />
-<WatchDialog Open="through is not null" OpenChanged="o => { if (!o) through = null; }" Bulk="true"
-             Heading="@(through is { } t ? $"When did you watch everything up to {Label(t)}?" : null)" What="these" OnPick="WatchThrough" />
+             What="@(pending is { } p ? Label(p) : "")" ReleaseDate="pending?.AirDate" OnPick="WatchOne"
+             ThroughLabel="@(pending is { Position: > 1 } ? "Everything up to here" : null)" ThroughHint="@($"Also marks every earlier episode in {Order.Name} you haven't watched.")" />
 
 @code {
     [Parameter, EditorRequired] public int ShowId { get; set; }
     [Parameter, EditorRequired] public WatchOrderDto Order { get; set; } = default!;
     [Parameter] public EventCallback OnChanged { get; set; }
-    private WatchOrderEpisode? pending, through;
+    private WatchOrderEpisode? pending;
     private bool busy;
 
     private static string Label(WatchOrderEpisode e) => e.SeasonNumber == 0 ? $"Special {e.EpisodeNumber}" : Fmt.Ep(e.SeasonNumber, e.EpisodeNumber);
@@ -64,23 +62,13 @@
         busy = true;
         try
         {
-            await Api.WatchAsync(Fmt.Watch(MediaType.Episode, ShowId, c, e.SeasonNumber, e.EpisodeNumber));
-            Toasts.Show($"Watched {Label(e)}{Fmt.When(c)}");
-            await OnChanged.InvokeAsync();
-        }
-        catch (Exception ex) { Toasts.Error(ex); }
-        finally { busy = false; }
-    }
-
-    private async Task WatchThrough(WatchChoice c)
-    {
-        if (through is not { } e) return;
-        through = null;
-        busy = true;
-        try
-        {
-            var n = await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At));
-            Toasts.Show(n == 0 ? "Already watched all of those" : $"Marked {n} episode{(n == 1 ? "" : "s")} watched{Fmt.When(c)}");
+            if (c.Through)
+                Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At, InOrder: true)), c));
+            else
+            {
+                await Api.WatchAsync(Fmt.Watch(MediaType.Episode, ShowId, c, e.SeasonNumber, e.EpisodeNumber));
+                Toasts.Show($"Watched {Label(e)}{Fmt.When(c)}");
+            }
             await OnChanged.InvokeAsync();
         }
         catch (Exception ex) { Toasts.Error(ex); }

@@ -22,6 +22,8 @@ public record TmdbListItem(
     string? OriginalTitle = null,
     string? OriginalName = null);
 
+public record TmdbSearchPerson(int Id, string Name, string? ProfilePath, string? KnownForDepartment, List<TmdbListItem>? KnownFor);
+
 public record TmdbGenre(int Id, string Name);
 public record TmdbRole(string? Character, int EpisodeCount);
 /// <summary>Movie credits carry Character; TV aggregate credits carry Roles instead.</summary>

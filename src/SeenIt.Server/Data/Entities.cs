@@ -23,6 +23,8 @@ public class AppUser : IdentityUser<Guid>
     public List<string> HomeOrder { get; set; } = [];
     /// <summary>Color theme key (UiPrefs.Themes); null means the default.</summary>
     public string? Theme { get; set; }
+    /// <summary>Show and give ratings as 0.5–5 stars instead of 1–10 (stored as 1–10 either way).</summary>
+    public bool FiveStarRatings { get; set; }
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
     public List<string> Tabs { get; set; } = [];
 
@@ -409,4 +411,28 @@ public class ShowWatchOrder
     public int ShowTmdbId { get; set; }
     public string OrderId { get; set; } = "";
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>IMDb's own rating for a title, from its daily public ratings file (datasets.imdbws.com).</summary>
+public class ImdbRating
+{
+    public string ImdbId { get; set; } = "";
+    public double Rating { get; set; }
+    public int Votes { get; set; }
+}
+
+/// <summary>Scores from other sites (Rotten Tomatoes, Metacritic, Letterboxd...) via MDBList, cached for a few days.</summary>
+public class ExternalScoreCache
+{
+    public MediaType Type { get; set; }
+    public int TmdbId { get; set; }
+    public string Json { get; set; } = "[]";
+    public DateTimeOffset FetchedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>Small bits of server state (e.g. when the IMDb ratings were last loaded).</summary>
+public class ServerState
+{
+    public string Key { get; set; } = "";
+    public string Value { get; set; } = "";
 }

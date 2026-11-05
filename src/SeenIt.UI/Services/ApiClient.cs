@@ -69,6 +69,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     // ---------- Catalog ----------
 
+    public Task<List<ExternalScore>> ScoresAsync(MediaType type, int id) =>
+        GetAsync<List<ExternalScore>>($"api/catalog/{(type == MediaType.Movie ? "movie" : "show")}/{id}/scores");
+
+    public Task<PagedResult<PersonHit>> SearchPeopleAsync(string q, int page = 1) =>
+        GetAsync<PagedResult<PersonHit>>($"api/catalog/search/people?q={Uri.EscapeDataString(q)}&page={page}");
+
     public Task<PagedResult<MediaSummary>> SearchAsync(string q, string? type = null, int page = 1) =>
         GetAsync<PagedResult<MediaSummary>>($"api/catalog/search?q={Uri.EscapeDataString(q)}&page={page}" + (type is null ? "" : $"&type={type}"));
     public Task<PagedResult<MediaSummary>> BrowseAsync(MediaType type, string list, int page = 1) =>
@@ -251,7 +257,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<WatchOrderDto?> WatchOrderAsync(int showId) => SendAsync<WatchOrderDto>(HttpMethod.Get, $"api/shows/{showId}/order");
     public Task SetWatchOrderAsync(int showId, string? orderId) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/order", new SetWatchOrderRequest(orderId));
     public async Task<int> WatchThroughAsync(int showId, WatchThroughRequest r) =>
-        (await SendAsync<AddedResult>(HttpMethod.Post, $"api/shows/{showId}/order/watch-through", r))?.Added ?? 0;
+        (await SendAsync<AddedResult>(HttpMethod.Post, $"api/shows/{showId}/watch-through", r))?.Added ?? 0;
     private sealed record AddedResult(int Added);
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");
     public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content)

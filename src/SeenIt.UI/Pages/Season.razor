@@ -88,9 +88,11 @@ else if (season is not null)
     </div>
     <CastRow Cast="@(season.Cast ?? [])" Title="Cast this season" />
 
-    <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason" />
+    <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason"
+                 OnlyLabel="This season" ThroughLabel="@(Number > 1 ? $"Seasons 1–{Number}" : null)" ThroughHint="Also marks every episode of the earlier seasons you haven't watched." />
     <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
-                 What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch" />
+                 What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch"
+                 ThroughLabel="@(pending is { } pt && (pt.Plays == 0 || Rewatching) ? Fmt.ThroughLabel(pt.SeasonNumber, pt.EpisodeNumber) : null)" ThroughHint="@Fmt.ThroughHint(Number)" />
 }
 
 @code {
@@ -134,6 +136,8 @@ else if (season is not null)
     {
         if (pending is not { } e) return Task.CompletedTask;
         pending = null;
+        if (c.Through)
+            return Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At)), c)));
         return Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, e.SeasonNumber, e.EpisodeNumber)), $"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}{Fmt.When(c)}");
     }
     private Task Unwatch(EpisodeDto e) => Act(async () =>
@@ -141,15 +145,16 @@ else if (season is not null)
         var removed = await Api.UnwatchAsync(MediaType.Episode, Id, e.SeasonNumber, e.EpisodeNumber);
         undo = () => Api.RestorePlaysAsync(removed.Plays);
     }, "Removed from history");
-    private Task WatchSeason(WatchChoice c) =>
-        Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, Number, c.At, When: c.When)), $"Marked {season!.Name} watched{Fmt.When(c)}");
+    private Task WatchSeason(WatchChoice c) => c.Through
+        ? Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Number, null, c.When, c.At)), c)))
+        : Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, Number, c.At, When: c.When)), $"Marked {season!.Name} watched{Fmt.When(c)}");
     private Task UnwatchSeason() => Act(async () =>
     {
         var removed = await Api.UnwatchAsync(MediaType.Episode, Id, Number);
         undo = () => Api.RestorePlaysAsync(removed.Plays);
     }, "Season removed from history");
     private Task Rate(EpisodeDto e, int? v) => v is { } r
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, r, e.SeasonNumber, e.EpisodeNumber)), $"Rated {r}/10")
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, r, e.SeasonNumber, e.EpisodeNumber)), $"Rated {Fmt.Rating(r)}")
         : Act(async () =>
         {
             var old = e.Rating;

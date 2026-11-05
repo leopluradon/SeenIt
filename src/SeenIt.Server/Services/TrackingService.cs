@@ -115,7 +115,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         await db.Rewatches.Where(r => r.UserId == userId && r.ShowTmdbId == showId && r.CompletedAt == null).ExecuteDeleteAsync(ct) > 0;
 
     /// <summary>Marks the rewatch finished once every aired regular episode has been played since it started.</summary>
-    private async Task CompleteRewatchIfDoneAsync(Guid userId, int showId, CancellationToken ct)
+    public async Task CompleteRewatchIfDoneAsync(Guid userId, int showId, CancellationToken ct)
     {
         var rewatch = await db.Rewatches.FirstOrDefaultAsync(r => r.UserId == userId && r.ShowTmdbId == showId && r.CompletedAt == null, ct);
         if (rewatch is null) return;

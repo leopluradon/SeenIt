@@ -30,6 +30,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<EpisodeOrder> EpisodeOrders => Set<EpisodeOrder>();
     public DbSet<ShowWatchOrder> ShowWatchOrders => Set<ShowWatchOrder>();
     public DbSet<LetterboxdSync> LetterboxdSyncs => Set<LetterboxdSync>();
+    public DbSet<ImdbRating> ImdbRatings => Set<ImdbRating>();
+    public DbSet<ExternalScoreCache> ExternalScores => Set<ExternalScoreCache>();
+    public DbSet<ServerState> ServerState => Set<ServerState>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -130,6 +133,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             e.HasKey(x => new { x.UserId, x.ShowTmdbId });
             e.Property(x => x.OrderId).HasMaxLength(64);
+        });
+        b.Entity<ImdbRating>(e =>
+        {
+            e.HasKey(x => x.ImdbId);
+            e.Property(x => x.ImdbId).HasMaxLength(16);
+        });
+        b.Entity<ExternalScoreCache>(e => e.HasKey(x => new { x.Type, x.TmdbId }));
+        b.Entity<ServerState>(e =>
+        {
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(64);
         });
         b.Entity<LetterboxdSync>(e =>
         {

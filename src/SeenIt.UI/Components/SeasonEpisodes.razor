@@ -1,5 +1,6 @@
 @* Every episode of a season, with a picker to browse the show's other seasons in place. *@
 @inject ApiClient Api
+@inject Toasts Toasts
 <section class="row-section season-episodes">
     <div class="section-head">
         <h2>Episodes</h2>
@@ -24,7 +25,7 @@
             {
                 var current = e.SeasonNumber == CurrentSeason && e.EpisodeNumber == CurrentEpisode;
                 var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
-                <li @key="(e.SeasonNumber, e.EpisodeNumber)">
+                <li @key="(e.SeasonNumber, e.EpisodeNumber)" class="ep-item">
                     <a class="ep-row @(current ? "current" : "") @(e.Plays > 0 ? "watched" : "") @(aired ? "" : "unaired")"
                        href="@Fmt.EpisodeHref(ShowId, e.SeasonNumber, e.EpisodeNumber)" aria-current="@(current ? "page" : null)">
                         <span class="ep-num">@e.EpisodeNumber</span>
@@ -35,17 +36,29 @@
                         @if (e.Plays > 0) { <span class="ep-check" title="@($"Watched{(e.Plays > 1 ? $" {e.Plays}×" : "")}")"><Icon Name="check" Size="16" /></span> }
                         else if (!aired) { <span class="pill pill-sm">Upcoming</span> }
                     </a>
+                    @if (CanWatch && e.Plays == 0 && aired)
+                    {
+                        <button class="btn btn-sm ep-mark" disabled="@busy" @onclick="() => pending = e" title="Mark watched" aria-label="@($"Mark {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)} watched")"><Icon Name="check" Size="14" /></button>
+                    }
                 </li>
             }
         </ol>
         <a class="small" href="@($"show/{ShowId}/season/{selected}")">Open @(selected == 0 ? "Specials" : $"Season {selected}") <Icon Name="chevron-right" Size="14" /></a>
     }
 </section>
+<WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
+             What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch"
+             ThroughLabel="@(pending is { } pt ? Fmt.ThroughLabel(pt.SeasonNumber, pt.EpisodeNumber) : null)" ThroughHint="@Fmt.ThroughHint(selected)" />
 @code {
     [Parameter, EditorRequired] public int ShowId { get; set; }
     [Parameter] public int CurrentSeason { get; set; }
     [Parameter] public int CurrentEpisode { get; set; }
     [Parameter] public IReadOnlyList<SeasonSummary> Seasons { get; set; } = [];
+    /// <summary>Signed in: unwatched episodes get a ✓ button.</summary>
+    [Parameter] public bool CanWatch { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private EpisodeDto? pending;
+    private bool busy;
     private int selected = -1;
     private SeasonDetail? season;
     private bool loading;
@@ -63,6 +76,26 @@
         {
             await Load(CurrentSeason); // refresh watched ticks after marking something
         }
+    }
+
+    private async Task Watch(WatchChoice c)
+    {
+        if (pending is not { } e) return;
+        pending = null;
+        busy = true;
+        try
+        {
+            if (c.Through) Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At)), c));
+            else
+            {
+                await Api.WatchAsync(Fmt.Watch(MediaType.Episode, ShowId, c, e.SeasonNumber, e.EpisodeNumber));
+                Toasts.Show($"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}{Fmt.When(c)}");
+            }
+            await Load(selected);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
     }
 
     private Task Pick(ChangeEventArgs e) => int.TryParse(e.Value?.ToString(), out var n) ? Load(n) : Task.CompletedTask;

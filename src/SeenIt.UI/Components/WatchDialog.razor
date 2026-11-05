@@ -1,8 +1,16 @@
 @* "When did you watch it?" Right now, on release, another date, or unknown. *@
 <Modal Open="Open" OpenChanged="OpenChanged" Title="@(Heading ?? $"When did you watch {What}?")">
     <div class="stack">
+        @if (ThroughLabel is not null)
+        {
+            <div class="segmented watch-scope" role="radiogroup" aria-label="What to mark">
+                <button type="button" role="radio" aria-checked="@(!through)" class="@(through ? "" : "on")" @onclick="() => through = false">@(OnlyLabel ?? "Just this one")</button>
+                <button type="button" role="radio" aria-checked="@through" class="@(through ? "on" : "")" @onclick="() => through = true">@ThroughLabel</button>
+            </div>
+            @if (through && ThroughHint is not null) { <p class="muted small">@ThroughHint</p> }
+        }
         <button class="btn btn-primary btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Now))"><Icon Name="check" Size="16" /> Right now</button>
-        @if (Bulk)
+        @if (Bulk || through)
         {
             <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release dates <span class="muted small">(each episode's air date)</span></button>
         }
@@ -34,8 +42,12 @@
     /// <summary>Where "Other date" starts (editing a play); otherwise now.</summary>
     [Parameter] public DateTimeOffset? Initial { get; set; }
     [Parameter] public string? Heading { get; set; }
+    /// <summary>Offers marking everything before it too ("Everything up to here"); null hides the choice.</summary>
+    [Parameter] public string? ThroughLabel { get; set; }
+    [Parameter] public string? OnlyLabel { get; set; }
+    [Parameter] public string? ThroughHint { get; set; }
     private string custom = "";
-    private bool badDate, wasOpen;
+    private bool badDate, wasOpen, through;
 
     protected override void OnParametersSet()
     {
@@ -45,6 +57,7 @@
             var start = Initial is { } i && !WatchDates.IsUnknown(i) ? i.LocalDateTime : DateTime.Now;
             custom = start.ToString("yyyy-MM-ddTHH:mm");
             badDate = false;
+            through = false;
         }
         wasOpen = Open;
     }
@@ -65,7 +78,7 @@
     {
         // Start the pick before closing: handlers read which item was pending synchronously,
         // and the parent may clear that when the dialog closes.
-        var picked = OnPick.InvokeAsync(choice);
+        var picked = OnPick.InvokeAsync(choice with { Through = through && ThroughLabel is not null });
         await OpenChanged.InvokeAsync(false);
         await picked;
     }

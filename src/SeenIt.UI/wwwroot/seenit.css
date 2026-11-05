@@ -1037,3 +1037,35 @@ html[data-theme="nord"] {
 .order-part a.ep-main, .order-part a.ep-main:hover { color: var(--text); }
 .order-part.single { background: none; border: 0; padding: 0; }
 .order-part.single > summary { display: none; }
+
+/* "Just this one / Everything up to here" in the watch dialog */
+.watch-scope { display: flex; }
+.watch-scope button { flex: 1; justify-content: center; text-align: center; }
+.ep-item { display: flex; align-items: center; gap: 6px; }
+.ep-item > .ep-row { flex: 1; }
+.ep-item > .ep-mark { flex: none; align-self: stretch; padding: 0 12px; }
+.season-cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.season-mark { align-self: flex-start; }
+.people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 18px 14px; margin-bottom: 14px; }
+.people-grid .cast img, .people-grid .cast-fallback { width: 100%; height: auto; aspect-ratio: 4/5; }
+.search-members { gap: 8px; }
+
+/* Other sites' scores under the TMDB score */
+.ext-scores { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+.ext-score { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: .82rem; }
+a.ext-score:hover { border-color: var(--accent); color: var(--text); }
+.ext-score span { color: var(--text-2); }
+.score + .ext-scores { margin-top: -8px; margin-bottom: 16px; }
+
+/* Five-star picker: each star has a left (half) and right (full) hit area */
+.rating-picker.stars { gap: 2px; }
+.rating-picker.stars .star { position: relative; display: inline-flex; color: var(--surface-3); line-height: 0; }
+.rating-picker.stars .star svg { fill: var(--surface-3); stroke: var(--surface-3); }
+.rating-picker.stars .star-fill { position: absolute; inset: 0 auto 0 0; width: 0; overflow: hidden; pointer-events: none; }
+.rating-picker.stars .star-fill svg { fill: var(--warn); stroke: var(--warn); }
+.rating-picker.stars .star.half .star-fill { width: 50%; }
+.rating-picker.stars .star.full .star-fill { width: 100%; }
+.rating-picker.stars .star button { position: absolute; top: 0; bottom: 0; width: 50%; border: 0; padding: 0; background: none; cursor: pointer; }
+.rating-picker.stars .star button.left { left: 0; }
+.rating-picker.stars .star button.right { right: 0; }
+.rating-picker.stars .rating-value { margin-left: 6px; }

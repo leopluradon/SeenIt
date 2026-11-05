@@ -73,6 +73,12 @@ public class TmdbClient
     public Task<TmdbPage<TmdbListItem>?> SearchMultiAsync(string query, int page, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbListItem>>($"search/multi?query={Uri.EscapeDataString(query)}&page={page}&include_adult=false", TimeSpan.FromMinutes(30), ct);
 
+    public Task<TmdbExternalIds?> GetExternalIdsAsync(string kind, int id, CancellationToken ct = default) =>
+        GetAsync<TmdbExternalIds>($"{kind}/{id}/external_ids", TimeSpan.FromDays(1), ct);
+
+    public Task<TmdbPage<TmdbSearchPerson>?> SearchPersonAsync(string query, int page, CancellationToken ct = default) =>
+        GetAsync<TmdbPage<TmdbSearchPerson>>($"search/person?query={Uri.EscapeDataString(query)}&page={page}&include_adult=false", TimeSpan.FromMinutes(30), ct);
+
     public Task<TmdbPage<TmdbListItem>?> SearchMovieAsync(string query, int? year, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbListItem>>($"search/movie?query={Uri.EscapeDataString(query)}&include_adult=false" + (year is { } y ? $"&primary_release_year={y}" : ""), TimeSpan.FromHours(6), ct);
 

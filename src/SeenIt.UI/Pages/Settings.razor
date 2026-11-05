@@ -294,6 +294,15 @@
             </div>
         </section>
 
+        <section class="panel" id="ratings">
+            <h2>Ratings</h2>
+            <p class="muted small">How you give and see ratings. Changing it never changes your ratings: 4½ stars and 9/10 are the same rating.</p>
+            <div class="segmented">
+                <button class="@(Fmt.FiveStars ? "" : "on")" @onclick="() => SaveScale(false)">1–10</button>
+                <button class="@(Fmt.FiveStars ? "on" : "")" @onclick="() => SaveScale(true)">★ 5 stars, with halves</button>
+            </div>
+        </section>
+
         <section class="panel" id="appearance">
             <h2>Appearance</h2>
             <p class="muted small">Color theme, saved to your account so it follows you to every device.</p>
@@ -723,6 +732,18 @@
             await Api.SetPreferencesAsync(new PreferencesRequest(HideSpoilers: hide, BlurSpoilerImages: blur));
             Session.Update(me => me with { HideSpoilers = hide, BlurSpoilerImages = blur });
             Toasts.Show(hide ? "Spoilers hidden" : "Spoilers shown");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task SaveScale(bool five)
+    {
+        if (five == Fmt.FiveStars) return;
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(FiveStarRatings: five));
+            Session.Update(me => me with { FiveStarRatings = five });
+            Toasts.Show(five ? "Ratings shown as 5 stars" : "Ratings shown out of 10");
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

@@ -43,7 +43,7 @@ public record MeDto(
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
     DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null,
-    IReadOnlyList<string>? HomeOrder = null, string? Theme = null);
+    IReadOnlyList<string>? HomeOrder = null, string? Theme = null, bool FiveStarRatings = false);
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(
@@ -54,7 +54,8 @@ public record PreferencesRequest(
     string? TrackingSince = null,   // yyyy-MM-dd; "" clears it
     string? TimeZone = null,        // IANA id, e.g. America/New_York; "" = follow the device
     IReadOnlyList<string>? HomeOrder = null,    // home section keys, top to bottom
-    string? Theme = null);                      // key from UiPrefs.Themes; "" = default
+    string? Theme = null,                       // key from UiPrefs.Themes; "" = default
+    bool? FiveStarRatings = null);
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }
@@ -154,6 +155,15 @@ public record MediaSummary(
     string? Overview);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int TotalPages, int TotalResults);
+
+/// <summary>
+/// A title's score on another site. Value is as that site shows it (7.8, 94, 3.9); Max is its scale
+/// (10, 100, 5); Percent marks %-style scores (Rotten Tomatoes).
+/// </summary>
+public record ExternalScore(string Source, string Name, double Value, double Max, bool Percent, int? Votes, string? Url);
+
+/// <summary>A person from search, with what they're best known for.</summary>
+public record PersonHit(int Id, string Name, string? ProfilePath, string? Department, IReadOnlyList<string> KnownFor);
 
 public record CastMember(int Id, string Name, string? Character, string? ProfilePath, int? EpisodeCount = null);
 public record CrewMember(int Id, string Name, string Job, string? ProfilePath);
@@ -265,7 +275,8 @@ public record SeasonDetail(
 public enum WatchTime { Now, ReleaseDate, Custom, Unknown }
 
 /// <summary>What the "when did you watch it?" dialog returns.</summary>
-public record WatchChoice(WatchTime When, DateTimeOffset? At = null);
+/// <summary>Through: also mark everything before it (when the dialog offered that).</summary>
+public record WatchChoice(WatchTime When, DateTimeOffset? At = null, bool Through = false);
 
 public record WatchRequest(
     MediaType Type,
@@ -845,5 +856,9 @@ public record WatchOrderDto(string Id, string Name, string? Description, int Air
 public record WatchOrderPart(string Name, IReadOnlyList<WatchOrderEpisode> Episodes);
 public record WatchOrderEpisode(int Position, int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate, int? Runtime, bool Watched, bool IsNext);
 public record SetWatchOrderRequest(string? OrderId);
-/// <summary>Mark everything in the order up to and including this episode as watched.</summary>
-public record WatchThroughRequest(int SeasonNumber, int EpisodeNumber, WatchTime When, DateTimeOffset? WatchedAt = null);
+/// <summary>
+/// Mark everything up to and including this episode (or, without an episode, the end of this season)
+/// as watched: in the watch order you follow when InOrder is set, otherwise in TMDB's season order
+/// (specials only up to a special).
+/// </summary>
+public record WatchThroughRequest(int SeasonNumber, int? EpisodeNumber, WatchTime When, DateTimeOffset? WatchedAt = null, bool InOrder = false);

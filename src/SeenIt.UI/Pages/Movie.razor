@@ -8,7 +8,7 @@
 @if (m is null && error is null) { <Spinner /> }
 else if (m is not null)
 {
-    <MediaHero Title="@m.Title" Year="m.ReleaseDate?.Year" Tagline="@m.Tagline" Poster="@m.PosterPath" Backdrop="@m.BackdropPath" Score="m.VoteAverage" Votes="m.VoteCount">
+    <MediaHero Title="@m.Title" Year="m.ReleaseDate?.Year" Tagline="@m.Tagline" Poster="@m.PosterPath" Backdrop="@m.BackdropPath" Score="m.VoteAverage" Votes="m.VoteCount" ScoresFor="(MediaType.Movie, Id)">
         <Facts>
             @if (m.ReleaseDate is { } d) { <span>@d.ToString("MMM d, yyyy")</span> }
             @if (m.Runtime is > 0) { <span>@Fmt.Runtime(m.Runtime)</span> }
@@ -209,7 +209,7 @@ else if (m is not null)
         : Act(() => Api.AddToWatchlistAsync(MediaType.Movie, Id), "Added to watchlist");
 
     private Task Rate(int? value) => value is { } v
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Movie, Id, v)), $"Rated {v}/10")
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Movie, Id, v)), $"Rated {Fmt.Rating(v)}")
         : Act(async () =>
         {
             var old = m!.User!.Rating;

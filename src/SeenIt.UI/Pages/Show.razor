@@ -7,7 +7,7 @@
 @if (s is null && error is null) { <Spinner /> }
 else if (s is not null)
 {
-    <MediaHero Title="@s.Name" Year="s.FirstAirDate?.Year" Tagline="@s.Tagline" Poster="@s.PosterPath" Backdrop="@s.BackdropPath" Score="s.VoteAverage" Votes="s.VoteCount">
+    <MediaHero Title="@s.Name" Year="s.FirstAirDate?.Year" Tagline="@s.Tagline" Poster="@s.PosterPath" Backdrop="@s.BackdropPath" Score="s.VoteAverage" Votes="s.VoteCount" ScoresFor="(MediaType.Show, Id)">
         <Facts>
             @if (s.Networks.Count > 0) { <span>@string.Join(", ", s.Networks)</span> }
             <span>@s.NumberOfSeasons season@(s.NumberOfSeasons == 1 ? "" : "s") · @s.NumberOfEpisodes episodes</span>
@@ -87,7 +87,7 @@ else if (s is not null)
                     @if (p.Rewatch is null && (p.Completed || p.RewatchesCompleted > 0))
                     {
                         <div class="inline spread next-ep">
-                            <span class="muted small">@(p.RewatchesCompleted > 0 ? $"You've been through it {p.RewatchesCompleted + 1} times." : "Fancy going through it again?")</span>
+                            <span class="muted small">@(p.RewatchesCompleted > 0 ? $"You've been through it {p.RewatchesCompleted + 1} times." : "")</span>
                             <button class="btn btn-sm" disabled="@busy" @onclick="StartRewatch"><Icon Name="repeat" Size="14" /> Start a rewatch</button>
                         </div>
                     }
@@ -132,7 +132,8 @@ else if (s is not null)
         <div class="season-grid">
             @foreach (var season in s.Seasons)
             {
-                <a class="season-card" href="@($"show/{Id}/season/{season.SeasonNumber}")" @key="season.SeasonNumber">
+                <div class="season-cell" @key="season.SeasonNumber">
+                <a class="season-card" href="@($"show/{Id}/season/{season.SeasonNumber}")">
                     <div class="poster">
                         @if (Img.Poster(season.PosterPath ?? s.PosterPath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
                         @if (season.EpisodeCount > 0 && season.Watched >= season.EpisodeCount) { <span class="poster-badge done"><Icon Name="check" Size="14" /></span> }
@@ -142,6 +143,11 @@ else if (s is not null)
                     @if (season.CompletedAt is { } done) { <div class="poster-sub ok">Finished @done.ToLocalTime().ToString("MMM d, yyyy")</div> }
                     @if (s.User is not null && season.EpisodeCount > 0) { <ProgressBar Value="season.Watched" Max="season.EpisodeCount" /> }
                 </a>
+                @if (s.User is not null && season.Watched < season.EpisodeCount && season.AirDate is { } sad && sad <= DateOnly.FromDateTime(DateTime.Today))
+                {
+                    <button class="btn btn-sm btn-ghost season-mark" disabled="@busy" @onclick="() => pendingSeason = season"><Icon Name="check" Size="14" /> Mark watched</button>
+                }
+                </div>
             }
         </div>
     </section>
@@ -155,6 +161,9 @@ else if (s is not null)
         <WatchDialog @bind-Open="watchAllOpen" What="every aired episode" Bulk="true" OnPick="WatchAll" />
         <WatchDialog Open="pendingEpisode is not null" OpenChanged="o => { if (!o) pendingEpisode = null; }"
                      What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode" />
+        <WatchDialog Open="pendingSeason is not null" OpenChanged="o => { if (!o) pendingSeason = null; }" What="@(pendingSeason?.Name ?? "")" Bulk="true" OnPick="WatchSeason"
+                     OnlyLabel="This season" ThroughLabel="@(pendingSeason is { SeasonNumber: > 1 } ps ? $"Seasons 1–{ps.SeasonNumber}" : null)"
+                     ThroughHint="Also marks every episode of the earlier seasons you haven't watched." />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Title="@s.Name" />
     }
@@ -218,6 +227,7 @@ else if (s is not null)
     private string? error;
     private bool busy, watchAllOpen, listOpen, fixOpen;
     private EpisodeRef? pendingEpisode;
+    private SeasonSummary? pendingSeason;
     private WatchOrdersDto? orders;
     private WatchOrderDto? order;
 
@@ -276,6 +286,15 @@ else if (s is not null)
     private Task WatchAll(WatchChoice c) =>
         Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, null, c.At, When: c.When)), $"Marked all aired episodes watched{Fmt.When(c)}");
 
+    private Task WatchSeason(WatchChoice c)
+    {
+        if (pendingSeason is not { } season) return Task.CompletedTask;
+        pendingSeason = null;
+        return c.Through
+            ? Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(season.SeasonNumber, null, c.When, c.At)), c)))
+            : Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, season.SeasonNumber, c.At, When: c.When)), $"Marked {season.Name} watched{Fmt.When(c)}");
+    }
+
     private Task WatchEpisode(WatchChoice c)
     {
         if (pendingEpisode is not { } n) return Task.CompletedTask;
@@ -300,7 +319,7 @@ else if (s is not null)
         : Act(() => Api.AddToWatchlistAsync(MediaType.Show, Id), "Added to watchlist");
 
     private Task Rate(int? value) => value is { } v
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Show, Id, v)), $"Rated {v}/10")
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Show, Id, v)), $"Rated {Fmt.Rating(v)}")
         : Act(async () =>
         {
             var old = s!.User!.Rating;

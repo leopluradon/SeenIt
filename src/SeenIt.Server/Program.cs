@@ -126,6 +126,11 @@ builder.Services.AddScoped<GoalService>();
 builder.Services.AddScoped<UserDataCache>();
 builder.Services.AddScoped<WatchOrderService>();
 builder.Services.AddScoped<ShareCardService>();
+builder.Services.Configure<MdbListOptions>(config.GetSection("MdbList"));
+builder.Services.AddHttpClient("mdblist", c => c.Timeout = TimeSpan.FromSeconds(8));
+builder.Services.AddHttpClient("imdb", c => c.Timeout = TimeSpan.FromMinutes(5));
+builder.Services.AddScoped<ScoreService>();
+builder.Services.AddHostedService<ImdbRatingsWorker>();
 
 var app = builder.Build();
 

@@ -243,6 +243,15 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         return new(items, res.Page, res.TotalPages, res.TotalResults);
     }
 
+    public async Task<PagedResult<PersonHit>> SearchPeopleAsync(string query, int page, CancellationToken ct)
+    {
+        var res = await tmdb.SearchPersonAsync(query, page, ct);
+        if (res is null) return new([], 1, 0, 0);
+        var items = res.Results.Select(p => new PersonHit(p.Id, p.Name, p.ProfilePath, p.KnownForDepartment,
+            (p.KnownFor ?? []).Select(k => k.Title ?? k.Name).OfType<string>().Take(3).ToList())).ToList();
+        return new(items, res.Page, res.TotalPages, res.TotalResults);
+    }
+
     public async Task<PagedResult<MediaSummary>> BrowseAsync(MediaType type, string list, int page, CancellationToken ct)
     {
         var allowed = type == MediaType.Movie

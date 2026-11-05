@@ -29,6 +29,8 @@ services:
       # The Android app, put there by scripts/publish-apk.sh, served at /download/SeenIt.apk.
       SeenIt__DownloadsDir: /downloads
       # Optional: leave SMTP_HOST empty to turn off email (password reset).
+      # Optional: a free mdblist.com API key adds Rotten Tomatoes, Metacritic, Letterboxd and Trakt scores.
+      MdbList__ApiKey: "${MDBLIST_API_KEY:-}"
       Smtp__Host: "${SMTP_HOST:-}"
       Smtp__Port: "${SMTP_PORT:-587}"
       Smtp__User: "${SMTP_USER:-}"

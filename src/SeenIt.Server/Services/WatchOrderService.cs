@@ -11,7 +11,7 @@ namespace SeenIt.Server.Services;
 /// intended...), using TMDB's "episode groups". Plays are still stored by season and episode; the
 /// order only changes what's next, progress, and the episode list and previous/next links.
 /// </summary>
-public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService catalog)
+public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService catalog, TrackingService tracking)
 {
     private static readonly TimeSpan Fresh = TimeSpan.FromDays(7);
 
@@ -146,15 +146,31 @@ public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService 
         return null;
     }
 
-    /// <summary>Marks every aired, unwatched episode in the order up to and including this one as watched.</summary>
+    /// <summary>Marks every aired, unwatched episode up to and including this one as watched (see WatchThroughRequest).</summary>
     public async Task<int> WatchThroughAsync(Guid userId, int showId, WatchThroughRequest req, CancellationToken ct)
     {
-        var orderId = await db.ShowWatchOrders.AsNoTracking().Where(o => o.UserId == userId && o.ShowTmdbId == showId)
-            .Select(o => o.OrderId).FirstOrDefaultAsync(ct) ?? throw new TrackingException("Pick a watch order first.");
-        var loaded = await LoadAsync(orderId, showId, ct) ?? throw new TrackingException("That watch order isn't available any more.");
-        var sequence = loaded.Parts.SelectMany(p => p.Episodes).Select(e => (e.Season, e.Episode)).Distinct().ToList();
-        var upTo = sequence.IndexOf((req.SeasonNumber, req.EpisodeNumber));
-        if (upTo < 0) throw new TrackingException("That episode isn't in this order.");
+        if (await catalog.EnsureShowAsync(showId, ct) is null) throw new TrackingException("Show not found.");
+        List<(int Season, int Episode)> sequence;
+        if (req.InOrder)
+        {
+            var orderId = await db.ShowWatchOrders.AsNoTracking().Where(o => o.UserId == userId && o.ShowTmdbId == showId)
+                .Select(o => o.OrderId).FirstOrDefaultAsync(ct) ?? throw new TrackingException("Pick a watch order first.");
+            var loaded = await LoadAsync(orderId, showId, ct) ?? throw new TrackingException("That watch order isn't available any more.");
+            sequence = loaded.Parts.SelectMany(p => p.Episodes).Select(e => (e.Season, e.Episode)).Distinct().ToList();
+        }
+        else
+        {
+            // TMDB's order: seasons then episodes. Specials only lead up to other specials.
+            var specials = req.SeasonNumber == 0;
+            sequence = (await db.Episodes.AsNoTracking()
+                    .Where(e => e.ShowTmdbId == showId && (specials ? e.SeasonNumber == 0 : e.SeasonNumber > 0))
+                    .Select(e => new { e.SeasonNumber, e.EpisodeNumber }).ToListAsync(ct))
+                .OrderBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).Select(e => (e.SeasonNumber, e.EpisodeNumber)).ToList();
+        }
+        var upTo = req.EpisodeNumber is { } ep
+            ? sequence.IndexOf((req.SeasonNumber, ep))
+            : sequence.FindLastIndex(x => x.Season == req.SeasonNumber);
+        if (upTo < 0) throw new TrackingException(req.InOrder ? "That episode isn't in this order." : "That isn't an episode of this show.");
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var airDates = (await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == showId)
@@ -181,6 +197,7 @@ public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService 
             // Watching picks a paused show back up, as marking a single episode does.
             await db.ShowStates.Where(x => x.UserId == userId && x.ShowTmdbId == showId && x.Status == ShowTrackStatus.Paused).ExecuteDeleteAsync(ct);
             await db.SaveChangesAsync(ct);
+            await tracking.CompleteRewatchIfDoneAsync(userId, showId, ct);
         }
         return todo.Count;
     }

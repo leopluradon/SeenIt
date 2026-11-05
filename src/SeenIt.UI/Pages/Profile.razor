@@ -91,7 +91,7 @@ else if (p is not null)
                 <div class="poster-scroller">
                     @foreach (var r in p.TopRated)
                     {
-                        <PosterCard Media="@(new MediaSummary(r.Type, r.TmdbId, r.Title, null, r.PosterPath, null, null, null))" Badge="@($"★ {r.Rating}")" ShowScore="false" @key="(r.Type, r.TmdbId)" />
+                        <PosterCard Media="@(new MediaSummary(r.Type, r.TmdbId, r.Title, null, r.PosterPath, null, null, null))" Badge="@Fmt.RatingBadge(r.Rating)" ShowScore="false" @key="(r.Type, r.TmdbId)" />
                     }
                 </div>
             </section>

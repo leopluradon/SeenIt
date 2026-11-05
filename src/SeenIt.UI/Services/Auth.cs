@@ -112,7 +112,9 @@ public class TokenManager(ITokenStore store)
 public class SessionState(ApiClient api, TokenManager tokens, IOfflineStore offline) : AuthenticationStateProvider
 {
     private static readonly AuthenticationState Anonymous = new(new ClaimsPrincipal(new ClaimsIdentity()));
-    private MeDto? _me;
+    private MeDto? _meValue;
+    // Rating display is formatted all over the UI, so the scale lives on Fmt.
+    private MeDto? _me { get => _meValue; set { _meValue = value; Fmt.FiveStars = value?.FiveStarRatings ?? false; } }
     private Task<AuthenticationState>? _pending;
     private bool _subscribed;
 

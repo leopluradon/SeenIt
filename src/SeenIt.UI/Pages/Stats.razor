@@ -19,7 +19,7 @@ else if (s is not null)
         <div class="stat"><span class="stat-value">@s.MoviesWatched.ToString("N0")</span><span class="stat-label">Movies (@s.MoviePlays.ToString("N0") plays · @Fmt.Duration(s.MinutesMovies))</span></div>
         <div class="stat"><span class="stat-value">@s.EpisodesWatched.ToString("N0")</span><span class="stat-label">Episodes (@s.EpisodePlays.ToString("N0") plays · @Fmt.Duration(s.MinutesEpisodes))</span></div>
         <div class="stat"><span class="stat-value">@s.ShowsWatched.ToString("N0")</span><span class="stat-label">Shows</span></div>
-        <div class="stat"><span class="stat-value">@s.Ratings.ToString("N0")</span><span class="stat-label">Ratings @if (s.AverageRating is { } avg) { <span>· avg @avg.ToString("0.0")</span> }</span></div>
+        <div class="stat"><span class="stat-value">@s.Ratings.ToString("N0")</span><span class="stat-label">Ratings @if (s.AverageRating is { } avg) { <span>· avg @Fmt.Avg(avg)</span> }</span></div>
     </div>
 
     <div class="stat-panels">
@@ -35,7 +35,7 @@ else if (s is not null)
         </section>
         <section class="panel">
             <h2>Ratings</h2>
-            <BarChart Data="s.RatingDistribution" Vertical="true" Label="Number of ratings at each score" />
+            <BarChart Data="Fmt.RatingBuckets(s.RatingDistribution)" Vertical="true" Label="Number of ratings at each score" />
         </section>
         <section class="panel">
             <h2>Day of week</h2>
@@ -212,18 +212,18 @@ else if (s is not null)
             <section class="panel">
                 <h2>You vs everyone</h2>
                 <p class="small">
-                    On average you rate <b>@Math.Abs(rv.AverageDifference ?? 0).ToString("0.0")</b> point@(Math.Abs(rv.AverageDifference ?? 0) == 1 ? "" : "s")
+                    On average you rate <b>@Fmt.Avg(Math.Abs(rv.AverageDifference ?? 0))</b> @(Fmt.FiveStars ? "star" : "point")@(Fmt.Avg(Math.Abs(rv.AverageDifference ?? 0)) == "1.0" ? "" : "s")
                     @((rv.AverageDifference ?? 0) >= 0 ? "higher" : "lower") than TMDB users, across @rv.Count.ToString("N0") ratings.
                 </p>
                 @if (rv.Higher.Count > 0)
                 {
                     <h3>You liked more</h3>
-                    <div class="poster-scroller">@foreach (var h in rv.Higher) { <PosterCard Media="h.Media" ShowScore="false" Sub="@($"You {h.You} · TMDB {h.Tmdb:0.0}")" @key="(h.Media.Type, h.Media.TmdbId)" /> }</div>
+                    <div class="poster-scroller">@foreach (var h in rv.Higher) { <PosterCard Media="h.Media" ShowScore="false" Sub="@($"You {Fmt.Stars(h.You)} · TMDB {Fmt.Avg(h.Tmdb)}")" @key="(h.Media.Type, h.Media.TmdbId)" /> }</div>
                 }
                 @if (rv.Lower.Count > 0)
                 {
                     <h3>You liked less</h3>
-                    <div class="poster-scroller">@foreach (var h in rv.Lower) { <PosterCard Media="h.Media" ShowScore="false" Sub="@($"You {h.You} · TMDB {h.Tmdb:0.0}")" @key="(h.Media.Type, h.Media.TmdbId)" /> }</div>
+                    <div class="poster-scroller">@foreach (var h in rv.Lower) { <PosterCard Media="h.Media" ShowScore="false" Sub="@($"You {Fmt.Stars(h.You)} · TMDB {Fmt.Avg(h.Tmdb)}")" @key="(h.Media.Type, h.Media.TmdbId)" /> }</div>
                 }
             </section>
         }

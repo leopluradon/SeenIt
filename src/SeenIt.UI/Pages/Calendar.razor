@@ -11,7 +11,7 @@
         <button class="btn btn-sm" @onclick="() => Shift(14)" aria-label="Later"><Icon Name="chevron-right" Size="16" /></button>
     </div>
 </div>
-<p class="muted small">@from.ToString("MMM d") – @from.AddDays(Days - 1).ToString("MMM d, yyyy") · episodes of shows you watch or have on your watchlist, plus watchlist movie releases.</p>
+<p class="muted small">@from.ToString("MMM d") – @from.AddDays(Days - 1).ToString("MMM d, yyyy")</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }

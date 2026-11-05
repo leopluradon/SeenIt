@@ -38,7 +38,8 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
     public async Task<byte[]> ReviewAsync(Guid userId, int year, int? month, string? tz, CancellationToken ct)
     {
         var r = await reviews.BuildAsync(userId, year, month, tz, ct);
-        var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.DisplayName }).FirstAsync(ct);
+        var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.DisplayName, u.FiveStarRatings }).FirstAsync(ct);
+        string? Caption(ReviewItem i) => i.Rating is { } r ? $"★ {Stars(r, user.FiveStarRatings)}" : i.Type == MediaType.Show ? i.Detail : null;
         var pal = await PaletteAsync(userId, ct);
         var goalLines = month is null ? await GoalLinesAsync(userId, year, tz, ct) : [];
 
@@ -94,7 +95,8 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         return Encode(surface, posters);
     }
 
-    private static string? Caption(ReviewItem i) => i.Rating is { } r ? $"★ {r}" : i.Type == MediaType.Show ? i.Detail : null;
+    /// <summary>A 1–10 rating as the viewer shows them: "8", or "4.5" in stars.</summary>
+    private static string Stars(int r, bool five) => five ? (r / 2.0).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) : r.ToString();
 
     private async Task<List<string>> GoalLinesAsync(Guid userId, int year, string? tz, CancellationToken ct)
     {
@@ -116,6 +118,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         var cmp = await social.CompareAsync(viewerId, a, b, ct);
         if (cmp is null) return null;
         var pal = await PaletteAsync(viewerId, ct);
+        var five = await db.Users.Where(u => u.Id == viewerId).Select(u => u.FiveStarRatings).FirstOrDefaultAsync(ct);
 
         var both = cmp.RatedBoth.Where(x => x.A >= 8 && x.B >= 8).OrderByDescending(x => x.A + x.B).Take(5).ToList();
         var rowLabel = "You both loved";
@@ -159,7 +162,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         {
             y += 70;
             PosterRow(c, pal, ref y, rowLabel, both.Select(x => (x.Media.Title, Poster(posters, x.Media.PosterPath),
-                x.A is { } ra && x.B is { } rb ? $"★{ra} · ★{rb}" : null)).ToList());
+                x.A is { } ra && x.B is { } rb ? $"★{Stars(ra, five)} · ★{Stars(rb, five)}" : null)).ToList());
         }
 
         Footer(c, pal, H);
