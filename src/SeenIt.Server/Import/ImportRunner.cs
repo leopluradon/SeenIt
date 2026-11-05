@@ -216,7 +216,8 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         {
             if (await ResolveAsync(job, r.Item, ct) is { } id)
             {
-                var type = r.Season is not null ? MediaType.Episode : r.Item.Type;
+                // Season and episode: an episode rating. Season alone: a season rating (stored on the show).
+                var type = r.Season is not null && r.Episode is not null ? MediaType.Episode : r.Item.Type;
                 var key = (type, id, r.Season, r.Episode);
                 if (byKey.TryGetValue(key, out var row))
                 {

@@ -189,6 +189,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     public Task<ProfileDto> ProfileAsync(string userName) => GetAsync<ProfileDto>($"api/users/{Uri.EscapeDataString(userName)}");
     public Task<FeedDto> FeedAsync(int take = 40) => GetAsync<FeedDto>($"api/social/feed?take={take}");
+    public Task<List<FriendSeen>> SeenByAsync(MediaType type, int id, int? season = null, int? episode = null) =>
+        GetAsync<List<FriendSeen>>($"api/social/seen/{type}/{id}" + (season is { } s ? $"?season={s}" + (episode is { } e ? $"&episode={e}" : "") : ""));
+
     public Task<List<UserCard>> SearchUsersAsync(string q) => GetAsync<List<UserCard>>($"api/social/search?q={Uri.EscapeDataString(q)}");
     public Task<List<UserCard>> FollowingAsync() => GetAsync<List<UserCard>>("api/social/following");
     public Task<List<UserCard>> FollowersAsync() => GetAsync<List<UserCard>>("api/social/followers");

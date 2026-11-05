@@ -61,6 +61,7 @@ else if (e is not null)
                 <span>Your rating</span>
                 <RatingPicker Value="e.Rating" ValueChanged="Rate" />
             </div>
+            <FriendsSeen Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" />
             @if (myPlays.Count > 0)
             {
                 <div class="panel">

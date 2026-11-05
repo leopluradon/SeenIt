@@ -34,6 +34,13 @@ else if (season is not null)
     var airedCount = eps.Count(x => x.AirDate is { } d && d <= today);
     var first = eps.Where(x => x.AirDate is not null).MinBy(x => x.AirDate)?.AirDate;
     var last = eps.Where(x => x.AirDate is not null).MaxBy(x => x.AirDate)?.AirDate;
+    <AuthorizeView>
+        <div class="panel rate-panel">
+            <span>Your rating for @season.Name</span>
+            <RatingPicker Value="season.Rating" ValueChanged="RateSeason" />
+        </div>
+        <FriendsSeen Type="MediaType.Show" TmdbId="Id" Season="Number" Total="airedCount" />
+    </AuthorizeView>
     <DetailStats Items="@([
         ("Episodes", airedCount < eps.Count ? $"{airedCount} aired of {eps.Count}" : eps.Count.ToString()),
         ("Total runtime", total > 0 ? Fmt.Duration(total) : null),
@@ -165,6 +172,15 @@ else if (season is not null)
             var old = e.Rating;
             await Api.UnrateAsync(MediaType.Episode, Id, e.SeasonNumber, e.EpisodeNumber);
             if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, o, e.SeasonNumber, e.EpisodeNumber));
+        }, "Rating removed");
+
+    private Task RateSeason(int? v) => v is { } r
+        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Show, Id, r, Number)), $"Rated {season!.Name} {Fmt.Rating(r)}")
+        : Act(async () =>
+        {
+            var old = season!.Rating;
+            await Api.UnrateAsync(MediaType.Show, Id, Number);
+            if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Show, Id, o, Number));
         }, "Rating removed");
 
     // Set by an action that can be undone; the toast it shows gets an Undo button.

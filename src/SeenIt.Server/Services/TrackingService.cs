@@ -603,7 +603,12 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             (season, episode) = (req.SeasonNumber, req.EpisodeNumber);
             await EnsureMetaAsync(MediaType.Show, req.TmdbId, ct);
         }
-        else await EnsureMetaAsync(req.Type, req.TmdbId, ct);
+        else
+        {
+            // A show with a season number rates that season.
+            if (req.Type == MediaType.Show && req.SeasonNumber is { } sn) season = sn;
+            await EnsureMetaAsync(req.Type, req.TmdbId, ct);
+        }
 
         var row = await db.Ratings.FirstOrDefaultAsync(r => r.UserId == userId && r.Type == req.Type && r.TmdbId == req.TmdbId
                                                              && r.SeasonNumber == season && r.EpisodeNumber == episode, ct);

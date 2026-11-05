@@ -267,7 +267,8 @@ public record SeasonDetail(
     IReadOnlyList<EpisodeDto> Episodes,
     IReadOnlyList<CastMember>? Cast = null,
     int? Rewatch = null,       // number of the rewatch in progress (2 = second time through)
-    DateTimeOffset? CompletedAt = null);
+    DateTimeOffset? CompletedAt = null,
+    int? Rating = null);       // your rating of the season itself
 
 // ---------- Tracking ----------
 
@@ -633,6 +634,12 @@ public record NowWatchingDto(
     string? PosterPath, string? BackdropPath, DateTimeOffset StartedAt, DateTimeOffset EndsAt, WatchSource Source);
 
 // ---------- Social ----------
+
+/// <summary>
+/// Someone you follow (or who follows you) who has watched or rated a title. Plays: for an episode or
+/// movie, how many times; for a show or season, how many different episodes (out of the aired count).
+/// </summary>
+public record FriendSeen(UserCard User, int Plays, DateTimeOffset? LastWatched, int? Rating);
 
 public record UserCard(string UserName, string? DisplayName, bool Following, bool FollowsYou)
 {

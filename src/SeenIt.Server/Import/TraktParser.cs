@@ -102,6 +102,10 @@ public static class TraktParser
             case "movie" or "show" when Ref(e) is { } r:
                 result.Ratings.Add(new ImportRating(r, null, null, rating, at));
                 break;
+            case "season" when e.TryGetProperty("show", out var sshow) && e.TryGetProperty("season", out var season)
+                               && ShowRef(sshow) is { } ss && Int(season, "number") is { } snum:
+                result.Ratings.Add(new ImportRating(ss, snum, null, rating, at));   // a season: season number, no episode
+                break;
             case "episode" when e.TryGetProperty("show", out var show) && e.TryGetProperty("episode", out var ep)
                                 && ShowRef(show) is { } s && Int(ep, "season") is { } sn && Int(ep, "number") is { } en:
                 result.Ratings.Add(new ImportRating(s, sn, en, rating, at));

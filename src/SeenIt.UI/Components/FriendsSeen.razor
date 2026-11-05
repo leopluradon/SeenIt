@@ -1,0 +1,57 @@
+@* People you follow (or who follow you) who've watched or rated this, with their rating. Hidden when there's nobody. *@
+@inject ApiClient Api
+@if (people is { Count: > 0 })
+{
+    <section class="panel friends-seen">
+        <h2>Friends who've seen it</h2>
+        <ul>
+            @foreach (var f in shown)
+            {
+                <li @key="f.User.UserName">
+                    <a href="@Fmt.UserHref(f.User.UserName)" class="friends-seen-who">
+                        <span class="avatar avatar-sm">@f.User.Name[..1].ToUpperInvariant()</span>
+                        <b>@f.User.Name</b>
+                    </a>
+                    <span class="muted small">@Detail(f)</span>
+                    @if (f.Rating is { } r) { <span class="pill pill-sm friends-seen-rating" title="@($"{f.User.Name} rated it {Fmt.Rating(r)}")">@Fmt.RatingBadge(r)</span> }
+                </li>
+            }
+        </ul>
+        @if (people.Count > Shown && !all) { <button class="btn btn-sm btn-ghost" @onclick="() => all = true">Show all @people.Count</button> }
+    </section>
+}
+@code {
+    [Parameter, EditorRequired] public MediaType Type { get; set; }
+    [Parameter, EditorRequired] public int TmdbId { get; set; }
+    [Parameter] public int? Season { get; set; }
+    [Parameter] public int? Episode { get; set; }
+    /// <summary>Episodes aired in the show or season, for "12 of 24 episodes".</summary>
+    [Parameter] public int? Total { get; set; }
+    private const int Shown = 6;
+    private List<FriendSeen>? people;
+    private bool all;
+    private (MediaType, int, int?, int?) loadedFor;
+    private IEnumerable<FriendSeen> shown => all ? people! : people!.Take(Shown);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedFor == (Type, TmdbId, Season, Episode)) return;
+        loadedFor = (Type, TmdbId, Season, Episode);
+        people = null;
+        all = false;
+        try { people = await Api.SeenByAsync(Type, TmdbId, Season, Episode); }
+        catch { people = null; }   // a nicety; the page is fine without it
+    }
+
+    private string Detail(FriendSeen f)
+    {
+        var watched = (Type, f.Plays) switch
+        {
+            (_, 0) => "rated, not watched",
+            (MediaType.Show, var n) => Total is > 0 and var t && n >= t ? "watched it all" : $"{n} of {Total?.ToString() ?? "?"} episodes",
+            (_, 1) => "watched",
+            (_, var n) => $"watched {n}×",
+        };
+        return f.LastWatched is { } at ? $"{watched} · {Fmt.Day(DateOnly.FromDateTime(at.LocalDateTime))}" : watched;
+    }
+}

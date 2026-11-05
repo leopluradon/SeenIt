@@ -34,3 +34,16 @@ public class ScoreTests
         Assert.Equal("https://letterboxd.com/tmdb/603/", scores[2].Url);
     }
 }
+
+public class SeasonRatingImportTests
+{
+    [Fact]
+    public void Trakt_season_ratings_keep_their_season_and_no_episode()
+    {
+        var json = """[{"rated_at":"2023-10-17T23:27:41.000Z","rating":10,"type":"season","season":{"ids":{"tmdb":298958},"number":4},"show":{"ids":{"tmdb":76331,"imdb":"tt7660850"},"year":2018,"title":"Succession"}}]""";
+        var parsed = SeenIt.Server.Import.TraktParser.Parse(new Dictionary<string, string> { ["ratings-seasons.json"] = json });
+        var r = Assert.Single(parsed.Ratings);
+        Assert.Equal((4, (int?)null, 10), (r.Season!.Value, r.Episode, r.Rating));
+        Assert.Equal(76331, r.Item.TmdbId);
+    }
+}

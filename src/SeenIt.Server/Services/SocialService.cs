@@ -104,6 +104,50 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         return (await CardsAsync(me, following, ct), await CardsAsync(me, followers, ct));
     }
 
+    /// <summary>
+    /// Who you follow, or who follows you, has seen or rated this (a movie, show, season or episode),
+    /// limited to people whose profiles you can see.
+    /// </summary>
+    public async Task<List<FriendSeen>> SeenByAsync(Guid me, MediaType type, int tmdbId, int? season, int? episode, CancellationToken ct)
+    {
+        var following = await db.Follows.Where(f => f.FollowerId == me).Select(f => f.FolloweeId).ToListAsync(ct);
+        var followers = await db.Follows.Where(f => f.FolloweeId == me).Select(f => f.FollowerId).ToListAsync(ct);
+        var ids = following.Union(followers).ToList();
+        if (ids.Count == 0) return [];
+        var people = (await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToListAsync(ct))
+            .Where(u => CanView(u, me, following.Contains(u.Id) && followers.Contains(u.Id))).ToDictionary(u => u.Id);
+        if (people.Count == 0) return [];
+        var visible = people.Keys.ToList();
+
+        // Plays: movies and episodes count every play; shows and seasons count distinct episodes.
+        var plays = db.WatchEvents.AsNoTracking().Where(w => visible.Contains(w.UserId) && w.TmdbId == tmdbId);
+        plays = type switch
+        {
+            MediaType.Movie => plays.Where(w => w.Type == MediaType.Movie),
+            MediaType.Episode => plays.Where(w => w.Type == MediaType.Episode && w.SeasonNumber == season && w.EpisodeNumber == episode),
+            _ when season is { } sn => plays.Where(w => w.Type == MediaType.Episode && w.SeasonNumber == sn),
+            _ => plays.Where(w => w.Type == MediaType.Episode),
+        };
+        var rows = await plays.Select(w => new { w.UserId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt }).ToListAsync(ct);
+        var distinctEpisodes = type == MediaType.Show;
+        var watched = rows.GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => (
+            Count: distinctEpisodes ? g.Select(r => (r.SeasonNumber, r.EpisodeNumber)).Distinct().Count() : g.Count(),
+            Last: g.Where(r => !WatchDates.IsUnknown(r.WatchedAt)).Select(r => (DateTimeOffset?)r.WatchedAt).Max()));
+
+        var ratingType = type == MediaType.Episode ? MediaType.Episode : type;
+        int? rSeason = type == MediaType.Movie ? null : season, rEpisode = type == MediaType.Episode ? episode : null;
+        var ratings = await db.Ratings.AsNoTracking()
+            .Where(r => visible.Contains(r.UserId) && r.Type == ratingType && r.TmdbId == tmdbId && r.SeasonNumber == rSeason && r.EpisodeNumber == rEpisode)
+            .ToDictionaryAsync(r => r.UserId, r => r.Value, ct);
+
+        var cards = (await CardsAsync(me, people.Values.Where(u => watched.ContainsKey(u.Id) || ratings.ContainsKey(u.Id)), ct))
+            .ToDictionary(c => c.UserName);
+        return people.Values.Where(u => cards.ContainsKey(u.UserName!))
+            .Select(u => new FriendSeen(cards[u.UserName!], watched.TryGetValue(u.Id, out var w) ? w.Count : 0, w.Last, ratings.TryGetValue(u.Id, out var r) ? r : null))
+            .OrderByDescending(f => f.LastWatched ?? DateTimeOffset.MinValue).ThenBy(f => f.User.Name)
+            .ToList();
+    }
+
     /// <summary>People you follow whose profiles you're allowed to see.</summary>
     private async Task<List<AppUser>> VisibleFolloweesAsync(Guid me, CancellationToken ct)
     {
