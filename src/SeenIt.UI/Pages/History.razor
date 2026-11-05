@@ -1,6 +1,6 @@
 @page "/history"
 @page "/u/{UserName}/history"
-@attribute [Authorize]
+@* No [Authorize]: a public profile's history is open to anyone; your own needs signing in (below). *@
 @inject ApiClient Api
 @inject SessionState Session
 @inject Toasts Toasts
@@ -198,8 +198,16 @@ else if (data is not null)
 
     protected override void OnInitialized() => filtersOpen = ActiveFilters > 0;
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     protected override async Task OnParametersSetAsync()
     {
+        if (string.IsNullOrEmpty(UserName) && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            var back = Nav.ToBaseRelativePath(Nav.Uri);
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(back), replace: true);
+            return;
+        }
         search = Q ?? "";
         if (genresFor != Other)
         {
