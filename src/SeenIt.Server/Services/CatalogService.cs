@@ -263,6 +263,12 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         var res = type == MediaType.Movie && list is "upcoming" or "now_playing"
             ? await tmdb.GetTheatricalAsync(list == "upcoming", region, page, ct)
             : await tmdb.GetListAsync(type == MediaType.Movie ? "movie" : "tv", list, page, ct);
+        // Upcoming: leave out anything already out (re-releases, or a wide release after a limited one).
+        if (res is not null && type == MediaType.Movie && list == "upcoming")
+        {
+            var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            res = res with { Results = res.Results.Where(r => string.IsNullOrEmpty(r.ReleaseDate) || string.CompareOrdinal(r.ReleaseDate, today) > 0).ToList() };
+        }
         if (res is null) return new([], 1, 0, 0);
         return new(res.Results.Select(r => ToSummary(r, type)).ToList(), res.Page, res.TotalPages, res.TotalResults);
     }
