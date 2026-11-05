@@ -67,6 +67,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             e.HasIndex(x => new { x.UserId, x.Type, x.TmdbId });
             e.HasIndex(x => new { x.UserId, x.WatchedAt });
+            e.HasIndex(x => x.ImportJobId);
         });
 
         b.Entity<WatchlistItem>(e => e.HasIndex(x => new { x.UserId, x.Type, x.TmdbId }).IsUnique());
@@ -85,7 +86,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
-        b.Entity<UserListItem>(e => e.HasIndex(x => new { x.ListId, x.Type, x.TmdbId }).IsUnique());
+        b.Entity<UserListItem>(e =>
+        {
+            e.HasIndex(x => new { x.ListId, x.Type, x.TmdbId }).IsUnique();
+            e.Property(x => x.Note).HasMaxLength(500);
+        });
 
         b.Entity<ImportJob>(e => e.HasIndex(x => new { x.UserId, x.CreatedAt }));
         b.Entity<JellyfinEvent>(e => e.HasIndex(x => new { x.UserId, x.ReceivedAt }));

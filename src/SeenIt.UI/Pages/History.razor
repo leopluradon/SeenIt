@@ -3,10 +3,12 @@
 @inject ApiClient Api
 @inject Toasts Toasts
 @inject NavigationManager Nav
+@inject IJSRuntime Js
 <PageTitle>History · SeenIt</PageTitle>
 
 <div class="page-head">
     <h1>History</h1>
+    <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="ToggleSelecting" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
     <div class="segmented">
         <button class="@(Type is null ? "on" : "")" @onclick='() => Go(type: "")'>All</button>
         <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick='() => Go(type: "Movie")'>Movies</button>
@@ -108,8 +110,15 @@ else if (data is not null)
                 </div>
                 @foreach (var h in day)
                 {
-                    <div class="history-item" @key="h.Id">
-                        <a href="@(h.Type == MediaType.Movie ? $"movie/{h.TmdbId}" : Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber))" class="history-link">
+                    <div class="history-item @(selecting && selected.Contains(h.Id) ? "picked" : "")" @key="h.Id">
+                        @if (selecting)
+                        {
+                            <label class="pick-box" aria-label="Select this play">
+                                <input type="checkbox" checked="@selected.Contains(h.Id)" @onchange="() => TogglePick(h.Id)" />
+                            </label>
+                        }
+                        <a href="@(h.Type == MediaType.Movie ? $"movie/{h.TmdbId}" : Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber))" class="history-link"
+                           @onclick="() => { if (selecting) TogglePick(h.Id); }" @onclick:preventDefault="selecting">
                             <img src="@Img.Poster(h.PosterPath, "w92")" alt="" loading="lazy" />
                             <div>
                                 <div class="mini-title">@h.Title</div>
@@ -120,8 +129,11 @@ else if (data is not null)
                                 </div>
                             </div>
                         </a>
-                        <button class="icon-btn" @onclick="() => editing = h" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
-                        <button class="icon-btn" @onclick="() => Delete(h)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
+                        @if (!selecting)
+                        {
+                            <button class="icon-btn" @onclick="() => editing = h" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
+                            <button class="icon-btn" @onclick="() => Delete(h)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
+                        }
                     </div>
                 }
             }
@@ -129,6 +141,24 @@ else if (data is not null)
         <Pager Page="data.Page" TotalPages="data.TotalPages" OnPage="p => Go(page: p)" />
     }
 }
+
+@if (selecting)
+{
+    <div class="bulk-bar" role="toolbar" aria-label="Selected plays">
+        <span><b>@selected.Count</b> selected</span>
+        @if (data is { Items.Count: > 0 } d)
+        {
+            @if (d.Items.All(i => selected.Contains(i.Id))) { <button class="btn btn-sm btn-ghost" @onclick="() => { foreach (var i in d.Items) selected.Remove(i.Id); }">Unselect page</button> }
+            else { <button class="btn btn-sm btn-ghost" @onclick="() => { foreach (var i in d.Items) selected.Add(i.Id); }">Select page</button> }
+        }
+        <span class="bulk-actions">
+            <button class="btn btn-sm" disabled="@(selected.Count == 0 || bulkBusy)" @onclick="() => bulkDateOpen = true"><Icon Name="calendar" Size="16" /> Change date</button>
+            <button class="btn btn-sm btn-danger" disabled="@(selected.Count == 0 || bulkBusy)" @onclick="DeleteSelected"><Icon Name="trash" Size="16" /> Delete</button>
+        </span>
+    </div>
+}
+@if (selecting) { <div class="bulk-spacer" aria-hidden="true"></div> }
+<WatchDialog @bind-Open="bulkDateOpen" Bulk="true" Heading="@($"When did you watch these {selected.Count}?")" What="these" OnPick="RedateSelected" />
 
 <EditPlayDialog Play="@(editing is { } eh ? new PlayDto(eh.Id, eh.WatchedAt, eh.Source) : null)" PlayChanged="p => { if (p is null) editing = null; }"
                 What="@(editing is null ? "this" : editing.Type == MediaType.Episode ? $"{editing.Title} {Fmt.Ep(editing.SeasonNumber, editing.EpisodeNumber)}" : editing.Title)"
@@ -240,6 +270,65 @@ else if (data is not null)
     {
         search = "";
         Nav.NavigateTo(Type is null ? "history" : $"history?type={Type}");
+    }
+
+    private bool selecting, bulkBusy, bulkDateOpen;
+    private readonly HashSet<Guid> selected = [];
+
+    private void ToggleSelecting()
+    {
+        selecting = !selecting;
+        selected.Clear();
+    }
+
+    private void TogglePick(Guid id)
+    {
+        if (!selected.Remove(id)) selected.Add(id);
+    }
+
+    private async Task DeleteSelected()
+    {
+        var ids = selected.ToList();
+        if (ids.Count > 1 && !await Js.InvokeAsync<bool>("confirm", $"Delete {ids.Count} plays?")) return;
+        bulkBusy = true;
+        try
+        {
+            var removed = await Api.DeleteHistoryAsync(ids);
+            selected.Clear();
+            Toasts.Show($"Removed {removed.Removed} play{(removed.Removed == 1 ? "" : "s")}", undo: async () =>
+            {
+                await Api.RestorePlaysAsync(removed.Plays);
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { bulkBusy = false; }
+    }
+
+    private async Task RedateSelected(WatchChoice c)
+    {
+        bulkDateOpen = false;
+        var ids = selected.ToList();
+        bulkBusy = true;
+        try
+        {
+            var before = await Api.EditPlaysAsync(new BulkEditPlaysRequest(ids, c.When, c.At)) ?? [];
+            selected.Clear();
+            var label = c.When switch
+            {
+                WatchTime.Unknown => "to an unknown date", WatchTime.ReleaseDate => "to their release dates",
+                WatchTime.Now => "to now", _ => $"to {Fmt.PlayedAt(c.At!.Value)}",
+            };
+            Toasts.Show($"Moved {before.Count} play{(before.Count == 1 ? "" : "s")} {label}", undo: async () =>
+            {
+                await Api.SetPlayDatesAsync(before);
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { bulkBusy = false; }
     }
 
     private async Task Delete(HistoryEntry h)

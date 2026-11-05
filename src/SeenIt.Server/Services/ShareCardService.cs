@@ -10,7 +10,7 @@ namespace SeenIt.Server.Services;
 /// posting elsewhere. Drawn on the server so the website and the app get the same picture.
 /// </summary>
 public class ShareCardService(AppDbContext db, ReviewService reviews, SocialService social, GoalService goals,
-    IHttpClientFactory http, ILogger<ShareCardService> log)
+    IHttpClientFactory http, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, ILogger<ShareCardService> log)
 {
     private const int W = 1080;
     private const float Pad = 72;
@@ -305,8 +305,13 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         {
             try
             {
-                var bytes = await client.GetByteArrayAsync(ImageBase + p, ct);
-                return (p, SKImage.FromEncodedData(bytes));
+                // Posters never change at a given path, so keep the downloads for a day.
+                var bytes = await Microsoft.Extensions.Caching.Memory.CacheExtensions.GetOrCreateAsync(cache, "poster:" + p, e =>
+                {
+                    e.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1);
+                    return client.GetByteArrayAsync(ImageBase + p, ct);
+                });
+                return (p, SKImage.FromEncodedData(bytes!));
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
             {

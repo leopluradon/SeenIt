@@ -15,6 +15,10 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
 {
     private readonly Dictionary<ImportRef, int?> _resolved = [];
     private readonly Dictionary<(MediaType, int), bool> _metaOk = [];
+    private readonly ImportUndo _undo = new();
+
+    /// <summary>What rows get tagged with, so the import can be undone. The Letterboxd feed sync runs with an empty id: nothing to undo.</summary>
+    private static Guid? Tag(ImportJob job) => job.Id == Guid.Empty ? null : job.Id;
 
     public async Task RunAsync(ImportJob job, CancellationToken ct)
     {
@@ -31,7 +35,8 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
     }
 
     /// <summary>Imports already-parsed rows (the Letterboxd feed sync builds them itself).</summary>
-    public async Task RunAsync(ImportJob job, ParsedImport parsed, CancellationToken ct)
+    /// <param name="resolving">Adding titles matched by hand to a finished import: keep its counts and pending list.</param>
+    public async Task RunAsync(ImportJob job, ParsedImport parsed, CancellationToken ct, bool resolving = false)
     {
         var found = parsed.Total;
         parsed.Keep(job.Parts);
@@ -47,9 +52,12 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 _ => "No movies or shows were found in that Simkl backup.",
             });
 
-        job.Total = parsed.Total;
-        job.Processed = job.Imported = job.Skipped = job.Failed = 0;
-        job.Unmatched = [];
+        if (!resolving)
+        {
+            job.Total = parsed.Total;
+            job.Processed = job.Imported = job.Skipped = job.Failed = 0;
+            job.Unmatched = [];
+        }
         await db.SaveChangesAsync(ct);
 
         if (parsed.Progress.Count > 0) await ExpandProgressAsync(job, parsed, ct);
@@ -58,6 +66,13 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         await ImportRatingsAsync(job, parsed.Ratings, ct);
         foreach (var list in parsed.Lists) await ImportListAsync(job, list, ct);
         if (parsed.Favorites.Count > 0) await ImportFavoritesAsync(job, parsed.Favorites, ct);
+
+        if (Tag(job) is not null)
+        {
+            job.UndoJson = ImportUndo.Merge(job.UndoJson, _undo);
+            if (!resolving) job.PendingJson = PendingImport.Serialize(PendingImport.From(parsed, _resolved));
+        }
+        if (resolving) { await db.SaveChangesAsync(ct); return; }
 
         // Failed counts rows; people think in titles ("Chernobyl" in the diary twice is one title).
         var unmatched = job.Unmatched.Count < 200 ? job.Unmatched.Count : job.Failed;
@@ -97,7 +112,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                     db.WatchEvents.Add(new WatchEvent
                     {
                         UserId = job.UserId, Type = type, TmdbId = tmdbId, SeasonNumber = w.Season, EpisodeNumber = w.Episode,
-                        WatchedAt = w.WatchedAt, Source = source,
+                        WatchedAt = w.WatchedAt, Source = source, ImportJobId = Tag(job),
                     });
                     plays.Add(new ExistingPlay(null, w.WatchedAt) { Used = true });
                     job.Imported++;
@@ -105,6 +120,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 else if (match.Id is { } id && WatchDates.IsUnknown(match.At) && !w.Approximate)
                 {
                     await db.WatchEvents.Where(x => x.Id == id).ExecuteUpdateAsync(x => x.SetProperty(e => e.WatchedAt, w.WatchedAt), ct);
+                    _undo.Dated.Add(id);   // undo puts its "date unknown" back
                     job.Imported++;
                 }
                 else job.Skipped++;
@@ -182,7 +198,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                     job.Skipped++;
                 else
                 {
-                    db.Watchlist.Add(new WatchlistItem { UserId = job.UserId, Type = item.Item.Type, TmdbId = id, AddedAt = item.AddedAt });
+                    db.Watchlist.Add(new WatchlistItem { UserId = job.UserId, Type = item.Item.Type, TmdbId = id, AddedAt = item.AddedAt, ImportJobId = Tag(job) });
                     job.Imported++;
                 }
             }
@@ -205,11 +221,15 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 if (byKey.TryGetValue(key, out var row))
                 {
                     if (row.Value == r.Rating) job.Skipped++;
-                    else { row.Value = r.Rating; row.RatedAt = r.RatedAt; job.Imported++; }
+                    else
+                    {
+                        if (Tag(job) is not null && row.ImportJobId != Tag(job)) _undo.Ratings.Add(new RatingBefore(row.Id, row.Value, row.RatedAt));
+                        row.Value = r.Rating; row.RatedAt = r.RatedAt; job.Imported++;
+                    }
                 }
                 else
                 {
-                    row = new Rating { UserId = job.UserId, Type = type, TmdbId = id, SeasonNumber = r.Season, EpisodeNumber = r.Episode, Value = r.Rating, RatedAt = r.RatedAt };
+                    row = new Rating { UserId = job.UserId, Type = type, TmdbId = id, SeasonNumber = r.Season, EpisodeNumber = r.Episode, Value = r.Rating, RatedAt = r.RatedAt, ImportJobId = Tag(job) };
                     db.Ratings.Add(row);
                     byKey[key] = row;
                     job.Imported++;
@@ -233,7 +253,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         }
         if (list is null)
         {
-            list = new UserList { UserId = job.UserId, Name = name, Description = import.Description };
+            list = new UserList { UserId = job.UserId, Name = name, Description = import.Description, ImportJobId = Tag(job) };
             db.Lists.Add(list);
         }
         var position = list.Items.Count == 0 ? 0 : list.Items.Max(i => i.Position) + 1;
@@ -245,7 +265,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 if (list.Items.Any(i => i.Type == item.Item.Type && i.TmdbId == id)) job.Skipped++;
                 else
                 {
-                    var row = new UserListItem { ListId = list.Id, Type = item.Item.Type, TmdbId = id, AddedAt = item.AddedAt, Position = position++ };
+                    var row = new UserListItem { ListId = list.Id, Type = item.Item.Type, TmdbId = id, AddedAt = item.AddedAt, Position = position++, ImportJobId = Tag(job) };
                     // Add through the DbSet: a client-set Guid key found only via the navigation
                     // would be treated as an existing row and UPDATEd instead of inserted.
                     db.ListItems.Add(row);
@@ -274,7 +294,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 if (!existing.Add((item.Item.Type, id))) job.Skipped++;
                 else
                 {
-                    db.Favorites.Add(new Favorite { UserId = job.UserId, Type = item.Item.Type, TmdbId = id, Rank = ++rank, AddedAt = item.AddedAt });
+                    db.Favorites.Add(new Favorite { UserId = job.UserId, Type = item.Item.Type, TmdbId = id, Rank = ++rank, AddedAt = item.AddedAt, ImportJobId = Tag(job) });
                     job.Imported++;
                 }
             }

@@ -464,6 +464,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<DateTimeOffset>("AddedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("ImportJobId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Rank")
                         .HasColumnType("integer");
 
@@ -553,6 +556,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<byte[]>("Payload")
                         .HasColumnType("bytea");
 
+                    b.Property<string>("PendingJson")
+                        .HasColumnType("text");
+
                     b.Property<int>("Processed")
                         .HasColumnType("integer");
 
@@ -567,6 +573,12 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.Property<int>("Total")
                         .HasColumnType("integer");
+
+                    b.Property<string>("UndoJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UndoneAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.PrimitiveCollection<List<string>>("Unmatched")
                         .IsRequired()
@@ -745,6 +757,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int?>("EpisodeNumber")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("ImportJobId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("RatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -892,6 +907,9 @@ namespace SeenIt.Server.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<Guid?>("ImportJobId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsPublic")
                         .HasColumnType("boolean");
 
@@ -899,6 +917,9 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("Ranked")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -922,8 +943,15 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<DateTimeOffset>("AddedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("ImportJobId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ListId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("Position")
                         .HasColumnType("integer");
@@ -954,6 +982,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int?>("EpisodeNumber")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("ImportJobId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("SeasonNumber")
                         .HasColumnType("integer");
 
@@ -974,6 +1005,8 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ImportJobId");
+
                     b.HasIndex("UserId", "WatchedAt");
 
                     b.HasIndex("UserId", "Type", "TmdbId");
@@ -989,6 +1022,9 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.Property<DateTimeOffset>("AddedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ImportJobId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("TmdbId")
                         .HasColumnType("integer");

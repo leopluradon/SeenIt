@@ -64,14 +64,14 @@ public class ListService(AppDbContext db, TrackingService tracking)
             MediaSummary? media = i.Type == MediaType.Movie
                 ? movies.TryGetValue(i.TmdbId, out var m) ? CatalogService.ToSummary(m) : null
                 : shows.TryGetValue(i.TmdbId, out var s) ? CatalogService.ToSummary(s) : null;
-            return media is null ? null : new ListItemDto(i.Id, media, i.AddedAt, i.Position);
+            return media is null ? null : new ListItemDto(i.Id, media, i.AddedAt, i.Position, i.Note);
         }).OfType<ListItemDto>().ToList();
-        return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, items);
+        return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, items, list.Ranked);
     }
 
     public async Task<UserList> CreateAsync(Guid userId, CreateListRequest req, CancellationToken ct)
     {
-        var list = new UserList { UserId = userId, Name = Validate(req.Name), Description = Trim(req.Description, 2000), IsPublic = req.IsPublic };
+        var list = new UserList { UserId = userId, Name = Validate(req.Name), Description = Trim(req.Description, 2000), IsPublic = req.IsPublic, Ranked = req.Ranked };
         db.Lists.Add(list);
         await db.SaveChangesAsync(ct);
         return list;
@@ -84,6 +84,7 @@ public class ListService(AppDbContext db, TrackingService tracking)
         list.Name = Validate(req.Name);
         list.Description = Trim(req.Description, 2000);
         list.IsPublic = req.IsPublic;
+        list.Ranked = req.Ranked;
         list.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
@@ -122,6 +123,29 @@ public class ListService(AppDbContext db, TrackingService tracking)
         if (list is null || item is null) return false;
         db.ListItems.Remove(item);
         list.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>Puts the list in the given order. Items missing from it keep their relative order at the end.</summary>
+    public async Task<bool> ReorderAsync(Guid userId, Guid listId, IReadOnlyList<Guid> itemIds, CancellationToken ct)
+    {
+        var list = await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.Id == listId && l.UserId == userId, ct);
+        if (list is null) return false;
+        var rank = itemIds.Select((id, i) => (id, i)).GroupBy(x => x.id).ToDictionary(g => g.Key, g => g.First().i);
+        var ordered = list.Items.OrderBy(i => rank.TryGetValue(i.Id, out var r) ? r : int.MaxValue).ThenBy(i => i.Position).ToList();
+        for (var i = 0; i < ordered.Count; i++) ordered[i].Position = i;
+        list.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> SetNoteAsync(Guid userId, Guid listId, Guid itemId, string? note, CancellationToken ct)
+    {
+        var item = await db.ListItems.FirstOrDefaultAsync(i => i.Id == itemId && i.ListId == listId
+            && db.Lists.Any(l => l.Id == listId && l.UserId == userId), ct);
+        if (item is null) return false;
+        item.Note = Trim(note, 500);
         await db.SaveChangesAsync(ct);
         return true;
     }

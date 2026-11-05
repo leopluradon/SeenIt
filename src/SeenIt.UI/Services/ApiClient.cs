@@ -240,6 +240,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task SetPlexUserAsync(string? name) => SendAsync(HttpMethod.Put, "api/jellyfin/plex-user", new PlexUserRequest(name));
     public Task SetJellyfinThresholdAsync(int pct) => SendAsync(HttpMethod.Put, "api/jellyfin/threshold", new JellyfinThresholdRequest(pct));
 
+    public Task<UndoImportResult?> UndoImportAsync(Guid id) => SendAsync<UndoImportResult>(HttpMethod.Post, $"api/imports/{id}/undo");
+    public Task<ResolveImportResult?> ResolveImportAsync(Guid id, ResolveImportRequest r) => SendAsync<ResolveImportResult>(HttpMethod.Post, $"api/imports/{id}/resolve", r);
+    public Task<List<PlayDate>?> EditPlaysAsync(BulkEditPlaysRequest r) => SendAsync<List<PlayDate>>(HttpMethod.Post, "api/history/edit", r);
+    public Task SetPlayDatesAsync(IReadOnlyList<PlayDate> dates) => SendAsync(HttpMethod.Post, "api/history/dates", dates);
+    public Task ReorderListAsync(Guid id, IReadOnlyList<Guid> itemIds) => SendAsync(HttpMethod.Put, $"api/lists/{id}/order", new ListOrderRequest(itemIds));
+    public Task SetListNoteAsync(Guid id, Guid itemId, string? note) => SendAsync(HttpMethod.Put, $"api/lists/{id}/items/{itemId}/note", new ListNoteRequest(note));
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");
     public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content)
     {

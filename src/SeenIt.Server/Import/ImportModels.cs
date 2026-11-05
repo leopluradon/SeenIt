@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text.Json;
 using System.Text;
 using SeenIt.Contracts;
 
@@ -80,4 +81,93 @@ public static class ImportFiles
     }
 
     private static string Decode(byte[] bytes) => Encoding.UTF8.GetString(bytes).TrimStart('﻿');
+}
+
+/// <summary>A rating an import overwrote, so undo can put the old one back.</summary>
+public record RatingBefore(Guid Id, int Value, DateTimeOffset RatedAt);
+
+/// <summary>What an import changed in place (rather than added), for undo.</summary>
+public class ImportUndo
+{
+    public List<RatingBefore> Ratings { get; set; } = [];
+    /// <summary>Plays of yours that had "date unknown" and took the import's date.</summary>
+    public List<Guid> Dated { get; set; } = [];
+
+    public static ImportUndo Parse(string? json) =>
+        string.IsNullOrEmpty(json) ? new() : JsonSerializer.Deserialize<ImportUndo>(json) ?? new();
+
+    public static string Merge(string? existing, ImportUndo more)
+    {
+        var all = Parse(existing);
+        // The first value seen is the one from before the import.
+        foreach (var r in more.Ratings) if (all.Ratings.All(x => x.Id != r.Id)) all.Ratings.Add(r);
+        all.Dated = [.. all.Dated.Union(more.Dated)];
+        return JsonSerializer.Serialize(all);
+    }
+}
+
+public record PendingPlay(int? Season, int? Episode, DateTimeOffset WatchedAt, bool Approximate);
+public record PendingRating(int? Season, int? Episode, int Value, DateTimeOffset RatedAt);
+public record PendingListEntry(string List, string? Description, DateTimeOffset AddedAt);
+
+/// <summary>
+/// An unmatched title from an import with everything it would have brought in, kept so the user
+/// can pick the right title later (the uploaded file itself isn't kept).
+/// </summary>
+public record PendingImport(
+    string Key, string Label, MediaType Type, string? Title, int? Year,
+    List<PendingPlay> Plays, List<PendingRating> Ratings, DateTimeOffset? Watchlist,
+    List<PendingListEntry> Lists, DateTimeOffset? Favorite, ImportProgress? Progress)
+{
+    private const int Max = 500;
+
+    public static List<PendingImport> From(ParsedImport parsed, IReadOnlyDictionary<ImportRef, int?> resolved)
+    {
+        var result = new List<PendingImport>();
+        foreach (var r in resolved.Where(x => x.Value is null).Select(x => x.Key).DistinctBy(r => (r.Type, r.Label)).Take(Max))
+        {
+            bool Same(ImportRef x) => x.Type == r.Type && x.Label == r.Label;
+            var plays = parsed.History.Where(h => Same(h.Item)).Select(h => new PendingPlay(h.Season, h.Episode, h.WatchedAt, h.Approximate)).ToList();
+            var ratings = parsed.Ratings.Where(x => Same(x.Item)).Select(x => new PendingRating(x.Season, x.Episode, x.Rating, x.RatedAt)).ToList();
+            var lists = parsed.Lists.SelectMany(l => l.Items.Where(i => Same(i.Item)).Select(i => new PendingListEntry(l.Name, l.Description, i.AddedAt))).ToList();
+            var item = new PendingImport($"p{result.Count}", r.Label, r.Type, r.Title, r.Year, plays, ratings,
+                parsed.Watchlist.FirstOrDefault(w => Same(w.Item))?.AddedAt, lists,
+                parsed.Favorites.FirstOrDefault(f => Same(f.Item))?.AddedAt, parsed.Progress.FirstOrDefault(p => Same(p.Show)));
+            if (plays.Count + ratings.Count + lists.Count > 0 || item.Watchlist is not null || item.Favorite is not null || item.Progress is not null)
+                result.Add(item);
+        }
+        return result;
+    }
+
+    public static string? Serialize(List<PendingImport> items) => items.Count == 0 ? null : JsonSerializer.Serialize(items);
+    public static List<PendingImport> Parse(string? json) =>
+        string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<PendingImport>>(json) ?? [];
+
+    /// <summary>These rows again, now pointing at the title the user picked.</summary>
+    public ParsedImport ToParsed(int tmdbId)
+    {
+        var r = new ImportRef(Type, tmdbId, null, Title, Year);
+        var parsed = new ParsedImport();
+        parsed.History.AddRange(Plays.Select(p => new ImportWatch(r, p.Season, p.Episode, p.WatchedAt, p.Approximate)));
+        parsed.Ratings.AddRange(Ratings.Select(x => new ImportRating(r, x.Season, x.Episode, x.Value, x.RatedAt)));
+        if (Watchlist is { } w) parsed.Watchlist.Add(new ImportListItem(r, w));
+        foreach (var g in Lists.GroupBy(l => l.List))
+            parsed.Lists.Add(new ImportList(g.Key, g.First().Description, [.. g.Select(l => new ImportListItem(r, l.AddedAt))]));
+        if (Favorite is { } f) parsed.Favorites.Add(new ImportListItem(r, f));
+        if (Progress is { } p) parsed.Progress.Add(p with { Show = r });
+        return parsed;
+    }
+
+    public string Summary()
+    {
+        var parts = new List<string>();
+        var plays = Plays.Count;
+        if (plays > 0) parts.Add(Type == MediaType.Show ? $"{plays} episode{(plays == 1 ? "" : "s")}" : $"{plays} play{(plays == 1 ? "" : "s")}");
+        if (Progress is not null) parts.Add("progress");
+        if (Ratings.FirstOrDefault(x => x.Season is null) is { } rating) parts.Add($"rated {rating.Value}");
+        if (Watchlist is not null) parts.Add("watchlist");
+        if (Favorite is not null) parts.Add("favorite");
+        if (Lists.Count > 0) parts.Add(Lists.Count == 1 ? $"list “{Lists[0].List}”" : $"{Lists.Count} lists");
+        return string.Join(" · ", parts);
+    }
 }

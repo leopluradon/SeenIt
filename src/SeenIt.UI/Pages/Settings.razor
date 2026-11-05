@@ -97,6 +97,8 @@
                 </div>
             </div>
 
+            <MatchImportDialog JobId="matchJob" @bind-Item="matching" OnMatched="LoadImports" />
+
             <h3 id="letterboxd-sync">Letterboxd auto-sync</h3>
             <p class="muted small">Brings in new diary entries, ratings and likes from your public Letterboxd feed every few hours, so you can keep logging on Letterboxd. It reads the latest 50 entries, so import your full export once first for older ones. Entries you delete here aren't brought back.</p>
             @if (lb is { Username: { } lbUser })
@@ -137,11 +139,29 @@
                             }
                             else if (j.Status == ImportStatus.Queued) { <span class="muted small">Waiting to start…</span> }
                             @if (j.Message is not null) { <div class="small">@j.Message</div> }
-                            @if (j.Unmatched.Count > 0)
+                            @if (j.Pending is { Count: > 0 } pend)
+                            {
+                                <details class="small" open="@(pend.Count <= 5)">
+                                    <summary>Couldn't be matched (@pend.Count): find them yourself</summary>
+                                    <ul class="pending-list">
+                                        @foreach (var u in pend)
+                                        {
+                                            <li @key="u.Key">
+                                                <span><b>@u.Label</b> <span class="muted">@(u.Type == MediaType.Movie ? "movie" : "show")@(u.Summary.Length > 0 ? " · " + u.Summary : "")</span></span>
+                                                <button class="btn btn-sm" @onclick="() => { matchJob = j.Id; matching = u; }">Find</button>
+                                            </li>
+                                        }
+                                    </ul>
+                                </details>
+                            }
+                            else if (j.Unmatched.Count > 0)
                             {
                                 <details class="small"><summary>Which couldn't be matched (@j.Unmatched.Count)</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
                             }
-                            <div class="muted small">@j.CreatedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")</div>
+                            <div class="inline spread">
+                                <span class="muted small">@j.CreatedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")@(j.UndoneAt is { } undone ? $" · undone {undone.ToLocalTime():MMM d, yyyy}" : "")</span>
+                                @if (j.CanUndo) { <button class="btn btn-sm btn-ghost" disabled="@undoing" @onclick="() => UndoImport(j)">Undo this import</button> }
+                            </div>
                         </div>
                     }
                 </div>
@@ -543,6 +563,23 @@
     private string? plexUser;
     private bool kodiBusy;
     private LetterboxdSyncDto? lb;
+    private Guid matchJob;
+    private PendingTitle? matching;
+    private bool undoing;
+
+    private async Task UndoImport(ImportJobDto j)
+    {
+        if (!await Js.InvokeAsync<bool>("confirm", $"Undo the {WatchSources.Name(j.Kind)} import of {j.FileName}? Everything it added is removed, and ratings it changed go back to what they were. Plays you logged yourself aren't touched.")) return;
+        undoing = true;
+        try
+        {
+            var r = await Api.UndoImportAsync(j.Id);
+            Toasts.Show(r is null ? "Import undone" : $"Import undone: removed {r.Plays:N0} plays, {r.Ratings:N0} ratings, {r.Watchlist + r.ListItems + r.Favorites:N0} watchlist, list and favorite entries");
+            await LoadImports();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { undoing = false; }
+    }
     private string? lbName;
     private bool lbBusy;
 

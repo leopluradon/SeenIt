@@ -147,6 +147,8 @@ public class WatchEvent
     public DateTimeOffset WatchedAt { get; set; }
     public WatchSource Source { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The import that added this, so the import can be undone.</summary>
+    public Guid? ImportJobId { get; set; }
 }
 
 public class WatchlistItem
@@ -156,6 +158,8 @@ public class WatchlistItem
     public MediaType Type { get; set; }
     public int TmdbId { get; set; }
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The import that added this, so the import can be undone.</summary>
+    public Guid? ImportJobId { get; set; }
 }
 
 public class Rating
@@ -168,6 +172,8 @@ public class Rating
     public int? EpisodeNumber { get; set; }
     public int Value { get; set; }
     public DateTimeOffset RatedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The import that added this, so the import can be undone.</summary>
+    public Guid? ImportJobId { get; set; }
 }
 
 public class UserList
@@ -178,7 +184,11 @@ public class UserList
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public bool IsPublic { get; set; }
+    /// <summary>A ranking: shown numbered, in the owner's order.</summary>
+    public bool Ranked { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The import that created this list (undoing the import removes it once it's empty).</summary>
+    public Guid? ImportJobId { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<UserListItem> Items { get; set; } = [];
 }
@@ -191,6 +201,10 @@ public class UserListItem
     public int TmdbId { get; set; }
     public int Position { get; set; }
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The owner's note on this entry ("better than the book").</summary>
+    public string? Note { get; set; }
+    /// <summary>The import that added this, so the import can be undone.</summary>
+    public Guid? ImportJobId { get; set; }
 }
 
 public class ImportJob
@@ -212,6 +226,11 @@ public class ImportJob
     public int Failed { get; set; }
     public string? Message { get; set; }
     public List<string> Unmatched { get; set; } = [];
+    public DateTimeOffset? UndoneAt { get; set; }
+    /// <summary>JSON (ImportUndo): what the import changed in place, so undo can put it back.</summary>
+    public string? UndoJson { get; set; }
+    /// <summary>JSON (List&lt;PendingImport&gt;): unmatched titles with their rows, for matching them by hand later.</summary>
+    public string? PendingJson { get; set; }
 }
 
 public class JellyfinEvent
@@ -318,6 +337,8 @@ public class Favorite
     public int TmdbId { get; set; }
     public int Rank { get; set; }
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The import that added this, so the import can be undone.</summary>
+    public Guid? ImportJobId { get; set; }
 }
 
 /// <summary>A TMDB collection (franchise) and its movies, for franchise progress in stats.</summary>

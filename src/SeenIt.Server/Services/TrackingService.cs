@@ -157,6 +157,58 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         return (before, new PlayDto(play.Id, play.WatchedAt, play.Source));
     }
 
+    /// <summary>
+    /// Re-dates several plays. A custom date applies to all of them, keeping their order a minute
+    /// apart (a binge stays in sequence); "release date" uses each one's own. Returns the old dates, for undo.
+    /// </summary>
+    public async Task<List<PlayDate>> EditPlaysAsync(Guid userId, BulkEditPlaysRequest req, CancellationToken ct)
+    {
+        if (req.Ids.Count > 2000) throw new TrackingException("That's too many plays at once.");
+        if (req.When == WatchTime.Custom && req.WatchedAt is null) throw new TrackingException("Pick a date.");
+        var plays = await db.WatchEvents.Where(w => w.UserId == userId && req.Ids.Contains(w.Id))
+            .OrderBy(w => w.WatchedAt).ThenBy(w => w.CreatedAt).ToListAsync(ct);
+        var before = plays.Select(p => new PlayDate(p.Id, p.WatchedAt)).ToList();
+
+        Dictionary<int, DateOnly?> movieDates = [];
+        Dictionary<(int, int?, int?), DateOnly?> episodeDates = [];
+        if (req.When == WatchTime.ReleaseDate)
+        {
+            var movieIds = plays.Where(p => p.Type == MediaType.Movie).Select(p => p.TmdbId).Distinct().ToList();
+            var showIds = plays.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
+            movieDates = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).Select(m => new { m.TmdbId, m.ReleaseDate })
+                .ToDictionaryAsync(m => m.TmdbId, m => m.ReleaseDate, ct);
+            episodeDates = (await db.Episodes.Where(e => showIds.Contains(e.ShowTmdbId))
+                    .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.AirDate }).ToListAsync(ct))
+                .ToDictionary(e => (e.ShowTmdbId, (int?)e.SeasonNumber, (int?)e.EpisodeNumber), e => e.AirDate);
+        }
+
+        for (var i = 0; i < plays.Count; i++)
+        {
+            var p = plays[i];
+            p.WatchedAt = req.When switch
+            {
+                WatchTime.Custom => req.WatchedAt!.Value.ToUniversalTime().AddMinutes(i),
+                WatchTime.ReleaseDate => PlayTime(WatchTime.ReleaseDate, null,
+                    p.Type == MediaType.Movie ? movieDates.GetValueOrDefault(p.TmdbId) : episodeDates.GetValueOrDefault((p.TmdbId, p.SeasonNumber, p.EpisodeNumber))),
+                _ => PlayTime(req.When, req.WatchedAt, null),
+            };
+        }
+        await db.SaveChangesAsync(ct);
+        return before;
+    }
+
+    /// <summary>Puts plays back on the dates given (undo for <see cref="EditPlaysAsync"/>).</summary>
+    public async Task<int> SetPlayDatesAsync(Guid userId, IReadOnlyList<PlayDate> dates, CancellationToken ct)
+    {
+        if (dates.Count > 2000) throw new TrackingException("That's too many plays at once.");
+        var byId = dates.ToDictionary(d => d.Id, d => d.WatchedAt.ToUniversalTime());
+        var ids = byId.Keys.ToList();
+        var plays = await db.WatchEvents.Where(w => w.UserId == userId && ids.Contains(w.Id)).ToListAsync(ct);
+        foreach (var p in plays) p.WatchedAt = byId[p.Id];
+        await db.SaveChangesAsync(ct);
+        return plays.Count;
+    }
+
     /// <summary>Deletes several plays at once; returns them as they were (for undo).</summary>
     public async Task<List<RestorePlay>> DeleteHistoryAsync(Guid userId, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
@@ -318,6 +370,13 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var pageSize = Math.Clamp(f.PageSize, 1, 100);
         var page = Math.Max(f.Page, 1);
         var q = FilterHistory(db.WatchEvents.Where(w => w.UserId == userId), f);
+        if (!string.IsNullOrWhiteSpace(f.Q))
+        {
+            // Find the matching plays once. As a filter inside every query below (count, page,
+            // totals, day sums) the title/episode-name search ran over every episode again each time.
+            var ids = await SearchPlaysAsync(userId, f.Q, ct);
+            q = q.Where(w => ids.Contains(w.Id));
+        }
 
         var total = await q.CountAsync(ct);
         var ordered = f.Oldest
@@ -396,17 +455,26 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             q = q.Where(w => w.Type == MediaType.Movie ? movies.Contains(w.TmdbId) : shows.Contains(w.TmdbId));
         }
 
-        if (!string.IsNullOrWhiteSpace(f.Q))
-        {
-            var term = f.Q.Trim().ToLower();
-            var movies = db.Movies.Where(m => m.Title.ToLower().Contains(term)).Select(m => m.TmdbId);
-            var shows = db.Shows.Where(s => s.Name.ToLower().Contains(term)).Select(s => s.TmdbId);
-            var episodes = db.Episodes.Where(e => e.Name != null && e.Name.ToLower().Contains(term));
-            q = q.Where(w => w.Type == MediaType.Movie
-                ? movies.Contains(w.TmdbId)
-                : shows.Contains(w.TmdbId) || episodes.Any(e => e.ShowTmdbId == w.TmdbId && e.SeasonNumber == w.SeasonNumber && e.EpisodeNumber == w.EpisodeNumber));
-        }
         return q;
+    }
+
+    /// <summary>The user's plays whose movie title, show name or episode name contains the text.</summary>
+    private async Task<List<Guid>> SearchPlaysAsync(Guid userId, string text, CancellationToken ct)
+    {
+        var term = text.Trim().ToLower();
+        var mine = db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId);
+        var movieIds = await db.Movies.Where(m => m.Title.ToLower().Contains(term)).Select(m => m.TmdbId).ToListAsync(ct);
+        var showIds = await db.Shows.Where(s => s.Name.ToLower().Contains(term)).Select(s => s.TmdbId).ToListAsync(ct);
+        var byTitle = await mine.Where(w => w.Type == MediaType.Movie ? movieIds.Contains(w.TmdbId) : showIds.Contains(w.TmdbId))
+            .Select(w => w.Id).ToListAsync(ct);
+        // Episode names: only among shows this user has watched.
+        var watchedShows = mine.Where(w => w.Type == MediaType.Episode).Select(w => w.TmdbId).Distinct();
+        var byEpisode = await mine.Where(w => w.Type == MediaType.Episode)
+            .Join(db.Episodes.Where(e => watchedShows.Contains(e.ShowTmdbId) && e.Name != null && e.Name.ToLower().Contains(term)),
+                w => new { S = w.TmdbId, N = w.SeasonNumber ?? -1, E = w.EpisodeNumber ?? -1 },
+                e => new { S = e.ShowTmdbId, N = e.SeasonNumber, E = e.EpisodeNumber }, (w, e) => w.Id)
+            .ToListAsync(ct);
+        return [.. byTitle.Union(byEpisode)];
     }
 
     /// <summary>Genres across everything the user has watched, most-watched first, for the history filter.</summary>

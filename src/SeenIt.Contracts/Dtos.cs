@@ -446,9 +446,13 @@ public record DashboardDto(
 // ---------- Lists ----------
 
 public record ListSummary(Guid Id, string Name, string? Description, bool IsPublic, int ItemCount, DateTimeOffset UpdatedAt, IReadOnlyList<string?> Posters);
-public record ListDetail(Guid Id, string Name, string? Description, bool IsPublic, string OwnerUserName, bool IsOwner, IReadOnlyList<ListItemDto> Items);
-public record ListItemDto(Guid Id, MediaSummary Media, DateTimeOffset AddedAt, int Position);
-public record CreateListRequest(string Name, string? Description, bool IsPublic);
+public record ListDetail(Guid Id, string Name, string? Description, bool IsPublic, string OwnerUserName, bool IsOwner, IReadOnlyList<ListItemDto> Items,
+    bool Ranked = false);
+public record ListItemDto(Guid Id, MediaSummary Media, DateTimeOffset AddedAt, int Position, string? Note = null);
+public record CreateListRequest(string Name, string? Description, bool IsPublic, bool Ranked = false);
+/// <summary>Every item id of the list, in the new order.</summary>
+public record ListOrderRequest(IReadOnlyList<Guid> ItemIds);
+public record ListNoteRequest(string? Note);
 public record ListItemRequest(MediaType Type, int TmdbId);
 
 // ---------- Integrations ----------
@@ -478,6 +482,7 @@ public enum ActivityKind
     FavoriteAdd, FavoriteRemove,
     EditPlay,
     GoalSet, GoalDelete, LetterboxdSync,
+    ImportUndo, ImportResolve, ListReorder, ListNote,
 }
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
@@ -504,7 +509,20 @@ public record ImportJobDto(
     int Failed,
     string? Message,
     IReadOnlyList<string> Unmatched,
-    ImportParts Parts = ImportParts.All);
+    ImportParts Parts = ImportParts.All,
+    DateTimeOffset? UndoneAt = null,
+    bool CanUndo = false,                          // imports from before undo existed can't be undone
+    IReadOnlyList<PendingTitle>? Pending = null);  // unmatched titles that can still be matched by hand
+
+/// <summary>An unmatched import title, with what it would bring in.</summary>
+public record PendingTitle(string Key, string Label, MediaType Type, string? Title, int? Year, string Summary);
+public record ResolveImportRequest(string Key, int TmdbId);
+public record ResolveImportResult(int Imported, int Skipped);
+public record UndoImportResult(int Plays, int Ratings, int Watchlist, int ListItems, int Favorites, int Lists);
+
+/// <summary>Several plays at once: one date for all (kept in their order, a minute apart), each one's release date, or unknown.</summary>
+public record BulkEditPlaysRequest(IReadOnlyList<Guid> Ids, WatchTime When, DateTimeOffset? WatchedAt = null);
+public record PlayDate(Guid Id, DateTimeOffset WatchedAt);
 
 // ---------- Month / year in review ----------
 

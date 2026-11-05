@@ -13,7 +13,7 @@ else if (list is not null)
     <div class="page-head">
         <div>
             <h1>@list.Name</h1>
-            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items · @(list.IsPublic ? "Public" : "Private")</p>
+            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items@(list.Ranked ? " · Ranked" : "") · @(list.IsPublic ? "Public" : "Private")</p>
         </div>
         @if (list.IsPublic && !list.IsOwner) { <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
         @if (list.IsOwner)
@@ -21,6 +21,7 @@ else if (list is not null)
             <div class="inline">
                 @if (list.IsPublic) { <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
                 else { <span class="muted small" title="Make the list public in Edit to share it">Private: only you can see it</span> }
+                @if (list.Items.Count > 1) { <button class="btn btn-sm @(arranging ? "btn-on" : "")" @onclick="ToggleArranging">@(arranging ? "Done" : "Reorder & notes")</button> }
                 <button class="btn btn-sm" @onclick="() => editOpen = true">Edit</button>
                 <button class="btn btn-sm btn-danger" @onclick="Delete">Delete</button>
             </div>
@@ -28,6 +29,36 @@ else if (list is not null)
     </div>
     @if (list.Description is not null) { <p class="overview">@list.Description</p> }
     @if (list.Items.Count == 0) { <Empty Title="This list is empty.">Add movies and shows from their pages with the “Lists” button.</Empty> }
+    @if (arranging && order is not null)
+    {
+        <p class="muted small">Drag entries (or use the arrows) to put them in order, and add a note to any of them. Notes save when you leave the box.</p>
+        <ol class="arrange-list">
+            @for (var n = 0; n < order.Count; n++)
+            {
+                var i = order[n];
+                var index = n;
+                <li class="arrange-item @(dragging == i.Id ? "dragging" : "")" @key="i.Id" draggable="true"
+                    @ondragstart="() => dragging = i.Id" @ondragend="() => dragging = null"
+                    @ondragover="() => DragOver(index)" @ondragover:preventDefault="true" @ondrop:preventDefault="true">
+                    <span class="arrange-handle" aria-hidden="true"><Icon Name="menu" Size="16" /></span>
+                    <span class="arrange-rank">@(index + 1)</span>
+                    <img src="@Img.Poster(i.Media.PosterPath, "w92")" alt="" loading="lazy" />
+                    <div class="arrange-main">
+                        <b>@i.Media.Title</b> <span class="muted small">@i.Media.Year</span>
+                        <textarea rows="1" maxlength="500" placeholder="Add a note" aria-label="Note for @i.Media.Title"
+                                  value="@i.Note" @onchange="e => SaveNote(i, e.Value?.ToString())"></textarea>
+                    </div>
+                    <div class="arrange-moves">
+                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => Move(index, 0)" aria-label="Move to the top" title="Move to the top"><Icon Name="chevron-up" Size="14" /><Icon Name="chevron-up" Size="14" /></button>
+                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => Move(index, index - 1)" aria-label="Move up"><Icon Name="chevron-up" Size="16" /></button>
+                        <button class="icon-btn" disabled="@(index == order.Count - 1)" @onclick="() => Move(index, index + 1)" aria-label="Move down"><Icon Name="chevron-down" Size="16" /></button>
+                    </div>
+                </li>
+            }
+        </ol>
+    }
+    else
+    {
     @if (list.Items.Count > 8)
     {
         <div class="searchbar">
@@ -37,10 +68,11 @@ else if (list is not null)
         </div>
     }
     <div class="poster-grid">
-        @foreach (var i in list.Items.Where(i => TextMatch.Contains(i.Media.Title, find)))
+        @foreach (var (i, rank) in list.Items.Select((x, n) => (x, n + 1)).Where(x => TextMatch.Contains(x.x.Media.Title, find)))
         {
             <div class="poster-wrap" @key="i.Id">
-                <PosterCard Media="i.Media" />
+                <PosterCard Media="i.Media" Badge="@(list.Ranked ? $"#{rank}" : null)" />
+                @if (i.Note is { Length: > 0 } note) { <p class="list-note">@note</p> }
                 @if (list.IsOwner)
                 {
                     <button class="poster-remove" @onclick="() => Remove(i)" aria-label="Remove @i.Media.Title"><Icon Name="x" Size="14" /></button>
@@ -49,8 +81,10 @@ else if (list is not null)
         }
     </div>
 
+    }
+
     <Modal @bind-Open="editOpen" Title="Edit list">
-        <ListForm Name="@list.Name" Description="@list.Description" IsPublic="list.IsPublic" OnSave="Save" />
+        <ListForm Name="@list.Name" Description="@list.Description" IsPublic="list.IsPublic" Ranked="list.Ranked" OnSave="Save" />
     </Modal>
 }
 @code {
@@ -60,6 +94,58 @@ else if (list is not null)
     private string? error;
     private bool editOpen;
     private string find = "";
+    private bool arranging, orderChanged;
+    private List<ListItemDto>? order;
+    private Guid? dragging;
+
+    private async Task ToggleArranging()
+    {
+        if (!arranging)
+        {
+            order = [.. list!.Items];
+            orderChanged = false;
+            arranging = true;
+            return;
+        }
+        arranging = false;
+        if (orderChanged && order is not null)
+        {
+            try { await Api.ReorderListAsync(Id, order.Select(i => i.Id).ToList()); Toasts.Show("Order saved"); }
+            catch (Exception ex) { Toasts.Error(ex); }
+        }
+        await Load();
+    }
+
+    private void Move(int from, int to)
+    {
+        if (order is null || from == to || to < 0 || to >= order.Count) return;
+        var item = order[from];
+        order.RemoveAt(from);
+        order.Insert(to, item);
+        orderChanged = true;
+    }
+
+    /// <summary>While dragging, the dragged entry moves to wherever the pointer is.</summary>
+    private void DragOver(int index)
+    {
+        if (order is null || dragging is not { } id) return;
+        var from = order.FindIndex(i => i.Id == id);
+        if (from >= 0 && from != index) Move(from, index);
+    }
+
+    private async Task SaveNote(ListItemDto item, string? note)
+    {
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (note == item.Note) return;
+        try
+        {
+            await Api.SetListNoteAsync(Id, item.Id, note);
+            var updated = item with { Note = note };
+            if (order is not null) order[order.IndexOf(item)] = updated;
+            Toasts.Show(note is null ? "Note removed" : "Note saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
 
     protected override Task OnParametersSetAsync() => Load();
 

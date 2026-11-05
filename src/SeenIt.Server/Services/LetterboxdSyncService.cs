@@ -94,7 +94,8 @@ public class LetterboxdSyncService(AppDbContext db, IHttpClientFactory http, Imp
         }
         if (liked.Count > 0) parsed.Lists.Add(new ImportList("Liked on Letterboxd", "Films you hearted on Letterboxd.", liked));
 
-        var job = new ImportJob { UserId = sync.UserId, Kind = ImportKind.Letterboxd, FileName = "RSS", Parts = ImportParts.All };
+        // An empty id: the feed's rows aren't tied to an undoable import.
+        var job = new ImportJob { Id = Guid.Empty, UserId = sync.UserId, Kind = ImportKind.Letterboxd, FileName = "RSS", Parts = ImportParts.All };
         if (parsed.Total > 0)
         {
             try { await runner.RunAsync(job, parsed, ct); }

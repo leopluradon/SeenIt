@@ -117,6 +117,7 @@ builder.Services.AddHostedService<EmailWorker>();
 // Password reset links are good for two hours.
 builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = TimeSpan.FromHours(2));
 builder.Services.AddScoped<ImportRunner>();
+builder.Services.AddScoped<SeenIt.Server.Import.ImportService>();
 builder.Services.AddHostedService<ImportWorker>();
 builder.Services.AddHostedService<ShowRefreshWorker>();
 builder.Services.AddScoped<LetterboxdSyncService>();

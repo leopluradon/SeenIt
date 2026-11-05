@@ -1,0 +1,80 @@
+@* Pick the right TMDB title for something an import couldn't match; its plays, ratings and list entries come in as that title. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+<Modal Open="Item is not null" OpenChanged="o => { if (!o) Close(); }" Title="@($"Find “{Item?.Label}”")">
+    @if (Item is { } item)
+    {
+        <p class="muted small">The import couldn't tell which @(item.Type == MediaType.Movie ? "movie" : "show") this is. Pick it and @item.Summary will come in for it.</p>
+        <form class="searchbar" @onsubmit="Search">
+            <Icon Name="search" Size="18" />
+            <input @bind="query" placeholder="Search TMDB" aria-label="Search" />
+            <button class="btn btn-sm" type="submit" disabled="@searching">Search</button>
+        </form>
+        @if (searching) { <Spinner /> }
+        else if (results is { } list)
+        {
+            @if (list.Count == 0) { <p class="muted small">Nothing found. Try a shorter or different title.</p> }
+            <div class="fix-results">
+                @foreach (var r in list)
+                {
+                    <div class="fix-result" @key="r.TmdbId">
+                        <img src="@Img.Poster(r.PosterPath, "w92")" alt="" loading="lazy" />
+                        <div class="fix-result-main">
+                            <b>@r.Title</b> <span class="muted">@r.Year</span>
+                            @if (r.Overview is { Length: > 0 } o) { <div class="muted small clamp-2">@o</div> }
+                        </div>
+                        <button class="btn btn-sm btn-primary" disabled="@saving" @onclick="() => Pick(r)">This one</button>
+                    </div>
+                }
+            </div>
+        }
+    }
+</Modal>
+@code {
+    [Parameter] public Guid JobId { get; set; }
+    [Parameter] public PendingTitle? Item { get; set; }
+    [Parameter] public EventCallback<PendingTitle?> ItemChanged { get; set; }
+    [Parameter] public EventCallback OnMatched { get; set; }
+    private string query = "";
+    private List<MediaSummary>? results;
+    private bool searching, saving;
+    private string? openedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Item is { } item && openedFor != item.Key + JobId)
+        {
+            openedFor = item.Key + JobId;
+            query = item.Title ?? item.Label;
+            results = null;
+            await Search();
+        }
+        else if (Item is null) openedFor = null;
+    }
+
+    private async Task Search()
+    {
+        if (string.IsNullOrWhiteSpace(query) || Item is null) return;
+        searching = true;
+        try { results = (await Api.SearchAsync(query.Trim(), Item.Type == MediaType.Movie ? "movie" : "show")).Items.Take(12).ToList(); }
+        catch (Exception ex) { Toasts.Error(ex); results = []; }
+        searching = false;
+    }
+
+    private async Task Pick(MediaSummary m)
+    {
+        if (Item is not { } item) return;
+        saving = true;
+        try
+        {
+            var r = await Api.ResolveImportAsync(JobId, new ResolveImportRequest(item.Key, m.TmdbId));
+            Toasts.Show(r is { Imported: > 0 } ? $"Added {r.Imported} for {m.Title}" : $"Matched to {m.Title}; you already had everything");
+            Close();
+            await OnMatched.InvokeAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        saving = false;
+    }
+
+    private void Close() { _ = ItemChanged.InvokeAsync(null); }
+}

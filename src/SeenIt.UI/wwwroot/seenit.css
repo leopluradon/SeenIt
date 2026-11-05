@@ -978,3 +978,43 @@ html[data-theme="nord"] {
 .share-wait { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 0; }
 .share-btn { margin-left: auto; }
 .server-tabs { margin: 4px 0 14px; }
+
+/* Import results */
+.pending-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.pending-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Selecting plays in History */
+.pick-box { display: flex; align-items: center; padding: 4px; cursor: pointer; }
+.pick-box input { width: 20px; height: 20px; accent-color: var(--accent); }
+.history-item.picked { background: var(--accent-soft); }
+.bulk-bar {
+    position: fixed; z-index: 44; left: 50%; transform: translateX(-50%); bottom: 20px;
+    width: min(720px, calc(100vw - 32px)); display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+.bulk-actions { display: flex; gap: 8px; margin-left: auto; }
+@media (max-width: 760px) {
+    .bulk-bar { bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); }
+    .bulk-actions { margin-left: 0; width: 100%; }
+    .bulk-actions .btn { flex: 1; }
+}
+
+/* Ranked lists, notes and reordering */
+.list-note { margin: 6px 0 0; font-size: .82rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.arrange-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.arrange-item { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.arrange-item.dragging { opacity: .5; border-style: dashed; }
+.arrange-handle { color: var(--muted); cursor: grab; display: flex; }
+.arrange-rank { font-weight: 800; min-width: 2ch; text-align: right; color: var(--accent); }
+.arrange-item img { width: 46px; height: 69px; object-fit: cover; border-radius: 6px; flex: none; }
+.arrange-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.arrange-main textarea { width: 100%; resize: vertical; min-height: 34px; font-size: .88rem; }
+.arrange-moves { display: flex; gap: 2px; }
+@media (max-width: 760px) {
+    .arrange-handle { display: none; }
+    .arrange-item { gap: 8px; padding: 8px; }
+    .arrange-moves { flex-direction: column; }
+}
+.bulk-spacer { height: 110px; }

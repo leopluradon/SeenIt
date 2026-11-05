@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SeenIt.Contracts;
 using SeenIt.Server.Data;
+using SeenIt.Server.Import;
 using SeenIt.Server.Services;
 
 namespace SeenIt.Server.Endpoints;
@@ -111,10 +112,23 @@ public static class ApiEndpoints
             return Results.Ok(r.After);
         });
 
+        g.MapPost("/history/edit", async (BulkEditPlaysRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var before = await t.EditPlaysAsync(p.UserId(), req, ct);
+            await a.LogAsync(p, ActivityKind.EditPlay, detail: $"{before.Count} plays → {req.When}{(req.WatchedAt is { } at ? $" {at:yyyy-MM-dd HH:mm zzz}" : "")}");
+            return Results.Ok(before);
+        });
+        g.MapPost("/history/dates", async (List<PlayDate> dates, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var n = await t.SetPlayDatesAsync(p.UserId(), dates, ct);
+            await a.LogAsync(p, ActivityKind.EditPlay, detail: $"{n} plays back to their old dates (undo)");
+            return Results.Ok(new { restored = n });
+        });
+
         g.MapPost("/history/delete", async (List<Guid> ids, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             var plays = await t.DeleteHistoryAsync(p.UserId(), ids, ct);
-            if (plays.Count > 0) await a.LogAsync(p, ActivityKind.DeletePlay, detail: $"{plays.Count} plays (duplicates)");
+            if (plays.Count > 0) await a.LogAsync(p, ActivityKind.DeletePlay, detail: $"{plays.Count} plays (selected)");
             return Results.Ok(new RemovedPlays(plays.Count, plays));
         });
 
@@ -285,6 +299,14 @@ public static class ApiEndpoints
             await a.LogAsync(p, ActivityKind.ListAdd, req.Type, req.TmdbId, detail: $"to \"{await ListName(db, id, ct)}\"");
             return Results.NoContent();
         });
+        g.MapPut("/{id:guid}/order", async (Guid id, ListOrderRequest req, ClaimsPrincipal p, ListService l, ActivityService a, CancellationToken ct) =>
+        {
+            if (!await l.ReorderAsync(p.UserId(), id, req.ItemIds, ct)) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.ListReorder, detail: $"{req.ItemIds.Count} items");
+            return Results.NoContent();
+        });
+        g.MapPut("/{id:guid}/items/{itemId:guid}/note", async (Guid id, Guid itemId, ListNoteRequest req, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
+            await l.SetNoteAsync(p.UserId(), id, itemId, req.Note, ct) ? Results.NoContent() : Results.NotFound());
         g.MapDelete("/{id:guid}/items", async (Guid id, MediaType type, int tmdbId, ClaimsPrincipal p, ListService l, AppDbContext db, ActivityService a, CancellationToken ct) =>
         {
             if (!await l.RemoveItemAsync(p.UserId(), id, type, tmdbId, ct)) return Results.NotFound();
@@ -375,13 +397,18 @@ public static class ApiEndpoints
 
     private static void MapImports(RouteGroupBuilder g)
     {
-        g.MapGet("", async (ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
+        g.MapGet("", (ClaimsPrincipal p, ImportService s, CancellationToken ct) => s.RecentAsync(p.UserId(), ct));
+        g.MapPost("/{id:guid}/undo", async (Guid id, ClaimsPrincipal p, ImportService s, ActivityService a, CancellationToken ct) =>
         {
-            var uid = p.UserId();
-            return await db.ImportJobs.Where(j => j.UserId == uid).OrderByDescending(j => j.CreatedAt).Take(20)
-                .Select(j => new ImportJobDto(j.Id, j.Kind, j.FileName, j.Status, j.CreatedAt, j.FinishedAt,
-                    j.Total, j.Processed, j.Imported, j.Skipped, j.Failed, j.Message, j.Unmatched, j.Parts))
-                .ToListAsync(ct);
+            if (await s.UndoAsync(p.UserId(), id, ct) is not { } r) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.ImportUndo, detail: $"{r.Plays} plays, {r.Ratings} ratings, {r.Watchlist} watchlist, {r.ListItems} list entries, {r.Favorites} favorites, {r.Lists} lists");
+            return Results.Ok(r);
+        });
+        g.MapPost("/{id:guid}/resolve", async (Guid id, ResolveImportRequest req, ClaimsPrincipal p, ImportService s, ActivityService a, CancellationToken ct) =>
+        {
+            if (await s.ResolveAsync(p.UserId(), id, req, ct) is not { } r) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.ImportResolve, detail: $"{req.Key} → TMDB {req.TmdbId}: {r.Imported} added");
+            return Results.Ok(r);
         });
 
         g.MapPost("/{kind}", async (ImportKind kind, int? parts, IFormFile file, ClaimsPrincipal p, AppDbContext db, ActivityService a, CancellationToken ct) =>
