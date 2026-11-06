@@ -6,6 +6,8 @@ using AndroidX.Core.View;
 
 namespace SeenIt.Mobile;
 
+// Share an IMDb, TMDB, Letterboxd or Trakt link from another app → open it in SeenIt (search resolves the link).
+[IntentFilter([Intent.ActionSend], Categories = [Intent.CategoryDefault], DataMimeType = "text/plain", Label = "SeenIt")]
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop,
     ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
@@ -16,7 +18,20 @@ public class MainActivity : MauiAppCompatActivity
     protected override void OnNewIntent(Intent? intent)
     {
         base.OnNewIntent(intent);
-        DeepLinks.Open(intent?.GetStringExtra(PathExtra));
+        DeepLinks.Open(PathFor(intent));
+    }
+
+    /// <summary>An app page to open: our own deep link, or a shared link/text sent to search.</summary>
+    private static string? PathFor(Intent? intent)
+    {
+        if (intent?.GetStringExtra(PathExtra) is { Length: > 0 } path) return path;
+        if (intent?.Action == Intent.ActionSend && intent.GetStringExtra(Intent.ExtraText) is { Length: > 0 } text)
+        {
+            var link = System.Text.RegularExpressions.Regex.Match(text, @"https?://\S+");
+            var query = link.Success ? link.Value : text.Trim();
+            return "search?q=" + Uri.EscapeDataString(query.Length > 500 ? query[..500] : query);
+        }
+        return null;
     }
 
     protected override void OnPause()
@@ -29,7 +44,7 @@ public class MainActivity : MauiAppCompatActivity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
-        DeepLinks.Open(Intent?.GetStringExtra(PathExtra));
+        DeepLinks.Open(PathFor(Intent));
         if (Window is not { } window) return;
 
         // Android 15+ draws apps edge-to-edge, and the WebView doesn't report safe-area insets to

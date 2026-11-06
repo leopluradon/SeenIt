@@ -11,7 +11,7 @@ namespace SeenIt.Server.Services;
 /// Reads TMDB and keeps a local copy of the metadata tracking depends on (titles, runtimes,
 /// genres, episode lists), so history, progress, calendar and stats never call TMDB.
 /// </summary>
-public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogService> log)
+public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory http, ILogger<CatalogService> log)
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Locks = new();
     /// <summary>
@@ -248,10 +248,56 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
     private static readonly System.Text.RegularExpressions.Regex TmdbRe = new(@"^(?:https?://)?(?:www\.)?themoviedb\.org/(movie|tv|person)/(\d+)(?:-[^/?#]*)?(?:/season/(\d+)(?:/episode/(\d+))?)?",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
+    private static readonly System.Text.RegularExpressions.Regex LetterboxdRe = new(@"^(?:https?://)?(?:www\.)?(?:letterboxd\.com/(?:[\w-]+/)?film/([\w-]+)|boxd\.it/(\w+))",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private static readonly System.Text.RegularExpressions.Regex TraktRe = new(@"^(?:https?://)?(?:www\.|app\.)?trakt\.tv/(movies|shows)/([\w-]+)(?:/seasons/(\d+)(?:/episodes/(\d+))?)?",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     /// <summary>Null when the query isn't an id or link (search normally then).</summary>
     public async Task<LookupResult?> LookupAsync(string query, CancellationToken ct)
     {
         query = query.Trim();
+        // A shared link often comes with text around it ("Check this out https://…"): use the link.
+        if (System.Text.RegularExpressions.Regex.Match(query, @"https?://\S+") is { Success: true } link && link.Value.Length < query.Length) query = link.Value;
+        if (LetterboxdRe.Match(query) is { Success: true } lb)
+        {
+            var url = lb.Groups[1].Success ? $"https://letterboxd.com/film/{lb.Groups[1].Value}/" : $"https://boxd.it/{lb.Groups[2].Value}";
+            int? movieId = null;
+            try { movieId = Import.ImportRunner.LetterboxdPageTmdbId(await http.CreateClient("letterboxd").GetStringAsync(url, ct)); }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { log.LogInformation("Letterboxd lookup failed: {Message}", ex.Message); }
+            var movie = movieId is { } mid ? await MovieSummaryAsync(mid, ct) : null;
+            return new LookupResult("Letterboxd film", movie is null ? [] : [movie], [], movie is null ? null : $"movie/{movie.TmdbId}");
+        }
+        if (TraktRe.Match(query) is { Success: true } tr)
+        {
+            var isShow = tr.Groups[1].Value.Equals("shows", StringComparison.OrdinalIgnoreCase);
+            var slug = tr.Groups[2].Value;
+            int? id = null;
+            // Trakt's pages link to TMDB; failing that (Trakt can block servers), the slug is "title-year".
+            try
+            {
+                var html = await http.CreateClient("letterboxd").GetStringAsync($"https://trakt.tv/{(isShow ? "shows" : "movies")}/{slug}", ct);
+                var m = System.Text.RegularExpressions.Regex.Match(html, isShow ? @"themoviedb\.org/tv/(\d+)" : @"themoviedb\.org/movie/(\d+)");
+                if (m.Success) id = int.Parse(m.Groups[1].Value);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { log.LogInformation("Trakt page lookup failed: {Message}", ex.Message); }
+            if (id is null)
+            {
+                var yearMatch = System.Text.RegularExpressions.Regex.Match(slug, @"^(.*)-(\d{4})$");
+                var title = (yearMatch.Success ? yearMatch.Groups[1].Value : slug).Replace('-', ' ');
+                int? year = yearMatch.Success ? int.Parse(yearMatch.Groups[2].Value) : null;
+                var hits = isShow ? await tmdb.SearchShowAsync(title, year, ct) : await tmdb.SearchMovieAsync(title, year, ct);
+                id = hits?.Results.FirstOrDefault()?.Id;
+            }
+            if (id is not { } found) return new LookupResult("Trakt link", [], [], null);
+            var summary = isShow ? await ShowSummaryAsync(found, ct) : await MovieSummaryAsync(found, ct);
+            var go = summary is null ? null
+                : !isShow ? $"movie/{found}"
+                : tr.Groups[4].Success ? $"show/{found}/season/{tr.Groups[3].Value}/episode/{tr.Groups[4].Value}"
+                : tr.Groups[3].Success ? $"show/{found}/season/{tr.Groups[3].Value}"
+                : $"show/{found}";
+            return new LookupResult("Trakt link", summary is null ? [] : [summary], [], go);
+        }
         if (ImdbRe.Match(query) is { Success: true } im)
         {
             var id = (im.Groups[1].Success ? im.Groups[1].Value : im.Groups[2].Value).ToLowerInvariant();
