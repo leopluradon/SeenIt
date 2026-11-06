@@ -192,6 +192,11 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     public Task<ProfileDto> ProfileAsync(string userName) => GetAsync<ProfileDto>($"api/users/{Uri.EscapeDataString(userName)}");
     public Task<FeedDto> FeedAsync(int take = 40) => GetAsync<FeedDto>($"api/social/feed?take={take}");
+    public Task<List<NotInterestedEntry>> NotInterestedAsync() => GetAsync<List<NotInterestedEntry>>("api/not-interested");
+    public Task MarkNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Post, "api/not-interested", new FavoriteRequest(type, id));
+    public Task UndoNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/not-interested?type={type}&tmdbId={id}");
+    public Task<ForYouDto> ForYouAsync() => GetAsync<ForYouDto>("api/recommendations");
+
     public Task<NotificationsDto> NotificationsAsync() => GetAsync<NotificationsDto>("api/notifications");
     public async Task<int> UnreadNotificationsAsync() => (await GetAsync<UnreadResult>("api/notifications/unread")).Unread;
     public Task MarkNotificationsReadAsync() => SendAsync(HttpMethod.Post, "api/notifications/read");

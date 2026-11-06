@@ -81,6 +81,7 @@ public static class UiPrefs
         ("upnext", "Up next"),
         ("upcoming", "Coming up"),
         ("recent", "Recently watched"),
+        ("foryou", "Picked for you"),
         ("friends", "Friends' activity"),
         ("trending-movies", "Trending movies"),
         ("trending-shows", "Trending shows"),
@@ -192,7 +193,8 @@ public record UserMediaState(
     DateTimeOffset? LastWatchedAt,
     IReadOnlyList<Guid> ListIds,
     IReadOnlyList<PlayDto>? History = null,    // every play, newest first (movies only)
-    bool IsFavorite = false);
+    bool IsFavorite = false,
+    bool NotInterested = false);
 
 public record MovieDetail(
     int TmdbId,
@@ -441,6 +443,13 @@ public record ShowProgressDto(
 /// <summary>Paused and dropped shows are kept out of Up Next and the widget until you resume them.</summary>
 public enum ShowTrackStatus { Watching, Paused, Dropped }
 public record ShowStatusRequest(ShowTrackStatus Status);
+
+public record NotInterestedEntry(MediaSummary Media, DateTimeOffset AddedAt);
+/// <summary>A recommendation and the title of yours that led to it ("Because you liked …").</summary>
+public record ForYouItem(MediaSummary Media, string Because, MediaType BecauseType, int BecauseTmdbId);
+public record ForYouGroup(MediaSummary Seed, IReadOnlyList<MediaSummary> Items);
+/// <summary>Top: best overall. Groups: "Because you liked X" for a few of your favorites. Empty until you've rated or watched a few things.</summary>
+public record ForYouDto(IReadOnlyList<ForYouItem> Top, IReadOnlyList<ForYouGroup> Groups);
 
 public record NotificationDto(Guid Id, MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, string Title, string? Detail,
     string? PosterPath, DateOnly Day, bool Read);

@@ -11,6 +11,11 @@
         }
         @if (Badge is not null) { <span class="poster-badge">@Badge</span> }
         @if (Media.VoteAverage is > 0 && ShowScore) { <span class="poster-score">@Media.VoteAverage.Value.ToString("0.0")</span> }
+        @if (OnDismiss.HasDelegate)
+        {
+            <button type="button" class="poster-dismiss" title="Not interested" aria-label="@($"Not interested in {Media.Title}")"
+                    @onclick="() => OnDismiss.InvokeAsync(Media)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="x" Size="14" /></button>
+        }
     </div>
     <div class="poster-title">@Media.Title</div>
     <div class="poster-sub" title="@SubTitle">
@@ -26,4 +31,6 @@
     [Parameter] public string? SubTitle { get; set; }
     [Parameter] public bool ShowScore { get; set; } = true;
     [Parameter] public string? Href { get; set; }
+    /// <summary>Shows a small × for "not interested".</summary>
+    [Parameter] public EventCallback<MediaSummary> OnDismiss { get; set; }
 }

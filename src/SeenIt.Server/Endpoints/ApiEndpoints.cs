@@ -55,14 +55,25 @@ public static class ApiEndpoints
             // In theaters / upcoming depend on the country, like where to watch.
             var saved = p.OptionalUserId() is { } uid ? await db.Users.Where(u => u.Id == uid).Select(u => u.Region).FirstOrDefaultAsync(ct) : null;
             var code = saved ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r.ToUpperInvariant() : "US");
-            return await c.BrowseAsync(type, list, page ?? 1, ct, code);
+            var result = await c.BrowseAsync(type, list, page ?? 1, ct, code);
+            var hidden = await c.NotInterestedAsync(p.OptionalUserId(), ct);
+            return hidden.Count == 0 ? result : result with { Items = result.Items.Where(m => !hidden.Contains((m.Type, m.TmdbId))).ToList() };
         });
 
+        // "You might also like" leaves out what you marked not interested.
         g.MapGet("/movie/{id:int}", async (int id, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
-            await c.GetMovieAsync(id, p.OptionalUserId(), ct) is { } m ? Results.Ok(m) : Results.NotFound());
+        {
+            if (await c.GetMovieAsync(id, p.OptionalUserId(), ct) is not { } m) return Results.NotFound();
+            var hidden = await c.NotInterestedAsync(p.OptionalUserId(), ct);
+            return Results.Ok(hidden.Count == 0 ? m : m with { Recommendations = m.Recommendations.Where(r => !hidden.Contains((r.Type, r.TmdbId))).ToList() });
+        });
 
         g.MapGet("/show/{id:int}", async (int id, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
-            await c.GetShowAsync(id, p.OptionalUserId(), ct) is { } s ? Results.Ok(s) : Results.NotFound());
+        {
+            if (await c.GetShowAsync(id, p.OptionalUserId(), ct) is not { } s) return Results.NotFound();
+            var hidden = await c.NotInterestedAsync(p.OptionalUserId(), ct);
+            return Results.Ok(hidden.Count == 0 ? s : s with { Recommendations = s.Recommendations.Where(r => !hidden.Contains((r.Type, r.TmdbId))).ToList() });
+        });
 
         g.MapGet("/show/{id:int}/season/{season:int}", async (int id, int season, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
             await c.GetSeasonAsync(id, season, p.OptionalUserId(), ct) is { } s ? Results.Ok(s) : Results.NotFound());
@@ -280,6 +291,36 @@ public static class ApiEndpoints
             if (await c.CancelAsync(p.UserId(), ct)) await a.LogAsync(p, ActivityKind.CheckInCancel);
             return Results.NoContent();
         });
+        // "Not interested" (also takes the title off the watchlist) and recommendations.
+        g.MapGet("/not-interested", async (ClaimsPrincipal p, AppDbContext db, TrackingService t, CancellationToken ct) =>
+        {
+            var rows = await db.NotInterested.AsNoTracking().Where(n => n.UserId == p.UserId()).OrderByDescending(n => n.CreatedAt).ToListAsync(ct);
+            var (movies, shows) = await t.LoadMetaAsync(rows.Select(r => (r.Type, r.TmdbId)), ct);
+            return rows.Select(r => r.Type == MediaType.Movie
+                    ? movies.TryGetValue(r.TmdbId, out var m) ? new NotInterestedEntry(CatalogService.ToSummary(m), r.CreatedAt) : null
+                    : shows.TryGetValue(r.TmdbId, out var s) ? new NotInterestedEntry(CatalogService.ToSummary(s), r.CreatedAt) : null)
+                .OfType<NotInterestedEntry>().ToList();
+        });
+        g.MapPost("/not-interested", async (FavoriteRequest req, ClaimsPrincipal p, AppDbContext db, CatalogService c, TrackingService t, CancellationToken ct) =>
+        {
+            if (req.Type is not (MediaType.Movie or MediaType.Show)) return Results.BadRequest(new ProblemInfo("Only movies and shows."));
+            var meta = req.Type == MediaType.Movie ? (object?)await c.EnsureMovieAsync(req.TmdbId, ct) : await c.EnsureShowAsync(req.TmdbId, ct);
+            if (meta is null) return Results.NotFound();
+            if (!await db.NotInterested.AnyAsync(n => n.UserId == p.UserId() && n.Type == req.Type && n.TmdbId == req.TmdbId, ct))
+            {
+                db.NotInterested.Add(new NotInterested { UserId = p.UserId(), Type = req.Type, TmdbId = req.TmdbId });
+                await db.SaveChangesAsync(ct);
+            }
+            await t.RemoveFromWatchlistAsync(p.UserId(), req.Type, req.TmdbId, ct);
+            return Results.NoContent();
+        });
+        g.MapDelete("/not-interested", async (MediaType type, int tmdbId, ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
+        {
+            await db.NotInterested.Where(n => n.UserId == p.UserId() && n.Type == type && n.TmdbId == tmdbId).ExecuteDeleteAsync(ct);
+            return Results.NoContent();
+        });
+        g.MapGet("/recommendations", (ClaimsPrincipal p, RecommendationService r, CancellationToken ct) => r.ForYouAsync(p.UserId(), ct));
+
         g.MapGet("/notifications", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, CancellationToken ct) =>
         {
             // Opening the page picks up today's releases straight away, rather than at the next hourly check.

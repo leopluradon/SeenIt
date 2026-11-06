@@ -122,6 +122,10 @@ else if (s is not null)
                 {
                     <button class="link-btn" @onclick="() => fixOpen = true">Wrong title?</button>
                 }
+                @if (s.User is { } ni && ni.Plays == 0)
+                {
+                    <button class="link-btn" disabled="@busy" @onclick="ToggleNotInterested" title="Keep it out of Discover, trending and For you">@(ni.NotInterested ? "Not interested ✓ (undo)" : "Not interested")</button>
+                }
             </div>
         </div>
     </div>
@@ -305,6 +309,10 @@ else if (s is not null)
         pendingEpisode = null;
         return Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, n.SeasonNumber, n.EpisodeNumber)), $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
     }
+
+    private Task ToggleNotInterested() => s!.User!.NotInterested
+        ? Act(() => Api.UndoNotInterestedAsync(MediaType.Show, Id), "It can be suggested again")
+        : Act(() => Api.MarkNotInterestedAsync(MediaType.Show, Id), "You won't see it suggested (and it's off your watchlist)");
 
     private Task ToggleFavorite() => s!.User!.IsFavorite
         ? Act(async () =>

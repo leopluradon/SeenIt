@@ -320,6 +320,11 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         return new(items, res.Page, res.TotalPages, res.TotalResults);
     }
 
+    /// <summary>What the user marked "not interested", as "Type:Id" keys.</summary>
+    public async Task<HashSet<(MediaType, int)>> NotInterestedAsync(Guid? userId, CancellationToken ct) => userId is { } uid
+        ? (await db.NotInterested.Where(n => n.UserId == uid).Select(n => new { n.Type, n.TmdbId }).ToListAsync(ct)).Select(n => (n.Type, n.TmdbId)).ToHashSet()
+        : [];
+
     public async Task<PagedResult<MediaSummary>> BrowseAsync(MediaType type, string list, int page, CancellationToken ct, string region = "US")
     {
         var allowed = type == MediaType.Movie
@@ -629,6 +634,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             Plays = watches.Count(),
             Last = watches.Max(w => (DateTimeOffset?)w.WatchedAt),
             Favorite = db.Favorites.Any(f => f.UserId == userId && f.Type == type && f.TmdbId == id),
+            NotInterested = db.NotInterested.Any(n => n.UserId == userId && n.Type == type && n.TmdbId == id),
         }).FirstOrDefaultAsync(ct);
         var lists = await db.ListItems
             .Where(i => i.Type == type && i.TmdbId == id && db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId))
@@ -639,7 +645,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 ? await watches.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt)
                     .Select(w => new PlayDto(w.Id, w.WatchedAt, w.Source)).ToListAsync(ct)
                 : [];
-        return new UserMediaState(state?.InWatchlist ?? false, state?.Rating, state?.Plays ?? 0, state?.Last, lists, history, state?.Favorite ?? false);
+        return new UserMediaState(state?.InWatchlist ?? false, state?.Rating, state?.Plays ?? 0, state?.Last, lists, history, state?.Favorite ?? false, state?.NotInterested ?? false);
     }
 
     private static List<Video> PickVideos(TmdbVideos? v) =>

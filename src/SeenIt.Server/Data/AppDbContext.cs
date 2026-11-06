@@ -35,6 +35,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ServerState> ServerState => Set<ServerState>();
     public DbSet<UserAvatar> Avatars => Set<UserAvatar>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotInterested> NotInterested => Set<NotInterested>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -142,6 +143,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.ImdbId).HasMaxLength(16);
         });
         b.Entity<ExternalScoreCache>(e => e.HasKey(x => new { x.Type, x.TmdbId }));
+        b.Entity<NotInterested>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
         b.Entity<Notification>(e =>
         {
             e.HasIndex(x => new { x.UserId, x.Type, x.TmdbId, x.SeasonNumber, x.EpisodeNumber }).IsUnique().AreNullsDistinct(false);
@@ -189,7 +191,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

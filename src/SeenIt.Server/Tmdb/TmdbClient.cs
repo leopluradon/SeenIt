@@ -73,6 +73,9 @@ public class TmdbClient
     public Task<TmdbPage<TmdbListItem>?> SearchMultiAsync(string query, int page, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbListItem>>($"search/multi?query={Uri.EscapeDataString(query)}&page={page}&include_adult=false", TimeSpan.FromMinutes(30), ct);
 
+    public Task<TmdbPage<TmdbListItem>?> GetRecommendationsAsync(string kind, int id, CancellationToken ct = default) =>
+        GetAsync<TmdbPage<TmdbListItem>>($"{kind}/{id}/recommendations", TimeSpan.FromHours(12), ct);
+
     public Task<TmdbExternalIds?> GetExternalIdsAsync(string kind, int id, CancellationToken ct = default) =>
         GetAsync<TmdbExternalIds>($"{kind}/{id}/external_ids", TimeSpan.FromDays(1), ct);
 

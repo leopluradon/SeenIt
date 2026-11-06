@@ -1,0 +1,78 @@
+@page "/for-you"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>For you · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>For you</h1>
+    <div class="segmented">
+        <button class="@(filter is null ? "on" : "")" @onclick="() => filter = null">All</button>
+        <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => filter = MediaType.Movie">Movies</button>
+        <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => filter = MediaType.Show">Shows</button>
+    </div>
+</div>
+<p class="muted small">Picked from what you've rated highly and watched lately, leaving out what you've seen, rated or have on your watchlist. Tap × on anything you're not interested in.</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (data is null && error is null) { <Spinner /> }
+else if (data is { Top.Count: 0 })
+{
+    <Empty Title="Nothing to suggest yet.">
+        <span>Rate a few movies or shows you loved (8 or more), or watch a few things, and suggestions show up here.</span>
+    </Empty>
+}
+else if (data is not null)
+{
+    var top = data.Top.Where(i => filter is null || i.Media.Type == filter).ToList();
+    <section class="row-section">
+        <div class="section-head"><h2>Top picks</h2></div>
+        <div class="poster-grid">
+            @foreach (var i in top)
+            {
+                <PosterCard Media="i.Media" Sub="@($"Because you liked {i.Because}")" SubTitle="@($"Because you liked {i.Because}")" OnDismiss="Dismiss" @key="(i.Media.Type, i.Media.TmdbId)" />
+            }
+        </div>
+    </section>
+    @foreach (var g in data.Groups)
+    {
+        var items = g.Items.Where(m => filter is null || m.Type == filter).ToList();
+        if (items.Count == 0) continue;
+        <PosterRow Title="@($"Because you liked {g.Seed.Title}")" Items="items" MoreHref="@Fmt.Href(g.Seed.Type, g.Seed.TmdbId)" OnDismiss="Dismiss" @key="(g.Seed.Type, g.Seed.TmdbId)" />
+    }
+}
+@code {
+    private ForYouDto? data;
+    private string? error;
+    private MediaType? filter;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { data = await Api.ForYouAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Dismiss(MediaSummary m)
+    {
+        if (data is null) return;
+        var before = data;
+        data = Without(data, m);
+        try
+        {
+            await Api.MarkNotInterestedAsync(m.Type, m.TmdbId);
+            Toasts.Show($"You won't see {m.Title} suggested", undo: async () =>
+            {
+                await Api.UndoNotInterestedAsync(m.Type, m.TmdbId);
+                await InvokeAsync(() => { data = before; StateHasChanged(); });
+            });
+        }
+        catch (Exception ex) { data = before; Toasts.Error(ex); }
+    }
+
+    private static ForYouDto Without(ForYouDto d, MediaSummary m) => new(
+        d.Top.Where(i => i.Media.Type != m.Type || i.Media.TmdbId != m.TmdbId).ToList(),
+        d.Groups.Select(g => g with { Items = g.Items.Where(x => x.Type != m.Type || x.TmdbId != m.TmdbId).ToList() }).ToList());
+}

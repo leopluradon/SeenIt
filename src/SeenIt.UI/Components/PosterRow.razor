@@ -11,7 +11,7 @@
     else
     {
         <div class="poster-scroller">
-            @foreach (var m in Items) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
+            @foreach (var m in Items) { <PosterCard Media="m" OnDismiss="OnDismiss" @key="(m.Type, m.TmdbId)" /> }
         </div>
     }
 </section>
@@ -21,4 +21,6 @@
     [Parameter] public string? MoreHref { get; set; }
     [Parameter] public string EmptyText { get; set; } = "Nothing here yet.";
     [Parameter] public EventCallback OnHide { get; set; }
+    /// <summary>"Not interested" on each card.</summary>
+    [Parameter] public EventCallback<MediaSummary> OnDismiss { get; set; }
 }

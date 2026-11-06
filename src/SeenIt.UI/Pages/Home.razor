@@ -173,11 +173,17 @@
                         </section>
                     }
                     break;
+                case "foryou":
+                    @if (forYou is not { Count: 0 })
+                    {
+                        <PosterRow Title="Picked for you" Items="forYou" MoreHref="for-you" OnHide='EventCallback.Factory.Create(this, () => Hide("foryou"))' OnDismiss="Dismiss" />
+                    }
+                    break;
                 case "trending-movies":
-                    <PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-movies"))' />
+                    <PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-movies"))' OnDismiss="Dismiss" />
                     break;
                 case "trending-shows":
-                    <PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-shows"))' />
+                    <PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-shows"))' OnDismiss="Dismiss" />
                     break;
             }
         }
@@ -221,7 +227,14 @@
     private NowWatchingDto? now;
     private FeedDto? feed;
     private string? error;
-    private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows;
+    private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows, forYou;
+
+    private async Task LoadForYou()
+    {
+        if (hidden.Contains("foryou")) return;
+        try { forYou = (await Api.ForYouAsync()).Top.Take(20).Select(i => i.Media).ToList(); }
+        catch { forYou = []; }
+    }
     private bool signedIn, customizeOpen;
     private HashSet<string> hidden = [];
     private List<(string Href, string Text)> reviewLinks = [];
@@ -241,7 +254,9 @@
         {
             var reviewTask = LoadReviewLinks();
             var extrasTask = LoadExtras();
+            var forYouTask = LoadForYou();
             await LoadDashboard();
+            await forYouTask;
             await reviewTask;
             await extrasTask;
         }
@@ -272,6 +287,25 @@
             Toasts.Show("Check-in canceled");
         }
         catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    /// <summary>"Not interested" from a home row: drop it there (and from For you), with undo.</summary>
+    private async Task Dismiss(MediaSummary m)
+    {
+        var (movies, shows, picks) = (trendingMovies, trendingShows, forYou);
+        trendingMovies = trendingMovies?.Where(x => x != m).ToList();
+        trendingShows = trendingShows?.Where(x => x != m).ToList();
+        forYou = forYou?.Where(x => x != m).ToList();
+        try
+        {
+            await Api.MarkNotInterestedAsync(m.Type, m.TmdbId);
+            Toasts.Show($"You won't see {m.Title} suggested", undo: async () =>
+            {
+                await Api.UndoNotInterestedAsync(m.Type, m.TmdbId);
+                await InvokeAsync(() => { (trendingMovies, trendingShows, forYou) = (movies, shows, picks); StateHasChanged(); });
+            });
+        }
+        catch (Exception ex) { (trendingMovies, trendingShows, forYou) = (movies, shows, picks); Toasts.Error(ex); }
     }
 
     private async Task LoadTrending()
@@ -316,6 +350,7 @@
         hidden = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         var shown = before.Except(hidden).ToList();
         if (shown.Any(k => k.StartsWith("trending")) && trendingMovies is null) await LoadTrending();
+        if (shown.Contains("foryou") && forYou is null) await LoadForYou();
         if (shown.Contains("review") && reviewLinks.Count == 0) await LoadReviewLinks();
         if (shown.Any(k => k is "now" or "friends" or "onthisday" or "goals")) await LoadExtras();
     }
@@ -330,6 +365,7 @@
             Session.Update(me => me with { HiddenHomeSections = saved });
             if (!visible) Toasts.Show("Section hidden. Bring it back with “Customize home”.");
             if (visible && key.StartsWith("trending") && trendingMovies is null) await LoadTrending();
+            if (visible && key == "foryou" && forYou is null) await LoadForYou();
             if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
             if (visible && key is "now" or "friends" or "goals") await LoadExtras();
         }

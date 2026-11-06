@@ -841,6 +841,25 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Movies");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.NotInterested", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "Type", "TmdbId");
+
+                    b.ToTable("NotInterested");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1464,6 +1483,15 @@ namespace SeenIt.Server.Data.Migrations
                     b.Navigation("Cast");
 
                     b.Navigation("Directors");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.NotInterested", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.Notification", b =>

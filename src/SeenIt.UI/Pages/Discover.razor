@@ -1,6 +1,8 @@
 @page "/discover"
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject Toasts Toasts
+@inject SessionState Session
 <PageTitle>Discover · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -10,6 +12,13 @@
         <button class="@(Type == MediaType.Show ? "on" : "")" @onclick="() => Switch(MediaType.Show)"><Icon Name="tv" Size="16" /> Shows</button>
     </div>
 </div>
+@if (Session.Me is not null)
+{
+    <div class="discover-links">
+        <a class="btn btn-sm" href="for-you"><Icon Name="star" Size="14" /> For you</a>
+        <a class="btn btn-sm btn-ghost" href="not-interested">Not interested</a>
+    </div>
+}
 <div class="chips">
     @foreach (var (key, label) in Lists)
     {
@@ -20,7 +29,7 @@
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items.Count == 0 && loading) { <Spinner /> }
 <div class="poster-grid">
-    @foreach (var m in items) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
+    @foreach (var m in items) { <PosterCard Media="m" OnDismiss="@(Session.Me is null ? default : EventCallback.Factory.Create<MediaSummary>(this, Dismiss))" @key="(m.Type, m.TmdbId)" /> }
 </div>
 @if (page < totalPages)
 {
@@ -83,4 +92,20 @@
     }
 
     private Task More() => Load();
+
+    private async Task Dismiss(MediaSummary m)
+    {
+        var at = items.IndexOf(m);
+        items.Remove(m);
+        try
+        {
+            await Api.MarkNotInterestedAsync(m.Type, m.TmdbId);
+            Toasts.Show($"You won't see {m.Title} in Discover", undo: async () =>
+            {
+                await Api.UndoNotInterestedAsync(m.Type, m.TmdbId);
+                await InvokeAsync(() => { items.Insert(Math.Clamp(at, 0, items.Count), m); StateHasChanged(); });
+            });
+        }
+        catch (Exception ex) { items.Insert(Math.Clamp(at, 0, items.Count), m); Toasts.Error(ex); }
+    }
 }

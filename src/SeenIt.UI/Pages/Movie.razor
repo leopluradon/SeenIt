@@ -91,6 +91,10 @@ else if (m is not null)
                 {
                     <button class="link-btn" @onclick="() => fixOpen = true">Wrong title?</button>
                 }
+                @if (m.User is { } ni && ni.Plays == 0)
+                {
+                    <button class="link-btn" disabled="@busy" @onclick="ToggleNotInterested" title="Keep it out of Discover, trending and For you">@(ni.NotInterested ? "Not interested ✓ (undo)" : "Not interested")</button>
+                }
             </div>
         </div>
     </div>
@@ -191,6 +195,10 @@ else if (m is not null)
         var removed = await Api.UnwatchAsync(MediaType.Movie, Id);
         undo = () => Api.RestorePlaysAsync(removed.Plays);
     }, "Removed from history");
+
+    private Task ToggleNotInterested() => m!.User!.NotInterested
+        ? Act(() => Api.UndoNotInterestedAsync(MediaType.Movie, Id), "It can be suggested again")
+        : Act(() => Api.MarkNotInterestedAsync(MediaType.Movie, Id), "You won't see it suggested (and it's off your watchlist)");
 
     private Task ToggleFavorite() => m!.User!.IsFavorite
         ? Act(async () =>

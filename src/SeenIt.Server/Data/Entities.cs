@@ -472,3 +472,12 @@ public class Notification
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ReadAt { get; set; }
 }
+
+/// <summary>"Not interested": kept out of Discover, trending, "you might also like" and recommendations.</summary>
+public class NotInterested
+{
+    public Guid UserId { get; set; }
+    public MediaType Type { get; set; }
+    public int TmdbId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}

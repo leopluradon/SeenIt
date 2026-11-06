@@ -1,0 +1,45 @@
+@page "/not-interested"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>Not interested · SeenIt</PageTitle>
+
+<div class="page-head"><h1>Not interested</h1></div>
+<p class="muted small">Kept out of Discover, trending, "you might also like" and For you. They still turn up in search. Tap × to bring one back.</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items is null && error is null) { <Spinner /> }
+else if (items is { Count: 0 }) { <Empty Title="Nothing hidden." /> }
+else if (items is not null)
+{
+    <div class="poster-grid">
+        @foreach (var i in items)
+        {
+            <PosterCard Media="i.Media" ShowScore="false" Sub="@($"Hidden {i.AddedAt.ToLocalTime():MMM d, yyyy}")" OnDismiss="Undo" @key="(i.Media.Type, i.Media.TmdbId)" />
+        }
+    </div>
+}
+@code {
+    private List<NotInterestedEntry>? items;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { items = await Api.NotInterestedAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Undo(MediaSummary m)
+    {
+        try
+        {
+            await Api.UndoNotInterestedAsync(m.Type, m.TmdbId);
+            items?.RemoveAll(i => i.Media.Type == m.Type && i.Media.TmdbId == m.TmdbId);
+            Toasts.Show($"{m.Title} can be suggested again");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

@@ -132,6 +132,7 @@ builder.Services.AddHttpClient("imdb", c => c.Timeout = TimeSpan.FromMinutes(5))
 builder.Services.AddScoped<ScoreService>();
 builder.Services.AddScoped<AvatarService>();
 builder.Services.AddScoped<ReleaseAlertService>();
+builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddHostedService<ReleaseAlertWorker>();
 builder.Services.AddHostedService<ImdbRatingsWorker>();
 
