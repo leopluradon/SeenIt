@@ -24,6 +24,7 @@ else if (list is not null)
                     </button>
                 </AuthorizeView>
                 <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button>
+                <button class="btn btn-sm btn-ghost" @onclick="ShowFeeds">RSS</button>
             </div>
         }
         @if (list.IsOwner)
@@ -32,12 +33,29 @@ else if (list is not null)
                 @if (list.IsPublic) { <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
                 else { <span class="muted small" title="Make the list public in Edit to share it">Private: only you can see it</span> }
                 @if (list.Items.Count > 1 && list.Rules is null) { <button class="btn btn-sm @(arranging ? "btn-on" : "")" @onclick="ToggleArranging">@(arranging ? "Done" : "Reorder & notes")</button> }
+                <button class="btn btn-sm btn-ghost" @onclick="ShowFeeds">RSS</button>
                 <button class="btn btn-sm" @onclick="() => editOpen = true">Edit</button>
                 <button class="btn btn-sm btn-danger" @onclick="Delete">Delete</button>
             </div>
         }
     </div>
     @if (list.Description is not null) { <p class="overview">@list.Description</p> }
+    <Modal Open="feeds is not null" OpenChanged="o => { if (!o) feeds = null; }" Title="Feeds for this list">
+        @if (feeds is { } f)
+        {
+            <div class="stack">
+                <p class="muted small">Follow this list in a feed reader, or use it in automations. @(list.IsPublic ? "" : "The links include your private key, so keep them to yourself.")</p>
+                @foreach (var (label, url) in new[] { ("RSS", f.Rss), ("JSON Feed", f.Json) })
+                {
+                    <div class="cal-link">
+                        <span class="feed-label">@label</span>
+                        <input readonly value="@url" aria-label="@($"{label} link")" onfocus="this.select()" />
+                        <button class="btn btn-sm" @onclick="() => CopyLink(url)"><Icon Name="copy" Size="14" /> Copy</button>
+                    </div>
+                }
+            </div>
+        }
+    </Modal>
     @if (list.Rules is { } rules)
     {
         <div class="rule-summary">@foreach (var r in RuleText(rules)) { <span class="pill pill-sm">@r</span> }</div>
@@ -120,6 +138,21 @@ else if (list is not null)
             SmartSort.RecentlyWatched => "Recently watched first", SmartSort.Title => "A–Z", _ => r.Source == SmartSource.Tmdb ? "Most popular first" : "Most played first",
         };
         yield return $"Up to {r.Limit}";
+    }
+
+    private ListFeedsDto? feeds;
+
+    private async Task ShowFeeds()
+    {
+        if (list is null) return;
+        try { feeds = await Api.ListFeedsAsync(list.Id); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task CopyLink(string url)
+    {
+        try { await Js.InvokeVoidAsync("navigator.clipboard.writeText", url); Toasts.Show("Link copied"); }
+        catch { Toasts.Show("Couldn't copy; select the link and copy it.", error: true); }
     }
 
     private bool saving;

@@ -25,3 +25,20 @@ public class CalendarFeedTests
         Assert.All(ics.Split("\r\n"), line => Assert.True(System.Text.Encoding.UTF8.GetByteCount(line) <= 75, line));
     }
 }
+
+public class FeedTests
+{
+    [Fact]
+    public void Rss_and_json_feeds_carry_the_items()
+    {
+        var feed = new SeenIt.Server.Services.FeedService.Feed("Best & worst · SeenIt", "A list", "https://seenit.example/lists/1",
+            [new("1:Movie:603", "The Matrix (1999)", "https://seenit.example/movie/603", new DateTimeOffset(2026, 11, 5, 12, 0, 0, TimeSpan.Zero), "Whoa <3", "https://image.tmdb.org/t/p/w342/x.jpg")]);
+        var rss = SeenIt.Server.Services.FeedService.Rss(feed);
+        var doc = System.Xml.Linq.XDocument.Parse(rss);   // well-formed, with & and < escaped
+        Assert.Equal("Best & worst · SeenIt", doc.Root!.Element("channel")!.Element("title")!.Value);
+        Assert.Contains("<pubDate>Thu, 05 Nov 2026 12:00:00 GMT</pubDate>", rss);
+        var json = System.Text.Json.JsonDocument.Parse(SeenIt.Server.Services.FeedService.JsonFeed(feed, "https://seenit.example/feed.json")).RootElement;
+        Assert.Equal("https://jsonfeed.org/version/1.1", json.GetProperty("version").GetString());
+        Assert.Equal("The Matrix (1999)", json.GetProperty("items")[0].GetProperty("title").GetString());
+    }
+}

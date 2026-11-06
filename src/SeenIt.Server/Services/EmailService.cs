@@ -20,7 +20,8 @@ public class SmtpOptions
     public bool Enabled => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(From ?? User);
 }
 
-public record EmailMessage(string To, string Subject, string Text, string Html);
+public record EmailAttachment(string FileName, string ContentType, byte[] Data);
+public record EmailMessage(string To, string Subject, string Text, string Html, IReadOnlyList<EmailAttachment>? Attachments = null);
 
 /// <summary>Sends mail over SMTP. <see cref="Queue"/> hands it to a background worker so requests don't wait on the mail server.</summary>
 public class EmailService(IOptionsMonitor<SmtpOptions> options, ILogger<EmailService> log)
@@ -46,7 +47,9 @@ public class EmailService(IOptionsMonitor<SmtpOptions> options, ILogger<EmailSer
         mail.From.Add(MailboxAddress.Parse(o.From ?? o.User!));
         mail.To.Add(MailboxAddress.Parse(message.To));
         mail.Subject = message.Subject;
-        mail.Body = new BodyBuilder { TextBody = message.Text, HtmlBody = message.Html }.ToMessageBody();
+        var body = new BodyBuilder { TextBody = message.Text, HtmlBody = message.Html };
+        foreach (var a in message.Attachments ?? []) body.Attachments.Add(a.FileName, a.Data, ContentType.Parse(a.ContentType));
+        mail.Body = body.ToMessageBody();
 
         var security = o.Security.ToLowerInvariant() switch
         {

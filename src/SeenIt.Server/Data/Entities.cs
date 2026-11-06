@@ -32,6 +32,11 @@ public class AppUser : IdentityUser<Guid>
     /// <summary>The last local day a release digest was emailed, so it goes once a day.</summary>
     public DateOnly? LastReleaseEmail { get; set; }
 
+    /// <summary>Email the full export once a month.</summary>
+    public bool MonthlyBackup { get; set; }
+    /// <summary>The month (first day) the last backup email went out.</summary>
+    public DateOnly? LastMonthlyBackup { get; set; }
+
     /// <summary>When the profile picture last changed (its URL's version); null when there's none.</summary>
     public long? AvatarVersion { get; set; }
     /// <summary>"48d 7h" or "1,159h" for long stretches of time.</summary>

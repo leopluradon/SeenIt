@@ -335,20 +335,27 @@ public static class ApiEndpoints
             await a.MarkAllReadAsync(p.UserId(), ct);
             return Results.NoContent();
         });
+        static AlertSettingsDto Alerts(AppUser u, ReleaseAlertService a, EmailService email) => new(u.ReleaseEmails, email.Enabled,
+            $"{a.BaseUrl()}cal/{u.CalendarToken}.ics", u.MonthlyBackup,
+            $"{a.BaseUrl()}feeds/{u.CalendarToken}/watchlist.rss", $"{a.BaseUrl()}feeds/{u.CalendarToken}/history.rss");
         g.MapGet("/alerts", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, EmailService email, CancellationToken ct) =>
-        {
-            var u = await db.Users.AsNoTracking().FirstAsync(x => x.Id == p.UserId(), ct);
-            return new AlertSettingsDto(u.ReleaseEmails, email.Enabled, $"{a.BaseUrl()}cal/{u.CalendarToken}.ics");
-        });
-        g.MapPut("/alerts", async (AlertSettingsRequest req, ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, EmailService email, CancellationToken ct) =>
+            Alerts(await db.Users.AsNoTracking().FirstAsync(x => x.Id == p.UserId(), ct), a, email));
+        g.MapPut("/alerts", async (AlertSettingsRequest req, ClaimsPrincipal p, HttpContext http, AppDbContext db, ReleaseAlertService a, EmailService email, CancellationToken ct) =>
         {
             var u = await db.Users.FirstAsync(x => x.Id == p.UserId(), ct);
             if (req.Emails is { } on) u.ReleaseEmails = on;
             if (req.NewCalendarUrl) u.CalendarToken = AppUser.NewToken();
+            if (req.MonthlyBackup is { } backup) u.MonthlyBackup = backup;
             await db.SaveChangesAsync(ct);
             // Turning emails on today still sends today's digest.
             if (req.Emails == true) { u.LastReleaseEmail = null; await db.SaveChangesAsync(ct); await a.ScanAsync(u, ct); }
-            return new AlertSettingsDto(u.ReleaseEmails, email.Enabled, $"{a.BaseUrl()}cal/{u.CalendarToken}.ics");
+            // Turning the monthly backup on sends this month's straight away, so you can see it works.
+            if (req.MonthlyBackup == true && email.Enabled && u.Email is { Length: > 0 } to)
+            {
+                var local = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ReviewService.Zone(u.TimeZone)).DateTime);
+                await MonthlyBackupWorker.SendAsync(http.RequestServices, db, email, u, to, new DateOnly(local.Year, local.Month, 1), ct);
+            }
+            return Alerts(u, a, email);
         });
 
         g.MapGet("/calendar", (DateOnly? from, int? days, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
@@ -383,6 +390,14 @@ public static class ApiEndpoints
         var g = app.MapGroup("/api/lists").RequireAuthorization();
         g.MapGet("", (ClaimsPrincipal p, ListService l, CancellationToken ct) => l.GetMineAsync(p.UserId(), ct));
         g.MapGet("/saved", (ClaimsPrincipal p, ListService l, CancellationToken ct) => l.SavedAsync(p.UserId(), ct));
+        // Feed links for one of your lists (private ones include your key; anyone with the link can read it).
+        g.MapGet("/{id:guid}/feeds", async (Guid id, ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, CancellationToken ct) =>
+        {
+            var list = await db.Lists.AsNoTracking().Where(l => l.Id == id).Select(l => new { l.UserId, l.IsPublic }).FirstOrDefaultAsync(ct);
+            if (list is null || (list.UserId != p.UserId() && !list.IsPublic)) return Results.NotFound();
+            var key = list.IsPublic ? "" : "?key=" + await db.Users.Where(u => u.Id == list.UserId).Select(u => u.CalendarToken).FirstAsync(ct);
+            return Results.Ok(new ListFeedsDto($"{a.BaseUrl()}feeds/lists/{id}.rss{key}", $"{a.BaseUrl()}feeds/lists/{id}.json{key}"));
+        });
         g.MapPost("/{id:guid}/save", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
             await l.SaveAsync(p.UserId(), id, true, ct) ? Results.NoContent() : Results.NotFound());
         g.MapDelete("/{id:guid}/save", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
@@ -558,6 +573,17 @@ public static class ApiEndpoints
         // Profiles respect the owner's visibility setting; signed-out visitors see public ones only.
         app.MapGet("/api/users/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.GetProfileAsync(name, p.OptionalUserId(), ct) is { } profile ? Results.Ok(profile) : Results.NotFound());
+
+        // RSS / JSON Feed: lists (public ones need no key) and, with your private key, watchlist and history.
+        static IResult FeedResult(FeedService.Feed? f, string format, HttpContext http) => f is null ? Results.NotFound()
+            : format == "json" ? Results.Text(FeedService.JsonFeed(f, $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}{http.Request.QueryString}"), "application/feed+json; charset=utf-8")
+            : Results.Text(FeedService.Rss(f), "application/rss+xml; charset=utf-8");
+        app.MapGet("/feeds/lists/{id:guid}.{format:regex(^(rss|json)$)}", async (Guid id, string format, string? key, HttpContext http, FeedService feeds, CancellationToken ct) =>
+            FeedResult(await feeds.ListAsync(id, key, ct), format, http));
+        app.MapGet("/feeds/{key}/watchlist.{format:regex(^(rss|json)$)}", async (string key, string format, HttpContext http, FeedService feeds, CancellationToken ct) =>
+            FeedResult(await feeds.WatchlistAsync(key, ct), format, http));
+        app.MapGet("/feeds/{key}/history.{format:regex(^(rss|json)$)}", async (string key, string format, HttpContext http, FeedService feeds, CancellationToken ct) =>
+            FeedResult(await feeds.HistoryAsync(key, ct), format, http));
 
         // Private calendar feed (subscribe in Google/Apple Calendar). The token in the URL is the only key.
         app.MapGet("/cal/{token}.ics", async (string token, ReleaseAlertService alerts, CancellationToken ct) =>

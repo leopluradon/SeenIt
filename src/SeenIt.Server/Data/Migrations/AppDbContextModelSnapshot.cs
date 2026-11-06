@@ -258,6 +258,9 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateOnly?>("LastMonthlyBackup")
+                        .HasColumnType("date");
+
                     b.Property<DateOnly?>("LastReleaseEmail")
                         .HasColumnType("date");
 
@@ -269,6 +272,9 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("MonthlyBackup")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)

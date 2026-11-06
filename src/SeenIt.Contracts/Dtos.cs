@@ -455,8 +455,10 @@ public record NotificationDto(Guid Id, MediaType Type, int TmdbId, int? SeasonNu
     string? PosterPath, DateOnly Day, bool Read);
 public record NotificationsDto(IReadOnlyList<NotificationDto> Items, int Unread);
 /// <summary>Release alerts and the private calendar feed. CalendarUrl is secret: anyone with it sees your calendar.</summary>
-public record AlertSettingsDto(bool Emails, bool EmailAvailable, string CalendarUrl);
-public record AlertSettingsRequest(bool? Emails = null, bool NewCalendarUrl = false);
+public record AlertSettingsDto(bool Emails, bool EmailAvailable, string CalendarUrl, bool MonthlyBackup = false, string? WatchlistFeed = null, string? HistoryFeed = null);
+public record AlertSettingsRequest(bool? Emails = null, bool NewCalendarUrl = false, bool? MonthlyBackup = null);
+/// <summary>A list's RSS and JSON Feed links (private lists carry the owner's secret key).</summary>
+public record ListFeedsDto(string Rss, string Json);
 
 public record CalendarEntry(
     DateOnly Date,

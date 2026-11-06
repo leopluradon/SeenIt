@@ -197,6 +197,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task UndoNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/not-interested?type={type}&tmdbId={id}");
     public Task<ForYouDto> ForYouAsync() => GetAsync<ForYouDto>("api/recommendations");
 
+    public Task<ListFeedsDto> ListFeedsAsync(Guid id) => GetAsync<ListFeedsDto>($"api/lists/{id}/feeds");
     public Task<List<string>> GenresAsync() => GetAsync<List<string>>("api/catalog/genres");
     public Task<List<ListSummary>> SavedListsAsync() => GetAsync<List<ListSummary>>("api/lists/saved");
     public Task<List<ListSummary>> BrowseListsAsync(string? q, bool recent) =>

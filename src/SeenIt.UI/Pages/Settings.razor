@@ -455,6 +455,24 @@
             <h2>Export your data</h2>
             <p class="muted small">Download everything you've put into SeenIt (history, ratings, watchlist, lists, show status and settings) as a .zip of JSON and CSV files.</p>
             <button class="btn" @onclick="Export" disabled="@exporting"><Icon Name="download" Size="16" /> @(exporting ? "Preparing…" : "Download my data")</button>
+            @if (alerts is { } ex)
+            {
+                <label class="check @(ex.EmailAvailable ? "" : "disabled")">
+                    <input type="checkbox" checked="@ex.MonthlyBackup" disabled="@(!ex.EmailAvailable)" @onchange="e => SaveBackup((bool)e.Value!)" />
+                    Email me this backup on the 1st of every month (to @Session.Me?.Email)
+                </label>
+                <h3>Feeds</h3>
+                <p class="muted small">RSS links for feed readers and automations (JSON Feed too: swap <code>.rss</code> for <code>.json</code>). They use your private key, so keep them to yourself. Each list has its own feed on its page.</p>
+                @foreach (var (label, url) in new[] { ("Watchlist", ex.WatchlistFeed), ("History", ex.HistoryFeed) })
+                {
+                    if (url is null) continue;
+                    <div class="cal-link">
+                        <span class="feed-label">@label</span>
+                        <input readonly value="@url" aria-label="@($"{label} feed link")" onfocus="this.select()" />
+                        <button class="btn btn-sm" @onclick="() => Copy(url)"><Icon Name="copy" Size="14" /> Copy</button>
+                    </div>
+                }
+            }
         </section>
 
         <section class="panel" id="profile">
@@ -847,9 +865,19 @@
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
+    private async Task SaveBackup(bool on)
+    {
+        try
+        {
+            alerts = await Api.SetAlertSettingsAsync(new AlertSettingsRequest(MonthlyBackup: on));
+            Toasts.Show(on ? "Backup emails on: this month's is on its way" : "Backup emails off");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
     private async Task NewCalendarUrl()
     {
-        if (!await Js.InvokeAsync<bool>("confirm", "Make a new calendar link? The old one stops working, so calendars subscribed to it need the new link.")) return;
+        if (!await Js.InvokeAsync<bool>("confirm", "Make a new private link? The old calendar link and your watchlist, history and private-list feeds stop working, so anything subscribed to them needs the new links.")) return;
         await SaveAlerts(new AlertSettingsRequest(NewCalendarUrl: true));
         Toasts.Show("New calendar link made");
     }
