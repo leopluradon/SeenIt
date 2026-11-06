@@ -647,6 +647,10 @@ public static class ApiEndpoints
 
         var g = app.MapGroup("/api/social").RequireAuthorization();
         g.MapGet("/feed", (int? take, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.FeedAsync(p.UserId(), take ?? 40, ct));
+        g.MapGet("/history", (MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
+                string? sort, int? page, int? pageSize, string? tz, string? user, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            s.FriendsHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 100), tz), user, ct));
+        g.MapGet("/history/genres", (ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.FriendsHistoryGenresAsync(p.UserId(), ct));
         g.MapGet("/search", (string q, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.SearchAsync(p.UserId(), q, ct));
         g.MapGet("/seen/{type}/{id:int}", (MediaType type, int id, int? season, int? episode, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             s.SeenByAsync(p.UserId(), type, id, season, episode, ct));

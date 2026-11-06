@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject SessionState Session
+@inject NavigationManager Nav
 <PageTitle>Friends · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -24,30 +25,13 @@
 @switch (tab)
 {
     case "feed":
-        @if (feed is null && error is null) { <Spinner /> }
-        else if (feed is not null)
+        @if (watching is { Count: > 0 })
         {
-            @if (feed.WatchingNow.Count == 0 && feed.Activity.Count == 0)
-            {
-                <Empty Title="Nothing from friends yet.">Follow people to see what they're watching. <a href="" @onclick='() => Show("find")' @onclick:preventDefault>Find people</a>.</Empty>
-            }
-            @foreach (var w in feed.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
-            <div class="history-list">
-                @foreach (var a in feed.Activity)
-                {
-                    var h = a.Entry;
-                    <div class="history-item" @key="h.Id">
-                        <a href="@Href(h)"><img src="@Img.Poster(h.PosterPath, "w92")" alt="" loading="lazy" /></a>
-                        <div class="history-body">
-                            <div class="small"><a href="@Fmt.UserHref(a.User.UserName)"><b>@a.User.Name</b></a> watched</div>
-                            <a href="@Href(h)" class="mini-title">@h.Title</a>
-                            @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)</div> }
-                            <div class="muted small"><RelTime At="h.WatchedAt" /></div>
-                        </div>
-                    </div>
-                }
+            <div class="friends-watching">
+                @foreach (var w in watching) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
             </div>
         }
+        <History Friends="true" />
         break;
 
     case "following":
@@ -93,22 +77,21 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
-    private string tab = "following";
-    private FeedDto? feed;
+    private string tab = "", loaded = "";
+    private List<FriendWatching>? watching;
     private List<UserCard>? people, results;
     private string? error, query;
 
-    protected override Task OnInitializedAsync()
+    // The tab lives in the URL (?tab=), so Activity's filters, back and forward all work.
+    protected override Task OnParametersSetAsync()
     {
         tab = Tab is "feed" or "followers" or "find" ? Tab : "following";
+        if (tab == loaded) return Task.CompletedTask;   // only a filter changed: the history view reloads itself
+        loaded = tab;
         return Load();
     }
 
-    private Task Show(string t)
-    {
-        tab = t;
-        return Load();
-    }
+    private void Show(string t) => Nav.NavigateTo(t == "following" ? "friends" : $"friends?tab={t}");
 
     private async Task Load()
     {
@@ -117,7 +100,7 @@
         {
             switch (tab)
             {
-                case "feed": feed = await Api.FeedAsync(60); break;
+                case "feed": watching = (await Api.FeedAsync(1)).WatchingNow.ToList(); break;
                 case "following": people = null; people = await Api.FollowingAsync(); break;
                 case "followers": people = null; people = await Api.FollowersAsync(); break;
             }
@@ -132,8 +115,6 @@
         try { results = await Api.SearchUsersAsync(query); }
         catch (Exception ex) { error = ex.Message; }
     }
-
-    private static string Href(HistoryEntry h) => h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : Fmt.Href(h.Type, h.TmdbId);
 
     public static string VisibilityText(ProfileVisibility v) => v switch
     {

@@ -39,7 +39,7 @@ public record ProblemInfo(string Title, Dictionary<string, string[]>? Errors = n
 
 public record MeDto(
     Guid Id, string UserName, string Email, string? DisplayName, DateTimeOffset CreatedAt,
-    bool HideSpoilers = false, bool BlurSpoilerImages = false,
+    bool HideSpoilers = true, bool BlurSpoilerImages = true,
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
     DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null,
@@ -450,7 +450,8 @@ public record HistoryEntry(
     WatchSource Source,
     int? Runtime = null,
     int? Episodes = null,      // Shows view: episodes watched that day (one row per show per day)
-    string? Range = null);     // Shows view: "S04E01–S04E05", or one episode's number
+    string? Range = null,      // Shows view: "S04E01–S04E05", or one episode's number
+    string? Who = null);       // Friends' history: whose play this is (a UserName from HistoryPage.People)
 
 /// <summary>History filters. Type = Show groups episodes into one row per show per day. From is inclusive, To exclusive; both are absolute instants computed by the client in its own time zone.</summary>
 public record HistoryQuery(
@@ -468,7 +469,9 @@ public record HistoryQuery(
 /// <summary>Totals for one day (null = unknown date) across every matching play, not just the visible page.</summary>
 public record HistoryDay(DateOnly? Date, int Plays, long Minutes);
 
-public record HistoryPage(IReadOnlyList<HistoryEntry> Items, int Page, int TotalPages, int TotalResults, long TotalMinutes, IReadOnlyList<HistoryDay>? Days = null);
+/// <summary>People: on friends' history, everyone whose history you can see (for the filter and each row's name).</summary>
+public record HistoryPage(IReadOnlyList<HistoryEntry> Items, int Page, int TotalPages, int TotalResults, long TotalMinutes, IReadOnlyList<HistoryDay>? Days = null,
+    IReadOnlyList<UserCard>? People = null);
 
 public record WatchlistEntry(MediaSummary Media, DateTimeOffset AddedAt, DateOnly? ReleaseDate);
 public record WatchlistRequest(MediaType Type, int TmdbId);

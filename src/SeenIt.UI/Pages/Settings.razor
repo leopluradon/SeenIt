@@ -875,8 +875,8 @@ else { <h1>Settings</h1> }
     protected override async Task OnInitializedAsync()
     {
         displayName = Session.Me?.DisplayName;
-        hideSpoilers = Session.Me?.HideSpoilers ?? false;
-        blurImages = Session.Me?.BlurSpoilerImages ?? false;
+        hideSpoilers = Session.Me?.HideSpoilers ?? true;
+        blurImages = Session.Me?.BlurSpoilerImages ?? true;
         tabs = UiLayout.Tabs(Session.Me).Select(t => t.Key).ToList();
         visibility = Session.Me?.Visibility ?? ProfileVisibility.Friends;
         trackingSince = Session.Me?.TrackingSince?.ToString("yyyy-MM-dd");

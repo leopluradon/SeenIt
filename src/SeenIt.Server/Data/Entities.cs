@@ -13,9 +13,9 @@ public class AppUser : IdentityUser<Guid>
     public int JellyfinThresholdPercent { get; set; } = 90;
 
     /// <summary>Blur titles and descriptions of episodes the user hasn't watched.</summary>
-    public bool HideSpoilers { get; set; }
+    public bool HideSpoilers { get; set; } = true;
     /// <summary>Also blur those episodes' images.</summary>
-    public bool BlurSpoilerImages { get; set; }
+    public bool BlurSpoilerImages { get; set; } = true;
 
     /// <summary>Home page sections the user has hidden (keys from UiPrefs.HomeSections).</summary>
     public List<string> HiddenHomeSections { get; set; } = [];

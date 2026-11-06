@@ -216,6 +216,35 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         return new FeedDto(watching, rows.Zip(entries, (w, e) => new ActivityItem(byId[w.UserId], e)).ToList());
     }
 
+    /// <summary>The people you follow whose history you may see.</summary>
+    private async Task<List<AppUser>> HistoryFolloweesAsync(Guid me, CancellationToken ct)
+    {
+        var people = await VisibleFolloweesAsync(me, ct);
+        var ids = people.Select(u => u.Id).ToList();
+        var mutual = (await db.Follows.Where(f => f.FolloweeId == me && ids.Contains(f.FollowerId)).Select(f => f.FollowerId).ToListAsync(ct)).ToHashSet();
+        return people.Where(u => CanSee(u, me, mutual.Contains(u.Id), ProfilePart.History)).OrderBy(u => u.DisplayName ?? u.UserName).ToList();
+    }
+
+    /// <summary>
+    /// Friends' history: every play of everyone you follow whose history you can see, with the same
+    /// filters as your own history; "user" narrows it to one of them.
+    /// </summary>
+    public async Task<HistoryPage> FriendsHistoryAsync(Guid me, HistoryQuery f, string? user, CancellationToken ct)
+    {
+        var people = await HistoryFolloweesAsync(me, ct);
+        var cards = await CardsAsync(me, people, ct);
+        var names = people.ToDictionary(u => u.Id, u => u.UserName!);
+        var ids = people.Where(u => string.IsNullOrEmpty(user) || string.Equals(u.UserName, user, StringComparison.OrdinalIgnoreCase)).Select(u => u.Id).ToList();
+        if (ids.Count == 0) return new HistoryPage([], 1, 0, 0, 0, [], cards);
+        return await tracking.GetHistoryAsync(ids, f, names, ct) with { People = cards };
+    }
+
+    public async Task<List<string>> FriendsHistoryGenresAsync(Guid me, CancellationToken ct)
+    {
+        var ids = (await HistoryFolloweesAsync(me, ct)).Select(u => u.Id).ToList();
+        return ids.Count == 0 ? [] : await tracking.GetHistoryGenresAsync(ids, ct);
+    }
+
     /// <summary>Whether the viewer may see this person's profile (and so compare against it).</summary>
     private async Task<(bool Ok, UserCard Card)> VisibleAsync(AppUser user, Guid viewer, CancellationToken ct)
     {

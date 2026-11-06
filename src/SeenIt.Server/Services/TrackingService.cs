@@ -365,20 +365,27 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     // ---------- History ----------
 
-    public async Task<HistoryPage> GetHistoryAsync(Guid userId, HistoryQuery f, CancellationToken ct)
+    public Task<HistoryPage> GetHistoryAsync(Guid userId, HistoryQuery f, CancellationToken ct) => GetHistoryAsync([userId], f, null, ct);
+
+    /// <summary>
+    /// History across several people (friends' history). With names, each row says whose play it is,
+    /// and the Shows view groups per person as well as per show and day.
+    /// </summary>
+    public async Task<HistoryPage> GetHistoryAsync(IReadOnlyCollection<Guid> userIds, HistoryQuery f, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
     {
         var pageSize = Math.Clamp(f.PageSize, 1, 100);
         var page = Math.Max(f.Page, 1);
-        var q = FilterHistory(db.WatchEvents.Where(w => w.UserId == userId), f);
+        var people = userIds.ToList();
+        var q = FilterHistory(people.Count == 1 ? db.WatchEvents.Where(w => w.UserId == people[0]) : db.WatchEvents.Where(w => people.Contains(w.UserId)), f);
         if (!string.IsNullOrWhiteSpace(f.Q))
         {
             // Find the matching plays once. As a filter inside every query below (count, page,
             // totals, day sums) the title/episode-name search ran over every episode again each time.
-            var ids = await SearchPlaysAsync(userId, f.Q, ct);
+            var ids = await SearchPlaysAsync(people, f.Q, ct);
             q = q.Where(w => ids.Contains(w.Id));
         }
 
-        if (f.Type == MediaType.Show) return await ShowHistoryAsync(q, f, page, pageSize, ct);
+        if (f.Type == MediaType.Show) return await ShowHistoryAsync(q, f, page, pageSize, names, ct);
 
         var total = await q.CountAsync(ct);
         var ordered = f.Oldest
@@ -388,6 +395,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
         var minutes = total > 0 ? await MinutesAsync(q, ct) : 0;
         var entries = await ToHistoryAsync(rows, ct);
+        if (names is not null) entries = rows.Zip(entries, (r, e) => e with { Who = names.GetValueOrDefault(r.UserId) }).ToList();
         return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct));
     }
 
@@ -395,12 +403,12 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     /// The Shows view: one row per show per day (unknown dates count as one "day"), newest first,
     /// with how many episodes and which. Paged by rows, so a day's group is never split.
     /// </summary>
-    private async Task<HistoryPage> ShowHistoryAsync(IQueryable<WatchEvent> q, HistoryQuery f, int page, int pageSize, CancellationToken ct)
+    private async Task<HistoryPage> ShowHistoryAsync(IQueryable<WatchEvent> q, HistoryQuery f, int page, int pageSize, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
     {
         var tz = ReviewService.Zone(f.TimeZone);
-        var plays = await q.Select(w => new { w.Id, w.TmdbId, S = w.SeasonNumber ?? 0, E = w.EpisodeNumber ?? 0, w.WatchedAt, w.CreatedAt }).ToListAsync(ct);
+        var plays = await q.Select(w => new { w.Id, w.UserId, w.TmdbId, S = w.SeasonNumber ?? 0, E = w.EpisodeNumber ?? 0, w.WatchedAt, w.CreatedAt }).ToListAsync(ct);
         var groups = plays
-            .GroupBy(p => (Day: WatchDates.IsUnknown(p.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(p.WatchedAt, tz).DateTime), p.TmdbId))
+            .GroupBy(p => (Day: WatchDates.IsUnknown(p.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(p.WatchedAt, tz).DateTime), p.TmdbId, p.UserId))
             .Select(g => (Key: g.Key, Plays: g.OrderBy(p => p.WatchedAt).ThenBy(p => p.CreatedAt).ToList()))
             .ToList();
         // Newest first; "date unknown" goes last (first when oldest-first), like the plain view.
@@ -422,7 +430,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             var range = eps.Count == 1 ? Code(eps[0]) : $"{Code(eps[0])}–{Code(eps[^1])}";
             var runtime = g.Plays.Sum(p => detailed[p.Id].Runtime ?? 0);
             return latest with { Type = MediaType.Show, SeasonNumber = null, EpisodeNumber = null, EpisodeTitle = null,
-                Runtime = runtime > 0 ? runtime : null, Episodes = g.Plays.Count, Range = range };
+                Runtime = runtime > 0 ? runtime : null, Episodes = g.Plays.Count, Range = range, Who = names?.GetValueOrDefault(g.Key.UserId) };
         }).ToList();
 
         var minutes = total > 0 ? await MinutesAsync(q, ct) : 0;
@@ -502,11 +510,11 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         return q;
     }
 
-    /// <summary>The user's plays whose movie title, show name or episode name contains the text.</summary>
-    private async Task<List<Guid>> SearchPlaysAsync(Guid userId, string text, CancellationToken ct)
+    /// <summary>These people's plays whose movie title, show name or episode name contains the text.</summary>
+    private async Task<List<Guid>> SearchPlaysAsync(List<Guid> userIds, string text, CancellationToken ct)
     {
         var term = text.Trim().ToLower();
-        var mine = db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId);
+        var mine = userIds.Count == 1 ? db.WatchEvents.AsNoTracking().Where(w => w.UserId == userIds[0]) : db.WatchEvents.AsNoTracking().Where(w => userIds.Contains(w.UserId));
         var movieIds = await db.Movies.Where(m => m.Title.ToLower().Contains(term)).Select(m => m.TmdbId).ToListAsync(ct);
         var showIds = await db.Shows.Where(s => s.Name.ToLower().Contains(term)).Select(s => s.TmdbId).ToListAsync(ct);
         var byTitle = await mine.Where(w => w.Type == MediaType.Movie ? movieIds.Contains(w.TmdbId) : showIds.Contains(w.TmdbId))
@@ -522,9 +530,12 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     }
 
     /// <summary>Genres across everything the user has watched, most-watched first, for the history filter.</summary>
-    public async Task<List<string>> GetHistoryGenresAsync(Guid userId, CancellationToken ct)
+    public Task<List<string>> GetHistoryGenresAsync(Guid userId, CancellationToken ct) => GetHistoryGenresAsync([userId], ct);
+
+    public async Task<List<string>> GetHistoryGenresAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct)
     {
-        var watched = await db.WatchEvents.Where(w => w.UserId == userId)
+        var people = userIds.ToList();
+        var watched = await db.WatchEvents.Where(w => people.Contains(w.UserId))
             .GroupBy(w => new { w.Type, w.TmdbId }).Select(g => new { g.Key.Type, g.Key.TmdbId, Plays = g.Count() }).ToListAsync(ct);
         var (movies, shows) = await LoadMetaAsync(watched.Select(w => (w.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, w.TmdbId)), ct);
         var counts = new Dictionary<string, int>();

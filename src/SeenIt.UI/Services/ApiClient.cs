@@ -113,8 +113,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task RestorePlaysAsync(IReadOnlyList<RestorePlay> plays) => SendAsync(HttpMethod.Post, "api/history/restore", plays);
     public Task<RematchResult?> RematchAsync(RematchRequest r) => SendAsync<RematchResult>(HttpMethod.Post, "api/rematch", r);
     public Task<List<DuplicateGroup>> DuplicatesAsync() => GetAsync<List<DuplicateGroup>>("api/duplicates");
-    /// <summary>Your history, or someone else's (read-only) when userName is given.</summary>
-    public Task<HistoryPage> HistoryAsync(HistoryQuery f, string? userName = null)
+    /// <summary>Your history, someone else's (read-only) when userName is given, or everyone you follow when friends is set ("user" picks one of them).</summary>
+    public Task<HistoryPage> HistoryAsync(HistoryQuery f, string? userName = null, bool friends = false, string? user = null)
     {
         var qs = new List<string> { $"page={f.Page}", $"pageSize={f.PageSize}", $"tz={Tz}" };
         if (f.Type is { } t) qs.Add($"type={t}");
@@ -124,10 +124,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         if (f.From is { } from) qs.Add($"from={Uri.EscapeDataString(from.ToString("O"))}");
         if (f.To is { } to) qs.Add($"to={Uri.EscapeDataString(to.ToString("O"))}");
         if (f.Oldest) qs.Add("sort=oldest");
+        if (friends && !string.IsNullOrWhiteSpace(user)) qs.Add($"user={Uri.EscapeDataString(user)}");
+        if (friends) return GetAsync<HistoryPage>("api/social/history?" + string.Join('&', qs));
         return GetAsync<HistoryPage>((userName is null ? "api/history?" : $"api/users/{Uri.EscapeDataString(userName)}/history?") + string.Join('&', qs));
     }
-    public Task<List<string>> HistoryGenresAsync(string? userName = null) =>
-        GetAsync<List<string>>(userName is null ? "api/history/genres" : $"api/users/{Uri.EscapeDataString(userName)}/history/genres");
+    public Task<List<string>> HistoryGenresAsync(string? userName = null, bool friends = false) =>
+        GetAsync<List<string>>(friends ? "api/social/history/genres" : userName is null ? "api/history/genres" : $"api/users/{Uri.EscapeDataString(userName)}/history/genres");
     public async Task<RemovedPlays> DeleteHistoryAsync(Guid id) =>
         await SendAsync<RemovedPlays>(HttpMethod.Delete, $"api/history/{id}") ?? new RemovedPlays(0, []);
 

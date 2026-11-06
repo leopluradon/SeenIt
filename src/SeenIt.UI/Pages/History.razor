@@ -6,12 +6,14 @@
 @inject Toasts Toasts
 @inject NavigationManager Nav
 @inject IJSRuntime Js
-<PageTitle>@(Other is { } on ? $"{on}'s history" : "History") · SeenIt</PageTitle>
-
-@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
-<div class="page-head">
-    <h1>@(Other is { } o ? $"{o}'s history" : "History")</h1>
-    @if (Other is null && Type != MediaType.Show) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="ToggleSelecting" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
+@if (!Friends)
+{
+    <PageTitle>@(Other is { } on ? $"{on}'s history" : "History") · SeenIt</PageTitle>
+    @if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
+}
+<div class="@(Friends ? "history-toolbar" : "page-head")">
+    @if (!Friends) { <h1>@(Other is { } o ? $"{o}'s history" : "History")</h1> }
+    @if (Mine && Type != MediaType.Show) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="ToggleSelecting" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
     <div class="segmented">
         <button class="@(Type is null ? "on" : "")" @onclick='() => Go(type: "")'>All</button>
         <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick='() => Go(type: "Movie")'>Movies</button>
@@ -22,13 +24,23 @@
 
 <form class="searchbar" @onsubmit="Submit" role="search">
     <Icon Name="search" Size="18" />
-    <input type="search" @bind="search" @bind:event="oninput" @bind:after="Debounce" placeholder="@(Other is null ? "Search your history" : "Search their history")" aria-label="Search history" />
+    <input type="search" @bind="search" @bind:event="oninput" @bind:after="Debounce" placeholder="@(Friends ? "Search friends' history" : Other is null ? "Search your history" : "Search their history")" aria-label="Search history" />
     <button type="button" class="btn btn-sm filter-toggle @(ActiveFilters > 0 ? "btn-on" : "")" @onclick="() => filtersOpen = !filtersOpen" aria-expanded="@filtersOpen">
         Filters@(ActiveFilters > 0 ? $" · {ActiveFilters}" : "")
     </button>
 </form>
 
 <div class="history-filters @(filtersOpen ? "open" : "")">
+    @if (Friends && data?.People is { Count: > 1 } everyone)
+    {
+        <div class="field">
+            <label for="hf-who">Who</label>
+            <select id="hf-who" value="@(UserParam ?? "")" @onchange='e => Go(user: e.Value?.ToString() ?? "")'>
+                <option value="">Everyone</option>
+                @foreach (var u in everyone) { <option value="@u.UserName">@u.Name</option> }
+            </select>
+        </div>
+    }
     <div class="field">
         <label for="hf-when">When</label>
         <select id="hf-when" value="@(Period ?? "")" @onchange='e => Go(period: e.Value?.ToString() ?? "")'>
@@ -94,6 +106,10 @@ else if (data is not null)
         {
             <Empty Title="No plays match these filters."><button class="btn btn-sm" @onclick="Clear">Clear filters</button></Empty>
         }
+        else if (Friends)
+        {
+            <Empty Title="Nothing from friends yet.">Follow people to see what they're watching. Only people whose history is visible to you show up here.</Empty>
+        }
         else
         {
             <Empty Title="Nothing watched yet.">Mark something watched, connect Jellyfin, or import from Trakt or Letterboxd in <a href="settings">Settings</a>.</Empty>
@@ -125,6 +141,10 @@ else if (data is not null)
                            @onclick="() => { if (selecting) TogglePick(h.Id); }" @onclick:preventDefault="selecting">
                             <img src="@Img.Poster(h.PosterPath, "w92")" alt="" loading="lazy" />
                             <div>
+                                @if (h.Who is { } who && People.GetValueOrDefault(who) is { } person)
+                                {
+                                    <div class="history-who small"><Avatar Name="@person.Name" Url="@person.Avatar" Class="avatar-xs" /> <b>@person.Name</b></div>
+                                }
                                 <div class="mini-title">@h.Title</div>
                                 @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · @h.EpisodeTitle</div> }
                                 @if (h.Type == MediaType.Show) { <div class="small">@(h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div> }
@@ -134,7 +154,7 @@ else if (data is not null)
                                 </div>
                             </div>
                         </a>
-                        @if (!selecting && Other is null && h.Type != MediaType.Show)
+                        @if (!selecting && Mine && h.Type != MediaType.Show)
                         {
                             <button class="icon-btn" @onclick="() => editing = h" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
                             <button class="icon-btn" @onclick="() => Delete(h)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
@@ -173,8 +193,13 @@ else if (data is not null)
     private HistoryEntry? editing;
     /// <summary>Viewing someone else's history (read-only).</summary>
     [Parameter] public string? UserName { get; set; }
-    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
-    private string BasePath => Other is { } n ? $"u/{Uri.EscapeDataString(n)}/history" : "history";
+    private string? Other => Friends ? null : UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    /// <summary>Embedded in the Friends page: everyone you follow, read-only, with a "who" filter.</summary>
+    [Parameter] public bool Friends { get; set; }
+    [SupplyParameterFromQuery(Name = "user")] public string? UserParam { get; set; }
+    private bool Mine => !Friends && Other is null;
+    private string BasePath => Friends ? "friends" : Other is { } n ? $"u/{Uri.EscapeDataString(n)}/history" : "history";
+    private Dictionary<string, UserCard> People => data?.People?.ToDictionary(u => u.UserName, StringComparer.OrdinalIgnoreCase) ?? [];
     [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "source")] public string? SourceParam { get; set; }
@@ -187,7 +212,7 @@ else if (data is not null)
 
     private MediaType? Type => Enum.TryParse<MediaType>(TypeParam, out var t) ? t : null;
     private WatchSource? Source => Enum.TryParse<WatchSource>(SourceParam, out var s) ? s : null;
-    private int ActiveFilters => new[] { Period, Genre, SourceParam, Sort }.Count(v => !string.IsNullOrEmpty(v));
+    private int ActiveFilters => new[] { Period, Genre, SourceParam, Sort, Friends ? UserParam : null }.Count(v => !string.IsNullOrEmpty(v));
 
     private HistoryPage? data;
     private List<string> genres = [];
@@ -204,7 +229,7 @@ else if (data is not null)
 
     protected override async Task OnParametersSetAsync()
     {
-        if (string.IsNullOrEmpty(UserName) && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        if (!Friends && string.IsNullOrEmpty(UserName) && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
         {
             var back = Nav.ToBaseRelativePath(Nav.Uri);
             Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(back), replace: true);
@@ -212,14 +237,15 @@ else if (data is not null)
         }
         search = Q ?? "";
         if (Type == MediaType.Show && selecting) { selecting = false; selected.Clear(); }   // rows there are groups, not plays
-        if (genresFor != Other)
+        var whose = Friends ? "\u0001friends" : Other;
+        if (genresFor != whose)
         {
             // Same page for your history and a friend's: reset when switching between them.
-            genresFor = Other;
+            genresFor = whose;
             selecting = false;
             selected.Clear();
             data = null;
-            try { genres = await Api.HistoryGenresAsync(Other); } catch { genres = []; /* the filter just stays empty */ }
+            try { genres = await Api.HistoryGenresAsync(Other, Friends); } catch { genres = []; /* the filter just stays empty */ }
         }
         await Load();
     }
@@ -228,7 +254,7 @@ else if (data is not null)
     {
         error = null;
         var (from, to) = Range();
-        try { data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", PageParam ?? 1), Other); }
+        try { data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", PageParam ?? 1), Other, Friends, UserParam); }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s history is private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
@@ -261,10 +287,12 @@ else if (data is not null)
 
     /// <summary>Updates one or more filters in the URL; any change goes back to page 1.</summary>
     private void Go(string? type = null, string? q = null, string? source = null, string? genre = null,
-        string? period = null, string? from = null, string? to = null, string? sort = null, int? page = null)
+        string? period = null, string? from = null, string? to = null, string? sort = null, int? page = null, string? user = null)
     {
         var p = new Dictionary<string, object?>
         {
+            ["tab"] = Friends ? "feed" : null,
+            ["user"] = Friends ? Blank(user ?? UserParam) : null,
             ["type"] = Blank(type ?? TypeParam),
             ["q"] = Blank(q ?? Q),
             ["source"] = Blank(source ?? SourceParam),
@@ -295,7 +323,8 @@ else if (data is not null)
     private void Clear()
     {
         search = "";
-        Nav.NavigateTo(Type is null ? BasePath : $"{BasePath}?type={Type}");
+        var path = Friends ? $"{BasePath}?tab=feed" : BasePath;
+        Nav.NavigateTo(Type is null ? path : $"{path}{(Friends ? "&" : "?")}type={Type}");
     }
 
     private bool selecting, bulkBusy, bulkDateOpen;
