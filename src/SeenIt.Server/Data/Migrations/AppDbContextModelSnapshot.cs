@@ -296,6 +296,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<string>("PlexUsername")
                         .HasColumnType("text");
 
+                    b.Property<string>("PrefsJson")
+                        .HasColumnType("text");
+
                     b.Property<int>("RatingScale")
                         .HasColumnType("integer");
 

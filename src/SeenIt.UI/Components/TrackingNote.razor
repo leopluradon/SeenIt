@@ -2,7 +2,7 @@
 @inject SessionState Session
 @if (Session.Me?.TrackingSince is { } since)
 {
-    <p class="muted small @(Center ? "center-text" : "")">Counting from @since.ToString("MMM d, yyyy"), when you started tracking · <a href="settings#tracking">change</a></p>
+    <p class="muted small @(Center ? "center-text" : "")">Counting from @since.ToString(Fmt.DateLong), when you started tracking · <a href="settings#tracking">change</a></p>
 }
 @code {
     [Parameter] public bool Center { get; set; }

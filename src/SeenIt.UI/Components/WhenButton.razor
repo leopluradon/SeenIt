@@ -1,0 +1,12 @@
+@* "Pick a date": when ✓ records straight away (Settings → Tracking), this still opens the full "when did you watch" choices. *@
+@if (Fmt.Prefs.WatchDefault != WatchDefault.Ask)
+{
+    <button type="button" class="btn @(Small ? "btn-sm" : "") btn-ghost when-btn" disabled="@Disabled" @onclick="OnClick"
+            title="Watched at another time? Pick the date" aria-label="@($"Pick when you watched {What}")"><Icon Name="calendar" Size="@(Small ? 14 : 18)" /></button>
+}
+@code {
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public bool Small { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string What { get; set; } = "it";
+}

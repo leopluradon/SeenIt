@@ -16,7 +16,8 @@
         <span class="muted small">@Progress.Watched/@Progress.Aired</span>
         @if (Progress.NextEpisode is { } next)
         {
-            <button class="btn btn-sm btn-check" disabled="@busy" @onclick="() => dialogOpen = true" aria-label="Mark @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber) watched">
+            <WhenButton Small="true" Disabled="busy" What="@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)" OnClick="() => { askWhen = true; dialogOpen = true; }" />
+            <button class="btn btn-sm btn-check" disabled="@busy" @onclick="() => { askWhen = false; dialogOpen = true; }" aria-label="Mark @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber) watched">
                 <Icon Name="check" Size="16" />
             </button>
         }
@@ -24,9 +25,10 @@
 </div>
 @if (Progress.NextEpisode is { } pending)
 {
-    <WatchDialog @bind-Open="dialogOpen" What="@($"{Progress.Name} {Fmt.Ep(pending.SeasonNumber, pending.EpisodeNumber)}")" ReleaseDate="pending.AirDate" OnPick="c => Watch(pending, c)" />
+    <WatchDialog @bind-Open="dialogOpen" What="@($"{Progress.Name} {Fmt.Ep(pending.SeasonNumber, pending.EpisodeNumber)}")" ReleaseDate="pending.AirDate" OnPick="c => Watch(pending, c)" AskWhen="askWhen" />
 }
 @code {
+    private bool askWhen;
     [Parameter, EditorRequired] public ShowProgressDto Progress { get; set; } = default!;
     [Parameter] public EventCallback OnWatched { get; set; }
     private bool busy, dialogOpen;

@@ -13,6 +13,12 @@
                 <input type="checkbox" checked="@(!hidden.Contains(key))" @onchange="e => Toggle(key, (bool)e.Value!)" />
                 <span>@label</span>
             </label>
+            @if (Rows.Contains(key))
+            {
+                <select class="row-count" value="@Fmt.Prefs.Count(key)" disabled="@(busy || hidden.Contains(key))" @onchange="e => SetCount(key, e)" aria-label="@($"How many in {label}")" title="How many to show">
+                    @foreach (var n in new[] { 6, 12, 20, 30 }) { <option value="@n">@n</option> }
+                </select>
+            }
             <button class="icon-btn" disabled="@(index == 0 || busy)" @onclick="() => Move(index, -1)" aria-label="Move @label up"><Icon Name="chevron-up" Size="16" /></button>
             <button class="icon-btn" disabled="@(index == order.Count - 1 || busy)" @onclick="() => Move(index, 1)" aria-label="Move @label down"><Icon Name="chevron-down" Size="16" /></button>
         </div>
@@ -25,6 +31,19 @@
     private List<string> order = [];
     private HashSet<string> hidden = [];
     private bool busy;
+    /// <summary>Sections that are rows of titles, with a "how many" choice.</summary>
+    private static readonly HashSet<string> Rows = ["upnext", "upcoming", "recent", "friends", "foryou", "trending-movies", "trending-shows"];
+
+    private async Task SetCount(string key, ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var n)) return;
+        var counts = (Fmt.Prefs.HomeCounts ?? new Dictionary<string, int>()).ToDictionary(kv => kv.Key, kv => kv.Value);
+        counts[key] = n;
+        var prefs = Fmt.Prefs with { HomeCounts = counts };
+        Session.Update(me => me with { Prefs = prefs });
+        try { await Api.SavePrefsAsync(prefs); await OnChanged.InvokeAsync(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
 
     protected override void OnParametersSet()
     {

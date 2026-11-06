@@ -765,16 +765,21 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     public async Task<DashboardDto> GetDashboardAsync(Guid userId, CancellationToken ct)
     {
         var progress = await GetProgressAsync(userId, ct);
-        var sort = await db.Users.Where(u => u.Id == userId).Select(u => u.UpNextSort).FirstOrDefaultAsync(ct);
-        var upNext = UpNextSorts.Apply(progress.Where(p => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching), sort).Take(12).ToList();
+        var me = await db.Users.Where(u => u.Id == userId).Select(u => new { u.UpNextSort, u.PrefsJson }).FirstOrDefaultAsync(ct);
+        var prefs = UserPrefsStore.Read(me?.PrefsJson);
+        var upNext = UpNextSorts.Apply(progress.Where(p => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching), me?.UpNextSort ?? UpNextSort.LastWatched)
+            .Take(prefs.Count("upnext")).ToList();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var upcoming = (await GetCalendarAsync(userId, today, 14, ct)).Take(12).ToList();
+        var upcoming = (await GetCalendarAsync(userId, today, prefs.ComingUpDays, ct)).Take(prefs.Count("upcoming")).ToList();
         var recent = await db.WatchEvents.Where(w => w.UserId == userId)
-            .OrderByDescending(w => w.WatchedAt).Take(12).ToListAsync(ct);
+            .OrderByDescending(w => w.WatchedAt).Take(prefs.Count("recent")).ToListAsync(ct);
         return new DashboardDto(upNext, upcoming, await ToHistoryAsync(recent, ct));
     }
 
     // ---------- Stats ----------
+
+    public async Task<bool> FirstWatchesOnlyAsync(Guid userId, CancellationToken ct) =>
+        !UserPrefsStore.Read(await db.Users.Where(u => u.Id == userId).Select(u => u.PrefsJson).FirstOrDefaultAsync(ct)).CountRewatches;
 
     public async Task<StatsDto> GetStatsAsync(Guid userId, string? tzId, CancellationToken ct)
     {
@@ -782,6 +787,9 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var since = await TrackingSinceAsync(userId, ct);
         var watches = await db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId)
             .Select(w => new { w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt }).ToListAsync(ct);
+        // "Don't count rewatches": each movie and episode counts once, at its first play.
+        if (await FirstWatchesOnlyAsync(userId, ct))
+            watches = watches.GroupBy(w => (w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber)).Select(g => g.MinBy(w => w.WatchedAt)!).ToList();
 
         var movieIds = watches.Where(w => w.Type == MediaType.Movie).Select(w => w.TmdbId).Distinct().ToList();
         var showIds = watches.Where(w => w.Type == MediaType.Episode).Select(w => w.TmdbId).Distinct().ToList();

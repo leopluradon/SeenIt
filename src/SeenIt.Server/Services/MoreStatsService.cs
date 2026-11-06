@@ -303,7 +303,7 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
         var followers = (await db.Follows.Where(f => f.FolloweeId == userId).Select(f => f.FollowerId).ToListAsync(ct)).ToHashSet();
         var people = await db.Users.AsNoTracking().Where(u => following.Contains(u.Id) || u.Id == userId).ToListAsync(ct);
         // Only people whose profile you can see (public, or friends who follow you back).
-        people = people.Where(u => SocialService.CanView(u, userId, followers.Contains(u.Id))).ToList();
+        people = people.Where(u => SocialService.CanSee(u, userId, followers.Contains(u.Id), ProfilePart.Stats)).ToList();
         var ids = people.Select(u => u.Id).ToList();
 
         var monthStartLocal = new DateTime(c.Today.Year, c.Today.Month, 1);

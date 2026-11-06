@@ -14,6 +14,14 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
     public static bool CanView(AppUser owner, Guid? viewer, bool mutual) =>
         owner.Id == viewer || owner.Visibility == ProfileVisibility.Public || (owner.Visibility == ProfileVisibility.Friends && mutual);
 
+    /// <summary>One part of a profile (history, ratings…): its own audience if the owner set one, else the profile's.</summary>
+    public static bool CanSee(AppUser owner, Guid? viewer, bool mutual, ProfilePart part)
+    {
+        if (owner.Id == viewer) return true;
+        var who = owner.Prefs().For(part, owner.Visibility);
+        return who == ProfileVisibility.Public || (who == ProfileVisibility.Friends && mutual);
+    }
+
     private async Task<(bool Following, bool FollowsYou)> RelationAsync(Guid? viewer, Guid them, CancellationToken ct)
     {
         if (viewer is not { } me || me == them) return (false, false);
@@ -43,7 +51,9 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         if (owner is null) return null;
         var (following, followsYou) = await RelationAsync(viewer, owner.Id, ct);
         var isMe = owner.Id == viewer;
-        var canView = CanView(owner, viewer, following && followsYou);
+        var mutual = following && followsYou;
+        bool See(ProfilePart part) => CanSee(owner, viewer, mutual, part);
+        var canView = Enum.GetValues<ProfilePart>().Any(See);
         var card = new UserCard(owner.UserName!, owner.DisplayName, following, followsYou, AvatarService.Path(owner.UserName!, owner.AvatarVersion));
         var followers = await db.Follows.CountAsync(f => f.FolloweeId == owner.Id, ct);
         var followingCount = await db.Follows.CountAsync(f => f.FollowerId == owner.Id, ct);
@@ -53,14 +63,18 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         if (!canView)
             return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, false, followers, followingCount, null, null, [], [], publicLists);
 
-        var recentRows = await db.WatchEvents.AsNoTracking().Where(w => w.UserId == owner.Id && w.WatchedAt > WatchDates.Unknown)
-            .OrderByDescending(w => w.WatchedAt).Take(24).ToListAsync(ct);
-        var topRated = await tracking.TopRatedAsync(owner.Id, 18, ct);
+        // Each part has its own audience (Settings → Privacy); what this viewer may not see is left out.
+        var recent = See(ProfilePart.History)
+            ? await tracking.ToHistoryAsync(await db.WatchEvents.AsNoTracking().Where(w => w.UserId == owner.Id && w.WatchedAt > WatchDates.Unknown)
+                .OrderByDescending(w => w.WatchedAt).Take(24).ToListAsync(ct), ct)
+            : [];
+        var topRated = See(ProfilePart.Ratings) ? await tracking.TopRatedAsync(owner.Id, 18, ct) : [];
 
         return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, true, followers, followingCount,
-            await checkIns.GetAsync(owner.Id, ct), await StatsAsync(owner.Id, ct),
-            await tracking.ToHistoryAsync(recentRows, ct), topRated, publicLists,
-            await tracking.GetFavoritesAsync(owner.Id, ct));
+            See(ProfilePart.WatchingNow) ? await checkIns.GetAsync(owner.Id, ct) : null,
+            See(ProfilePart.Stats) ? await StatsAsync(owner.Id, ct) : null,
+            recent, topRated, publicLists,
+            See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null);
     }
 
     /// <summary>
@@ -87,7 +101,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var owner = await FindAsync(userName);
         if (owner is null) return null;
         var (following, followsYou) = await RelationAsync(viewer, owner.Id, ct);
-        return CanView(owner, viewer, following && followsYou) ? owner : null;
+        return CanSee(owner, viewer, following && followsYou, ProfilePart.History) ? owner : null;
     }
 
     public async Task<bool> FollowAsync(Guid me, string userName, bool follow, CancellationToken ct)
@@ -132,10 +146,14 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var followers = await db.Follows.Where(f => f.FolloweeId == me).Select(f => f.FollowerId).ToListAsync(ct);
         var ids = following.Union(followers).ToList();
         if (ids.Count == 0) return [];
-        var people = (await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToListAsync(ct))
-            .Where(u => CanView(u, me, following.Contains(u.Id) && followers.Contains(u.Id))).ToDictionary(u => u.Id);
+        var everyone = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToListAsync(ct);
+        bool Mutual(AppUser u) => following.Contains(u.Id) && followers.Contains(u.Id);
+        // Plays need their history to be visible to you, ratings their ratings.
+        var historyOk = everyone.Where(u => CanSee(u, me, Mutual(u), ProfilePart.History)).Select(u => u.Id).ToList();
+        var ratingsOk = everyone.Where(u => CanSee(u, me, Mutual(u), ProfilePart.Ratings)).Select(u => u.Id).ToList();
+        var people = everyone.Where(u => historyOk.Contains(u.Id) || ratingsOk.Contains(u.Id)).ToDictionary(u => u.Id);
         if (people.Count == 0) return [];
-        var visible = people.Keys.ToList();
+        var visible = historyOk;
 
         // Plays: movies and episodes count every play; shows and seasons count distinct episodes.
         var plays = db.WatchEvents.AsNoTracking().Where(w => visible.Contains(w.UserId) && w.TmdbId == tmdbId);
@@ -155,7 +173,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var ratingType = type == MediaType.Episode ? MediaType.Episode : type;
         int? rSeason = type == MediaType.Movie ? null : season, rEpisode = type == MediaType.Episode ? episode : null;
         var ratings = await db.Ratings.AsNoTracking()
-            .Where(r => visible.Contains(r.UserId) && r.Type == ratingType && r.TmdbId == tmdbId && r.SeasonNumber == rSeason && r.EpisodeNumber == rEpisode)
+            .Where(r => ratingsOk.Contains(r.UserId) && r.Type == ratingType && r.TmdbId == tmdbId && r.SeasonNumber == rSeason && r.EpisodeNumber == rEpisode)
             .ToDictionaryAsync(r => r.UserId, r => r.Value, ct);
 
         var cards = (await CardsAsync(me, people.Values.Where(u => watched.ContainsKey(u.Id) || ratings.ContainsKey(u.Id)), ct))
@@ -173,7 +191,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             .Join(db.Users, f => f.FolloweeId, u => u.Id, (f, u) => u).AsNoTracking().ToListAsync(ct);
         var ids = followees.Select(u => u.Id).ToList();
         var followBack = (await db.Follows.Where(f => f.FolloweeId == me && ids.Contains(f.FollowerId)).Select(f => f.FollowerId).ToListAsync(ct)).ToHashSet();
-        return followees.Where(u => CanView(u, me, followBack.Contains(u.Id))).ToList();
+        return followees.Where(u => CanSee(u, me, followBack.Contains(u.Id), ProfilePart.History) || CanSee(u, me, followBack.Contains(u.Id), ProfilePart.WatchingNow)).ToList();
     }
 
     public async Task<FeedDto> FeedAsync(Guid me, int take, CancellationToken ct)
@@ -184,12 +202,15 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var cards = (await CardsAsync(me, people, ct)).ToDictionary(c => c.UserName);
         var byId = people.ToDictionary(u => u.Id, u => cards[u.UserName!]);
 
-        var live = (await db.CheckIns.AsNoTracking().Where(c => ids.Contains(c.UserId)).ToListAsync(ct)).Where(CheckInService.IsLive).ToList();
+        var mutualIds = (await db.Follows.Where(f => f.FolloweeId == me && ids.Contains(f.FollowerId)).Select(f => f.FollowerId).ToListAsync(ct)).ToHashSet();
+        var watchingIds = people.Where(u => CanSee(u, me, mutualIds.Contains(u.Id), ProfilePart.WatchingNow)).Select(u => u.Id).ToList();
+        var historyIds = people.Where(u => CanSee(u, me, mutualIds.Contains(u.Id), ProfilePart.History)).Select(u => u.Id).ToList();
+        var live = (await db.CheckIns.AsNoTracking().Where(c => watchingIds.Contains(c.UserId)).ToListAsync(ct)).Where(CheckInService.IsLive).ToList();
         var liveDtos = await checkIns.ToDtosAsync(live, ct);
         var watching = live.Zip(liveDtos, (c, d) => new FriendWatching(byId[c.UserId], d)).ToList();
 
         var rows = await db.WatchEvents.AsNoTracking()
-            .Where(w => ids.Contains(w.UserId) && w.WatchedAt > WatchDates.Unknown && w.WatchedAt <= DateTimeOffset.UtcNow.AddDays(1))
+            .Where(w => historyIds.Contains(w.UserId) && w.WatchedAt > WatchDates.Unknown && w.WatchedAt <= DateTimeOffset.UtcNow.AddDays(1))
             .OrderByDescending(w => w.WatchedAt).Take(Math.Clamp(take, 1, 100)).ToListAsync(ct);
         var entries = await tracking.ToHistoryAsync(rows, ct);
         return new FeedDto(watching, rows.Zip(entries, (w, e) => new ActivityItem(byId[w.UserId], e)).ToList());
@@ -199,7 +220,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
     private async Task<(bool Ok, UserCard Card)> VisibleAsync(AppUser user, Guid viewer, CancellationToken ct)
     {
         var (following, followsYou) = await RelationAsync(viewer, user.Id, ct);
-        return (CanView(user, viewer, following && followsYou), new UserCard(user.UserName!, user.DisplayName, following, followsYou, AvatarService.Path(user.UserName!, user.AvatarVersion)));
+        return (CanSee(user, viewer, following && followsYou, ProfilePart.History), new UserCard(user.UserName!, user.DisplayName, following, followsYou, AvatarService.Path(user.UserName!, user.AvatarVersion)));
     }
 
     /// <summary>Compares two people. The viewer can be either of them or anyone who can see both profiles.</summary>
@@ -228,8 +249,17 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             .Concat(aw.Shows.Keys.Intersect(bw.Shows.Keys).Select(id => (Key: (MediaType.Show, id), Last: aw.Shows[id])))
             .OrderByDescending(x => x.Last).Select(x => x.Key).ToList();
 
+        // Someone whose ratings aren't visible to the viewer compares without them.
+        async Task<bool> RatingsVisible(AppUser u)
+        {
+            var (f, fy) = await RelationAsync(viewer, u.Id, ct);
+            return CanSee(u, viewer, f && fy, ProfilePart.Ratings);
+        }
+        var rateIds = new List<Guid>();
+        if (await RatingsVisible(a)) rateIds.Add(a.Id);
+        if (await RatingsVisible(b)) rateIds.Add(b.Id);
         var ratings = await db.Ratings.AsNoTracking()
-            .Where(r => (r.UserId == a.Id || r.UserId == b.Id) && r.Type != MediaType.Episode && r.SeasonNumber == null).ToListAsync(ct);
+            .Where(r => rateIds.Contains(r.UserId) && r.Type != MediaType.Episode && r.SeasonNumber == null).ToListAsync(ct);
         var ar = ratings.Where(r => r.UserId == a.Id).ToDictionary(r => (r.Type, r.TmdbId), r => r.Value);
         var br = ratings.Where(r => r.UserId == b.Id).ToDictionary(r => (r.Type, r.TmdbId), r => r.Value);
         var shared = ar.Keys.Intersect(br.Keys).ToList();

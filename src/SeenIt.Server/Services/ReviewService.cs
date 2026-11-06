@@ -253,9 +253,14 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
     {
         var unknown = WatchDates.Unknown;
         var rows = await db.WatchEvents.AsNoTracking()
-            .Where(w => w.UserId == userId && w.WatchedAt != unknown)
+            .Where(w => w.UserId == userId)
             .Select(w => new { w.Id, w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source })
             .ToListAsync(ct);
+        // "Don't count rewatches": only each movie and episode's first play (so a rewatch this year isn't in this year's review).
+        if (await tracking.FirstWatchesOnlyAsync(userId, ct))
+            rows = rows.GroupBy(w => (w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber)).Select(g => g.MinBy(w => w.WatchedAt)!).ToList();
+        // Plays with no date can't land in any period (but they still count as someone's first watch above).
+        rows = rows.Where(w => w.WatchedAt != unknown).ToList();
         return rows.Select(w => new Play(w.Id, w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, Local(w.WatchedAt, tz), w.Source))
             .Where(p => since is null || DateOnly.FromDateTime(p.Local) >= since)
             .ToList();

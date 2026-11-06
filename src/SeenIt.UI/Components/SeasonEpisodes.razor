@@ -32,7 +32,7 @@
                         <span class="ep-num">@e.EpisodeNumber</span>
                         <span class="ep-main">
                             <span class="ep-name"><Spoiler Watched="e.Plays > 0">@(e.Name ?? $"Episode {e.EpisodeNumber}")</Spoiler></span>
-                            <span class="muted small">@(e.AirDate?.ToString("MMM d, yyyy") ?? "TBA")@(e.Runtime is > 0 ? " · " + Fmt.Runtime(e.Runtime) : "")</span>
+                            <span class="muted small">@(e.AirDate?.ToString(Fmt.DateLong) ?? "TBA")@(e.Runtime is > 0 ? " · " + Fmt.Runtime(e.Runtime) : "")</span>
                         </span>
                         @if (e.Plays > 0) { <span class="ep-check" title="@($"Watched{(e.Plays > 1 ? $" {e.Plays}×" : "")}")"><Icon Name="check" Size="16" /></span> }
                         else if (!aired) { <span class="pill pill-sm">Upcoming</span> }
@@ -42,6 +42,7 @@
                         @* Over the row's right edge (not inside the link, so a tap doesn't also open the episode). *@
                         <div class="ep-actions">
                             @if (Fmt.CanThrough(e.SeasonNumber, e.EpisodeNumber)) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Open(e, true)" title="Mark everything up to here watched">Up to here</button> }
+                            <WhenButton Small="true" Disabled="busy" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" OnClick="() => Open(e, false, true)" />
                             <button class="btn btn-sm" disabled="@busy" @onclick="() => Open(e, false)" title="Mark watched" aria-label="@($"Mark {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)} watched")"><Icon Name="check" Size="14" /></button>
                         </div>
                     }
@@ -54,7 +55,7 @@
 <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
              What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch"
              Through="pendingThrough" ThroughNote="@(selected == 0 ? " (specials only)" : ", in season order")"
-             ScopeSeason="@(pending is { SeasonNumber: > 1, EpisodeNumber: > 1 } ps ? ps.SeasonNumber : null)" />
+             ScopeSeason="@(pending is { SeasonNumber: > 1, EpisodeNumber: > 1 } ps ? ps.SeasonNumber : null)"  AskWhen="askWhen" />
 @code {
     [Parameter, EditorRequired] public int ShowId { get; set; }
     [Parameter] public int CurrentSeason { get; set; }
@@ -65,7 +66,8 @@
     [Parameter] public EventCallback OnChanged { get; set; }
     private EpisodeDto? pending;
     private bool busy, pendingThrough;
-    private void Open(EpisodeDto e, bool through) { pending = e; pendingThrough = through; }
+    private void Open(EpisodeDto e, bool through, bool ask = false) { pending = e; pendingThrough = through; askWhen = ask; }
+    private bool askWhen;
     private int selected = -1;
     private SeasonDetail? season;
     private bool loading;

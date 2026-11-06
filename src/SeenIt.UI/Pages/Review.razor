@@ -35,7 +35,7 @@ else if (r is not null)
 {
     @if (r.TrackingSince is { } since && PeriodEnd <= since)
     {
-        <Empty Title="@($"Reviews start from {since:MMMM d, yyyy}.")">
+        <Empty Title="@($"Reviews start from {(since).ToString(Fmt.DateFull)}.")">
             <span>That's when you started tracking; plays before it were back-filled, so they aren't reviewed.</span>
             <a class="btn btn-sm" href="@($"review/{since.Year}" + (Month is null ? "" : $"/{since.Month}"))">Go to @(Month is null ? since.Year.ToString() : since.ToString("MMMM yyyy"))</a>
         </Empty>
@@ -70,8 +70,8 @@ else if (r is not null)
 
         <section class="review-facts">
             <div class="fact"><b>@r.DaysActive</b><span>of @r.DaysInPeriod days with something watched</span></div>
-            <div class="fact"><b>@r.LongestStreak.Days day@(r.LongestStreak.Days == 1 ? "" : "s")</b><span>longest streak@(r.LongestStreak.Start is { } ss && r.LongestStreak.Days > 1 ? $" ({ss:MMM d} – {r.LongestStreak.End:MMM d})" : "")</span></div>
-            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString("ddd, MMM d")</b><span>busiest day: @bd.Plays plays, <Dur Minutes="bd.Minutes" /></span></div> }
+            <div class="fact"><b>@r.LongestStreak.Days day@(r.LongestStreak.Days == 1 ? "" : "s")</b><span>longest streak@(r.LongestStreak.Start is { } ss && r.LongestStreak.Days > 1 ? $" ({(ss).ToString(Fmt.DateShort)} – {r.LongestStreak.End?.ToString(Fmt.DateShort)})" : "")</span></div>
+            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString(Fmt.DayShort)</b><span>busiest day: @bd.Plays plays, <Dur Minutes="bd.Minutes" /></span></div> }
             <div class="fact"><b>@r.AveragePlaysPerActiveDay</b><span>plays per active day</span></div>
             @if (r.FavoriteWeekday is { } fw) { <div class="fact"><b>@(fw)s</b><span>favorite day to watch</span></div> }
             @if (r.PeakHour is { } ph) { <div class="fact"><b>@HourLabel(ph)</b><span>peak viewing hour</span></div> }
@@ -136,7 +136,7 @@ else if (r is not null)
         <div class="stat-panels">
             @if (r.Genres.Count > 0) { <section class="panel"><h2>Genres</h2><BarChart Data="r.Genres" Label="Plays by genre" /></section> }
             @if (r.Networks.Count > 0) { <section class="panel"><h2>Networks</h2><BarChart Data="r.Networks" Label="Episodes by network" /></section> }
-            <section class="panel"><h2>Day of week</h2><BarChart Data="r.Weekdays" Vertical="true" Label="Plays by weekday" /></section>
+            <section class="panel"><h2>Day of week</h2><BarChart Data="Fmt.WeekOrder(r.Weekdays)" Vertical="true" Label="Plays by weekday" /></section>
             <section class="panel"><h2>Time of day</h2><BarChart Data="r.Hours" Vertical="true" LabelEvery="3" Label="Plays by hour" /></section>
             @if (r.Languages.Count > 0) { <section class="panel"><h2>Languages</h2><BarChart Data="r.Languages" Label="Plays by original language" /></section> }
             @if (r.Countries.Count > 0) { <section class="panel"><h2>Countries</h2><BarChart Data="r.Countries" Label="Plays by country of origin" /></section> }

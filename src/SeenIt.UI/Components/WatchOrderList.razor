@@ -24,12 +24,13 @@
                             <span class="ep-num">@(e.Watched ? "✓" : e.Position.ToString())</span>
                             <a class="ep-main" href="@Fmt.EpisodeHref(ShowId, e.SeasonNumber, e.EpisodeNumber)">
                                 <span class="ep-name"><Spoiler Watched="e.Watched">@(e.Name ?? "Episode")</Spoiler></span>
-                                <span class="muted small">@(e.SeasonNumber == 0 ? $"Special {e.EpisodeNumber}" : Fmt.Ep(e.SeasonNumber, e.EpisodeNumber))@(e.AirDate is { } a ? " · " + a.ToString("MMM d, yyyy") : "")@(e.Runtime is > 0 ? " · " + Fmt.Runtime(e.Runtime) : "")@(e.IsNext ? " · up next" : "")</span>
+                                <span class="muted small">@(e.SeasonNumber == 0 ? $"Special {e.EpisodeNumber}" : Fmt.Ep(e.SeasonNumber, e.EpisodeNumber))@(e.AirDate is { } a ? " · " + a.ToString(Fmt.DateLong) : "")@(e.Runtime is > 0 ? " · " + Fmt.Runtime(e.Runtime) : "")@(e.IsNext ? " · up next" : "")</span>
                             </a>
                             @if (!e.Watched && aired)
                             {
                                 <div class="order-actions">
                                     @if (e.Position > 1) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Open(e, true)" title="Mark everything up to here watched">Up to here</button> }
+                                    <WhenButton Small="true" Disabled="busy" What="@Label(e)" OnClick="() => Open(e, false, true)" />
                                     <button class="btn btn-sm" disabled="@busy" @onclick="() => Open(e, false)" title="Mark watched" aria-label="@($"Mark {Label(e)} watched")">
                                         <Icon Name="check" Size="14" />
                                     </button>
@@ -45,7 +46,7 @@
 
 <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
              What="@(pending is { } p ? Label(p) : "")" ReleaseDate="pending?.AirDate" OnPick="WatchOne"
-             Through="pendingThrough" ThroughNote="@($" in {Order.Name}")" />
+             Through="pendingThrough" ThroughNote="@($" in {Order.Name}")"  AskWhen="askWhen" />
 
 @code {
     [Parameter, EditorRequired] public int ShowId { get; set; }
@@ -53,7 +54,8 @@
     [Parameter] public EventCallback OnChanged { get; set; }
     private WatchOrderEpisode? pending;
     private bool pendingThrough;
-    private void Open(WatchOrderEpisode e, bool through) { pending = e; pendingThrough = through; }
+    private void Open(WatchOrderEpisode e, bool through, bool ask = false) { pending = e; pendingThrough = through; askWhen = ask; }
+    private bool askWhen;
     private bool busy;
 
     private static string Label(WatchOrderEpisode e) => e.SeasonNumber == 0 ? $"Special {e.EpisodeNumber}" : Fmt.Ep(e.SeasonNumber, e.EpisodeNumber);

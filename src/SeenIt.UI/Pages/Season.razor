@@ -51,9 +51,9 @@ else if (season is not null)
         ("Episodes", airedCount < eps.Count ? $"{airedCount} aired of {eps.Count}" : eps.Count.ToString()),
         ("Total runtime", total > 0 ? Fmt.Duration(total) : null),
         ("Per episode", runtimes.Count > 0 ? "~" + Fmt.Runtime((int)Math.Round(runtimes.Average(x => x.Runtime!.Value))) : null),
-        ("Aired", first is { } f ? (last is { } l && l != f ? $"{f:MMM d, yyyy} – {l:MMM d, yyyy}" : $"{f:MMM d, yyyy}") : null),
+        ("Aired", first is { } f ? (last is { } l && l != f ? $"{(f).ToString(Fmt.DateLong)} – {(l).ToString(Fmt.DateLong)}" : $"{(f).ToString(Fmt.DateLong)}") : null),
         ("You've watched", watchedMinutes > 0 ? Fmt.Duration(watchedMinutes) : null),
-        ("Completed", season.CompletedAt is { } done ? done.ToLocalTime().ToString("MMM d, yyyy") : null),
+        ("Completed", season.CompletedAt is { } done ? done.ToLocalTime().ToString(Fmt.DateLong) : null),
         ("Left to watch", watchedMinutes > 0 && season.CompletedAt is null ? Fmt.Duration(eps.Where(x => x.Plays == 0 && x.AirDate is { } d && d <= today).Sum(x => (long)(x.Runtime ?? 0))) : null),
     ])" />
     @if (season.Overview is not null) { <p class="overview">@season.Overview</p> }
@@ -70,7 +70,7 @@ else if (season is not null)
                 <div class="episode-body">
                     <div class="episode-title">
                         <a href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)"><b><Spoiler Watched="e.Plays > 0">@e.Name</Spoiler></b></a>
-                        <span class="muted small">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) @if (e.AirDate is { } ad) { <span class="dot-sep">@ad.ToString("MMM d, yyyy")</span> } @if (e.Runtime is > 0) { <span class="dot-sep">@Fmt.Runtime(e.Runtime)</span> }</span>
+                        <span class="muted small">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) @if (e.AirDate is { } ad) { <span class="dot-sep">@ad.ToString(Fmt.DateLong)</span> } @if (e.Runtime is > 0) { <span class="dot-sep">@Fmt.Runtime(e.Runtime)</span> }</span>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(e.Overview)) { <Spoiler Watched="e.Plays > 0" Block="true"><p class="episode-overview">@e.Overview</p></Spoiler> }
                     <AuthorizeView>
@@ -89,6 +89,7 @@ else if (season is not null)
                             else if (aired)
                             {
                                 <button class="btn btn-sm" disabled="@busy" @onclick="() => Open(e, false)"><Icon Name="check" Size="14" /> Mark watched</button>
+                                <WhenButton Small="true" Disabled="busy" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" OnClick="() => Open(e, false, true)" />
                                 @if (Fmt.CanThrough(e.SeasonNumber, e.EpisodeNumber)) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Open(e, true)" title="Mark everything up to here watched">Up to here</button> }
                             }
                             else
@@ -124,7 +125,7 @@ else if (season is not null)
     <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason" Through="seasonThrough" ThroughNote=" in the earlier seasons" />
     <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
                  What="@(pending is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pending?.AirDate" OnPick="Watch"
-                 Through="pendingThrough" ThroughNote="@(Number == 0 ? " (specials only)" : ", in season order")" ScopeSeason="@ScopeFor(pending)" />
+                 Through="pendingThrough" ThroughNote="@(Number == 0 ? " (specials only)" : ", in season order")" ScopeSeason="@ScopeFor(pending)"  AskWhen="askWhen" />
 }
 
 @code {
@@ -135,7 +136,8 @@ else if (season is not null)
     private bool busy, watchAllOpen;
     private EpisodeDto? pending;
     private bool pendingThrough, seasonThrough;
-    private void Open(EpisodeDto e, bool through) { pending = e; pendingThrough = through; }
+    private void Open(EpisodeDto e, bool through, bool ask = false) { pending = e; pendingThrough = through; askWhen = ask; }
+    private bool askWhen;
     private static int? ScopeFor(EpisodeDto? e) => e is { SeasonNumber: > 1, EpisodeNumber: > 1 } ? e.SeasonNumber : null;
 
     private int Aired => season?.Episodes.Count(e => e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today)) ?? 0;

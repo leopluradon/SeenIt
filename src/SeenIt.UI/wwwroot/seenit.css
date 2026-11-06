@@ -1182,3 +1182,11 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .settings-back { margin-bottom: 4px; }
 @media (min-width: 701px) { .settings-back { display: none; } }
 .danger-zone { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.when-btn { padding-left: 8px; padding-right: 8px; }
+.ep-item:has(.when-btn) > .ep-row.has-actions { padding-right: 196px; }
+.ep-item:has(.when-btn) > .ep-row.has-action { padding-right: 104px; }
+.pref-rows { display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; align-items: center; margin-bottom: 10px; }
+.pref-rows select { max-width: 320px; }
+.narrow-select { max-width: 320px; }
+.row-count { width: auto; padding: 2px 6px; font-size: .82rem; }
+@media (max-width: 600px) { .pref-rows { grid-template-columns: 1fr; gap: 4px; } .pref-rows > span { margin-top: 6px; font-weight: 600; } }

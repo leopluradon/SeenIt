@@ -129,7 +129,7 @@ else if (data is not null)
                                 @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · @h.EpisodeTitle</div> }
                                 @if (h.Type == MediaType.Show) { <div class="small">@(h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div> }
                                 <div class="muted small">
-                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString("h:mm tt"))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
+                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString(Fmt.TimeOnly))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
                                     @if (h.Source != WatchSource.Manual) { <span class="pill pill-sm">@SourceLabel(h.Source)</span> }
                                 </div>
                             </div>

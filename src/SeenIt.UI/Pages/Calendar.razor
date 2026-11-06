@@ -23,7 +23,7 @@
     <button class="chip @(hideWatched ? "on" : "")" @onclick="() => hideWatched = !hideWatched" aria-pressed="@hideWatched">Hide watched</button>
     <button class="chip @(hidePremieres ? "on" : "")" @onclick="() => hidePremieres = !hidePremieres" aria-pressed="@hidePremieres" title="Season premieres of shows that are only on your watchlist">Hide premieres of shows I haven't started</button>
 </div>
-<p class="muted small">@(month ? anchor.ToString("MMMM yyyy") : $"{from:MMM d} – {from.AddDays(Days - 1):MMM d, yyyy}")</p>
+<p class="muted small">@(month ? anchor.ToString("MMMM yyyy") : $"{(from).ToString(Fmt.DateShort)} – {(from.AddDays(Days - 1)).ToString(Fmt.DateLong)}")</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }
@@ -34,17 +34,17 @@ else if (items is not null)
     @if (month)
     {
         var first = new DateOnly(anchor.Year, anchor.Month, 1);
-        var start = first.AddDays(-(int)first.DayOfWeek);
+        var start = first.AddDays(-(((int)first.DayOfWeek - (int)Fmt.WeekStart + 7) % 7));
         var byDay = shown.GroupBy(i => i.Date).ToDictionary(g => g.Key, g => g.ToList());
         <div class="cal-month" role="grid" aria-label="@anchor.ToString("MMMM yyyy")">
-            @foreach (var wd in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" }) { <div class="cal-dow" role="columnheader">@wd</div> }
+            @foreach (var wd in WeekDays) { <div class="cal-dow" role="columnheader">@wd</div> }
             @for (var d = start; d < start.AddDays(42); d = d.AddDays(1))
             {
                 var day = d;
-                if (day > first.AddMonths(1).AddDays(-1) && day.DayOfWeek == DayOfWeek.Sunday) break;
+                if (day > first.AddMonths(1).AddDays(-1) && day.DayOfWeek == Fmt.WeekStart) break;
                 var list = byDay.GetValueOrDefault(day) ?? [];
                 <button class="cal-cell @(day.Month != anchor.Month ? "other" : "") @(day == today ? "today" : "") @(day == picked ? "picked" : "") @(list.Count > 0 ? "busy" : "")"
-                        @onclick="() => picked = day" role="gridcell" aria-label="@($"{day:dddd, MMM d}: {list.Count} release{(list.Count == 1 ? "" : "s")}")" @key="day">
+                        @onclick="() => picked = day" role="gridcell" aria-label="@($"{(day).ToString(Fmt.DayLong)}: {list.Count} release{(list.Count == 1 ? "" : "s")}")" @key="day">
                     <span class="cal-num">@day.Day</span>
                     @foreach (var c in list.Take(3)) { <span class="cal-pill @(c.Watched ? "watched" : "")">@c.Title</span> }
                     @if (list.Count > 3) { <span class="cal-more">+@(list.Count - 3) more</span> }
@@ -54,7 +54,7 @@ else if (items is not null)
         @if (picked is { } p)
         {
             <section class="cal-day">
-                <h3 class="day-head">@Fmt.Day(p) <span class="muted small">@p.ToString("MMM d")</span></h3>
+                <h3 class="day-head">@Fmt.Day(p) <span class="muted small">@p.ToString(Fmt.DateShort)</span></h3>
                 @if (byDay.GetValueOrDefault(p) is { Count: > 0 } dayItems) { <div class="mini-list">@foreach (var c in dayItems) { @Entry(c) }</div> }
                 else { <p class="muted small">Nothing that day.</p> }
             </section>
@@ -66,7 +66,7 @@ else if (items is not null)
         @foreach (var day in shown.GroupBy(i => i.Date))
         {
             <section class="cal-day @(day.Key == today ? "today" : "")">
-                <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString("MMM d")</span>@if (day.Key > today.AddDays(1) && Fmt.Countdown(day.Key) is { } cd) { <span class="countdown small"> · @cd</span> }</h3>
+                <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString(Fmt.DateShort)</span>@if (day.Key > today.AddDays(1) && Fmt.Countdown(day.Key) is { } cd) { <span class="countdown small"> · @cd</span> }</h3>
                 <div class="mini-list">@foreach (var c in day) { @Entry(c) }</div>
             </section>
         }
@@ -74,6 +74,7 @@ else if (items is not null)
 }
 @code {
     private const int Days = 28;
+    private static IEnumerable<string> WeekDays => Enumerable.Range(0, 7).Select(i => ((DayOfWeek)(((int)Fmt.WeekStart + i) % 7)).ToString()[..3]);
     private bool month, hideWatched, hidePremieres;
     private MediaType? kind;
     private DateOnly anchor = DateOnly.FromDateTime(DateTime.Today);
@@ -116,7 +117,7 @@ else if (items is not null)
             if (month)
             {
                 var first = new DateOnly(anchor.Year, anchor.Month, 1);
-                var start = first.AddDays(-(int)first.DayOfWeek);
+                var start = first.AddDays(-(((int)first.DayOfWeek - (int)Fmt.WeekStart + 7) % 7));
                 items = await Api.CalendarAsync(start, 42);
             }
             else items = await Api.CalendarAsync(from, Days);

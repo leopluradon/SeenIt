@@ -22,7 +22,7 @@ else if (data is not null)
     @foreach (var day in data.Items.GroupBy(n => n.Day))
     {
         <section class="cal-day">
-            <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString("MMM d")</span></h3>
+            <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString(Fmt.DateShort)</span></h3>
             <div class="mini-list">
                 @foreach (var n in day)
                 {

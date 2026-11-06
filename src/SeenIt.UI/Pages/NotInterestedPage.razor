@@ -15,7 +15,7 @@ else if (items is not null)
     <div class="poster-grid">
         @foreach (var i in items)
         {
-            <PosterCard Media="i.Media" ShowScore="false" Sub="@($"Hidden {i.AddedAt.ToLocalTime():MMM d, yyyy}")" OnDismiss="Undo" @key="(i.Media.Type, i.Media.TmdbId)" />
+            <PosterCard Media="i.Media" ShowScore="false" Sub="@($"Hidden {(i.AddedAt.ToLocalTime()).ToString(Fmt.DateLong)}")" OnDismiss="Undo" @key="(i.Media.Type, i.Media.TmdbId)" />
         }
     </div>
 }

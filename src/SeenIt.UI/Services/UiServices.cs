@@ -96,15 +96,34 @@ public static class Fmt
     {
         WatchTime.ReleaseDate => " (release date)",
         WatchTime.Unknown => " (date unknown)",
-        WatchTime.Custom when c.At is { } at => $" on {at.LocalDateTime:MMM d, yyyy}",
+        WatchTime.Custom when c.At is { } at => $" on {(at.LocalDateTime).ToString(Fmt.DateLong)}",
         _ => "",
     };
 
     public static string PlayedAt(DateTimeOffset d) =>
-        WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString("MMM d, yyyy, h:mm tt");
+        WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString(Fmt.DateTimeLong);
     public static string Source(WatchSource s) => WatchSources.Name(s);
     public static string Ep(int? s, int? e) => $"S{s:00}E{e:00}";
     public static string Runtime(int? minutes) => minutes is null or 0 ? "" : minutes < 60 ? $"{minutes}m" : $"{minutes / 60}h {minutes % 60}m";
+
+    /// <summary>Display, tracking and privacy choices (set from the signed-in profile).</summary>
+    public static UserPrefs Prefs { get; set; } = UserPrefs.Default;
+
+    // Date and time patterns in the user's style ("Nov 6, 2026" / "6 Nov 2026" / "2026-11-06", 12/24-hour clock).
+    public static string DateLong => Prefs.DateStyle switch { DateStyle.DayFirst => "d MMM yyyy", DateStyle.Iso => "yyyy-MM-dd", _ => "MMM d, yyyy" };
+    public static string DateShort => Prefs.DateStyle switch { DateStyle.DayFirst => "d MMM", DateStyle.Iso => "MM-dd", _ => "MMM d" };
+    public static string DateFull => Prefs.DateStyle switch { DateStyle.DayFirst => "d MMMM yyyy", DateStyle.Iso => "yyyy-MM-dd", _ => "MMMM d, yyyy" };
+    public static string TimeOnly => Prefs.Clock24 ? "HH:mm" : "h:mm tt";
+    public static string DateTimeLong => Prefs.DateStyle == DateStyle.Iso ? $"yyyy-MM-dd {TimeOnly}" : $"{DateLong}, {TimeOnly}";
+    public static string DayShort => Prefs.DateStyle switch { DateStyle.DayFirst => "ddd d MMM", DateStyle.Iso => "ddd MM-dd", _ => "ddd, MMM d" };
+    public static string DayLong => Prefs.DateStyle switch { DateStyle.DayFirst => "dddd d MMMM", DateStyle.Iso => "dddd MM-dd", _ => "dddd, MMM d" };
+    public static string DayLongYear => Prefs.DateStyle switch { DateStyle.DayFirst => "dddd d MMMM yyyy", DateStyle.Iso => "dddd yyyy-MM-dd", _ => "dddd, MMM d, yyyy" };
+    /// <summary>The first day of the week for calendars and weekday charts.</summary>
+    public static DayOfWeek WeekStart => Prefs.WeekStartsMonday ? DayOfWeek.Monday : DayOfWeek.Sunday;
+
+    /// <summary>Weekday chart buckets (Sun…Sat from the server) in the user's week order.</summary>
+    public static IReadOnlyList<CountBucket> WeekOrder(IReadOnlyList<CountBucket> days) =>
+        Prefs.WeekStartsMonday && days.Count == 7 && days[0].Label.StartsWith("Sun") ? [.. days.Skip(1), days[0]] : days;
 
     /// <summary>The user's choice for long durations: days and hours, or hours.</summary>
     public static TimeFormat Time { get; set; }
@@ -137,18 +156,18 @@ public static class Fmt
 
     /// <summary>The full date and time, for hovering over a relative one ("3d ago").</summary>
     public static string Exact(DateTimeOffset when) =>
-        WatchDates.IsUnknown(when) ? "Date unknown" : when.ToLocalTime().ToString("dddd, MMMM d, yyyy, h:mm tt");
+        WatchDates.IsUnknown(when) ? "Date unknown" : when.ToLocalTime().ToString($"{DayLongYear}, {TimeOnly}");
 
     public static string Relative(DateTimeOffset when)
     {
         if (WatchDates.IsUnknown(when)) return "date unknown";
         var d = DateTimeOffset.Now - when;
-        if (d.TotalMinutes < -1) return when.ToLocalTime().ToString("MMM d, yyyy"); // logged ahead of time
+        if (d.TotalMinutes < -1) return when.ToLocalTime().ToString(Fmt.DateLong); // logged ahead of time
         if (d.TotalMinutes < 1) return "just now";
         if (d.TotalHours < 1) return $"{(int)d.TotalMinutes}m ago";
         if (d.TotalDays < 1) return $"{(int)d.TotalHours}h ago";
         if (d.TotalDays < 7) return $"{(int)d.TotalDays}d ago";
-        return when.ToLocalTime().ToString("MMM d, yyyy");
+        return when.ToLocalTime().ToString(Fmt.DateLong);
     }
 
     /// <summary>Time until a release day: "today", "tomorrow", "in 5 days", "in 3 weeks", "in 2 months". Null once it's past.</summary>
@@ -180,8 +199,8 @@ public static class Fmt
     /// <summary>"9:00 PM on HBO", "9:00 PM", "on HBO", or null.</summary>
     public static string? AirTime(DateTimeOffset? at, string? network) => (at, network) switch
     {
-        ({ } a, { Length: > 0 } n) => $"{a.ToLocalTime():h:mm tt} on {n}",
-        ({ } a, _) => a.ToLocalTime().ToString("h:mm tt"),
+        ({ } a, { Length: > 0 } n) => $"{(a.ToLocalTime()).ToString(Fmt.TimeOnly)} on {n}",
+        ({ } a, _) => a.ToLocalTime().ToString(Fmt.TimeOnly),
         (null, { Length: > 0 } n) => $"on {n}",
         _ => null,
     };
@@ -192,7 +211,7 @@ public static class Fmt
         if (d == today) return "Today";
         if (d == today.AddDays(1)) return "Tomorrow";
         if (d == today.AddDays(-1)) return "Yesterday";
-        return d.Year == today.Year ? d.ToString("dddd, MMM d") : d.ToString("dddd, MMM d, yyyy");
+        return d.Year == today.Year ? d.ToString(DayLong) : d.ToString(DayLongYear);
     }
 }
 

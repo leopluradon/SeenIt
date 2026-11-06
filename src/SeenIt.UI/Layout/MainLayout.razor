@@ -121,8 +121,12 @@
 
     public void Dispose() => self?.Dispose();
 
+    /// <summary>The page this launch of the app opened on ("" = home), for the start-page setting.</summary>
+    public static string? LaunchPath { get; private set; }
+
     protected override async Task OnInitializedAsync()
     {
+        LaunchPath ??= Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0];
         try { features = await Api.FeaturesAsync(); } catch { /* offline: keep the Join button */ }
     }
 

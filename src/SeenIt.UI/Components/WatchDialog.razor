@@ -1,5 +1,5 @@
 @* "When did you watch it?" Right now, on release, another date, or unknown. *@
-<Modal Open="Open" OpenChanged="OpenChanged" Title="@(Heading ?? (Through ? $"When did you watch everything up to {What}?" : $"When did you watch {What}?"))">
+<Modal Open="Open && !instant" OpenChanged="OpenChanged" Title="@(Heading ?? (Through ? $"When did you watch everything up to {What}?" : $"When did you watch {What}?"))">
     <div class="stack">
         @if (Through && ScopeSeason is > 1 and var sn)
         {
@@ -17,7 +17,7 @@
         }
         else if (ReleaseDate is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today))
         {
-            <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release date <span class="muted small">(@rd.ToString("MMM d, yyyy"))</span></button>
+            <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release date <span class="muted small">(@rd.ToString(Fmt.DateLong))</span></button>
         }
         <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Unknown))">Unknown date</button>
         <div class="field">
@@ -49,14 +49,28 @@
     [Parameter] public string ThroughNote { get; set; } = ", in season order";
     /// <summary>With Through: the episode's season. Above 1 it offers "Season N only" or "Seasons 1–N".</summary>
     [Parameter] public int? ScopeSeason { get; set; }
+    /// <summary>Always show the choices, even when the user set ✓ to record straight away (the "pick a date" buttons).</summary>
+    [Parameter] public bool AskWhen { get; set; }
+    private bool instant;
     private string custom = "";
     private bool badDate, wasOpen, seasonOnly = true;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         // Start from "now" each time the dialog opens, not when the page first loaded.
         if (Open && !wasOpen)
         {
+            // "When you mark something watched: right now / release date" (Settings → Tracking) records it
+            // without asking, for single items. Bulk marking, "up to here" and edits always ask.
+            instant = !AskWhen && !Bulk && !Through && Initial is null && Heading is null && Fmt.Prefs.WatchDefault != WatchDefault.Ask;
+            if (instant)
+            {
+                wasOpen = true;
+                var released = ReleaseDate is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today);
+                await Pick(new WatchChoice(Fmt.Prefs.WatchDefault == WatchDefault.ReleaseDate && released ? WatchTime.ReleaseDate : WatchTime.Now));
+                instant = false;
+                return;
+            }
             var start = Initial is { } i && !WatchDates.IsUnknown(i) ? i.LocalDateTime : DateTime.Now;
             custom = start.ToString("yyyy-MM-ddTHH:mm");
             badDate = false;

@@ -114,7 +114,7 @@ public class SessionState(ApiClient api, TokenManager tokens, IOfflineStore offl
     private static readonly AuthenticationState Anonymous = new(new ClaimsPrincipal(new ClaimsIdentity()));
     private MeDto? _meValue;
     // Rating display is formatted all over the UI, so the scale lives on Fmt.
-    private MeDto? _me { get => _meValue; set { _meValue = value; Fmt.Scale = value?.RatingScale ?? RatingScale.Ten; Fmt.Time = value?.TimeFormat ?? TimeFormat.DaysHours; } }
+    private MeDto? _me { get => _meValue; set { _meValue = value; Fmt.Scale = value?.RatingScale ?? RatingScale.Ten; Fmt.Time = value?.TimeFormat ?? TimeFormat.DaysHours; Fmt.Prefs = value?.Prefs ?? UserPrefs.Default; } }
     private Task<AuthenticationState>? _pending;
     private bool _subscribed;
 

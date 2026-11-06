@@ -108,7 +108,10 @@ else if (s is not null)
                     {
                         <div class="inline spread next-ep">
                             <span>Next@(p.WatchOrder is { } won ? $" ({won})" : ""): <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@(n.SeasonNumber == 0 ? $"Special {n.EpisodeNumber}" : Fmt.Ep(n.SeasonNumber, n.EpisodeNumber))</b> <Spoiler>@n.Name</Spoiler></a></span>
-                            <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => pendingEpisode = n"><Icon Name="check" Size="14" /> Watched</button>
+                            <span class="inline">
+                                <WhenButton Small="true" Disabled="busy" What="@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)" OnClick="() => { askWhen = true; pendingEpisode = n; }" />
+                                <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => { askWhen = false; pendingEpisode = n; }"><Icon Name="check" Size="14" /> Watched</button>
+                            </span>
                         </div>
                     }
                 </div>
@@ -151,7 +154,7 @@ else if (s is not null)
                     </div>
                     <div class="poster-title">@season.Name</div>
                     <div class="poster-sub">@season.EpisodeCount episode@(season.EpisodeCount == 1 ? "" : "s") @if (season.Watched > 0 && season.CompletedAt is null) { <span>· @season.Watched watched</span> }</div>
-                    @if (season.CompletedAt is { } done) { <div class="poster-sub ok">Finished @done.ToLocalTime().ToString("MMM d, yyyy")</div> }
+                    @if (season.CompletedAt is { } done) { <div class="poster-sub ok">Finished @done.ToLocalTime().ToString(Fmt.DateLong)</div> }
                     @if (s.User is not null && season.EpisodeCount > 0) { <ProgressBar Value="season.Watched" Max="season.EpisodeCount" /> }
                 </a>
                 @if (s.User is not null && season.Watched < season.EpisodeCount && season.AirDate is { } sad && sad <= DateOnly.FromDateTime(DateTime.Today))
@@ -174,7 +177,7 @@ else if (s is not null)
     {
         <WatchDialog @bind-Open="watchAllOpen" What="every aired episode" Bulk="true" OnPick="WatchAll" />
         <WatchDialog Open="pendingEpisode is not null" OpenChanged="o => { if (!o) pendingEpisode = null; }"
-                     What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode" />
+                     What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode"  AskWhen="askWhen" />
         <WatchDialog Open="pendingSeason is not null" OpenChanged="o => { if (!o) pendingSeason = null; }" What="@(pendingSeason?.Name ?? "")" Bulk="true" OnPick="WatchSeason"
                      Through="seasonThrough" ThroughNote=" in the earlier seasons" />
         <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Show" TmdbId="Id" Title="@s.Name" Current="s.User?.Owned" OnChanged="Reload" />
@@ -239,7 +242,7 @@ else if (s is not null)
     [Parameter] public int Id { get; set; }
     private ShowDetail? s;
     private string? error;
-    private bool busy, watchAllOpen, listOpen, fixOpen, ownOpen;
+    private bool busy, watchAllOpen, listOpen, fixOpen, ownOpen, askWhen;
     private async Task Reload() { s = await Api.ShowAsync(Id); StateHasChanged(); }
     private EpisodeRef? pendingEpisode;
     private SeasonSummary? pendingSeason;

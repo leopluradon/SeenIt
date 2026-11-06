@@ -1,9 +1,9 @@
 @* Scores from IMDb, Rotten Tomatoes, Metacritic, Letterboxd... loaded after the page itself. *@
 @inject ApiClient Api
-@if (scores is { Count: > 0 })
+@if (Shown is { Count: > 0 } shown)
 {
     <div class="ext-scores">
-        @foreach (var s in scores)
+        @foreach (var s in shown)
         {
             var text = s.Percent ? $"{s.Value:0}%" : s.Max == 100 ? $"{s.Value:0}" : $"{s.Value:0.0#}";
             var title = $"{s.Name}: {text}{(s.Percent ? "" : $" out of {s.Max:0}")}{(s.Votes is { } v ? $" · {v:N0} votes" : "")}";
@@ -25,6 +25,11 @@
     [Parameter] public int Season { get; set; }
     [Parameter] public int Episode { get; set; }
     private List<ExternalScore>? scores;
+
+    /// <summary>The sites you chose, in your order (Settings → Display → Scores); all of them by default.</summary>
+    private List<ExternalScore>? Shown => scores is null ? null
+        : Fmt.Prefs.Scores is { } pick ? scores.Where(s => pick.Contains(s.Source)).OrderBy(s => pick.ToList().IndexOf(s.Source)).ToList()
+        : scores;
     private (MediaType, int, int, int) loadedFor;
 
     protected override async Task OnParametersSetAsync()

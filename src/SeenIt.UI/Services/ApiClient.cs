@@ -26,6 +26,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<TokenResponse> LoginAsync(LoginRequest r) => SendAsync<TokenResponse>(HttpMethod.Post, "api/auth/login", r, auth: false)!;
     public Task<MeDto> MeAsync() => GetAsync<MeDto>("api/auth/me");
     public Task UpdateProfileAsync(UpdateProfileRequest r) => SendAsync(HttpMethod.Put, "api/auth/me", r);
+    /// <summary>Saves the UserPrefs bundle (display, tracking, home, privacy parts).</summary>
+    public Task SavePrefsAsync(UserPrefs p) => SetPreferencesAsync(new PreferencesRequest(Prefs: p));
     public Task SetPreferencesAsync(PreferencesRequest r) => SendAsync(HttpMethod.Put, "api/auth/preferences", r);
     public Task ChangePasswordAsync(ChangePasswordRequest r) => SendAsync(HttpMethod.Post, "api/auth/password", r);
     private Task<ServerFeatures?>? _features;

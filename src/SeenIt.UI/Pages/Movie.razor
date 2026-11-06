@@ -10,7 +10,7 @@ else if (m is not null)
 {
     <MediaHero Title="@m.Title" Year="m.ReleaseDate?.Year" Tagline="@m.Tagline" Poster="@m.PosterPath" Backdrop="@m.BackdropPath" Score="m.VoteAverage" Votes="m.VoteCount" ScoresFor="(MediaType.Movie, Id)">
         <Facts>
-            @if (m.ReleaseDate is { } d) { <span>@d.ToString("MMM d, yyyy")</span> }
+            @if (m.ReleaseDate is { } d) { <span>@d.ToString(Fmt.DateLong)</span> }
             @if (m.Runtime is > 0) { <span>@Fmt.Runtime(m.Runtime)</span> }
             @if (m.Genres.Count > 0) { <span>@string.Join(", ", m.Genres)</span> }
             @if (m.Status is not null and not "Released") { <span class="pill">@m.Status</span> }
@@ -19,9 +19,10 @@ else if (m is not null)
         <Actions>
             @if (m.User is { } u)
             {
-                <button class="btn @(u.Plays > 0 ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="() => watchOpen = true">
+                <button class="btn @(u.Plays > 0 ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="() => { askWhen = false; watchOpen = true; }">
                     <Icon Name="check" Size="18" /> @(u.Plays switch { 0 => "Mark watched", 1 => "Watched", var n => $"Watched {n}×" })
                 </button>
+                <WhenButton Disabled="busy" What="@m.Title" OnClick="() => { askWhen = true; watchOpen = true; }" />
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
                     <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
                 </button>
@@ -146,7 +147,7 @@ else if (m is not null)
 
     @if (m.User is { } user)
     {
-        <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" />
+        <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" AskWhen="askWhen" />
         <EditPlayDialog @bind-Play="editing" What="@m.Title" ReleaseDate="m.ReleaseDate" OnSaved="Reload" />
         <RatePrompt @bind-Open="ratePrompt" Title="@m.Title" OnRate="Rate" />
         <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" Current="m.User?.Owned" OnChanged="Reload" />
@@ -159,7 +160,7 @@ else if (m is not null)
     [Parameter] public int Id { get; set; }
     private MovieDetail? m;
     private string? error;
-    private bool busy, watchOpen, listOpen, fixOpen, ownOpen, ratePrompt;
+    private bool busy, watchOpen, listOpen, fixOpen, ownOpen, ratePrompt, askWhen;
     private PlayDto? editing;
 
     private async Task Reload() { m = await Api.MovieAsync(Id); StateHasChanged(); }

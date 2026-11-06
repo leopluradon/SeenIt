@@ -15,8 +15,8 @@ else if (p is not null)
             <h1>@p.Name</h1>
             <DetailStats Items="@([
                 ("Known for", p.KnownFor),
-                ("Born", p.Birthday is { } b ? $"{b:MMMM d, yyyy}" + (p.Deathday is null ? $" (age {Age(b, DateOnly.FromDateTime(DateTime.Today))})" : "") : null),
-                ("Died", p.Deathday is { } d ? $"{d:MMMM d, yyyy}" + (p.Birthday is { } b2 ? $" (aged {Age(b2, d)})" : "") : null),
+                ("Born", p.Birthday is { } b ? $"{(b).ToString(Fmt.DateFull)}" + (p.Deathday is null ? $" (age {Age(b, DateOnly.FromDateTime(DateTime.Today))})" : "") : null),
+                ("Died", p.Deathday is { } d ? $"{(d).ToString(Fmt.DateFull)}" + (p.Birthday is { } b2 ? $" (aged {Age(b2, d)})" : "") : null),
                 ("From", p.PlaceOfBirth),
                 ("Credits", $"{p.Cast.Count(c => !c.Appearance)} acting" + (p.Crew.Count > 0 ? $" · {p.Crew.Count} crew" : "")),
             ])" />

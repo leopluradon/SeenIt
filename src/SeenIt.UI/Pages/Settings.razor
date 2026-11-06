@@ -80,6 +80,21 @@ else { <h1>Settings</h1> }
                     </label>
                 }
             </div>
+            <h3>By part</h3>
+            <p class="muted small">Give a part of your profile its own audience. "Same as profile" follows the choice above.</p>
+            <div class="pref-rows">
+                @foreach (var (part, label) in Parts)
+                {
+                    var current = Fmt.Prefs.PartVisibility?.TryGetValue(part, out var pv) == true ? pv.ToString() : "";
+                    <span>@label</span>
+                    <select value="@current" @onchange="e => SetPart(part, e.Value?.ToString())" aria-label="@($"Who can see your {label.ToLowerInvariant()}")">
+                        <option value="">Same as profile (@VisibilityName(visibility))</option>
+                        <option value="@ProfileVisibility.Public">Everyone</option>
+                        <option value="@ProfileVisibility.Friends">Friends</option>
+                        <option value="@ProfileVisibility.Private">Only me</option>
+                    </select>
+                }
+            </div>
             @if (Session.Me is { } who) { <p class="small"><a href="@Fmt.UserHref(who.UserName)">View your profile</a> · <a href="friends">Friends</a></p> }
         </section>
         <section class="panel" id="invites">
@@ -98,7 +113,7 @@ else { <h1>Settings</h1> }
                                 @if (i.UsedBy is { } joined) { <text>Joined: <a href="@Fmt.UserHref(joined)">@joined</a></text> }
                                 else if (i.UsedAt is not null) { <text>Used</text> }
                                 else if (expired) { <text>Expired</text> }
-                                else { <text>Unused · expires @i.ExpiresAt.ToLocalTime().ToString("MMM d")</text> }
+                                else { <text>Unused · expires @i.ExpiresAt.ToLocalTime().ToString(Fmt.DateShort)</text> }
                             </span>
                             @if (i.UsedAt is null && !expired)
                             {
@@ -152,6 +167,38 @@ else { <h1>Settings</h1> }
         }
         @if (Tab == "display")
         {
+        <section class="panel" id="start">
+            <h2>Start page</h2>
+            <p class="muted small">What SeenIt opens to. Tapping Home always goes home.</p>
+            <select value="@Fmt.Prefs.StartPage" @onchange='e => SavePrefs(p => p with { StartPage = e.Value?.ToString() ?? "home" }, "Start page saved")' aria-label="Start page" class="narrow-select">
+                @foreach (var (key, label) in StartPages) { <option value="@key">@label</option> }
+            </select>
+        </section>
+
+        <section class="panel" id="dates">
+            <h2>Dates & times</h2>
+            <div class="pref-rows">
+                <span>Dates</span>
+                <div class="segmented segmented-wrap">
+                    @foreach (var (style, sample) in new[] { (DateStyle.MonthFirst, "Nov 6, 2026"), (DateStyle.DayFirst, "6 Nov 2026"), (DateStyle.Iso, "2026-11-06") })
+                    {
+                        <button class="@(Fmt.Prefs.DateStyle == style ? "on" : "")" @onclick="() => SavePrefs(p => p with { DateStyle = style })">@sample</button>
+                    }
+                </div>
+                <span>Clock</span>
+                <div class="segmented">
+                    <button class="@(Fmt.Prefs.Clock24 ? "" : "on")" @onclick="() => SavePrefs(p => p with { Clock24 = false })">9:30 PM</button>
+                    <button class="@(Fmt.Prefs.Clock24 ? "on" : "")" @onclick="() => SavePrefs(p => p with { Clock24 = true })">21:30</button>
+                </div>
+                <span>Week starts on</span>
+                <div class="segmented">
+                    <button class="@(Fmt.Prefs.WeekStartsMonday ? "" : "on")" @onclick="() => SavePrefs(p => p with { WeekStartsMonday = false })">Sunday</button>
+                    <button class="@(Fmt.Prefs.WeekStartsMonday ? "on" : "")" @onclick="() => SavePrefs(p => p with { WeekStartsMonday = true })">Monday</button>
+                </div>
+            </div>
+            <p class="muted small">Used for dates and times across SeenIt, the calendar's month view and day-of-week charts.</p>
+        </section>
+
         <section class="panel" id="appearance">
             <h2>Appearance</h2>
             <p class="muted small">Color theme, saved to your account so it follows you to every device.</p>
@@ -200,6 +247,14 @@ else { <h1>Settings</h1> }
             <h3>Home page sections</h3>
             <p class="muted small">What shows on your home page, top to bottom.</p>
             <HomeSectionsEditor />
+                    <div class="field inline">
+                <label for="coming-up">Coming up covers</label>
+                <select id="coming-up" value="@Fmt.Prefs.ComingUpDays" @onchange='e => SavePrefs(p => p with { ComingUpDays = int.TryParse(e.Value?.ToString(), out var d) ? d : 14 }, "Saved")'>
+                    <option value="7">the next 7 days</option>
+                    <option value="14">the next 14 days</option>
+                    <option value="30">the next 30 days</option>
+                </select>
+            </div>
         </section>
         <section class="panel" id="ratings">
             <h2>Ratings</h2>
@@ -210,6 +265,26 @@ else { <h1>Settings</h1> }
                 <button class="@(Fmt.Scale == RatingScale.Decimal ? "on" : "")" @onclick="() => SaveScale(RatingScale.Decimal)">1–10 with decimals (8.1)</button>
             </div>
         </section>
+        <section class="panel" id="scores">
+            <h2>Scores</h2>
+            <p class="muted small">Which other sites' scores show on movie and show pages, and in what order. TMDB's always shows.</p>
+            <div class="tab-editor">
+                @{ var order = ScoreOrder(); }
+                @for (var i = 0; i < order.Count; i++)
+                {
+                    var index = i;
+                    var (key, name) = order[index];
+                    var on = Fmt.Prefs.Scores is null || Fmt.Prefs.Scores.Contains(key);
+                    <div class="tab-row @(on ? "" : "off")" @key="key">
+                        <label class="check"><input type="checkbox" checked="@on" @onchange="e => ToggleScore(key, (bool)e.Value!)" /> <span>@name</span></label>
+                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveScore(index, -1)" aria-label="@($"Move {name} up")"><Icon Name="chevron-up" Size="16" /></button>
+                        <button class="icon-btn" disabled="@(index == order.Count - 1)" @onclick="() => MoveScore(index, 1)" aria-label="@($"Move {name} down")"><Icon Name="chevron-down" Size="16" /></button>
+                    </div>
+                }
+            </div>
+            <button class="btn btn-sm btn-ghost" @onclick='() => SavePrefs(p => p with { Scores = null }, "Scores back to the default")'>Reset to default</button>
+        </section>
+
         <section class="panel" id="time">
             <h2>Time</h2>
             <p class="muted small">How long stretches of time read, like time watched. Hover one to see it the other way. Under a day it's always hours and minutes.</p>
@@ -263,6 +338,24 @@ else { <h1>Settings</h1> }
             </div>
             <p class="muted small">Days, months, times of day and "on this day" are worked out in this time zone on every device.@(TimeZoneInfo.Local.Id != timeZone && timeZone is not null ? $" This device is on {TimeZoneInfo.Local.Id}." : "")</p>
         </section>
+        <section class="panel" id="marking">
+            <h2>Marking watched</h2>
+            <div class="field">
+                <label for="watch-default">When you tap ✓ or Mark watched</label>
+                <select id="watch-default" class="narrow-select" value="@Fmt.Prefs.WatchDefault" @onchange='e => SavePrefs(p => p with { WatchDefault = Enum.TryParse<WatchDefault>(e.Value?.ToString(), out var w) ? w : WatchDefault.Ask }, "Saved")'>
+                    <option value="@WatchDefault.Ask">Ask when I watched it</option>
+                    <option value="@WatchDefault.Now">Record it as right now</option>
+                    <option value="@WatchDefault.ReleaseDate">Record it on its release date</option>
+                </select>
+            </div>
+            <p class="muted small">With either of the last two, a <Icon Name="calendar" Size="13" /> button next to ✓ still lets you pick any date. Marking a whole season or show, "up to here", and changing a play's date always ask.</p>
+            <label class="check">
+                <input type="checkbox" checked="@Fmt.Prefs.CountRewatches" @onchange='e => SavePrefs(p => p with { CountRewatches = (bool)e.Value! }, (bool)e.Value! ? "Rewatches count in stats" : "Stats count first watches only")' />
+                Count rewatches in stats and reviews
+            </label>
+            <p class="muted small">Off: play counts, time watched and reviews count each movie and episode once, at its first watch. Your history keeps every play either way.</p>
+        </section>
+
         <section class="panel" id="jellyfin">
             <h2>Media servers</h2>
             @if (jf is null) { <Spinner /> }
@@ -540,7 +633,7 @@ else { <h1>Settings</h1> }
                                 <details class="small"><summary>Which couldn't be matched (@j.Unmatched.Count)</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
                             }
                             <div class="inline spread">
-                                <span class="muted small">@j.CreatedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")@(j.UndoneAt is { } undone ? $" · undone {undone.ToLocalTime():MMM d, yyyy}" : "")</span>
+                                <span class="muted small">@j.CreatedAt.ToLocalTime().ToString(Fmt.DateTimeLong)@(j.UndoneAt is { } undone ? $" · undone {(undone.ToLocalTime()).ToString(Fmt.DateLong)}" : "")</span>
                                 @if (j.CanUndo) { <button class="btn btn-sm btn-ghost" disabled="@undoing" @onclick="() => UndoImport(j)">Undo this import</button> }
                             </div>
                         </div>
@@ -581,8 +674,8 @@ else { <h1>Settings</h1> }
     private static readonly Group[] Groups =
     [
         new("account", "Account", "users", "Profile, privacy, invites, password", ["profile", "privacy", "invites", "account", "about", "delete"]),
-        new("display", "Display", "eye", "Theme, layout, ratings, time, spoilers, region", ["appearance", "layout", "ratings", "time", "spoilers", "region"]),
-        new("tracking", "Tracking", "radio", "Time zone, media servers, Letterboxd sync", ["tracking", "jellyfin", "letterboxd", "letterboxd-sync"]),
+        new("display", "Display", "eye", "Start page, dates, theme, layout, ratings, scores", ["start", "dates", "appearance", "layout", "ratings", "scores", "time", "spoilers", "region"]),
+        new("tracking", "Tracking", "radio", "Time zone, marking watched, media servers", ["tracking", "marking", "jellyfin", "letterboxd", "letterboxd-sync"]),
         new("alerts", "Alerts & feeds", "bell", "Release alerts, calendar, RSS feeds", ["alerts", "calendar", "feeds", "private-link"]),
         new("data", "Import & export", "download", "Imports, exports, backups, clearing data", ["imports", "export", "clear"]),
     ];
@@ -955,6 +1048,58 @@ else { <h1>Settings</h1> }
         if (!await Js.InvokeAsync<bool>("confirm", "Make a new private link? The old calendar link and your watchlist, history and private-list feeds stop working, so anything subscribed to them needs the new links.")) return;
         await SaveAlerts(new AlertSettingsRequest(NewCalendarUrl: true));
         Toasts.Show("New calendar link made");
+    }
+
+    private static readonly (string, string)[] StartPages =
+        [("home", "Home"), ("progress", "Progress"), ("calendar", "Calendar"), ("watchlist", "Watchlist"), ("discover", "Discover")];
+    private static readonly (ProfilePart, string)[] Parts =
+        [(ProfilePart.History, "History"), (ProfilePart.Ratings, "Ratings"), (ProfilePart.Stats, "Stats"), (ProfilePart.WatchingNow, "Watching now"), (ProfilePart.Favorites, "Favorites")];
+    private static string VisibilityName(ProfileVisibility v) => v switch { ProfileVisibility.Public => "everyone", ProfileVisibility.Private => "only me", _ => "friends" };
+
+    /// <summary>Changes the UserPrefs bundle, applies it straight away and saves it.</summary>
+    private async Task SavePrefs(Func<UserPrefs, UserPrefs> change, string? done = null)
+    {
+        var prefs = change(Fmt.Prefs).Clean();
+        Session.Update(me => me with { Prefs = prefs });
+        StateHasChanged();
+        try { await Api.SavePrefsAsync(prefs); if (done is not null) Toasts.Show(done); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private Task SetPart(ProfilePart part, string? value)
+    {
+        var parts = (Fmt.Prefs.PartVisibility ?? new Dictionary<ProfilePart, ProfileVisibility>()).ToDictionary(kv => kv.Key, kv => kv.Value);
+        if (Enum.TryParse<ProfileVisibility>(value, out var v)) parts[part] = v; else parts.Remove(part);
+        return SavePrefs(p => p with { PartVisibility = parts.Count == 0 ? null : parts }, "Privacy saved");
+    }
+
+    /// <summary>Every score source: the chosen ones in your order, then the rest.</summary>
+    private static List<(string Key, string Name)> ScoreOrder()
+    {
+        var chosen = Fmt.Prefs.Scores;
+        if (chosen is null) return [.. UserPrefs.ScoreSources];
+        return [.. chosen.Select(k => UserPrefs.ScoreSources.First(s => s.Key == k)), .. UserPrefs.ScoreSources.Where(s => !chosen.Contains(s.Key))];
+    }
+
+    private Task ToggleScore(string key, bool on)
+    {
+        var chosen = (Fmt.Prefs.Scores ?? UserPrefs.ScoreSources.Select(s => s.Key)).ToList();
+        if (on && !chosen.Contains(key))
+        {
+            // Back in the position it has in the full list.
+            var order = ScoreOrder().Select(s => s.Key).ToList();
+            chosen = order.Where(k => chosen.Contains(k) || k == key).ToList();
+        }
+        if (!on) chosen.Remove(key);
+        return SavePrefs(p => p with { Scores = chosen });
+    }
+
+    private Task MoveScore(int index, int step)
+    {
+        var order = ScoreOrder().Select(s => s.Key).ToList();
+        (order[index], order[index + step]) = (order[index + step], order[index]);
+        var chosen = Fmt.Prefs.Scores ?? UserPrefs.ScoreSources.Select(s => s.Key).ToList();
+        return SavePrefs(p => p with { Scores = order.Where(chosen.Contains).ToList() });
     }
 
     private async Task SaveTime(TimeFormat f)

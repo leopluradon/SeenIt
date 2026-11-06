@@ -14,7 +14,7 @@ public class UserDataCache(IMemoryCache cache, AppDbContext db)
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(30);
 
-    private sealed record Fingerprint(long Plays, double PlaySum, DateTimeOffset? LastAdded, long Ratings, long RatingSum, DateTimeOffset? LastRated);
+    private sealed record Fingerprint(long Plays, double PlaySum, DateTimeOffset? LastAdded, long Ratings, double RatingSum, DateTimeOffset? LastRated);
 
     public async Task<string> FingerprintAsync(Guid userId, CancellationToken ct)
     {
@@ -24,11 +24,13 @@ public class UserDataCache(IMemoryCache cache, AppDbContext db)
               (SELECT coalesce(sum(extract(epoch FROM "WatchedAt")), 0)::float8 FROM "WatchEvents" WHERE "UserId" = {userId}) AS "PlaySum",
               (SELECT max("CreatedAt") FROM "WatchEvents" WHERE "UserId" = {userId}) AS "LastAdded",
               (SELECT count(*) FROM "Ratings" WHERE "UserId" = {userId}) AS "Ratings",
-              (SELECT coalesce(sum("Value"), 0)::bigint FROM "Ratings" WHERE "UserId" = {userId}) AS "RatingSum",
+              (SELECT coalesce(sum("Value"), 0)::float8 FROM "Ratings" WHERE "UserId" = {userId}) AS "RatingSum",
               (SELECT max("RatedAt") FROM "Ratings" WHERE "UserId" = {userId}) AS "LastRated"
             """).FirstAsync(ct);
-        var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.TimeZone, u.TrackingSince }).FirstOrDefaultAsync(ct);
-        return $"{fp.Plays}|{fp.PlaySum:R}|{fp.LastAdded?.UtcTicks}|{fp.Ratings}|{fp.RatingSum}|{fp.LastRated?.UtcTicks}|{user?.TimeZone}|{user?.TrackingSince}";
+        var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.TimeZone, u.TrackingSince, u.PrefsJson }).FirstOrDefaultAsync(ct);
+        // Preferences that change what stats count are part of the key too.
+        var firstOnly = !UserPrefsStore.Read(user?.PrefsJson).CountRewatches;
+        return $"{fp.Plays}|{fp.PlaySum:R}|{fp.LastAdded?.UtcTicks}|{fp.Ratings}|{fp.RatingSum:R}|{fp.LastRated?.UtcTicks}|{user?.TimeZone}|{user?.TrackingSince}|{firstOnly}";
     }
 
     /// <param name="key">What's being cached and its parameters, e.g. "review:2026:10:America/New_York".</param>

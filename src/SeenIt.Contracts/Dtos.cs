@@ -46,7 +46,8 @@ public record MeDto(
     IReadOnlyList<string>? HomeOrder = null, string? Theme = null, RatingScale RatingScale = RatingScale.Ten,
     TimeFormat TimeFormat = TimeFormat.DaysHours,
     string? Avatar = null,    // profile picture path, null when there's none
-    UpNextSort UpNextSort = UpNextSort.LastWatched);
+    UpNextSort UpNextSort = UpNextSort.LastWatched,
+    UserPrefs? Prefs = null);
 
 /// <summary>How long stretches of time read: "48d 7h" or "1,159h". Under a day both read "5h 12m".</summary>
 public enum TimeFormat { DaysHours, Hours }
@@ -66,7 +67,52 @@ public record PreferencesRequest(
     string? Theme = null,                       // key from UiPrefs.Themes; "" = default
     RatingScale? RatingScale = null,
     TimeFormat? TimeFormat = null,
-    UpNextSort? UpNextSort = null);
+    UpNextSort? UpNextSort = null,
+    UserPrefs? Prefs = null);   // replaces all of them at once
+
+public enum DateStyle { MonthFirst, DayFirst, Iso }
+/// <summary>What tapping ✓ / Mark watched does: ask when, or record it straight away.</summary>
+public enum WatchDefault { Ask, Now, ReleaseDate }
+/// <summary>Parts of your profile that can have their own audience (null = same as the profile).</summary>
+public enum ProfilePart { History, Ratings, Stats, WatchingNow, Favorites }
+
+/// <summary>
+/// Display, tracking, home and privacy choices, kept together. Defaults reproduce how SeenIt
+/// behaved before they existed.
+/// </summary>
+public record UserPrefs(
+    string StartPage = "home",                       // home, progress, calendar, watchlist, discover
+    DateStyle DateStyle = DateStyle.MonthFirst,
+    bool Clock24 = false,
+    bool WeekStartsMonday = false,
+    IReadOnlyList<string>? Scores = null,            // other sites' scores to show, in order; null = all, usual order
+    bool CountRewatches = true,                      // false: stats count each movie/episode's first play only
+    IReadOnlyDictionary<string, int>? HomeCounts = null,   // items per home row, by section key
+    int ComingUpDays = 14,
+    WatchDefault WatchDefault = WatchDefault.Ask,
+    IReadOnlyDictionary<ProfilePart, ProfileVisibility>? PartVisibility = null)
+{
+    public static readonly UserPrefs Default = new();
+    public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
+    public static readonly (string Key, string Name)[] ScoreSources =
+        [("imdb", "IMDb"), ("tomatoes", "Rotten Tomatoes"), ("popcorn", "RT audience"), ("metacritic", "Metacritic"),
+         ("metacriticuser", "Metacritic users"), ("letterboxd", "Letterboxd"), ("trakt", "Trakt"), ("rogerebert", "Roger Ebert"), ("myanimelist", "MyAnimeList")];
+    public const int DefaultRowCount = 12;
+    public int Count(string section) => HomeCounts?.TryGetValue(section, out var n) == true ? n : DefaultRowCount;
+    /// <summary>Who can see this part: its own setting, or the profile's.</summary>
+    public ProfileVisibility For(ProfilePart part, ProfileVisibility profile) =>
+        PartVisibility?.TryGetValue(part, out var v) == true ? v : profile;
+
+    /// <summary>Clamps everything to allowed values.</summary>
+    public UserPrefs Clean() => this with
+    {
+        StartPage = StartPages.Contains(StartPage) ? StartPage : "home",
+        Scores = Scores?.Where(s => ScoreSources.Any(x => x.Key == s)).Distinct().ToList(),
+        HomeCounts = HomeCounts?.Where(kv => UiPrefs.HomeSections.Any(h => h.Key == kv.Key)).ToDictionary(kv => kv.Key, kv => Math.Clamp(kv.Value, 4, 40)),
+        ComingUpDays = ComingUpDays is 7 or 14 or 30 ? ComingUpDays : 14,
+        PartVisibility = PartVisibility?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
+    };
+}
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }

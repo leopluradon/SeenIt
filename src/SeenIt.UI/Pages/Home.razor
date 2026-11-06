@@ -1,5 +1,6 @@
 @page "/"
 @inject ApiClient Api
+@inject NavigationManager Nav
 @inject SessionState Session
 @inject Toasts Toasts
 <PageTitle>SeenIt</PageTitle>
@@ -115,7 +116,7 @@
                                                 <div class="mini-title">@c.Title</div>
                                                 <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }</div>
                                             </div>
-                                            <span class="mini-date">@Fmt.Day(c.Date)@if (c.AirsAt is { } cat) { <span> · @cat.ToLocalTime().ToString("h:mm tt")</span> }@if (Soon(c) is { } cd) { <span class="countdown"> · @cd</span> }</span>
+                                            <span class="mini-date">@Fmt.Day(c.Date)@if (c.AirsAt is { } cat) { <span> · @cat.ToLocalTime().ToString(Fmt.TimeOnly)</span> }@if (Soon(c) is { } cd) { <span class="countdown"> · @cd</span> }</span>
                                         </a>
                                     }
                                 </div>
@@ -222,6 +223,8 @@
 }
 
 @code {
+    /// <summary>Once per app launch, not every time Home is opened.</summary>
+    private static bool startChecked;
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     private DashboardDto? dash;
     private NowWatchingDto? now;
@@ -237,7 +240,7 @@
     private async Task LoadForYou()
     {
         if (hidden.Contains("foryou")) return;
-        try { forYou = (await Api.ForYouAsync()).Top.Take(20).Select(i => i.Media).ToList(); }
+        try { forYou = (await Api.ForYouAsync()).Top.Take(Fmt.Prefs.Count("foryou")).Select(i => i.Media).ToList(); }
         catch { forYou = []; }
     }
     private bool signedIn, customizeOpen;
@@ -252,6 +255,16 @@
     protected override async Task OnInitializedAsync()
     {
         signedIn = AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated == true;
+        // Settings → Display → Start page: the first page you see when SeenIt opens (tapping Home later stays here).
+        if (!startChecked)
+        {
+            startChecked = true;
+            if (signedIn && SeenIt.UI.Layout.MainLayout.LaunchPath is "" && Fmt.Prefs.StartPage is { } start && start != "home" && UserPrefs.StartPages.Contains(start))
+            {
+                Nav.NavigateTo(start, replace: true);
+                return;
+            }
+        }
         hidden = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
         var trendingTask = LoadTrending();
         if (!signedIn) { try { features = await Api.FeaturesAsync(); } catch { } }
@@ -278,7 +291,7 @@
     private async Task LoadExtras()
     {
         try { if (!hidden.Contains("now")) now = await Api.CheckInAsync(); } catch { }
-        try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(18); } catch { }
+        try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); } catch { }
         try { if (!hidden.Contains("onthisday")) onThisDay = await Api.OnThisDayAsync(); } catch { }
         try { if (!hidden.Contains("goals")) goals = await Api.GoalsAsync(DateTime.Today.Year); } catch { }
     }
@@ -320,8 +333,8 @@
         {
             var m = Api.BrowseAsync(MediaType.Movie, "trending/week");
             var s = Api.BrowseAsync(MediaType.Show, "trending/week");
-            trendingMovies = (await m).Items;
-            trendingShows = (await s).Items;
+            trendingMovies = (await m).Items.Take(Fmt.Prefs.Count("trending-movies")).ToList();
+            trendingShows = (await s).Items.Take(Fmt.Prefs.Count("trending-shows")).ToList();
         }
         catch { trendingMovies ??= []; trendingShows ??= []; }
     }

@@ -40,6 +40,8 @@ public class AppUser : IdentityUser<Guid>
     /// <summary>When the profile picture last changed (its URL's version); null when there's none.</summary>
     public long? AvatarVersion { get; set; }
     public UpNextSort UpNextSort { get; set; }
+    /// <summary>UserPrefs as JSON; null = all defaults.</summary>
+    public string? PrefsJson { get; set; }
     /// <summary>"48d 7h" or "1,159h" for long stretches of time.</summary>
     public TimeFormat TimeFormat { get; set; }
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
@@ -528,4 +530,18 @@ public class TitleNote
     public int TmdbId { get; set; }
     public string Text { get; set; } = "";
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public static class UserPrefsStore
+{
+    private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web)
+        { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
+    public static UserPrefs Read(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return UserPrefs.Default;
+        try { return System.Text.Json.JsonSerializer.Deserialize<UserPrefs>(json, Json) ?? UserPrefs.Default; }
+        catch (System.Text.Json.JsonException) { return UserPrefs.Default; }
+    }
+    public static string Write(UserPrefs p) => System.Text.Json.JsonSerializer.Serialize(p.Clean(), Json);
+    public static UserPrefs Prefs(this AppUser u) => Read(u.PrefsJson);
 }

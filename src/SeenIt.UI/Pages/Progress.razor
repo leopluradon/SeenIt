@@ -46,7 +46,8 @@
                     <div class="progress-actions">
                         @if (f.Next is { } next)
                         {
-                            <button class="btn btn-sm btn-check" @onclick="() => pendingMovie = next" aria-label="@($"Mark {next.Title} watched")"><Icon Name="check" Size="16" /></button>
+                            <WhenButton Small="true" What="@next.Title" OnClick="() => { askWhen = true; pendingMovie = next; }" />
+                            <button class="btn btn-sm btn-check" @onclick="() => { askWhen = false; pendingMovie = next; }" aria-label="@($"Mark {next.Title} watched")"><Icon Name="check" Size="16" /></button>
                         }
                     </div>
                 </div>
@@ -55,7 +56,7 @@
     }
     @if (pendingMovie is { } pm)
     {
-        <WatchDialog Open="true" OpenChanged="o => { if (!o) pendingMovie = null; }" What="@pm.Title" OnPick="WatchMovie" />
+        <WatchDialog Open="true" OpenChanged="o => { if (!o) pendingMovie = null; }" What="@pm.Title" OnPick="WatchMovie" AskWhen="askWhen" />
     }
 }
 else
@@ -130,7 +131,8 @@ else if (items is not null)
                     <div class="progress-actions">
                         @if (p.NextEpisode is { } next && p.Status != ShowTrackStatus.Dropped)
                         {
-                            <button class="btn btn-sm btn-check" @onclick="() => pending = (p, next)" aria-label="Mark next episode watched"><Icon Name="check" Size="16" /></button>
+                            <WhenButton Small="true" What="@($"{p.Name} {Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)}")" OnClick="() => { askWhen = true; pending = (p, next); }" />
+                            <button class="btn btn-sm btn-check" @onclick="() => { askWhen = false; pending = (p, next); }" aria-label="Mark next episode watched"><Icon Name="check" Size="16" /></button>
                         }
                         <button class="icon-btn" @onclick="() => menuFor = menuFor == p.ShowTmdbId ? null : p.ShowTmdbId" aria-label="More options for @p.Name" aria-expanded="@(menuFor == p.ShowTmdbId)"><Icon Name="more" Size="18" /></button>
                     </div>
@@ -142,7 +144,7 @@ else if (items is not null)
 @if (pending is var (ps, pe))
 {
     <WatchDialog Open="true" OpenChanged="o => { if (!o) pending = null; }" What="@($"{ps.Name} {Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber)}")"
-                 ReleaseDate="pe.AirDate" OnPick="Watch" />
+                 ReleaseDate="pe.AirDate" OnPick="Watch"  AskWhen="askWhen" />
 }
 }
 @code {
@@ -154,6 +156,7 @@ else if (items is not null)
     private string? ferror;
     private string ftab = "progress";
     private MediaSummary? pendingMovie;
+    private bool askWhen;
 
     protected override async Task OnParametersSetAsync()
     {

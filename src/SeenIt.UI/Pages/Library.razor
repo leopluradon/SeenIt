@@ -37,7 +37,7 @@ else if (items is not null)
         @foreach (var i in shown)
         {
             <PosterCard Media="i.Media" Badge="@OwnedFormats.Label(i.Format)" Sub="@(i.Watched ? "Watched" : "Not watched yet")"
-                        SubTitle="@($"Added {i.AddedAt.ToLocalTime():MMM d, yyyy}{(i.Source == WatchSource.Manual ? "" : $" by {WatchSources.Name(i.Source)}")}")" @key="(i.Media.Type, i.Media.TmdbId)" />
+                        SubTitle="@($"Added {(i.AddedAt.ToLocalTime()).ToString(Fmt.DateLong)}{(i.Source == WatchSource.Manual ? "" : $" by {WatchSources.Name(i.Source)}")}")" @key="(i.Media.Type, i.Media.TmdbId)" />
         }
     </div>
 }
