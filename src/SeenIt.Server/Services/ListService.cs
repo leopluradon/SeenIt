@@ -17,6 +17,55 @@ public class ListService(AppDbContext db, TrackingService tracking)
                 .ToList())).ToList();
     }
 
+    /// <summary>Save or unsave someone's public list. False if it isn't a public list you can save.</summary>
+    public async Task<bool> SaveAsync(Guid userId, Guid listId, bool save, CancellationToken ct)
+    {
+        var list = await db.Lists.AsNoTracking().FirstOrDefaultAsync(l => l.Id == listId, ct);
+        if (list is null || list.UserId == userId || (!list.IsPublic && save)) return false;
+        var row = await db.ListLikes.FirstOrDefaultAsync(l => l.UserId == userId && l.ListId == listId, ct);
+        if (save && row is null) db.ListLikes.Add(new ListLike { UserId = userId, ListId = listId });
+        if (!save && row is not null) db.ListLikes.Remove(row);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>Lists you saved that are still public, newest save first.</summary>
+    public async Task<List<ListSummary>> SavedAsync(Guid userId, CancellationToken ct)
+    {
+        var ids = await db.ListLikes.Where(l => l.UserId == userId).OrderByDescending(l => l.CreatedAt).Select(l => l.ListId).ToListAsync(ct);
+        var lists = await SummariesAsync(db.Lists.Where(l => ids.Contains(l.Id) && l.IsPublic), userId, ct);
+        return lists.OrderBy(l => ids.IndexOf(l.Id)).ToList();
+    }
+
+    /// <summary>Everyone's public lists with something in them: most saved first ("popular") or most recently changed.</summary>
+    public async Task<List<ListSummary>> BrowseAsync(Guid? viewerId, string? query, bool recent, CancellationToken ct)
+    {
+        var q = db.Lists.Where(l => l.IsPublic && l.Items.Count > 0);
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var pattern = "%" + query.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+            q = db.Database.IsRelational()
+                ? q.Where(l => EF.Functions.ILike(l.Name, pattern) || EF.Functions.ILike(l.Description ?? "", pattern))
+                : q.Where(l => l.Name.ToLower().Contains(query.Trim().ToLower()));
+        }
+        q = recent
+            ? q.OrderByDescending(l => l.UpdatedAt)
+            : q.OrderByDescending(l => db.ListLikes.Count(x => x.ListId == l.Id)).ThenByDescending(l => l.UpdatedAt);
+        return await SummariesAsync(q.Take(60), viewerId, ct, keepOrder: true);
+    }
+
+    private async Task<List<ListSummary>> SummariesAsync(IQueryable<UserList> query, Guid? viewerId, CancellationToken ct, bool keepOrder = false)
+    {
+        var lists = await query.Include(l => l.Items).Include(l => l.User).AsNoTracking().ToListAsync(ct);
+        var ids = lists.Select(l => l.Id).ToList();
+        var saves = await db.ListLikes.Where(x => ids.Contains(x.ListId)).GroupBy(x => x.ListId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
+        var (movies, shows) = await tracking.LoadMetaAsync(lists.SelectMany(l => l.Items.OrderBy(i => i.Position).Take(4)).Select(i => (i.Type, i.TmdbId)), ct);
+        return lists.Select(l => new ListSummary(l.Id, l.Name, l.Description, l.IsPublic, l.Items.Count, l.UpdatedAt,
+            l.Items.OrderBy(i => i.Position).Take(4)
+                .Select(i => i.Type == MediaType.Movie ? movies.GetValueOrDefault(i.TmdbId)?.PosterPath : shows.GetValueOrDefault(i.TmdbId)?.PosterPath).ToList(),
+            l.UserId == viewerId ? null : l.User?.UserName, saves.GetValueOrDefault(l.Id))).ToList();
+    }
+
     /// <summary>
     /// Titles on your watchlist or any of your lists whose name contains the query (ignoring case,
     /// accents, punctuation and a leading "The"), with where each one is.
@@ -66,7 +115,9 @@ public class ListService(AppDbContext db, TrackingService tracking)
                 : shows.TryGetValue(i.TmdbId, out var s) ? CatalogService.ToSummary(s) : null;
             return media is null ? null : new ListItemDto(i.Id, media, i.AddedAt, i.Position, i.Note);
         }).OfType<ListItemDto>().ToList();
-        return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, items, list.Ranked);
+        var saves = await db.ListLikes.CountAsync(l => l.ListId == list.Id, ct);
+        var saved = viewerId is { } v && await db.ListLikes.AnyAsync(l => l.ListId == list.Id && l.UserId == v, ct);
+        return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, items, list.Ranked, saves, saved);
     }
 
     public async Task<UserList> CreateAsync(Guid userId, CreateListRequest req, CancellationToken ct)

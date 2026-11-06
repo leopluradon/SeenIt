@@ -374,8 +374,17 @@ public static class ApiEndpoints
         app.MapGet("/api/lists/{id:guid}", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
             await l.GetAsync(id, p.OptionalUserId(), ct) is { } list ? Results.Ok(list) : Results.NotFound());
 
+        // Everyone's public lists, most saved first (or most recently updated).
+        app.MapGet("/api/lists/browse", (string? q, string? sort, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
+            l.BrowseAsync(p.OptionalUserId(), q, sort == "recent", ct));
+
         var g = app.MapGroup("/api/lists").RequireAuthorization();
         g.MapGet("", (ClaimsPrincipal p, ListService l, CancellationToken ct) => l.GetMineAsync(p.UserId(), ct));
+        g.MapGet("/saved", (ClaimsPrincipal p, ListService l, CancellationToken ct) => l.SavedAsync(p.UserId(), ct));
+        g.MapPost("/{id:guid}/save", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
+            await l.SaveAsync(p.UserId(), id, true, ct) ? Results.NoContent() : Results.NotFound());
+        g.MapDelete("/{id:guid}/save", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
+            await l.SaveAsync(p.UserId(), id, false, ct) ? Results.NoContent() : Results.NotFound());
         static Task<string?> ListName(AppDbContext db, Guid id, CancellationToken ct) =>
             db.Lists.Where(l => l.Id == id).Select(l => l.Name).FirstOrDefaultAsync(ct);
 

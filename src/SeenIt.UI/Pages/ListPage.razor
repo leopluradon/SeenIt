@@ -13,9 +13,19 @@ else if (list is not null)
     <div class="page-head">
         <div>
             <h1>@list.Name</h1>
-            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items@(list.Ranked ? " · Ranked" : "") · @(list.IsPublic ? "Public" : "Private")</p>
+            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items@(list.Ranked ? " · Ranked" : "") · @(list.IsPublic ? "Public" : "Private")@(list.IsOwner && list.Saves > 0 ? $" · saved by {list.Saves}" : "")</p>
         </div>
-        @if (list.IsPublic && !list.IsOwner) { <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
+        @if (list.IsPublic && !list.IsOwner)
+        {
+            <div class="inline">
+                <AuthorizeView>
+                    <button class="btn btn-sm @(list.Saved ? "btn-on" : "")" disabled="@saving" @onclick="ToggleSave" aria-pressed="@list.Saved">
+                        <Icon Name="bookmark" Size="16" /> @(list.Saved ? "Saved" : "Save")@(list.Saves > 0 ? $" · {list.Saves}" : "")
+                    </button>
+                </AuthorizeView>
+                <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button>
+            </div>
+        }
         @if (list.IsOwner)
         {
             <div class="inline">
@@ -88,6 +98,23 @@ else if (list is not null)
     </Modal>
 }
 @code {
+    private bool saving;
+
+    private async Task ToggleSave()
+    {
+        if (list is null) return;
+        saving = true;
+        var save = !list.Saved;
+        try
+        {
+            await Api.SaveListAsync(list.Id, save);
+            list = list with { Saved = save, Saves = list.Saves + (save ? 1 : -1) };
+            Toasts.Show(save ? "Saved to your lists (Lists → Saved)" : "Removed from your saved lists");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { saving = false; }
+    }
+
     [Parameter] public Guid Id { get; set; }
     [Inject] private IJSRuntime Js { get; set; } = default!;
     private ListDetail? list;

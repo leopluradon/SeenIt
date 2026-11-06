@@ -481,3 +481,11 @@ public class NotInterested
     public int TmdbId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>Someone saved (liked) a public list; shows under Lists → Saved, and counts toward "popular".</summary>
+public class ListLike
+{
+    public Guid UserId { get; set; }
+    public Guid ListId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}

@@ -493,9 +493,10 @@ public record DashboardDto(
 
 // ---------- Lists ----------
 
-public record ListSummary(Guid Id, string Name, string? Description, bool IsPublic, int ItemCount, DateTimeOffset UpdatedAt, IReadOnlyList<string?> Posters);
+public record ListSummary(Guid Id, string Name, string? Description, bool IsPublic, int ItemCount, DateTimeOffset UpdatedAt, IReadOnlyList<string?> Posters,
+    string? Owner = null, int Saves = 0);   // Owner: set when it's someone else's list
 public record ListDetail(Guid Id, string Name, string? Description, bool IsPublic, string OwnerUserName, bool IsOwner, IReadOnlyList<ListItemDto> Items,
-    bool Ranked = false);
+    bool Ranked = false, int Saves = 0, bool Saved = false);
 public record ListItemDto(Guid Id, MediaSummary Media, DateTimeOffset AddedAt, int Position, string? Note = null);
 public record CreateListRequest(string Name, string? Description, bool IsPublic, bool Ranked = false);
 /// <summary>Every item id of the list, in the new order.</summary>

@@ -780,6 +780,24 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("LetterboxdSyncs");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.ListLike", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ListId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "ListId");
+
+                    b.HasIndex("ListId");
+
+                    b.ToTable("ListLikes");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.MovieMeta", b =>
                 {
                     b.Property<int>("TmdbId")
@@ -1419,6 +1437,21 @@ namespace SeenIt.Server.Data.Migrations
 
             modelBuilder.Entity("SeenIt.Server.Data.LetterboxdSync", b =>
                 {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ListLike", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.UserList", null)
+                        .WithMany()
+                        .HasForeignKey("ListId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")

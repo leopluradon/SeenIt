@@ -7,8 +7,36 @@
 
 <div class="page-head">
     <h1>Lists</h1>
-    <button class="btn btn-primary btn-sm" @onclick="() => createOpen = true"><Icon Name="plus" Size="16" /> New list</button>
+    <div class="segmented">
+        <button class="@(Tab == "mine" ? "on" : "")" @onclick='() => Go("mine")'>Mine</button>
+        <button class="@(Tab == "saved" ? "on" : "")" @onclick='() => Go("saved")'>Saved</button>
+        <button class="@(Tab == "browse" ? "on" : "")" @onclick='() => Go("browse")'>Browse</button>
+    </div>
+    @if (Tab == "mine") { <button class="btn btn-primary btn-sm" @onclick="() => createOpen = true"><Icon Name="plus" Size="16" /> New list</button> }
 </div>
+@if (Tab == "saved")
+{
+    <p class="muted small">Other people's public lists you saved.</p>
+    @if (saved is null) { <Spinner /> }
+    else if (saved.Count == 0) { <Empty Title="No saved lists yet.">Open someone's public list and tap <b>Save</b>, or find some under <a href="lists?tab=browse">Browse</a>.</Empty> }
+    else { <div class="list-grid">@foreach (var l in saved) { <ListCard List="l" @key="l.Id" /> }</div> }
+}
+else if (Tab == "browse")
+{
+    <form class="searchbar" @onsubmit="LoadBrowse" @onsubmit:preventDefault role="search">
+        <Icon Name="search" Size="18" />
+        <input type="search" @bind="browseQuery" @bind:event="oninput" @bind:after="BrowseDebounce" placeholder="Search everyone's public lists" aria-label="Search public lists" />
+    </form>
+    <div class="chips">
+        <button class="chip @(recent ? "" : "on")" @onclick="() => SetSort(false)">Most saved</button>
+        <button class="chip @(recent ? "on" : "")" @onclick="() => SetSort(true)">Recently updated</button>
+    </div>
+    @if (browse is null) { <Spinner /> }
+    else if (browse.Count == 0) { <Empty Title="No public lists found." /> }
+    else { <div class="list-grid">@foreach (var l in browse) { <ListCard List="l" @key="l.Id" /> }</div> }
+}
+else
+{
 <form class="searchbar" @onsubmit="Search" role="search">
     <Icon Name="search" Size="18" />
     <input type="search" @bind="query" @bind:event="oninput" @bind:after="Debounce" placeholder="Search your watchlist and all your lists" aria-label="Search your watchlist and lists" />
@@ -40,19 +68,9 @@ else if (lists is not null)
 {
     @if (lists.Count == 0) { <Empty Title="No lists yet.">Make lists like “Best of 2025” or “Comfort rewatches”, and share them publicly if you like.</Empty> }
     <div class="list-grid">
-        @foreach (var l in lists)
-        {
-            <a class="list-card" href="@($"lists/{l.Id}")" @key="l.Id">
-                <div class="list-posters">
-                    @foreach (var p in l.Posters.Take(4)) { <img src="@Img.Poster(p, "w154")" alt="" loading="lazy" /> }
-                </div>
-                <div class="list-meta">
-                    <b>@l.Name</b>
-                    <span class="muted small">@l.ItemCount items · @(l.IsPublic ? "Public" : "Private")</span>
-                </div>
-            </a>
-        }
+        @foreach (var l in lists) { <ListCard List="l" @key="l.Id" /> }
     </div>
+}
 }
 
 <Modal @bind-Open="createOpen" Title="New list">
@@ -67,7 +85,46 @@ else if (lists is not null)
     private List<ListSearchHit>? hits;
     private CancellationTokenSource? debounce;
 
-    protected override Task OnInitializedAsync() => Load();
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
+    private string Tab => TabParam is "saved" or "browse" ? TabParam : "mine";
+    private List<ListSummary>? saved, browse;
+    private string browseQuery = "";
+    private bool recent;
+    private CancellationTokenSource? browseDebounce;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        switch (Tab)
+        {
+            case "saved": try { saved = await Api.SavedListsAsync(); } catch (Exception ex) { saved = []; error = ex.Message; } break;
+            case "browse": await LoadBrowse(); break;
+            default: if (lists is null) await Load(); break;
+        }
+    }
+
+    private void Go(string tab) => Nav.NavigateTo(tab == "mine" ? "lists" : $"lists?tab={tab}");
+
+    private async Task LoadBrowse()
+    {
+        var q = browseQuery;
+        try
+        {
+            var result = await Api.BrowseListsAsync(q, recent);
+            if (q == browseQuery) browse = result;
+        }
+        catch (Exception ex) { browse = []; error = ex.Message; }
+    }
+
+    private Task SetSort(bool r) { recent = r; browse = null; return LoadBrowse(); }
+
+    private async Task BrowseDebounce()
+    {
+        browseDebounce?.Cancel();
+        browseDebounce = new CancellationTokenSource();
+        try { await Task.Delay(300, browseDebounce.Token); }
+        catch (TaskCanceledException) { return; }
+        await LoadBrowse();
+    }
 
     private async Task Load()
     {

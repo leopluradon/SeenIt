@@ -197,6 +197,11 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task UndoNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/not-interested?type={type}&tmdbId={id}");
     public Task<ForYouDto> ForYouAsync() => GetAsync<ForYouDto>("api/recommendations");
 
+    public Task<List<ListSummary>> SavedListsAsync() => GetAsync<List<ListSummary>>("api/lists/saved");
+    public Task<List<ListSummary>> BrowseListsAsync(string? q, bool recent) =>
+        GetAsync<List<ListSummary>>($"api/lists/browse?sort={(recent ? "recent" : "popular")}" + (string.IsNullOrWhiteSpace(q) ? "" : $"&q={Uri.EscapeDataString(q.Trim())}"));
+    public Task SaveListAsync(Guid id, bool save) => SendAsync(save ? HttpMethod.Post : HttpMethod.Delete, $"api/lists/{id}/save");
+
     public Task<NotificationsDto> NotificationsAsync() => GetAsync<NotificationsDto>("api/notifications");
     public async Task<int> UnreadNotificationsAsync() => (await GetAsync<UnreadResult>("api/notifications/unread")).Unread;
     public Task MarkNotificationsReadAsync() => SendAsync(HttpMethod.Post, "api/notifications/read");

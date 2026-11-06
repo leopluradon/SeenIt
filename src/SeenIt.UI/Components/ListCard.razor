@@ -1,0 +1,17 @@
+@* A list's poster mosaic, name and counts. Shows the owner and saves for other people's lists. *@
+<a class="list-card" href="@($"lists/{List.Id}")">
+    <div class="list-posters">
+        @foreach (var p in List.Posters.Take(4)) { <img src="@Img.Poster(p, "w154")" alt="" loading="lazy" /> }
+    </div>
+    <div class="list-meta">
+        <b>@List.Name</b>
+        <span class="muted small">
+            @List.ItemCount items
+            @if (List.Owner is { } owner) { <span> · by @owner</span> } else { <span> · @(List.IsPublic ? "Public" : "Private")</span> }
+            @if (List.Saves > 0) { <span> · @List.Saves save@(List.Saves == 1 ? "" : "s")</span> }
+        </span>
+    </div>
+</a>
+@code {
+    [Parameter, EditorRequired] public ListSummary List { get; set; } = default!;
+}
