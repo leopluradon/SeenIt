@@ -262,7 +262,8 @@ public record ShowDetail(
     long RemainingMinutes = 0,    // aired episodes you haven't watched
     ShowTrackStatus TrackStatus = ShowTrackStatus.Watching);
 
-public record EpisodeRef(int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate, bool Watched = false);
+public record EpisodeRef(int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate, bool Watched = false,
+    DateTimeOffset? AirsAt = null, string? Network = null);   // exact time and channel, from TVmaze, when known
 
 public record EpisodeDto(
     int TmdbId,
@@ -502,7 +503,10 @@ public record CalendarEntry(
     int? EpisodeNumber,
     string? EpisodeTitle,
     string? PosterPath,
-    bool Watched);
+    bool Watched,
+    bool Started = true,             // you've watched some of this show (false: only on your watchlist)
+    DateTimeOffset? AirsAt = null,   // exact air time, from TVmaze, when known
+    string? Network = null);
 
 public record StatsDto(
     int MoviesWatched,

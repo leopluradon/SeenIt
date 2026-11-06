@@ -115,7 +115,7 @@
                                                 <div class="mini-title">@c.Title</div>
                                                 <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }</div>
                                             </div>
-                                            <span class="mini-date">@Fmt.Day(c.Date)@if (c.Date > DateOnly.FromDateTime(DateTime.Today).AddDays(1) && Fmt.Countdown(c.Date) is { } cd) { <span class="countdown"> · @cd</span> }</span>
+                                            <span class="mini-date">@Fmt.Day(c.Date)@if (c.AirsAt is { } cat) { <span> · @cat.ToLocalTime().ToString("h:mm tt")</span> }@if (Soon(c) is { } cd) { <span class="countdown"> · @cd</span> }</span>
                                         </a>
                                     }
                                 </div>
@@ -228,6 +228,11 @@
     private FeedDto? feed;
     private string? error;
     private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows, forYou;
+
+    /// <summary>"in 5 hours" close to an exact air time; "in 3 days" further out; nothing for today/tomorrow.</summary>
+    private static string? Soon(CalendarEntry c) =>
+        c.AirsAt is { } at && at - DateTimeOffset.Now < TimeSpan.FromHours(36) ? Fmt.Countdown(at)
+        : c.Date > DateOnly.FromDateTime(DateTime.Today).AddDays(1) ? Fmt.Countdown(c.Date) : null;
 
     private async Task LoadForYou()
     {

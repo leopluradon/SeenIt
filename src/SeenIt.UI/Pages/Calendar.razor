@@ -5,44 +5,105 @@
 
 <div class="page-head">
     <h1>Calendar</h1>
+    <div class="segmented">
+        <button class="@(month ? "" : "on")" @onclick="() => SetView(false)">List</button>
+        <button class="@(month ? "on" : "")" @onclick="() => SetView(true)">Month</button>
+    </div>
     <div class="inline">
-        <button class="btn btn-sm" @onclick="() => Shift(-14)" aria-label="Earlier"><Icon Name="chevron-left" Size="16" /></button>
+        <button class="btn btn-sm" @onclick="() => Shift(-1)" aria-label="Earlier"><Icon Name="chevron-left" Size="16" /></button>
         <button class="btn btn-sm" @onclick="Today">Today</button>
-        <button class="btn btn-sm" @onclick="() => Shift(14)" aria-label="Later"><Icon Name="chevron-right" Size="16" /></button>
+        <button class="btn btn-sm" @onclick="() => Shift(1)" aria-label="Later"><Icon Name="chevron-right" Size="16" /></button>
+        <input type="date" class="cal-jump" value="@anchor.ToString("yyyy-MM-dd")" @onchange="Jump" aria-label="Go to a date" />
     </div>
 </div>
-<p class="muted small">@from.ToString("MMM d") – @from.AddDays(Days - 1).ToString("MMM d, yyyy")</p>
+<div class="chips">
+    <button class="chip @(kind is null ? "on" : "")" @onclick="() => kind = null">All</button>
+    <button class="chip @(kind == MediaType.Movie ? "on" : "")" @onclick="() => kind = MediaType.Movie">Movies</button>
+    <button class="chip @(kind == MediaType.Episode ? "on" : "")" @onclick="() => kind = MediaType.Episode">Shows</button>
+    <button class="chip @(hideWatched ? "on" : "")" @onclick="() => hideWatched = !hideWatched" aria-pressed="@hideWatched">Hide watched</button>
+    <button class="chip @(hidePremieres ? "on" : "")" @onclick="() => hidePremieres = !hidePremieres" aria-pressed="@hidePremieres" title="Season premieres of shows that are only on your watchlist">Hide premieres of shows I haven't started</button>
+</div>
+<p class="muted small">@(month ? anchor.ToString("MMMM yyyy") : $"{from:MMM d} – {from.AddDays(Days - 1):MMM d, yyyy}")</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }
 else if (items is not null)
 {
-    @if (items.Count == 0) { <Empty Title="Nothing airing in this window." /> }
-    @foreach (var day in items.GroupBy(i => i.Date))
+    var shown = items.Where(Keep).ToList();
+    var today = DateOnly.FromDateTime(DateTime.Today);
+    @if (month)
     {
-        <section class="cal-day @(day.Key == DateOnly.FromDateTime(DateTime.Today) ? "today" : "")">
-            <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString("MMM d")</span>@if (day.Key > DateOnly.FromDateTime(DateTime.Today).AddDays(1) && Fmt.Countdown(day.Key) is { } cd) { <span class="countdown small"> · @cd</span> }</h3>
-            <div class="mini-list">
-                @foreach (var c in day)
-                {
-                    <a class="mini-item @(c.Watched ? "watched" : "")" href="@(c.Type == MediaType.Movie ? $"movie/{c.TmdbId}" : Fmt.EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber))">
-                        <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
-                        <div>
-                            <div class="mini-title">@c.Title</div>
-                            <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }</div>
-                        </div>
-                        @if (c.Watched) { <span class="ok"><Icon Name="check" Size="18" /></span> }
-                    </a>
-                }
-            </div>
-        </section>
+        var first = new DateOnly(anchor.Year, anchor.Month, 1);
+        var start = first.AddDays(-(int)first.DayOfWeek);
+        var byDay = shown.GroupBy(i => i.Date).ToDictionary(g => g.Key, g => g.ToList());
+        <div class="cal-month" role="grid" aria-label="@anchor.ToString("MMMM yyyy")">
+            @foreach (var wd in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" }) { <div class="cal-dow" role="columnheader">@wd</div> }
+            @for (var d = start; d < start.AddDays(42); d = d.AddDays(1))
+            {
+                var day = d;
+                if (day > first.AddMonths(1).AddDays(-1) && day.DayOfWeek == DayOfWeek.Sunday) break;
+                var list = byDay.GetValueOrDefault(day) ?? [];
+                <button class="cal-cell @(day.Month != anchor.Month ? "other" : "") @(day == today ? "today" : "") @(day == picked ? "picked" : "") @(list.Count > 0 ? "busy" : "")"
+                        @onclick="() => picked = day" role="gridcell" aria-label="@($"{day:dddd, MMM d}: {list.Count} release{(list.Count == 1 ? "" : "s")}")" @key="day">
+                    <span class="cal-num">@day.Day</span>
+                    @foreach (var c in list.Take(3)) { <span class="cal-pill @(c.Watched ? "watched" : "")">@c.Title</span> }
+                    @if (list.Count > 3) { <span class="cal-more">+@(list.Count - 3) more</span> }
+                </button>
+            }
+        </div>
+        @if (picked is { } p)
+        {
+            <section class="cal-day">
+                <h3 class="day-head">@Fmt.Day(p) <span class="muted small">@p.ToString("MMM d")</span></h3>
+                @if (byDay.GetValueOrDefault(p) is { Count: > 0 } dayItems) { <div class="mini-list">@foreach (var c in dayItems) { @Entry(c) }</div> }
+                else { <p class="muted small">Nothing that day.</p> }
+            </section>
+        }
+    }
+    else
+    {
+        @if (shown.Count == 0) { <Empty Title="Nothing airing in this window." /> }
+        @foreach (var day in shown.GroupBy(i => i.Date))
+        {
+            <section class="cal-day @(day.Key == today ? "today" : "")">
+                <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString("MMM d")</span>@if (day.Key > today.AddDays(1) && Fmt.Countdown(day.Key) is { } cd) { <span class="countdown small"> · @cd</span> }</h3>
+                <div class="mini-list">@foreach (var c in day) { @Entry(c) }</div>
+            </section>
+        }
     }
 }
 @code {
     private const int Days = 28;
+    private bool month, hideWatched, hidePremieres;
+    private MediaType? kind;
+    private DateOnly anchor = DateOnly.FromDateTime(DateTime.Today);
     private DateOnly from = DateOnly.FromDateTime(DateTime.Today).AddDays(-3);
+    private DateOnly? picked = DateOnly.FromDateTime(DateTime.Today);
     private List<CalendarEntry>? items;
     private string? error;
+
+    private RenderFragment Entry(CalendarEntry c) => __builder =>
+    {
+        <a class="mini-item @(c.Watched ? "watched" : "")" href="@(c.Type == MediaType.Movie ? $"movie/{c.TmdbId}" : Fmt.EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber))" @key="(c.Type, c.TmdbId, c.SeasonNumber, c.EpisodeNumber)">
+            <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
+            <div>
+                <div class="mini-title">@c.Title</div>
+                <div class="muted small">
+                    @if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }
+                </div>
+                @if (Fmt.AirTime(c.AirsAt, c.Network) is { } when)
+                {
+                    <div class="small">@when@if (!c.Watched && c.AirsAt is { } at && Fmt.Countdown(at) is { } left && at - DateTimeOffset.Now < TimeSpan.FromHours(36)) { <span class="countdown"> · @left</span> }</div>
+                }
+            </div>
+            @if (c.Watched) { <span class="ok"><Icon Name="check" Size="18" /></span> }
+        </a>
+    };
+
+    private bool Keep(CalendarEntry c) =>
+        (kind is null || c.Type == kind)
+        && (!hideWatched || !c.Watched)
+        && (!hidePremieres || c.Type != MediaType.Episode || c.Started || c.EpisodeNumber != 1);
 
     protected override Task OnInitializedAsync() => Load();
 
@@ -50,10 +111,48 @@ else if (items is not null)
     {
         error = null;
         items = null;
-        try { items = await Api.CalendarAsync(from, Days); }
+        try
+        {
+            if (month)
+            {
+                var first = new DateOnly(anchor.Year, anchor.Month, 1);
+                var start = first.AddDays(-(int)first.DayOfWeek);
+                items = await Api.CalendarAsync(start, 42);
+            }
+            else items = await Api.CalendarAsync(from, Days);
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private Task Shift(int days) { from = from.AddDays(days); return Load(); }
-    private Task Today() { from = DateOnly.FromDateTime(DateTime.Today).AddDays(-3); return Load(); }
+    private Task SetView(bool m)
+    {
+        if (m == month) return Task.CompletedTask;
+        month = m;
+        anchor = month ? new DateOnly(from.AddDays(3).Year, from.AddDays(3).Month, 1) : anchor;
+        if (!month) from = anchor.AddDays(-3);
+        return Load();
+    }
+
+    private Task Shift(int step)
+    {
+        if (month) { anchor = new DateOnly(anchor.Year, anchor.Month, 1).AddMonths(step); picked = null; }
+        else from = from.AddDays(14 * step);
+        return Load();
+    }
+
+    private Task Today()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        anchor = today; picked = today;
+        from = today.AddDays(-3);
+        return Load();
+    }
+
+    private Task Jump(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var d)) return Task.CompletedTask;
+        anchor = d; picked = d;
+        from = d.AddDays(-1);
+        return Load();
+    }
 }

@@ -150,8 +150,18 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
             Line("BEGIN:VEVENT");
             Line($"UID:seenit-{e.Type.ToString().ToLowerInvariant()}-{e.TmdbId}-{e.SeasonNumber}-{e.EpisodeNumber}@seenit");
             Line($"DTSTAMP:{stamp}");
-            Line($"DTSTART;VALUE=DATE:{e.Date:yyyyMMdd}");
-            Line($"DTEND;VALUE=DATE:{e.Date.AddDays(1):yyyyMMdd}");
+            if (e.AirsAt is { } at)
+            {
+                // A real air time (TVmaze): a timed event, an hour long.
+                Line($"DTSTART:{at.UtcDateTime:yyyyMMdd'T'HHmmss'Z'}");
+                Line($"DTEND:{at.UtcDateTime.AddHours(1):yyyyMMdd'T'HHmmss'Z'}");
+            }
+            else
+            {
+                Line($"DTSTART;VALUE=DATE:{e.Date:yyyyMMdd}");
+                Line($"DTEND;VALUE=DATE:{e.Date.AddDays(1):yyyyMMdd}");
+            }
+            if (e.Network is { Length: > 0 } net) Line($"LOCATION:{Esc(net)}");
             Line($"SUMMARY:{Esc(summary)}");
             if (e.Type == MediaType.Episode && !string.IsNullOrWhiteSpace(e.EpisodeTitle)) Line($"DESCRIPTION:{Esc(e.EpisodeTitle!)}");
             Line($"URL:{site}{href}");

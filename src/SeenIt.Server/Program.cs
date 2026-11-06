@@ -136,6 +136,14 @@ builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddScoped<SmartListService>();
 builder.Services.AddScoped<FeedService>();
 builder.Services.AddScoped<LibraryService>();
+builder.Services.AddHttpClient("tvmaze", c =>
+{
+    c.BaseAddress = new Uri("https://api.tvmaze.com/");
+    c.Timeout = TimeSpan.FromSeconds(15);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("SeenIt (self-hosted tracker)");
+});
+builder.Services.AddScoped<TvmazeService>();
+builder.Services.AddHostedService<TvmazeWorker>();
 builder.Services.AddHostedService<MonthlyBackupWorker>();
 builder.Services.AddHostedService<ReleaseAlertWorker>();
 builder.Services.AddHostedService<ImdbRatingsWorker>();

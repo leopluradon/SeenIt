@@ -714,6 +714,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var watchlistShows = db.Watchlist.Where(w => w.UserId == userId && w.Type == MediaType.Show).Select(w => w.TmdbId);
         var dropped = db.ShowStates.Where(x => x.UserId == userId && x.Status == ShowTrackStatus.Dropped).Select(x => x.ShowTmdbId);
         var showIds = await watchedShows.Union(watchlistShows).Where(id => !dropped.Contains(id)).ToListAsync(ct);
+        var started = (await watchedShows.Distinct().ToListAsync(ct)).ToHashSet();
 
         var episodes = await db.Episodes
             .Where(e => showIds.Contains(e.ShowTmdbId) && e.AirDate >= from && e.AirDate < to)
@@ -724,9 +725,12 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 .Select(w => new { w.TmdbId, w.SeasonNumber, w.EpisodeNumber }).ToListAsync(ct))
             .Select(w => (w.TmdbId, w.SeasonNumber, w.EpisodeNumber)).ToHashSet();
 
+        var networks = await db.Shows.AsNoTracking().Where(s => showIds.Contains(s.TmdbId))
+            .Select(s => new { s.TmdbId, s.AirNetwork, s.Networks }).ToDictionaryAsync(s => s.TmdbId, s => s.AirNetwork ?? s.Networks.FirstOrDefault(), ct);
         var entries = episodes.Where(e => shows.ContainsKey(e.ShowTmdbId)).Select(e => new CalendarEntry(
             e.AirDate!.Value, MediaType.Episode, e.ShowTmdbId, shows[e.ShowTmdbId].Name, e.SeasonNumber, e.EpisodeNumber, e.Name,
-            shows[e.ShowTmdbId].PosterPath, watched.Contains((e.ShowTmdbId, (int?)e.SeasonNumber, (int?)e.EpisodeNumber)))).ToList();
+            shows[e.ShowTmdbId].PosterPath, watched.Contains((e.ShowTmdbId, (int?)e.SeasonNumber, (int?)e.EpisodeNumber)),
+            started.Contains(e.ShowTmdbId), e.AirStamp, networks.GetValueOrDefault(e.ShowTmdbId))).ToList();
 
         var watchlistMovies = await db.Watchlist
             .Where(w => w.UserId == userId && w.Type == MediaType.Movie)

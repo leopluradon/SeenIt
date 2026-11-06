@@ -124,6 +124,10 @@ public class ShowMeta
 
     public string? OriginalLanguage { get; set; }
     public List<string> Countries { get; set; } = [];
+    /// <summary>TVmaze's id for the show (for air times), its channel there, and when it was last checked.</summary>
+    public int? TvmazeId { get; set; }
+    public string? AirNetwork { get; set; }
+    public DateTimeOffset? TvmazeCheckedAt { get; set; }
     public List<string> Networks { get; set; } = [];
     public List<PersonCredit> Cast { get; set; } = [];
     public List<PersonCredit> Creators { get; set; } = [];
@@ -143,6 +147,8 @@ public class EpisodeMeta
     public int? TmdbId { get; set; }
     public string? Name { get; set; }
     public string? Overview { get; set; }
+    /// <summary>Exact air time from TVmaze (TMDB only has the day).</summary>
+    public DateTimeOffset? AirStamp { get; set; }
     public DateOnly? AirDate { get; set; }
     public int? Runtime { get; set; }
     public string? StillPath { get; set; }

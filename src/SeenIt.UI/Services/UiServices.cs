@@ -167,6 +167,25 @@ public static class Fmt
         };
     }
 
+    /// <summary>With an exact air time: "in 25 minutes", "in 5 hours" up to a day and a half out, then by day.</summary>
+    public static string? Countdown(DateTimeOffset at)
+    {
+        var left = at - DateTimeOffset.Now;
+        if (left < TimeSpan.Zero) return null;
+        if (left < TimeSpan.FromMinutes(60)) return $"in {Math.Max(1, (int)left.TotalMinutes)} minute{((int)left.TotalMinutes == 1 ? "" : "s")}";
+        if (left < TimeSpan.FromHours(36)) return $"in {(int)Math.Round(left.TotalHours)} hours";
+        return Countdown(DateOnly.FromDateTime(at.LocalDateTime));
+    }
+
+    /// <summary>"9:00 PM on HBO", "9:00 PM", "on HBO", or null.</summary>
+    public static string? AirTime(DateTimeOffset? at, string? network) => (at, network) switch
+    {
+        ({ } a, { Length: > 0 } n) => $"{a.ToLocalTime():h:mm tt} on {n}",
+        ({ } a, _) => a.ToLocalTime().ToString("h:mm tt"),
+        (null, { Length: > 0 } n) => $"on {n}",
+        _ => null,
+    };
+
     public static string Day(DateOnly d)
     {
         var today = DateOnly.FromDateTime(DateTime.Now);

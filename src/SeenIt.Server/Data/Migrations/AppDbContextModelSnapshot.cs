@@ -456,6 +456,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<DateOnly?>("AirDate")
                         .HasColumnType("date");
 
+                    b.Property<DateTimeOffset?>("AirStamp")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Name")
                         .HasColumnType("text");
 
@@ -1029,6 +1032,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int>("TmdbId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("AirNetwork")
+                        .HasColumnType("text");
+
                     b.Property<string>("BackdropPath")
                         .HasColumnType("text");
 
@@ -1071,6 +1077,12 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.Property<string>("Status")
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("TvmazeCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("TvmazeId")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

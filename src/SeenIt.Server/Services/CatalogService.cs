@@ -432,6 +432,18 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 progress = (await new ProgressCalculator(db).ForUserAsync(uid, [id], ct)).FirstOrDefault();
         }
 
+        // The next episode's exact time and channel, when TVmaze has them.
+        DateTimeOffset? nextAt = null;
+        string? nextNetwork = null;
+        if (s.NextEpisodeToAir is { } upcoming)
+        {
+            nextAt = await db.Episodes.AsNoTracking()
+                .Where(e => e.ShowTmdbId == id && e.SeasonNumber == upcoming.SeasonNumber && e.EpisodeNumber == upcoming.EpisodeNumber)
+                .Select(e => e.AirStamp).FirstOrDefaultAsync(ct);
+            nextNetwork = await db.Shows.AsNoTracking().Where(x => x.TmdbId == id).Select(x => x.AirNetwork).FirstOrDefaultAsync(ct)
+                          ?? s.Networks?.FirstOrDefault()?.Name;
+        }
+
         return new ShowDetail(
             s.Id, s.Name, NullIfEmpty(s.Tagline), s.Overview, TmdbDates.Parse(s.FirstAirDate), TmdbDates.Parse(s.LastAirDate), s.Status,
             s.Networks?.Select(n => n.Name).ToList() ?? [],
@@ -445,7 +457,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast),
             PickVideos(s.Videos),
             (s.Recommendations?.Results ?? []).Take(18).Select(x => ToSummary(x, MediaType.Show)).ToList(),
-            s.NextEpisodeToAir is { } n ? new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, TmdbDates.Parse(n.AirDate)) : null,
+            s.NextEpisodeToAir is { } n ? new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, TmdbDates.Parse(n.AirDate), AirsAt: nextAt, Network: nextNetwork) : null,
             user,
             progress,
             totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus);
