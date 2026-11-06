@@ -378,15 +378,61 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             q = q.Where(w => ids.Contains(w.Id));
         }
 
+        if (f.Type == MediaType.Show) return await ShowHistoryAsync(q, f, page, pageSize, ct);
+
         var total = await q.CountAsync(ct);
         var ordered = f.Oldest
             ? q.OrderBy(w => w.WatchedAt).ThenBy(w => w.CreatedAt)
             : q.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt);
         var rows = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
 
-        // Total running time of everything matched, not just this page.
+        var minutes = total > 0 ? await MinutesAsync(q, ct) : 0;
+        var entries = await ToHistoryAsync(rows, ct);
+        return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct));
+    }
+
+    /// <summary>
+    /// The Shows view: one row per show per day (unknown dates count as one "day"), newest first,
+    /// with how many episodes and which. Paged by rows, so a day's group is never split.
+    /// </summary>
+    private async Task<HistoryPage> ShowHistoryAsync(IQueryable<WatchEvent> q, HistoryQuery f, int page, int pageSize, CancellationToken ct)
+    {
+        var tz = ReviewService.Zone(f.TimeZone);
+        var plays = await q.Select(w => new { w.Id, w.TmdbId, S = w.SeasonNumber ?? 0, E = w.EpisodeNumber ?? 0, w.WatchedAt, w.CreatedAt }).ToListAsync(ct);
+        var groups = plays
+            .GroupBy(p => (Day: WatchDates.IsUnknown(p.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(p.WatchedAt, tz).DateTime), p.TmdbId))
+            .Select(g => (Key: g.Key, Plays: g.OrderBy(p => p.WatchedAt).ThenBy(p => p.CreatedAt).ToList()))
+            .ToList();
+        // Newest first; "date unknown" goes last (first when oldest-first), like the plain view.
+        groups = (f.Oldest
+                ? groups.OrderBy(g => g.Plays[0].WatchedAt).ThenBy(g => g.Plays[0].CreatedAt)
+                : groups.OrderByDescending(g => g.Plays[^1].WatchedAt).ThenByDescending(g => g.Plays[^1].CreatedAt))
+            .ToList();
+        var total = groups.Count;
+        var pageGroups = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        // Titles and runtimes for the plays on this page.
+        var ids = pageGroups.SelectMany(g => g.Plays.Select(p => p.Id)).ToHashSet();
+        var detailed = (await ToHistoryAsync(await db.WatchEvents.AsNoTracking().Where(w => ids.Contains(w.Id)).ToListAsync(ct), ct)).ToDictionary(e => e.Id);
+        var entries = pageGroups.Select(g =>
+        {
+            var latest = detailed[(f.Oldest ? g.Plays[0] : g.Plays[^1]).Id];
+            var eps = g.Plays.Select(p => (p.S, p.E)).Distinct().Order().ToList();
+            string Code((int S, int E) x) => x.S == 0 ? $"Special {x.E}" : $"S{x.S:00}E{x.E:00}";
+            var range = eps.Count == 1 ? Code(eps[0]) : $"{Code(eps[0])}–{Code(eps[^1])}";
+            var runtime = g.Plays.Sum(p => detailed[p.Id].Runtime ?? 0);
+            return latest with { Type = MediaType.Show, SeasonNumber = null, EpisodeNumber = null, EpisodeTitle = null,
+                Runtime = runtime > 0 ? runtime : null, Episodes = g.Plays.Count, Range = range };
+        }).ToList();
+
+        var minutes = total > 0 ? await MinutesAsync(q, ct) : 0;
+        return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct));
+    }
+
+    /// <summary>Total running time of everything matched, not just this page.</summary>
+    private async Task<long> MinutesAsync(IQueryable<WatchEvent> q, CancellationToken ct)
+    {
         var minutes = 0L;
-        if (total > 0)
         {
             var movieMinutes = await q.Where(w => w.Type == MediaType.Movie)
                 .Join(db.Movies, w => w.TmdbId, m => m.TmdbId, (w, m) => (long?)m.Runtime).SumAsync(ct) ?? 0;
@@ -398,9 +444,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 .SumAsync(ct) ?? 0;
             minutes = movieMinutes + episodeMinutes;
         }
-
-        var entries = await ToHistoryAsync(rows, ct);
-        return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct));
+        return minutes;
     }
 
     /// <summary>

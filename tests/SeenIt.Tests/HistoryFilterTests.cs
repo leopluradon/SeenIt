@@ -9,7 +9,9 @@ public class HistoryFilterTests
 {
     private static readonly Guid User = Guid.NewGuid();
 
-    private static async Task<TrackingService> Setup()
+    private static async Task<TrackingService> Setup() => (await SetupWithDb()).Tracking;
+
+    private static async Task<(TrackingService Tracking, AppDbContext Db)> SetupWithDb()
     {
         var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         db.Movies.Add(new MovieMeta { TmdbId = 1, Title = "Heat", Runtime = 170, Genres = ["Crime", "Drama"] });
@@ -26,7 +28,7 @@ public class HistoryFilterTests
         W(MediaType.Movie, 2, "2026-03-03T21:00:00Z");   // same UTC day as S01E02, different type
         db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Movie, TmdbId = 1, WatchedAt = WatchDates.Unknown });
         await db.SaveChangesAsync();
-        return new TrackingService(db, null!);
+        return (new TrackingService(db, null!), db);
     }
 
     [Theory]
@@ -66,5 +68,22 @@ public class HistoryFilterTests
 
         // An end bound alone must not sweep in plays with an unknown date.
         Assert.Equal(1, (await t.GetHistoryAsync(User, new HistoryQuery(To: DateTimeOffset.Parse("2026-01-01T00:00:00Z")), default)).TotalResults);
+    }
+
+    [Fact]
+    public async Task Shows_view_groups_a_days_episodes_into_one_row()
+    {
+        var (t, db) = await SetupWithDb();
+        // Another Severance episode the same day as S01E02, at a different time.
+        db.Episodes.Add(new EpisodeMeta { ShowTmdbId = 3, SeasonNumber = 1, EpisodeNumber = 3, Name = "In Perpetuity", Runtime = 50 });
+        db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Episode, TmdbId = 3, SeasonNumber = 1, EpisodeNumber = 3, WatchedAt = DateTimeOffset.Parse("2026-03-03T22:00:00Z") });
+        await db.SaveChangesAsync();
+
+        var shows = await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Show, TimeZone: "UTC"), default);
+        Assert.Equal(2, shows.TotalResults);   // Mar 3 (two episodes) and Mar 2 (one)
+        var first = shows.Items[0];
+        Assert.Equal((MediaType.Show, 2, "S01E02–S01E03", 55 + 50), (first.Type, first.Episodes!.Value, first.Range, first.Runtime!.Value));
+        Assert.Equal("S01E01", shows.Items[1].Range);
+        Assert.Equal(57 + 55 + 50, shows.TotalMinutes);
     }
 }

@@ -386,9 +386,11 @@ public record HistoryEntry(
     string? PosterPath,
     DateTimeOffset WatchedAt,
     WatchSource Source,
-    int? Runtime = null);
+    int? Runtime = null,
+    int? Episodes = null,      // Shows view: episodes watched that day (one row per show per day)
+    string? Range = null);     // Shows view: "S04E01–S04E05", or one episode's number
 
-/// <summary>History filters. From is inclusive, To exclusive; both are absolute instants computed by the client in its own time zone.</summary>
+/// <summary>History filters. Type = Show groups episodes into one row per show per day. From is inclusive, To exclusive; both are absolute instants computed by the client in its own time zone.</summary>
 public record HistoryQuery(
     MediaType? Type = null,
     string? Q = null,

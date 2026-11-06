@@ -11,11 +11,12 @@
 @if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 <div class="page-head">
     <h1>@(Other is { } o ? $"{o}'s history" : "History")</h1>
-    @if (Other is null) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="ToggleSelecting" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
+    @if (Other is null && Type != MediaType.Show) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="ToggleSelecting" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
     <div class="segmented">
         <button class="@(Type is null ? "on" : "")" @onclick='() => Go(type: "")'>All</button>
         <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick='() => Go(type: "Movie")'>Movies</button>
         <button class="@(Type == MediaType.Episode ? "on" : "")" @onclick='() => Go(type: "Episode")'>Episodes</button>
+        <button class="@(Type == MediaType.Show ? "on" : "")" @onclick='() => Go(type: "Show")' title="Episodes grouped into one row per show per day">Shows</button>
     </div>
 </div>
 
@@ -100,7 +101,7 @@ else if (data is not null)
     }
     else
     {
-        <p class="muted small">@data.TotalResults.ToString("N0") play@(data.TotalResults == 1 ? "" : "s")@(data.TotalMinutes > 0 ? $" · {Fmt.Duration(data.TotalMinutes)}" : "")@(Summary is { } sm ? $" · {sm}" : "")</p>
+        <p class="muted small">@(Type == MediaType.Show ? "Episodes grouped by show and day" : $"{data.TotalResults:N0} play{(data.TotalResults == 1 ? "" : "s")}")@(data.TotalMinutes > 0 ? $" · {Fmt.Duration(data.TotalMinutes)}" : "")@(Summary is { } sm ? $" · {sm}" : "")</p>
         <div class="history">
             @foreach (var day in data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
             {
@@ -120,19 +121,20 @@ else if (data is not null)
                                 <input type="checkbox" checked="@selected.Contains(h.Id)" @onchange="() => TogglePick(h.Id)" />
                             </label>
                         }
-                        <a href="@(h.Type == MediaType.Movie ? $"movie/{h.TmdbId}" : Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber))" class="history-link"
+                        <a href="@(h.Type switch { MediaType.Movie => $"movie/{h.TmdbId}", MediaType.Show => $"show/{h.TmdbId}", _ => Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) })" class="history-link"
                            @onclick="() => { if (selecting) TogglePick(h.Id); }" @onclick:preventDefault="selecting">
                             <img src="@Img.Poster(h.PosterPath, "w92")" alt="" loading="lazy" />
                             <div>
                                 <div class="mini-title">@h.Title</div>
                                 @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · @h.EpisodeTitle</div> }
+                                @if (h.Type == MediaType.Show) { <div class="small">@(h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div> }
                                 <div class="muted small">
                                     @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString("h:mm tt"))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
                                     @if (h.Source != WatchSource.Manual) { <span class="pill pill-sm">@SourceLabel(h.Source)</span> }
                                 </div>
                             </div>
                         </a>
-                        @if (!selecting && Other is null)
+                        @if (!selecting && Other is null && h.Type != MediaType.Show)
                         {
                             <button class="icon-btn" @onclick="() => editing = h" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
                             <button class="icon-btn" @onclick="() => Delete(h)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
@@ -209,6 +211,7 @@ else if (data is not null)
             return;
         }
         search = Q ?? "";
+        if (Type == MediaType.Show && selecting) { selecting = false; selected.Clear(); }   // rows there are groups, not plays
         if (genresFor != Other)
         {
             // Same page for your history and a friend's: reset when switching between them.
