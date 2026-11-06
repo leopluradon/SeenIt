@@ -47,7 +47,7 @@
     {
         var watched = (Type, f.Plays) switch
         {
-            (_, 0) => "rated, not watched",
+            (_, 0) => "rated",
             (MediaType.Show, var n) => Total is > 0 and var t && n >= t ? "watched it all" : $"{n} of {Total?.ToString() ?? "?"} episodes",
             (_, 1) => "watched",
             (_, var n) => $"watched {n}×",

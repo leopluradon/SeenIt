@@ -1190,3 +1190,4 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .narrow-select { max-width: 320px; }
 .row-count { width: auto; padding: 2px 6px; font-size: .82rem; }
 @media (max-width: 600px) { .pref-rows { grid-template-columns: 1fr; gap: 4px; } .pref-rows > span { margin-top: 6px; font-weight: 600; } }
+.pref-rows > .segmented { justify-self: start; }
