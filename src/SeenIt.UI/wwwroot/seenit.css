@@ -579,10 +579,11 @@ a.cast { color: var(--text); }
 .server-picker input { flex: 1; }
 
 /* ---------- Settings ---------- */
-.settings { display: grid; grid-template-columns: 180px 1fr; gap: 24px; align-items: start; }
+.settings { display: grid; grid-template-columns: 200px 1fr; gap: 24px; align-items: start; }
 .settings-nav { position: sticky; top: calc(var(--topbar-h) + 20px); display: flex; flex-direction: column; gap: 2px; }
-.settings-nav a { padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-2); font-weight: 600; }
-.settings-nav a:hover { background: var(--surface); }
+.settings-nav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--radius-sm); color: var(--text-2); font-weight: 600; }
+.settings-nav a:hover { background: var(--surface); color: var(--text); }
+.settings-nav a.active { background: var(--surface-2); color: var(--text); }
 .settings-body { min-width: 0; }
 .settings-body section { scroll-margin-top: calc(var(--topbar-h) + 16px); }
 .import-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 16px; }
@@ -644,7 +645,7 @@ a.cast { color: var(--text); }
     .stat-panels { grid-template-columns: 1fr; }
     .hbar { grid-template-columns: 96px 1fr 40px; }
     .settings { grid-template-columns: 1fr; }
-    .settings-nav { position: static; flex-direction: row; overflow-x: auto; }
+    .settings-nav { display: none; }   /* phones: the overview cards and "All settings" link instead */
     .page-head .segmented { width: 100%; }
     .page-head .segmented button { flex: 1; justify-content: center; padding: 6px 8px; }
     .pip { width: 15px; height: 15px; }
@@ -1172,3 +1173,12 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
     .cal-cell.busy::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-top: auto; align-self: center; }
     .cal-more { display: none; }
 }
+
+/* Settings overview (and the page you land on with no section chosen) */
+.settings-home { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.settings-card { display: flex; align-items: center; gap: 14px; color: var(--text); margin: 0; }
+.settings-card > span { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.settings-card:hover { border-color: var(--accent); color: var(--text); }
+.settings-back { margin-bottom: 4px; }
+@media (min-width: 701px) { .settings-back { display: none; } }
+.danger-zone { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }

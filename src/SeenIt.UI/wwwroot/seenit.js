@@ -15,6 +15,10 @@ window.seenit = {
         }
     },
     dialogClosed(id) { this._dialogs = this._dialogs.filter(d => d.id !== id); },
+    scrollToId(id) {
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ block: 'start', behavior: 'instant' });
+    },
     // Color theme: <html data-theme> drives the CSS; remembered on this device so the next start
     // (see the snippet in index.html) paints in it straight away.
     applyTheme(key, bg) {

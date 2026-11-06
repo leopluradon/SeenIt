@@ -10,169 +10,244 @@
 @inject ThemeService Theme
 <PageTitle>Settings · SeenIt</PageTitle>
 
-<h1>Settings</h1>
+@if (Current is { } cur)
+{
+    <nav class="crumbs settings-back"><a href="settings"><Icon Name="chevron-left" Size="16" /> All settings</a></nav>
+    <h1>@cur.Title</h1>
+}
+else { <h1>Settings</h1> }
 @if (Welcome)
 {
     <div class="panel welcome">
-        <b>Welcome to SeenIt!</b> Bring your history over from Trakt or Letterboxd below, or connect Jellyfin so everything you watch there is tracked automatically.
+        <b>Welcome to SeenIt!</b> Bring your history over from Trakt or Letterboxd in <a href="settings?tab=data">Import & export</a>, or connect Jellyfin, Plex or Kodi in <a href="settings?tab=tracking#jellyfin">Tracking</a> so everything you watch there is tracked automatically.
     </div>
 }
 
-<div class="settings">
-    <nav class="settings-nav">
-        <a href="settings#imports">Import</a>
-        <a href="settings#tracking">Stats</a>
-        <a href="settings#jellyfin">Media servers</a>
-        <a href="settings#alerts">Alerts</a>
-        <a href="settings#spoilers">Spoilers</a>
-        <a href="settings#ratings">Ratings</a>
-        <a href="settings#time">Time</a>
-        <a href="settings#appearance">Appearance</a>
-        <a href="settings#layout">Layout</a>
-        <a href="settings#invites">Invite friends</a>
-        <a href="settings#privacy">Privacy</a>
-        <a href="settings#region">Where to watch</a>
-        <a href="settings#export">Export</a>
-        <a href="settings#profile">Profile</a>
-        <a href="settings#account">Account</a>
+<div class="settings @(Current is null ? "at-home" : "")">
+    <nav class="settings-nav" aria-label="Settings">
+        @foreach (var g in Groups)
+        {
+            <a href="@($"settings?tab={g.Key}")" class="@(Tab == g.Key ? "active" : "")" aria-current="@(Tab == g.Key ? "page" : null)">
+                <Icon Name="@g.Icon" Size="18" /> <span>@g.Title</span>
+            </a>
+        }
     </nav>
     <div class="settings-body">
-
-        <section class="panel" id="imports">
-            <h2>Import</h2>
-            <p class="muted small">Re-importing is safe: a play you already have (logged here, by Jellyfin or by another import, within a day of the same date) is skipped, while separate viewings are all kept. Ratings are updated; watchlist and list entries aren't doubled.</p>
-            <PartsPicker @bind-Value="importParts" Label="What to import" />
-            <div class="import-grid">
-                <div class="import-card">
-                    <h3>Trakt</h3>
-                    <ol class="small">
-                        <li>On trakt.tv open <b>Settings → Data</b> and export your data.</li>
-                        <li>Upload the <code>.zip</code> you get (or individual <code>.json</code> files from it).</li>
-                    </ol>
-                    <p class="muted small">Imports watch history, ratings, watchlist, favorites, custom lists and your collection (into your <a href="library">library</a>).</p>
-                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Trakt export
-                        <InputFile OnChange="e => Upload(ImportKind.Trakt, e)" accept=".zip,.json,application/zip,application/x-zip-compressed,application/json" class="visually-hidden" disabled="@uploading" />
-                    </label>
-                </div>
-                <div class="import-card">
-                    <h3>Letterboxd</h3>
-                    <ol class="small">
-                        <li>On letterboxd.com open <b>Settings → Data → Export your data</b>.</li>
-                        <li>Upload the <code>.zip</code> as-is.</li>
-                    </ol>
-                    <p class="muted small">Imports your diary, watched films, ratings (★ × 2), watchlist, lists, favorite films and likes. Films are matched by title and year, or through Letterboxd's own link to TMDB. TV series logged on Letterboxd can't be imported.</p>
-                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Letterboxd export
-                        <InputFile OnChange="e => Upload(ImportKind.Letterboxd, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv,text/comma-separated-values" class="visually-hidden" disabled="@uploading" />
-                    </label>
-                </div>
-                <div class="import-card">
-                    <h3>IMDb</h3>
-                    <ol class="small">
-                        <li>On imdb.com open <b>Your ratings</b>, your <b>Watchlist</b> or any list, then <b>⋯ → Export</b>.</li>
-                        <li>Upload the <code>.csv</code> files (one at a time, or zipped together). Keep the watchlist's file name containing “watchlist”.</li>
-                    </ol>
-                    <p class="muted small">Imports ratings, the watchlist and lists, matched exactly by IMDb id. Rated movies count as watched (dated when you rated them) unless you untick History.</p>
-                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload IMDb export
-                        <InputFile OnChange="e => Upload(ImportKind.Imdb, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv,text/comma-separated-values" class="visually-hidden" disabled="@uploading" />
-                    </label>
-                </div>
-                <div class="import-card">
-                    <h3>TV Time</h3>
-                    <ol class="small">
-                        <li>Find the data export zip you downloaded from TV Time (its GDPR export).</li>
-                        <li>Upload the whole <code>.zip</code>.</li>
-                    </ol>
-                    <p class="muted small">Imports every episode you marked watched, with its date, and shows saved “for later” as your watchlist. Shows are matched through TheTVDB ids where the export has them. TV Time's movies can't be imported.</p>
-                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload TV Time export
-                        <InputFile OnChange="e => Upload(ImportKind.TvTime, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv" class="visually-hidden" disabled="@uploading" />
-                    </label>
-                </div>
-                <div class="import-card">
-                    <h3>Simkl</h3>
-                    <ol class="small">
-                        <li>On simkl.com open <b>Settings → Backup &amp; Export</b> and download a backup.</li>
-                        <li>Upload the <code>.zip</code>, <code>.json</code> or <code>.csv</code>.</li>
-                    </ol>
-                    <p class="muted small">Imports movies, shows and anime (as shows), ratings and plan-to-watch. The JSON backup has every episode's date; the CSV only says how far you got, so those episodes come in without dates.</p>
-                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Simkl backup
-                        <InputFile OnChange="e => Upload(ImportKind.Simkl, e)" accept=".zip,.json,.csv,application/zip,application/x-zip-compressed,application/json,text/csv" class="visually-hidden" disabled="@uploading" />
-                    </label>
-                </div>
+        @if (Current is null)
+        {
+            <div class="settings-home">
+                @foreach (var g in Groups)
+                {
+                    <a class="settings-card panel" href="@($"settings?tab={g.Key}")" @key="g.Key">
+                        <Icon Name="@g.Icon" Size="22" />
+                        <span><b>@g.Title</b><span class="muted small">@g.Blurb</span></span>
+                        <Icon Name="chevron-right" Size="16" />
+                    </a>
+                }
             </div>
-
-            <MatchImportDialog JobId="matchJob" @bind-Item="matching" OnMatched="LoadImports" />
-
-            <h3 id="letterboxd-sync">Letterboxd auto-sync</h3>
-            <p class="muted small">Brings in new diary entries, ratings and likes from your public Letterboxd feed every few hours, so you can keep logging on Letterboxd. It reads the latest 50 entries, so import your full export once first for older ones. Entries you delete here aren't brought back.</p>
-            @if (lb is { Username: { } lbUser })
+        }
+        @if (Tab == "account")
+        {
+        <section class="panel" id="profile">
+            <h2>Profile</h2>
+            @if (Session.Me is { } me)
             {
-                <div class="inline">
-                    <span>Syncing <a href="@($"https://letterboxd.com/{lbUser}/")" target="_blank" rel="noopener"><b>@lbUser</b></a></span>
-                    <button class="btn btn-sm" disabled="@lbBusy" @onclick="SyncLetterboxdNow">Check now</button>
-                    <button class="btn btn-sm btn-ghost" disabled="@lbBusy" @onclick="StopLetterboxd">Stop syncing</button>
+                <p class="muted small">Signed in as <b>@me.UserName</b> (@me.Email) · member since @me.CreatedAt.ToLocalTime().ToString("MMMM yyyy")</p>
+                <div class="avatar-edit">
+                    <Avatar Name="@(me.DisplayName ?? me.UserName)" Url="@me.Avatar" Class="avatar-lg" />
+                    <label class="btn @(avatarBusy ? "disabled" : "")">
+                        <Icon Name="upload" Size="16" /> @(avatarBusy ? "Uploading…" : me.Avatar is null ? "Add a profile picture" : "Change picture")
+                        <InputFile OnChange="UploadAvatar" accept="image/jpeg,image/png,image/webp,image/gif,image/*" class="visually-hidden" disabled="@avatarBusy" />
+                    </label>
+                    @if (me.Avatar is not null) { <button class="btn btn-ghost" disabled="@avatarBusy" @onclick="RemoveAvatar">Remove</button> }
+                    <span class="muted small">JPEG, PNG or WebP, up to 10 MB. It's cropped to a square.</span>
                 </div>
-                <p class="small @(lb.LastFailed ? "error" : "muted")">
-                    @if (lb.LastCheckedAt is { } checkedAt) { <span>Checked <RelTime At="checkedAt" />: @lb.LastResult</span> } else { <span>Not checked yet.</span> }
-                    @if (lb.LastAddedAt is { } added) { <span> Last added something <RelTime At="added" />.</span> }
-                </p>
-            }
-            else
-            {
-                <form class="inline" @onsubmit="StartLetterboxd">
-                    <input type="text" @bind="lbName" @bind:event="oninput" placeholder="Letterboxd username" aria-label="Letterboxd username" autocapitalize="off" autocomplete="off" spellcheck="false" />
-                    <button class="btn btn-sm btn-primary" type="submit" disabled="@(lbBusy || string.IsNullOrWhiteSpace(lbName))">@(lbBusy ? "Checking…" : "Start syncing")</button>
+                <form class="inline" @onsubmit="SaveProfile">
+                    <input placeholder="Display name" @bind="displayName" maxlength="64" aria-label="Display name" />
+                    <button class="btn" type="submit">Save</button>
                 </form>
             }
-            @if (imports is { Count: > 0 })
+        </section>
+        <section class="panel" id="privacy">
+            <h2>Privacy</h2>
+            <p class="muted small">Who can see your profile, history, ratings, stats and what you're watching now. Lists have their own public/private setting.</p>
+            <div class="stack">
+                @foreach (var (v, label, hint) in VisibilityOptions)
+                {
+                    <label class="check" @key="v">
+                        <input type="radio" name="visibility" checked="@(visibility == v)" @onchange="() => SaveVisibility(v)" />
+                        <span><b>@label</b> <span class="muted small">@hint</span></span>
+                    </label>
+                }
+            </div>
+            @if (Session.Me is { } who) { <p class="small"><a href="@Fmt.UserHref(who.UserName)">View your profile</a> · <a href="friends">Friends</a></p> }
+        </section>
+        <section class="panel" id="invites">
+            <h2>Invite friends</h2>
+            <p class="muted small">SeenIt is invite-only@(features?.OpenRegistration == true ? " (sign-ups are currently open too)" : ""). Each link works once and expires after 14 days. You and whoever joins with it will follow each other.</p>
+            <button class="btn" @onclick="CreateInvite" disabled="@creatingInvite"><Icon Name="plus" Size="16" /> @(creatingInvite ? "Creating…" : "Create invite link")</button>
+            @if (invites is { Count: > 0 })
             {
-                <h3>Recent imports</h3>
-                <div class="imports">
-                    @foreach (var j in imports)
+                <ul class="invite-list">
+                    @foreach (var i in invites)
                     {
-                        <div class="import-job" @key="j.Id">
-                            <div class="inline spread">
-                                <b>@WatchSources.Name(j.Kind) · @j.FileName</b>
-                                @if (j.Parts != ImportParts.All) { <span class="muted small">@PartsPicker.Describe(j.Parts)</span> }
-                                @if (j.UndoneAt is not null) { <span class="pill">Undone</span> } else { <span class="pill @StatusClass(j.Status)">@j.Status</span> }
-                            </div>
-                            @if (j.Status == ImportStatus.Running && j.Total > 0)
+                        var expired = i.UsedAt is null && i.ExpiresAt <= DateTimeOffset.UtcNow;
+                        <li @key="i.Code" class="@(i.UsedAt is not null || expired ? "done" : "")">
+                            <code>@i.Code</code>
+                            <span class="muted small">
+                                @if (i.UsedBy is { } joined) { <text>Joined: <a href="@Fmt.UserHref(joined)">@joined</a></text> }
+                                else if (i.UsedAt is not null) { <text>Used</text> }
+                                else if (expired) { <text>Expired</text> }
+                                else { <text>Unused · expires @i.ExpiresAt.ToLocalTime().ToString("MMM d")</text> }
+                            </span>
+                            @if (i.UsedAt is null && !expired)
                             {
-                                <ProgressBar Value="j.Processed" Max="j.Total" />
-                                <span class="muted small">@j.Processed.ToString("N0") of @j.Total.ToString("N0") · matching titles on TMDB can take a few minutes</span>
+                                <span class="invite-actions">
+                                    <button class="icon-btn" title="Share link" aria-label="Share invite link" @onclick="() => ShareInvite(i.Code)"><Icon Name="share" Size="16" /></button>
+                                    <button class="icon-btn" title="Delete" aria-label="Delete invite" @onclick="() => DeleteInvite(i.Code)"><Icon Name="trash" Size="16" /></button>
+                                </span>
                             }
-                            else if (j.Status == ImportStatus.Queued) { <span class="muted small">Waiting to start…</span> }
-                            @if (j.Message is not null) { <div class="small">@j.Message</div> }
-                            @if (j.Pending is { Count: > 0 } pend)
-                            {
-                                <details class="small" open="@(pend.Count <= 5)">
-                                    <summary>Couldn't be matched (@pend.Count): find them yourself</summary>
-                                    <ul class="pending-list">
-                                        @foreach (var u in pend)
-                                        {
-                                            <li @key="u.Key">
-                                                <span><b>@u.Label</b> <span class="muted">@(u.Type == MediaType.Movie ? "movie" : "show")@(u.Summary.Length > 0 ? " · " + u.Summary : "")</span></span>
-                                                <button class="btn btn-sm" @onclick="() => { matchJob = j.Id; matching = u; }">Find</button>
-                                            </li>
-                                        }
-                                    </ul>
-                                </details>
-                            }
-                            else if (j.Unmatched.Count > 0)
-                            {
-                                <details class="small"><summary>Which couldn't be matched (@j.Unmatched.Count)</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
-                            }
-                            <div class="inline spread">
-                                <span class="muted small">@j.CreatedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")@(j.UndoneAt is { } undone ? $" · undone {undone.ToLocalTime():MMM d, yyyy}" : "")</span>
-                                @if (j.CanUndo) { <button class="btn btn-sm btn-ghost" disabled="@undoing" @onclick="() => UndoImport(j)">Undo this import</button> }
-                            </div>
-                        </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+        <section class="panel" id="account">
+            <h2>Password & email</h2>
+            <form class="stack narrow" @onsubmit="ChangePassword">
+                <input type="password" placeholder="Current password" @bind="currentPassword" @bind:event="oninput" autocomplete="current-password" aria-label="Current password" />
+                <input type="password" placeholder="New password" @bind="newPassword" @bind:event="oninput" autocomplete="new-password" minlength="8" aria-label="New password" />
+                <button class="btn" type="submit" disabled="@(string.IsNullOrEmpty(currentPassword) || string.IsNullOrEmpty(newPassword))">Change password</button>
+            </form>
+            @if (features?.Email == true)
+            {
+                <h3>Email</h3>
+                <p class="muted small">Password reset emails go to @(Session.Me?.Email). Send yourself a test to check they arrive.</p>
+                <button class="btn" @onclick="TestEmail" disabled="@testingEmail">@(testingEmail ? "Sending…" : "Send test email")</button>
+            }
+        </section>
+        <section class="panel" id="about">
+            <h2>About</h2>
+            @if (Server.Configurable)
+            {
+                <p class="muted small">Server: @Server.Url</p>
+            }
+            @if (features?.Version is { } version)
+            {
+                <p class="muted small">SeenIt v@(version)@(Platform.AppVersion is { } av ? $" · app v{av}" : "")</p>
+            }
+            @if (Platform.AppVersion is null && android is { } apk)
+            {
+                <p class="small"><a href="@apk.Url" download>Get the Android app</a> <span class="muted">(v@(apk.Version), @(apk.Size / 1024 / 1024) MB)</span></p>
+            }
+        </section>
+        <section class="panel danger-zone" id="delete">
+            <h2>Delete account</h2>
+            <p class="muted small">Permanently deletes your account, history, ratings, watchlist and lists.</p>
+            <form class="stack narrow" @onsubmit="DeleteAccount">
+                <input type="password" placeholder="Password to confirm" @bind="deletePassword" @bind:event="oninput" autocomplete="current-password" aria-label="Password to confirm deletion" />
+                <button class="btn btn-danger" type="submit" disabled="@string.IsNullOrEmpty(deletePassword)">Delete my account</button>
+            </form>
+        </section>
+        }
+        @if (Tab == "display")
+        {
+        <section class="panel" id="appearance">
+            <h2>Appearance</h2>
+            <p class="muted small">Color theme, saved to your account so it follows you to every device.</p>
+            <div class="theme-grid">
+                @foreach (var t in UiPrefs.Themes)
+                {
+                    <button class="theme-option @(Theme.Current == t.Key ? "on" : "")" @key="t.Key" @onclick="() => SetTheme(t.Key)"
+                            style="--sw-bg:@t.Bg; --sw-surface:@t.Surface; --sw-accent:@t.Accent" aria-pressed="@(Theme.Current == t.Key)">
+                        <span class="theme-swatch"><span></span><span></span><span></span></span>
+                        <span>@t.Name</span>
+                    </button>
+                }
+            </div>
+        </section>
+        <section class="panel" id="layout">
+            <h2>Layout</h2>
+            <h3>Tabs at the bottom of the app</h3>
+            <p class="muted small">Pick up to @UiPrefs.MaxTabs, in order. “More” is always last and links to everything else. These tabs appear on phones and narrow windows.</p>
+            <div class="tab-editor">
+                @for (var i = 0; i < tabs.Count; i++)
+                {
+                    var index = i;
+                    var t = UiPrefs.Tabs.First(x => x.Key == tabs[index]);
+                    <div class="tab-row" @key="t.Key">
+                        <Icon Name="@t.Icon" Size="18" />
+                        <span>@t.Label</span>
+                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveTab(index, -1)" aria-label="Move @t.Label left"><Icon Name="chevron-left" Size="16" /></button>
+                        <button class="icon-btn" disabled="@(index == tabs.Count - 1)" @onclick="() => MoveTab(index, 1)" aria-label="Move @t.Label right"><Icon Name="chevron-right" Size="16" /></button>
+                        <button class="icon-btn" disabled="@(tabs.Count == 1)" @onclick="() => RemoveTab(index)" aria-label="Remove @t.Label"><Icon Name="x" Size="16" /></button>
+                    </div>
+                }
+                <div class="tab-row fixed"><Icon Name="menu" Size="18" /><span>More</span><span class="muted small">always shown</span></div>
+            </div>
+            @if (tabs.Count < UiPrefs.MaxTabs)
+            {
+                <div class="chips">
+                    @foreach (var t in UiPrefs.Tabs.Where(x => !tabs.Contains(x.Key)))
+                    {
+                        <button class="chip" @onclick="() => AddTab(t.Key)" @key="t.Key"><Icon Name="plus" Size="14" /> @t.Label</button>
                     }
                 </div>
             }
-        </section>
+            else { <p class="muted small">Remove a tab to add a different one.</p> }
+            <button class="btn btn-sm btn-ghost" @onclick="ResetTabs">Reset to default</button>
 
+            <h3>Home page sections</h3>
+            <p class="muted small">What shows on your home page, top to bottom.</p>
+            <HomeSectionsEditor />
+        </section>
+        <section class="panel" id="ratings">
+            <h2>Ratings</h2>
+            <p class="muted small">How you give and see ratings. Changing it never changes your ratings: 4½ stars and 9/10 are the same rating. Decimal ratings like 8.1 show rounded to the nearest half star in the 5-star view.</p>
+            <div class="segmented segmented-wrap">
+                <button class="@(Fmt.Scale == RatingScale.Ten ? "on" : "")" @onclick="() => SaveScale(RatingScale.Ten)">1–10</button>
+                <button class="@(Fmt.Scale == RatingScale.FiveStars ? "on" : "")" @onclick="() => SaveScale(RatingScale.FiveStars)">★ 5 stars, with halves</button>
+                <button class="@(Fmt.Scale == RatingScale.Decimal ? "on" : "")" @onclick="() => SaveScale(RatingScale.Decimal)">1–10 with decimals (8.1)</button>
+            </div>
+        </section>
+        <section class="panel" id="time">
+            <h2>Time</h2>
+            <p class="muted small">How long stretches of time read, like time watched. Hover one to see it the other way. Under a day it's always hours and minutes.</p>
+            <div class="segmented">
+                <button class="@(Fmt.Time == TimeFormat.DaysHours ? "on" : "")" @onclick="() => SaveTime(TimeFormat.DaysHours)">Days and hours (48d 7h)</button>
+                <button class="@(Fmt.Time == TimeFormat.Hours ? "on" : "")" @onclick="() => SaveTime(TimeFormat.Hours)">Hours (1,159h)</button>
+            </div>
+        </section>
+        <section class="panel" id="spoilers">
+            <h2>Spoilers</h2>
+            <p class="muted small">Applies everywhere you're signed in. Tap anything hidden to reveal it; episodes you've watched are never hidden.</p>
+            <div class="stack">
+                <label class="check">
+                    <input type="checkbox" checked="@hideSpoilers" @onchange="e => SavePreferences((bool)e.Value!, blurImages)" />
+                    Hide titles and descriptions of episodes I haven't watched
+                </label>
+                <label class="check @(hideSpoilers ? "" : "disabled")">
+                    <input type="checkbox" checked="@blurImages" disabled="@(!hideSpoilers)" @onchange="e => SavePreferences(hideSpoilers, (bool)e.Value!)" />
+                    Also blur their images
+                </label>
+            </div>
+        </section>
+        <section class="panel" id="region">
+            <h2>Where to watch</h2>
+            <p class="muted small">Streaming, rental and purchase options on movie and show pages are for this country.</p>
+            <div class="field inline">
+                <label for="region">Country</label>
+                <select id="region" value="@(region ?? "")" @onchange="SaveRegion">
+                    <option value="">Automatic (@ApiClient.DeviceRegion)</option>
+                    @foreach (var r in regions ?? []) { <option value="@r.Code" @key="r.Code">@r.Name</option> }
+                </select>
+            </div>
+        </section>
+        }
+        @if (Tab == "tracking")
+        {
         <section class="panel" id="tracking">
-            <h2>Stats</h2>
+            <h2>Dates & time zone</h2>
             <p class="muted small">If you back-filled your history before logging things as you watch them, those plays are dated the day you entered them and skew habits like your favorite day of the week. Set the day you started tracking for real: plays per month, day-of-week, and month and year reviews only count plays from then on (earlier years get no review). Totals still count everything.</p>
             <div class="field inline">
                 <label for="tracking-since">Started tracking</label>
@@ -188,7 +263,6 @@
             </div>
             <p class="muted small">Days, months, times of day and "on this day" are worked out in this time zone on every device.@(TimeZoneInfo.Local.Id != timeZone && timeZone is not null ? $" This device is on {TimeZoneInfo.Local.Id}." : "")</p>
         </section>
-
         <section class="panel" id="jellyfin">
             <h2>Media servers</h2>
             @if (jf is null) { <Spinner /> }
@@ -282,9 +356,34 @@
                 }
             }
         </section>
-
+        <section class="panel" id="letterboxd">
+            <h2>Letterboxd auto-sync</h2>
+            <p class="muted small">Brings in new diary entries, ratings and likes from your public Letterboxd feed every few hours, so you can keep logging on Letterboxd. It reads the latest 50 entries, so import your full export once first for older ones. Entries you delete here aren't brought back.</p>
+            @if (lb is { Username: { } lbUser })
+            {
+                <div class="inline">
+                    <span>Syncing <a href="@($"https://letterboxd.com/{lbUser}/")" target="_blank" rel="noopener"><b>@lbUser</b></a></span>
+                    <button class="btn btn-sm" disabled="@lbBusy" @onclick="SyncLetterboxdNow">Check now</button>
+                    <button class="btn btn-sm btn-ghost" disabled="@lbBusy" @onclick="StopLetterboxd">Stop syncing</button>
+                </div>
+                <p class="small @(lb.LastFailed ? "error" : "muted")">
+                    @if (lb.LastCheckedAt is { } checkedAt) { <span>Checked <RelTime At="checkedAt" />: @lb.LastResult</span> } else { <span>Not checked yet.</span> }
+                    @if (lb.LastAddedAt is { } added) { <span> Last added something <RelTime At="added" />.</span> }
+                </p>
+            }
+            else
+            {
+                <form class="inline" @onsubmit="StartLetterboxd">
+                    <input type="text" @bind="lbName" @bind:event="oninput" placeholder="Letterboxd username" aria-label="Letterboxd username" autocapitalize="off" autocomplete="off" spellcheck="false" />
+                    <button class="btn btn-sm btn-primary" type="submit" disabled="@(lbBusy || string.IsNullOrWhiteSpace(lbName))">@(lbBusy ? "Checking…" : "Start syncing")</button>
+                </form>
+            }
+        </section>
+        }
+        @if (Tab == "alerts")
+        {
         <section class="panel" id="alerts">
-            <h2>Alerts</h2>
+            <h2>Release alerts</h2>
             <p class="muted small">When a new episode of a show you watch (or have on your watchlist) or a watchlist movie comes out, it shows under the bell <Icon Name="bell" Size="14" /> at the top. Dropped shows are left out.</p>
             @if (alerts is { } al)
             {
@@ -294,177 +393,31 @@
                 </label>
                 @if (!al.EmailAvailable) { <p class="muted small">Email isn't set up on this server.</p> }
 
-                <h3>Calendar feed</h3>
+            }
+            else { <Spinner /> }
+        </section>
+        <section class="panel" id="calendar">
+            <h2>Calendar feed</h2>
+            @if (alerts is { } cal)
+            {
                 <p class="muted small">Subscribe in Google Calendar, Apple Calendar or Outlook to see releases there. Keep the link private: anyone with it can see your calendar.</p>
                 <div class="cal-link">
-                    <input readonly value="@al.CalendarUrl" aria-label="Calendar feed link" onfocus="this.select()" />
-                    <button class="btn btn-sm" @onclick="() => Copy(al.CalendarUrl)"><Icon Name="copy" Size="14" /> Copy</button>
+                    <input readonly value="@cal.CalendarUrl" aria-label="Calendar feed link" onfocus="this.select()" />
+                    <button class="btn btn-sm" @onclick="() => Copy(cal.CalendarUrl)"><Icon Name="copy" Size="14" /> Copy</button>
                 </div>
                 <div class="inline wrap">
-                    <a class="btn btn-sm" href="@($"https://calendar.google.com/calendar/r?cid={Uri.EscapeDataString(Webcal(al.CalendarUrl))}")" target="_blank" rel="noopener">Add to Google Calendar</a>
-                    <a class="btn btn-sm" href="@Webcal(al.CalendarUrl)">Open in Apple Calendar / Outlook</a>
-                    <button class="btn btn-sm btn-ghost" @onclick="NewCalendarUrl">New link</button>
+                    <a class="btn btn-sm" href="@($"https://calendar.google.com/calendar/r?cid={Uri.EscapeDataString(Webcal(cal.CalendarUrl))}")" target="_blank" rel="noopener">Add to Google Calendar</a>
+                    <a class="btn btn-sm" href="@Webcal(cal.CalendarUrl)">Open in Apple Calendar / Outlook</a>
                 </div>
             }
             else { <Spinner /> }
         </section>
-
-        <section class="panel" id="spoilers">
-            <h2>Spoilers</h2>
-            <p class="muted small">Applies everywhere you're signed in. Tap anything hidden to reveal it; episodes you've watched are never hidden.</p>
-            <div class="stack">
-                <label class="check">
-                    <input type="checkbox" checked="@hideSpoilers" @onchange="e => SavePreferences((bool)e.Value!, blurImages)" />
-                    Hide titles and descriptions of episodes I haven't watched
-                </label>
-                <label class="check @(hideSpoilers ? "" : "disabled")">
-                    <input type="checkbox" checked="@blurImages" disabled="@(!hideSpoilers)" @onchange="e => SavePreferences(hideSpoilers, (bool)e.Value!)" />
-                    Also blur their images
-                </label>
-            </div>
-        </section>
-
-        <section class="panel" id="ratings">
-            <h2>Ratings</h2>
-            <p class="muted small">How you give and see ratings. Changing it never changes your ratings: 4½ stars and 9/10 are the same rating. Decimal ratings like 8.1 show rounded to the nearest half star in the 5-star view.</p>
-            <div class="segmented segmented-wrap">
-                <button class="@(Fmt.Scale == RatingScale.Ten ? "on" : "")" @onclick="() => SaveScale(RatingScale.Ten)">1–10</button>
-                <button class="@(Fmt.Scale == RatingScale.FiveStars ? "on" : "")" @onclick="() => SaveScale(RatingScale.FiveStars)">★ 5 stars, with halves</button>
-                <button class="@(Fmt.Scale == RatingScale.Decimal ? "on" : "")" @onclick="() => SaveScale(RatingScale.Decimal)">1–10 with decimals (8.1)</button>
-            </div>
-        </section>
-
-        <section class="panel" id="time">
-            <h2>Time</h2>
-            <p class="muted small">How long stretches of time read, like time watched. Hover one to see it the other way. Under a day it's always hours and minutes.</p>
-            <div class="segmented">
-                <button class="@(Fmt.Time == TimeFormat.DaysHours ? "on" : "")" @onclick="() => SaveTime(TimeFormat.DaysHours)">Days and hours (48d 7h)</button>
-                <button class="@(Fmt.Time == TimeFormat.Hours ? "on" : "")" @onclick="() => SaveTime(TimeFormat.Hours)">Hours (1,159h)</button>
-            </div>
-        </section>
-
-        <section class="panel" id="appearance">
-            <h2>Appearance</h2>
-            <p class="muted small">Color theme, saved to your account so it follows you to every device.</p>
-            <div class="theme-grid">
-                @foreach (var t in UiPrefs.Themes)
-                {
-                    <button class="theme-option @(Theme.Current == t.Key ? "on" : "")" @key="t.Key" @onclick="() => SetTheme(t.Key)"
-                            style="--sw-bg:@t.Bg; --sw-surface:@t.Surface; --sw-accent:@t.Accent" aria-pressed="@(Theme.Current == t.Key)">
-                        <span class="theme-swatch"><span></span><span></span><span></span></span>
-                        <span>@t.Name</span>
-                    </button>
-                }
-            </div>
-        </section>
-
-        <section class="panel" id="layout">
-            <h2>Layout</h2>
-            <h3>Tabs at the bottom of the app</h3>
-            <p class="muted small">Pick up to @UiPrefs.MaxTabs, in order. “More” is always last and links to everything else. These tabs appear on phones and narrow windows.</p>
-            <div class="tab-editor">
-                @for (var i = 0; i < tabs.Count; i++)
-                {
-                    var index = i;
-                    var t = UiPrefs.Tabs.First(x => x.Key == tabs[index]);
-                    <div class="tab-row" @key="t.Key">
-                        <Icon Name="@t.Icon" Size="18" />
-                        <span>@t.Label</span>
-                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveTab(index, -1)" aria-label="Move @t.Label left"><Icon Name="chevron-left" Size="16" /></button>
-                        <button class="icon-btn" disabled="@(index == tabs.Count - 1)" @onclick="() => MoveTab(index, 1)" aria-label="Move @t.Label right"><Icon Name="chevron-right" Size="16" /></button>
-                        <button class="icon-btn" disabled="@(tabs.Count == 1)" @onclick="() => RemoveTab(index)" aria-label="Remove @t.Label"><Icon Name="x" Size="16" /></button>
-                    </div>
-                }
-                <div class="tab-row fixed"><Icon Name="menu" Size="18" /><span>More</span><span class="muted small">always shown</span></div>
-            </div>
-            @if (tabs.Count < UiPrefs.MaxTabs)
+        <section class="panel" id="feeds">
+            <h2>RSS feeds</h2>
+            @if (alerts is { } fd)
             {
-                <div class="chips">
-                    @foreach (var t in UiPrefs.Tabs.Where(x => !tabs.Contains(x.Key)))
-                    {
-                        <button class="chip" @onclick="() => AddTab(t.Key)" @key="t.Key"><Icon Name="plus" Size="14" /> @t.Label</button>
-                    }
-                </div>
-            }
-            else { <p class="muted small">Remove a tab to add a different one.</p> }
-            <button class="btn btn-sm btn-ghost" @onclick="ResetTabs">Reset to default</button>
-
-            <h3>Home page sections</h3>
-            <p class="muted small">What shows on your home page, top to bottom.</p>
-            <HomeSectionsEditor />
-        </section>
-
-        <section class="panel" id="invites">
-            <h2>Invite friends</h2>
-            <p class="muted small">SeenIt is invite-only@(features?.OpenRegistration == true ? " (sign-ups are currently open too)" : ""). Each link works once and expires after 14 days. You and whoever joins with it will follow each other.</p>
-            <button class="btn" @onclick="CreateInvite" disabled="@creatingInvite"><Icon Name="plus" Size="16" /> @(creatingInvite ? "Creating…" : "Create invite link")</button>
-            @if (invites is { Count: > 0 })
-            {
-                <ul class="invite-list">
-                    @foreach (var i in invites)
-                    {
-                        var expired = i.UsedAt is null && i.ExpiresAt <= DateTimeOffset.UtcNow;
-                        <li @key="i.Code" class="@(i.UsedAt is not null || expired ? "done" : "")">
-                            <code>@i.Code</code>
-                            <span class="muted small">
-                                @if (i.UsedBy is { } joined) { <text>Joined: <a href="@Fmt.UserHref(joined)">@joined</a></text> }
-                                else if (i.UsedAt is not null) { <text>Used</text> }
-                                else if (expired) { <text>Expired</text> }
-                                else { <text>Unused · expires @i.ExpiresAt.ToLocalTime().ToString("MMM d")</text> }
-                            </span>
-                            @if (i.UsedAt is null && !expired)
-                            {
-                                <span class="invite-actions">
-                                    <button class="icon-btn" title="Share link" aria-label="Share invite link" @onclick="() => ShareInvite(i.Code)"><Icon Name="share" Size="16" /></button>
-                                    <button class="icon-btn" title="Delete" aria-label="Delete invite" @onclick="() => DeleteInvite(i.Code)"><Icon Name="trash" Size="16" /></button>
-                                </span>
-                            }
-                        </li>
-                    }
-                </ul>
-            }
-        </section>
-
-        <section class="panel" id="privacy">
-            <h2>Privacy</h2>
-            <p class="muted small">Who can see your profile, history, ratings, stats and what you're watching now. Lists have their own public/private setting.</p>
-            <div class="stack">
-                @foreach (var (v, label, hint) in VisibilityOptions)
-                {
-                    <label class="check" @key="v">
-                        <input type="radio" name="visibility" checked="@(visibility == v)" @onchange="() => SaveVisibility(v)" />
-                        <span><b>@label</b> <span class="muted small">@hint</span></span>
-                    </label>
-                }
-            </div>
-            @if (Session.Me is { } who) { <p class="small"><a href="@Fmt.UserHref(who.UserName)">View your profile</a> · <a href="friends">Friends</a></p> }
-        </section>
-
-        <section class="panel" id="region">
-            <h2>Where to watch</h2>
-            <p class="muted small">Streaming, rental and purchase options on movie and show pages are for this country.</p>
-            <div class="field inline">
-                <label for="region">Country</label>
-                <select id="region" value="@(region ?? "")" @onchange="SaveRegion">
-                    <option value="">Automatic (@ApiClient.DeviceRegion)</option>
-                    @foreach (var r in regions ?? []) { <option value="@r.Code" @key="r.Code">@r.Name</option> }
-                </select>
-            </div>
-        </section>
-
-        <section class="panel" id="export">
-            <h2>Export your data</h2>
-            <p class="muted small">Download everything you've put into SeenIt (history, ratings, watchlist, lists, show status and settings) as a .zip of JSON and CSV files.</p>
-            <button class="btn" @onclick="Export" disabled="@exporting"><Icon Name="download" Size="16" /> @(exporting ? "Preparing…" : "Download my data")</button>
-            @if (alerts is { } ex)
-            {
-                <label class="check @(ex.EmailAvailable ? "" : "disabled")">
-                    <input type="checkbox" checked="@ex.MonthlyBackup" disabled="@(!ex.EmailAvailable)" @onchange="e => SaveBackup((bool)e.Value!)" />
-                    Email me this backup on the 1st of every month (to @Session.Me?.Email)
-                </label>
-                <h3>Feeds</h3>
                 <p class="muted small">RSS links for feed readers and automations (JSON Feed too: swap <code>.rss</code> for <code>.json</code>). They use your private key, so keep them to yourself. Each list has its own feed on its page.</p>
-                @foreach (var (label, url) in new[] { ("Watchlist", ex.WatchlistFeed), ("History", ex.HistoryFeed) })
+                @foreach (var (label, url) in new[] { ("Watchlist", fd.WatchlistFeed), ("History", fd.HistoryFeed) })
                 {
                     if (url is null) continue;
                     <div class="cal-link">
@@ -474,73 +427,194 @@
                     </div>
                 }
             }
+            else { <Spinner /> }
         </section>
-
-        <section class="panel" id="profile">
-            <h2>Profile</h2>
-            @if (Session.Me is { } me)
-            {
-                <p class="muted small">Signed in as <b>@me.UserName</b> (@me.Email) · member since @me.CreatedAt.ToLocalTime().ToString("MMMM yyyy")</p>
-                <div class="avatar-edit">
-                    <Avatar Name="@(me.DisplayName ?? me.UserName)" Url="@me.Avatar" Class="avatar-lg" />
-                    <label class="btn @(avatarBusy ? "disabled" : "")">
-                        <Icon Name="upload" Size="16" /> @(avatarBusy ? "Uploading…" : me.Avatar is null ? "Add a profile picture" : "Change picture")
-                        <InputFile OnChange="UploadAvatar" accept="image/jpeg,image/png,image/webp,image/gif,image/*" class="visually-hidden" disabled="@avatarBusy" />
+        <section class="panel" id="private-link">
+            <h2>Private link</h2>
+            <p class="muted small">Your calendar link, private-list feeds and watchlist and history feeds all use one private key. If you've shared one by mistake, make a new key: the old links all stop working, so anything subscribed to them needs the new ones.</p>
+            <button class="btn btn-sm" @onclick="NewCalendarUrl">Make a new private link</button>
+        </section>
+        }
+        @if (Tab == "data")
+        {
+        <section class="panel" id="imports">
+            <h2>Import</h2>
+            <p class="muted small">Re-importing is safe: a play you already have (logged here, by Jellyfin or by another import, within a day of the same date) is skipped, while separate viewings are all kept. Ratings are updated; watchlist and list entries aren't doubled.</p>
+            <PartsPicker @bind-Value="importParts" Label="What to import" />
+            <div class="import-grid">
+                <div class="import-card">
+                    <h3>Trakt</h3>
+                    <ol class="small">
+                        <li>On trakt.tv open <b>Settings → Data</b> and export your data.</li>
+                        <li>Upload the <code>.zip</code> you get (or individual <code>.json</code> files from it).</li>
+                    </ol>
+                    <p class="muted small">Imports watch history, ratings, watchlist, favorites, custom lists and your collection (into your <a href="library">library</a>).</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Trakt export
+                        <InputFile OnChange="e => Upload(ImportKind.Trakt, e)" accept=".zip,.json,application/zip,application/x-zip-compressed,application/json" class="visually-hidden" disabled="@uploading" />
                     </label>
-                    @if (me.Avatar is not null) { <button class="btn btn-ghost" disabled="@avatarBusy" @onclick="RemoveAvatar">Remove</button> }
-                    <span class="muted small">JPEG, PNG or WebP, up to 10 MB. It's cropped to a square.</span>
                 </div>
-                <form class="inline" @onsubmit="SaveProfile">
-                    <input placeholder="Display name" @bind="displayName" maxlength="64" aria-label="Display name" />
-                    <button class="btn" type="submit">Save</button>
-                </form>
-            }
-            @if (Server.Configurable)
+                <div class="import-card">
+                    <h3>Letterboxd</h3>
+                    <ol class="small">
+                        <li>On letterboxd.com open <b>Settings → Data → Export your data</b>.</li>
+                        <li>Upload the <code>.zip</code> as-is.</li>
+                    </ol>
+                    <p class="muted small">Imports your diary, watched films, ratings (★ × 2), watchlist, lists, favorite films and likes. Films are matched by title and year, or through Letterboxd's own link to TMDB. TV series logged on Letterboxd can't be imported.</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Letterboxd export
+                        <InputFile OnChange="e => Upload(ImportKind.Letterboxd, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv,text/comma-separated-values" class="visually-hidden" disabled="@uploading" />
+                    </label>
+                </div>
+                <div class="import-card">
+                    <h3>IMDb</h3>
+                    <ol class="small">
+                        <li>On imdb.com open <b>Your ratings</b>, your <b>Watchlist</b> or any list, then <b>⋯ → Export</b>.</li>
+                        <li>Upload the <code>.csv</code> files (one at a time, or zipped together). Keep the watchlist's file name containing “watchlist”.</li>
+                    </ol>
+                    <p class="muted small">Imports ratings, the watchlist and lists, matched exactly by IMDb id. Rated movies count as watched (dated when you rated them) unless you untick History.</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload IMDb export
+                        <InputFile OnChange="e => Upload(ImportKind.Imdb, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv,text/comma-separated-values" class="visually-hidden" disabled="@uploading" />
+                    </label>
+                </div>
+                <div class="import-card">
+                    <h3>TV Time</h3>
+                    <ol class="small">
+                        <li>Find the data export zip you downloaded from TV Time (its GDPR export).</li>
+                        <li>Upload the whole <code>.zip</code>.</li>
+                    </ol>
+                    <p class="muted small">Imports every episode you marked watched, with its date, and shows saved “for later” as your watchlist. Shows are matched through TheTVDB ids where the export has them. TV Time's movies can't be imported.</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload TV Time export
+                        <InputFile OnChange="e => Upload(ImportKind.TvTime, e)" accept=".zip,.csv,application/zip,application/x-zip-compressed,text/csv" class="visually-hidden" disabled="@uploading" />
+                    </label>
+                </div>
+                <div class="import-card">
+                    <h3>Simkl</h3>
+                    <ol class="small">
+                        <li>On simkl.com open <b>Settings → Backup &amp; Export</b> and download a backup.</li>
+                        <li>Upload the <code>.zip</code>, <code>.json</code> or <code>.csv</code>.</li>
+                    </ol>
+                    <p class="muted small">Imports movies, shows and anime (as shows), ratings and plan-to-watch. The JSON backup has every episode's date; the CSV only says how far you got, so those episodes come in without dates.</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Simkl backup
+                        <InputFile OnChange="e => Upload(ImportKind.Simkl, e)" accept=".zip,.json,.csv,application/zip,application/x-zip-compressed,application/json,text/csv" class="visually-hidden" disabled="@uploading" />
+                    </label>
+                </div>
+            </div>
+
+            <MatchImportDialog JobId="matchJob" @bind-Item="matching" OnMatched="LoadImports" />
+
+            @if (imports is { Count: > 0 })
             {
-                <p class="muted small">Server: @Server.Url</p>
-            }
-            @if (features?.Version is { } version)
-            {
-                <p class="muted small">SeenIt v@(version)@(Platform.AppVersion is { } av ? $" · app v{av}" : "")</p>
-            }
-            @if (Platform.AppVersion is null && android is { } apk)
-            {
-                <p class="small"><a href="@apk.Url" download>Get the Android app</a> <span class="muted">(v@(apk.Version), @(apk.Size / 1024 / 1024) MB)</span></p>
+                <h3>Recent imports</h3>
+                <div class="imports">
+                    @foreach (var j in imports)
+                    {
+                        <div class="import-job" @key="j.Id">
+                            <div class="inline spread">
+                                <b>@WatchSources.Name(j.Kind) · @j.FileName</b>
+                                @if (j.Parts != ImportParts.All) { <span class="muted small">@PartsPicker.Describe(j.Parts)</span> }
+                                @if (j.UndoneAt is not null) { <span class="pill">Undone</span> } else { <span class="pill @StatusClass(j.Status)">@j.Status</span> }
+                            </div>
+                            @if (j.Status == ImportStatus.Running && j.Total > 0)
+                            {
+                                <ProgressBar Value="j.Processed" Max="j.Total" />
+                                <span class="muted small">@j.Processed.ToString("N0") of @j.Total.ToString("N0") · matching titles on TMDB can take a few minutes</span>
+                            }
+                            else if (j.Status == ImportStatus.Queued) { <span class="muted small">Waiting to start…</span> }
+                            @if (j.Message is not null) { <div class="small">@j.Message</div> }
+                            @if (j.Pending is { Count: > 0 } pend)
+                            {
+                                <details class="small" open="@(pend.Count <= 5)">
+                                    <summary>Couldn't be matched (@pend.Count): find them yourself</summary>
+                                    <ul class="pending-list">
+                                        @foreach (var u in pend)
+                                        {
+                                            <li @key="u.Key">
+                                                <span><b>@u.Label</b> <span class="muted">@(u.Type == MediaType.Movie ? "movie" : "show")@(u.Summary.Length > 0 ? " · " + u.Summary : "")</span></span>
+                                                <button class="btn btn-sm" @onclick="() => { matchJob = j.Id; matching = u; }">Find</button>
+                                            </li>
+                                        }
+                                    </ul>
+                                </details>
+                            }
+                            else if (j.Unmatched.Count > 0)
+                            {
+                                <details class="small"><summary>Which couldn't be matched (@j.Unmatched.Count)</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
+                            }
+                            <div class="inline spread">
+                                <span class="muted small">@j.CreatedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")@(j.UndoneAt is { } undone ? $" · undone {undone.ToLocalTime():MMM d, yyyy}" : "")</span>
+                                @if (j.CanUndo) { <button class="btn btn-sm btn-ghost" disabled="@undoing" @onclick="() => UndoImport(j)">Undo this import</button> }
+                            </div>
+                        </div>
+                    }
+                </div>
             }
         </section>
-
-        <section class="panel" id="account">
-            <h2>Account</h2>
-            <h3>Change password</h3>
-            <form class="stack narrow" @onsubmit="ChangePassword">
-                <input type="password" placeholder="Current password" @bind="currentPassword" @bind:event="oninput" autocomplete="current-password" aria-label="Current password" />
-                <input type="password" placeholder="New password" @bind="newPassword" @bind:event="oninput" autocomplete="new-password" minlength="8" aria-label="New password" />
-                <button class="btn" type="submit" disabled="@(string.IsNullOrEmpty(currentPassword) || string.IsNullOrEmpty(newPassword))">Change password</button>
-            </form>
-            @if (features?.Email == true)
+        <section class="panel" id="export">
+            <h2>Export & backups</h2>
+            <p class="muted small">Download everything you've put into SeenIt (history, ratings, watchlist, lists, show status and settings) as a .zip of JSON and CSV files.</p>
+            <button class="btn" @onclick="Export" disabled="@exporting"><Icon Name="download" Size="16" /> @(exporting ? "Preparing…" : "Download my data")</button>
+            @if (alerts is { } ex)
             {
-                <h3>Email</h3>
-                <p class="muted small">Password reset emails go to @(Session.Me?.Email). Send yourself a test to check they arrive.</p>
-                <button class="btn" @onclick="TestEmail" disabled="@testingEmail">@(testingEmail ? "Sending…" : "Send test email")</button>
+                <label class="check @(ex.EmailAvailable ? "" : "disabled")">
+                    <input type="checkbox" checked="@ex.MonthlyBackup" disabled="@(!ex.EmailAvailable)" @onchange="e => SaveBackup((bool)e.Value!)" />
+                    Email me this backup on the 1st of every month (to @Session.Me?.Email)
+                </label>
             }
-            <h3>Clear data</h3>
+            }
+        </section>
+        <section class="panel" id="clear">
+            <h2>Clear data</h2>
             <p class="muted small">Delete some or all of what you've tracked, for a fresh start or before re-importing. Your account, settings and friends stay.</p>
             <PartsPicker @bind-Value="clearParts" Label="What to clear" />
             <form class="stack narrow" @onsubmit="ClearData">
                 <input type="password" placeholder="Password to confirm" @bind="clearPassword" @bind:event="oninput" autocomplete="current-password" aria-label="Password to confirm clearing data" />
                 <button class="btn btn-danger" type="submit" disabled="@(string.IsNullOrEmpty(clearPassword) || clearing)">@(clearing ? "Clearing…" : "Clear data")</button>
             </form>
-            <h3>Delete account</h3>
-            <p class="muted small">Permanently deletes your account, history, ratings, watchlist and lists.</p>
-            <form class="stack narrow" @onsubmit="DeleteAccount">
-                <input type="password" placeholder="Password to confirm" @bind="deletePassword" @bind:event="oninput" autocomplete="current-password" aria-label="Password to confirm deletion" />
-                <button class="btn btn-danger" type="submit" disabled="@string.IsNullOrEmpty(deletePassword)">Delete my account</button>
-            </form>
         </section>
+        }
     </div>
 </div>
 
 @code {
+    private sealed record Group(string Key, string Title, string Icon, string Blurb, string[] Sections);
+
+    /// <summary>The settings pages and which sections live on each (old settings#section links are sent to the right one).</summary>
+    private static readonly Group[] Groups =
+    [
+        new("account", "Account", "users", "Profile, privacy, invites, password", ["profile", "privacy", "invites", "account", "about", "delete"]),
+        new("display", "Display", "eye", "Theme, layout, ratings, time, spoilers, region", ["appearance", "layout", "ratings", "time", "spoilers", "region"]),
+        new("tracking", "Tracking", "radio", "Time zone, media servers, Letterboxd sync", ["tracking", "jellyfin", "letterboxd", "letterboxd-sync"]),
+        new("alerts", "Alerts & feeds", "bell", "Release alerts, calendar, RSS feeds", ["alerts", "calendar", "feeds", "private-link"]),
+        new("data", "Import & export", "download", "Imports, exports, backups, clearing data", ["imports", "export", "clear"]),
+    ];
+
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
+    private Group? Current => Groups.FirstOrDefault(g => g.Key == TabParam);
+    private string? Tab => Current?.Key;
+    private string? scrollTo;
+
+    /// <summary>Old links (settings#alerts) and in-page links: open the page that has the section, then scroll to it.</summary>
+    protected override void OnParametersSet()
+    {
+        var uri = new Uri(Nav.Uri);
+        var fragment = uri.Fragment.TrimStart('#');
+        if (fragment.Length == 0) { scrollTo = null; return; }
+        var home = Groups.FirstOrDefault(g => g.Sections.Contains(fragment));
+        if (home is not null && home.Key != TabParam)
+        {
+            var query = Welcome ? "&welcome=1" : "";
+            Nav.NavigateTo($"settings?tab={home.Key}{query}#{fragment}", replace: true);
+            return;
+        }
+        scrollTo = fragment;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (scrollTo is not { } id) return;
+        scrollTo = null;
+        try { await Js.InvokeVoidAsync("seenit.scrollToId", id); } catch (JSException) { }
+    }
+
     [SupplyParameterFromQuery(Name = "welcome")] public int? WelcomeParam { get; set; }
     private bool Welcome => WelcomeParam == 1;
 
