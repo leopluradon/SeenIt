@@ -166,7 +166,7 @@ else if (e is not null)
         undo = () => Api.RestorePlaysAsync(removed.Plays);
     }, "Play removed");
 
-    private Task Rate(int? value) => value is { } v
+    private Task Rate(double? value) => value is { } v
         ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, v, Season, Number)), $"Rated {Fmt.Rating(v)}")
         : Act(async () =>
         {

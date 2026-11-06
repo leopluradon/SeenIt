@@ -1094,3 +1094,10 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
 .season-crumbs { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .season-step { display: inline-flex; gap: 14px; }
 .season-step a { display: inline-flex; align-items: center; gap: 2px; }
+.segmented-wrap { flex-wrap: wrap; border-radius: var(--radius); }
+/* Decimal ratings: slider + number box */
+.rating-picker.decimal { gap: 8px; flex: 1; min-width: 0; max-width: 360px; }
+.rating-picker.decimal input[type=range] { flex: 1; min-width: 90px; accent-color: var(--warn); }
+.rating-picker.decimal input[type=range].unset { opacity: .45; }
+.rating-picker.decimal .rating-number { width: 4.2em; text-align: center; font-weight: 700; padding: 4px 6px; }
+.rating-picker.decimal.compact { max-width: 240px; }

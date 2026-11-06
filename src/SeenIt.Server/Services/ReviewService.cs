@@ -236,7 +236,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             decades.OrderBy(d => d.Key).Select(d => new CountBucket(d.Key, d.Value)).ToList(),
             sources,
             ratingValues.Count > 0 ? Math.Round(ratingValues.Average(), 2) : null,
-            Enumerable.Range(1, 10).Select(i => new CountBucket(i.ToString(), ratingValues.Count(v => v == i))).ToList(),
+            Enumerable.Range(1, 10).Select(i => new CountBucket(i.ToString(), ratingValues.Count(v => TrackingService.Bucket(v) == i))).ToList(),
             highest,
             showsStarted, completed,
             inPeriod.Count - rewatches, rewatches,

@@ -84,7 +84,7 @@ public static class ImportFiles
 }
 
 /// <summary>A rating an import overwrote, so undo can put the old one back.</summary>
-public record RatingBefore(Guid Id, int Value, DateTimeOffset RatedAt);
+public record RatingBefore(Guid Id, double Value, DateTimeOffset RatedAt);
 
 /// <summary>What an import changed in place (rather than added), for undo.</summary>
 public class ImportUndo

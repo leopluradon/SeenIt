@@ -233,9 +233,6 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("FiveStarRatings")
-                        .HasColumnType("boolean");
-
                     b.PrimitiveCollection<List<string>>("HiddenHomeSections")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -282,6 +279,9 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.Property<string>("PlexUsername")
                         .HasColumnType("text");
+
+                    b.Property<int>("RatingScale")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Region")
                         .HasMaxLength(2)
@@ -849,8 +849,8 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Value")
-                        .HasColumnType("integer");
+                    b.Property<double>("Value")
+                        .HasColumnType("double precision");
 
                     b.HasKey("Id");
 

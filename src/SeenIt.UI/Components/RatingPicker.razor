@@ -1,12 +1,24 @@
-@* 1–10 rating: ten pips, or five stars with halves when the user picked 5-star ratings
-   (stored as 1–10 either way). Click the current value again to clear. *@
-@if (Fmt.FiveStars)
+@* A 1–10 rating in the user's scale: ten pips, five stars with halves, or 1–10 with one decimal
+   (a slider plus a number box). Stored as 1–10 either way. Click the current value again (or ×) to clear. *@
+@if (Fmt.Scale == RatingScale.Decimal)
+{
+    var shownValue = draft ?? Value;
+    <div class="rating-picker decimal @(Compact ? "compact" : "")">
+        <input type="range" min="1" max="10" step="0.1" aria-label="Your rating, 1 to 10"
+               value="@((shownValue ?? 5.0).ToString("0.0", Inv))" class="@(Value is null && draft is null ? "unset" : "")"
+               @oninput="e => draft = Parse(e.Value)" @onchange="e => Commit(Parse(e.Value))" />
+        <input type="number" min="1" max="10" step="0.1" inputmode="decimal" class="rating-number" aria-label="Your rating"
+               value="@(shownValue?.ToString("0.0", Inv) ?? "")" placeholder="–" @onchange="e => Commit(Parse(e.Value))" />
+        @if (Value is not null) { <button type="button" class="icon-btn" aria-label="Clear rating" @onclick="() => Commit(null)"><Icon Name="x" Size="14" /></button> }
+    </div>
+}
+else if (Fmt.FiveStars)
 {
     <div class="rating-picker stars @(Compact ? "compact" : "")" role="radiogroup" aria-label="Your rating" @onmouseleave="() => hover = null">
         @for (var star = 1; star <= 5; star++)
         {
             var full = star * 2;
-            var shown = hover ?? Value ?? 0;
+            var shown = (int)Math.Round(hover ?? Value ?? 0, MidpointRounding.AwayFromZero);   // decimals show to the nearest half star
             var fill = shown >= full ? "full" : shown == full - 1 ? "half" : "";
             <span class="star @fill">
                 <Icon Name="star" Size="@(Compact ? 18 : 24)" />
@@ -29,16 +41,28 @@ else
         {
             var n = i;
             <button type="button" role="radio" aria-checked="@(Value == n)" aria-label="@n out of 10"
-                    class="pip @((hover ?? Value) >= n ? "on" : "")"
+                    class="pip @((hover ?? Value) >= n - 0.5 ? "on" : "")"
                     @onmouseenter="() => hover = n" @onclick="() => Pick(n)"></button>
         }
-        <span class="rating-value">@((hover ?? Value)?.ToString() ?? "–")</span>
+        <span class="rating-value">@((hover ?? Value) is { } v ? Fmt.Stars(v) : "–")</span>
     </div>
 }
 @code {
-    [Parameter] public int? Value { get; set; }
-    [Parameter] public EventCallback<int?> ValueChanged { get; set; }
+    [Parameter] public double? Value { get; set; }
+    [Parameter] public EventCallback<double?> ValueChanged { get; set; }
     [Parameter] public bool Compact { get; set; }
-    private int? hover;
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+    private double? hover, draft;
+
     private Task Pick(int n) => ValueChanged.InvokeAsync(Value == n ? null : n);
+
+    private static double? Parse(object? v) =>
+        double.TryParse(v?.ToString(), System.Globalization.NumberStyles.Float, Inv, out var d) ? Math.Round(Math.Clamp(d, 1, 10), 1) : null;
+
+    private async Task Commit(double? v)
+    {
+        draft = null;
+        if (v == Value) return;
+        await ValueChanged.InvokeAsync(v);
+    }
 }

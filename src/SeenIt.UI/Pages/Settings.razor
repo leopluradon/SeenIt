@@ -296,10 +296,11 @@
 
         <section class="panel" id="ratings">
             <h2>Ratings</h2>
-            <p class="muted small">How you give and see ratings. Changing it never changes your ratings: 4½ stars and 9/10 are the same rating.</p>
-            <div class="segmented">
-                <button class="@(Fmt.FiveStars ? "" : "on")" @onclick="() => SaveScale(false)">1–10</button>
-                <button class="@(Fmt.FiveStars ? "on" : "")" @onclick="() => SaveScale(true)">★ 5 stars, with halves</button>
+            <p class="muted small">How you give and see ratings. Changing it never changes your ratings: 4½ stars and 9/10 are the same rating. Decimal ratings like 8.1 show rounded to the nearest half star in the 5-star view.</p>
+            <div class="segmented segmented-wrap">
+                <button class="@(Fmt.Scale == RatingScale.Ten ? "on" : "")" @onclick="() => SaveScale(RatingScale.Ten)">1–10</button>
+                <button class="@(Fmt.Scale == RatingScale.FiveStars ? "on" : "")" @onclick="() => SaveScale(RatingScale.FiveStars)">★ 5 stars, with halves</button>
+                <button class="@(Fmt.Scale == RatingScale.Decimal ? "on" : "")" @onclick="() => SaveScale(RatingScale.Decimal)">1–10 with decimals (8.1)</button>
             </div>
         </section>
 
@@ -736,14 +737,14 @@
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    private async Task SaveScale(bool five)
+    private async Task SaveScale(RatingScale scale)
     {
-        if (five == Fmt.FiveStars) return;
+        if (scale == Fmt.Scale) return;
         try
         {
-            await Api.SetPreferencesAsync(new PreferencesRequest(FiveStarRatings: five));
-            Session.Update(me => me with { FiveStarRatings = five });
-            Toasts.Show(five ? "Ratings shown as 5 stars" : "Ratings shown out of 10");
+            await Api.SetPreferencesAsync(new PreferencesRequest(RatingScale: scale));
+            Session.Update(me => me with { RatingScale = scale });
+            Toasts.Show(scale switch { RatingScale.FiveStars => "Ratings shown as 5 stars", RatingScale.Decimal => "Ratings out of 10, with decimals", _ => "Ratings shown out of 10" });
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

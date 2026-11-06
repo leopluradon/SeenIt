@@ -322,7 +322,7 @@ else if (s is not null)
         }, "Removed from watchlist")
         : Act(() => Api.AddToWatchlistAsync(MediaType.Show, Id), "Added to watchlist");
 
-    private Task Rate(int? value) => value is { } v
+    private Task Rate(double? value) => value is { } v
         ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Show, Id, v)), $"Rated {Fmt.Rating(v)}")
         : Act(async () =>
         {

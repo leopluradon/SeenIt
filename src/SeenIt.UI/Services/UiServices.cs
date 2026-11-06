@@ -62,15 +62,22 @@ public static class Fmt
     public static WatchRequest Watch(MediaType type, int id, WatchChoice c, int? season = null, int? episode = null) =>
         new(type, id, season, episode, c.At, c.When);
 
-    /// <summary>The signed-in user shows ratings as 0.5–5 stars (stored as 1–10 either way).</summary>
-    public static bool FiveStars { get; set; }
+    /// <summary>How the signed-in user gives and sees ratings (stored as 1–10 either way).</summary>
+    public static RatingScale Scale { get; set; }
+    public static bool FiveStars => Scale == RatingScale.FiveStars;
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
 
-    /// <summary>A rating in the user's scale: "8/10" or "4/5".</summary>
-    public static string Rating(int r) => FiveStars ? $"{Stars(r)}/5" : $"{r}/10";
-    /// <summary>The number alone: "8", or "4.5" in stars.</summary>
-    public static string Stars(int r) => FiveStars ? (r / 2.0).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) : r.ToString();
-    /// <summary>Poster badge: "★ 8" or "★ 4.5".</summary>
-    public static string RatingBadge(int r) => $"★ {Stars(r)}";
+    /// <summary>A rating in the user's scale: "8/10", "8.1/10" or "4/5".</summary>
+    public static string Rating(double r) => FiveStars ? $"{Stars(r)}/5" : $"{Stars(r)}/10";
+    /// <summary>The number alone: "8", "8.1" (decimals), or "4.5" in stars.</summary>
+    public static string Stars(double r) => Scale switch
+    {
+        RatingScale.FiveStars => (r / 2).ToString("0.#", Inv),
+        RatingScale.Decimal => r.ToString("0.0", Inv),
+        _ => r.ToString("0.#", Inv),   // whole numbers, unless a friend rated in decimals
+    };
+    /// <summary>Poster badge: "★ 8", "★ 8.1" or "★ 4.5".</summary>
+    public static string RatingBadge(double r) => $"★ {Stars(r)}";
     /// <summary>An average or difference of 1–10 ratings, in the user's scale.</summary>
     public static string Avg(double v) => (FiveStars ? v / 2 : v).ToString("0.0");
     /// <summary>Rating distribution buckets labeled "1".."10", relabeled for stars.</summary>

@@ -637,9 +637,13 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     // ---------- Ratings ----------
 
+    /// <summary>The whole-number bucket a rating counts in for charts: 8.1 and 8.9 are both 8s.</summary>
+    public static int Bucket(double rating) => Math.Clamp((int)Math.Floor(rating + 1e-9), 1, 10);
+
     public async Task RateAsync(Guid userId, RatingRequest req, CancellationToken ct, DateTimeOffset? ratedAt = null)
     {
-        if (req.Rating is < 1 or > 10) throw new TrackingException("Ratings are 1 to 10.");
+        if (double.IsNaN(req.Rating) || req.Rating is < 1 or > 10) throw new TrackingException("Ratings are 1 to 10.");
+        req = req with { Rating = Math.Round(req.Rating, 1, MidpointRounding.AwayFromZero) };
         int? season = null, episode = null;
         if (req.Type == MediaType.Episode)
         {
@@ -826,7 +830,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             Genres: genres.OrderByDescending(g => g.Value).Take(12).Select(g => new CountBucket(g.Key, g.Value)).ToList(),
             PlaysByMonth: months.Select(m => new CountBucket(
                 new DateTime(m.Year, m.Month, 1).ToString("MMM", CultureInfo.InvariantCulture), byMonth.GetValueOrDefault(m))).ToList(),
-            RatingDistribution: Enumerable.Range(1, 10).Select(i => new CountBucket(i.ToString(), ratings.Count(r => r == i))).ToList(),
+            RatingDistribution: Enumerable.Range(1, 10).Select(i => new CountBucket(i.ToString(), ratings.Count(r => Bucket(r) == i))).ToList(),
             PlaysByWeekday: Enum.GetValues<DayOfWeek>().Select(d => new CountBucket(d.ToString()[..3], weekdays.GetValueOrDefault(d))).ToList());
     }
 

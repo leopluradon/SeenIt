@@ -23,8 +23,8 @@ public class AppUser : IdentityUser<Guid>
     public List<string> HomeOrder { get; set; } = [];
     /// <summary>Color theme key (UiPrefs.Themes); null means the default.</summary>
     public string? Theme { get; set; }
-    /// <summary>Show and give ratings as 0.5–5 stars instead of 1–10 (stored as 1–10 either way).</summary>
-    public bool FiveStarRatings { get; set; }
+    /// <summary>Rate as 1–10, 0.5–5 stars, or 1–10 with one decimal (stored as 1–10 either way).</summary>
+    public RatingScale RatingScale { get; set; }
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
     public List<string> Tabs { get; set; } = [];
 
@@ -172,7 +172,8 @@ public class Rating
     public int TmdbId { get; set; }
     public int? SeasonNumber { get; set; }
     public int? EpisodeNumber { get; set; }
-    public int Value { get; set; }
+    /// <summary>1–10, to one decimal place (8.1). Whole numbers unless the user rates in decimals.</summary>
+    public double Value { get; set; }
     public DateTimeOffset RatedAt { get; set; } = DateTimeOffset.UtcNow;
     /// <summary>The import that added this, so the import can be undone.</summary>
     public Guid? ImportJobId { get; set; }

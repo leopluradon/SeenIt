@@ -47,3 +47,15 @@ public class SeasonRatingImportTests
         Assert.Equal(76331, r.Item.TmdbId);
     }
 }
+
+public class DecimalRatingTests
+{
+    [Theory]
+    [InlineData(1.0, 1)]
+    [InlineData(8.1, 8)]
+    [InlineData(8.9, 8)]
+    [InlineData(9.0, 9)]
+    [InlineData(10.0, 10)]
+    public void Decimal_ratings_count_in_their_whole_number_bucket(double rating, int bucket) =>
+        Assert.Equal(bucket, SeenIt.Server.Services.TrackingService.Bucket(rating));
+}

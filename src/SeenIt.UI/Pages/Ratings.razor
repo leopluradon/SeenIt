@@ -23,7 +23,7 @@
 @if (items is null && error is null) { <Spinner /> }
 else if (items is not null)
 {
-    var shown = items.Where(r => (filter is null || r.Type == filter) && (stars is null || r.Rating == stars)).ToList();
+    var shown = items.Where(r => (filter is null || r.Type == filter) && (stars is null || (Fmt.FiveStars ? (int)Math.Round(r.Rating, MidpointRounding.AwayFromZero) : (int)Math.Floor(r.Rating + 1e-9)) == stars)).ToList();
     @if (shown.Count == 0) { <Empty Title="No ratings here." /> }
     <div class="poster-grid">
         @foreach (var r in shown)

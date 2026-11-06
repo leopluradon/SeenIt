@@ -258,7 +258,7 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
                 ? movies.TryGetValue(r.TmdbId, out var m) && m.VoteAverage is > 0 ? (Media: CatalogService.ToSummary(m), You: r.Value, Tmdb: m.VoteAverage.Value) : default
                 : shows.TryGetValue(r.TmdbId, out var s) && s.VoteAverage is > 0 ? (Media: CatalogService.ToSummary(s), You: r.Value, Tmdb: s.VoteAverage.Value) : default)
             .Where(x => x.Media is not null).ToList();
-        HotTake Take((MediaSummary Media, int You, double Tmdb) x) => new(x.Media, x.You, Math.Round(x.Tmdb, 1));
+        HotTake Take((MediaSummary Media, double You, double Tmdb) x) => new(x.Media, x.You, Math.Round(x.Tmdb, 1));
         return new RatingsVsTmdb(rows.Count,
             rows.Count > 0 ? Math.Round(rows.Average(x => x.You - x.Tmdb), 1) : null,
             rows.Where(x => x.You - x.Tmdb >= 1.5).OrderByDescending(x => x.You - x.Tmdb).Take(10).Select(Take).ToList(),

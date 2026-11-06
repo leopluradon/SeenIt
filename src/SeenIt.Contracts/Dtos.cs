@@ -43,7 +43,10 @@ public record MeDto(
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
     DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null,
-    IReadOnlyList<string>? HomeOrder = null, string? Theme = null, bool FiveStarRatings = false);
+    IReadOnlyList<string>? HomeOrder = null, string? Theme = null, RatingScale RatingScale = RatingScale.Ten);
+
+/// <summary>How ratings are given and shown. They're stored as 1–10 (to one decimal) whatever the scale.</summary>
+public enum RatingScale { Ten, FiveStars, Decimal }
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(
@@ -55,7 +58,7 @@ public record PreferencesRequest(
     string? TimeZone = null,        // IANA id, e.g. America/New_York; "" = follow the device
     IReadOnlyList<string>? HomeOrder = null,    // home section keys, top to bottom
     string? Theme = null,                       // key from UiPrefs.Themes; "" = default
-    bool? FiveStarRatings = null);
+    RatingScale? RatingScale = null);
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }
@@ -178,7 +181,7 @@ public record Video(string Key, string Name, string Site, string Type);
 /// <summary>What the signed-in user has done with a title. All empty when signed out.</summary>
 public record UserMediaState(
     bool InWatchlist,
-    int? Rating,
+    double? Rating,
     int Plays,
     DateTimeOffset? LastWatchedAt,
     IReadOnlyList<Guid> ListIds,
@@ -260,7 +263,7 @@ public record EpisodeDto(
     string? StillPath,
     double? VoteAverage,
     int Plays,
-    int? Rating,
+    double? Rating,
     bool Rewatched = false);   // played since the current rewatch started
 
 public record SeasonDetail(
@@ -274,7 +277,7 @@ public record SeasonDetail(
     IReadOnlyList<CastMember>? Cast = null,
     int? Rewatch = null,       // number of the rewatch in progress (2 = second time through)
     DateTimeOffset? CompletedAt = null,
-    int? Rating = null,        // your rating of the season itself
+    double? Rating = null,        // your rating of the season itself
     int? PreviousSeason = null, int? NextSeason = null);   // neighbors in season order (specials sit outside, except Specials → Season 1)
 
 // ---------- Tracking ----------
@@ -326,7 +329,7 @@ public record EpisodeDetail(
     IReadOnlyList<CrewMember> Crew,
     EpisodeRef? Previous,
     EpisodeRef? Next,
-    int? Rating,
+    double? Rating,
     IReadOnlyList<PlayDto>? Plays,    // null when signed out
     IReadOnlyList<SeasonSummary>? Seasons = null,
     IReadOnlyList<CastMember>? Cast = null);   // regulars in this episode; guests are in GuestStars
@@ -411,8 +414,8 @@ public record HistoryPage(IReadOnlyList<HistoryEntry> Items, int Page, int Total
 public record WatchlistEntry(MediaSummary Media, DateTimeOffset AddedAt, DateOnly? ReleaseDate);
 public record WatchlistRequest(MediaType Type, int TmdbId);
 
-public record RatingRequest(MediaType Type, int TmdbId, int Rating, int? SeasonNumber = null, int? EpisodeNumber = null);
-public record RatingEntry(MediaType Type, int TmdbId, string Title, int? SeasonNumber, int? EpisodeNumber, string? PosterPath, int Rating, DateTimeOffset RatedAt);
+public record RatingRequest(MediaType Type, int TmdbId, double Rating, int? SeasonNumber = null, int? EpisodeNumber = null);
+public record RatingEntry(MediaType Type, int TmdbId, string Title, int? SeasonNumber, int? EpisodeNumber, string? PosterPath, double Rating, DateTimeOffset RatedAt);
 
 public record ShowProgressDto(
     int ShowTmdbId,
@@ -566,7 +569,7 @@ public record ReviewItem(
     string? PosterPath,
     int Plays,
     long Minutes,
-    int? Rating,
+    double? Rating,
     string? Detail);
 
 public record ReviewPerson(int Id, string Name, string? ProfilePath, int Titles, int Plays);
@@ -648,7 +651,7 @@ public record NowWatchingDto(
 /// Someone you follow (or who follows you) who has watched or rated a title. Plays: for an episode or
 /// movie, how many times; for a show or season, how many different episodes (out of the aired count).
 /// </summary>
-public record FriendSeen(UserCard User, int Plays, DateTimeOffset? LastWatched, int? Rating);
+public record FriendSeen(UserCard User, int Plays, DateTimeOffset? LastWatched, double? Rating);
 
 public record UserCard(string UserName, string? DisplayName, bool Following, bool FollowsYou)
 {
@@ -685,7 +688,7 @@ public record CompareDto(
     IReadOnlyList<CompareItem> BLovedANot,    // rated 8+ by B, not watched by A
     IReadOnlyList<CompareItem> ALovedBNot);
 /// <summary>A title in a comparison, with each person's rating if they rated it.</summary>
-public record CompareItem(MediaSummary Media, int? A, int? B);
+public record CompareItem(MediaSummary Media, double? A, double? B);
 
 // ---------- Pick for me ----------
 
@@ -809,7 +812,7 @@ public record FranchiseProgress(int Id, string Name, string? PosterPath, int See
 public record BacklogStats(int Shows, int Episodes, long Minutes, int MinutesPerDay, DateOnly? CaughtUpBy);
 
 public record RatingsVsTmdb(int Count, double? AverageDifference, IReadOnlyList<HotTake> Higher, IReadOnlyList<HotTake> Lower);
-public record HotTake(MediaSummary Media, int You, double Tmdb);
+public record HotTake(MediaSummary Media, double You, double Tmdb);
 
 public record FriendsBoard(string Period, IReadOnlyList<LeaderRow> Rows, MediaSummary? TopTitle, int TopTitleFriends);
 public record LeaderRow(UserCard User, long Minutes, int Plays, bool IsMe);

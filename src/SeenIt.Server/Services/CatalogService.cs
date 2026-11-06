@@ -490,10 +490,10 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
 
         Dictionary<int, int> plays = [];
         List<(int Episode, DateTimeOffset WatchedAt)> seasonPlays = [];
-        Dictionary<int, int> ratings = [];
+        Dictionary<int, double> ratings = [];
         HashSet<int> rewatched = [];
         ShowRewatch? rewatch = null;
-        int? seasonRating = null;
+        double? seasonRating = null;
         if (userId is { } uid)
         {
             rewatch = await db.Rewatches.AsNoTracking().FirstOrDefaultAsync(r => r.UserId == uid && r.ShowTmdbId == showId && r.CompletedAt == null, ct);
@@ -511,7 +511,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 .ToDictionaryAsync(r => r.EpisodeNumber!.Value, r => r.Value, ct);
             seasonRating = await db.Ratings
                 .Where(r => r.UserId == uid && r.Type == MediaType.Show && r.TmdbId == showId && r.SeasonNumber == seasonNumber && r.EpisodeNumber == null)
-                .Select(r => (int?)r.Value).FirstOrDefaultAsync(ct);
+                .Select(r => (double?)r.Value).FirstOrDefaultAsync(ct);
         }
 
         return new SeasonDetail(showId, show.Name, seasonNumber, season.Name ?? $"Season {seasonNumber}", NullIfEmpty(season.Overview), season.PosterPath,
@@ -583,7 +583,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 watchedSet.Count(w => w.Item1 == x.Season)))
             .ToList();
 
-        int? rating = null;
+        double? rating = null;
         List<PlayDto>? plays = null;
         if (userId is { } uid)
         {
@@ -596,7 +596,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             rating = await db.Ratings
                 .Where(r => r.UserId == uid && r.Type == MediaType.Episode && r.TmdbId == showId
                             && r.SeasonNumber == seasonNumber && r.EpisodeNumber == episodeNumber)
-                .Select(r => (int?)r.Value).FirstOrDefaultAsync(ct);
+                .Select(r => (double?)r.Value).FirstOrDefaultAsync(ct);
         }
 
         return new EpisodeDetail(
@@ -625,7 +625,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
         {
             InWatchlist = db.Watchlist.Any(w => w.UserId == userId && w.Type == type && w.TmdbId == id),
             Rating = db.Ratings.Where(r => r.UserId == userId && r.Type == type && r.TmdbId == id && r.SeasonNumber == null && r.EpisodeNumber == null)
-                .Select(r => (int?)r.Value).FirstOrDefault(),
+                .Select(r => (double?)r.Value).FirstOrDefault(),
             Plays = watches.Count(),
             Last = watches.Max(w => (DateTimeOffset?)w.WatchedAt),
             Favorite = db.Favorites.Any(f => f.UserId == userId && f.Type == type && f.TmdbId == id),

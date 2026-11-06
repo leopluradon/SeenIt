@@ -137,7 +137,7 @@ else if (c is not null)
     private static string? Ratings(CompareItem i) =>
         i.A is null && i.B is null ? i.Media.Year?.ToString() : $"{Star(i.A)} · {Star(i.B)}";
 
-    private static string Star(int? r) => r is { } v ? $"★{Fmt.Stars(v)}" : "–";
+    private static string Star(double? r) => r is { } v ? $"★{Fmt.Stars(v)}" : "–";
 
     private string? RatingsLong(CompareItem i) =>
         i.A is null && i.B is null ? null

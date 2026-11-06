@@ -188,7 +188,7 @@ else if (season is not null)
         var removed = await Api.UnwatchAsync(MediaType.Episode, Id, Number);
         undo = () => Api.RestorePlaysAsync(removed.Plays);
     }, "Season removed from history");
-    private Task Rate(EpisodeDto e, int? v) => v is { } r
+    private Task Rate(EpisodeDto e, double? v) => v is { } r
         ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, r, e.SeasonNumber, e.EpisodeNumber)), $"Rated {Fmt.Rating(r)}")
         : Act(async () =>
         {
@@ -197,7 +197,7 @@ else if (season is not null)
             if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, o, e.SeasonNumber, e.EpisodeNumber));
         }, "Rating removed");
 
-    private Task RateSeason(int? v) => v is { } r
+    private Task RateSeason(double? v) => v is { } r
         ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Show, Id, r, Number)), $"Rated {season!.Name} {Fmt.Rating(r)}")
         : Act(async () =>
         {
