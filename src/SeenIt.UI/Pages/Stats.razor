@@ -55,7 +55,7 @@ else if (s is not null)
                     @for (var pad = 0; pad < (int)(m.Heatmap.FirstOrDefault()?.Date.DayOfWeek ?? 0); pad++) { <span class="hm-cell hm-pad"></span> }
                     @foreach (var d in m.Heatmap)
                     {
-                        <span class="hm-cell hm-@Level(d.Minutes)" title="@($"{d.Date:ddd, MMM d, yyyy}: {(d.Plays == 0 ? "nothing" : $"{Fmt.Duration(d.Minutes)}{(d.Minutes >= 1440 ? $" ({d.Minutes / 60:N0} hours)" : "")}, {d.Plays} play{(d.Plays == 1 ? "" : "s")}")}")"></span>
+                        <span class="hm-cell hm-@Level(d.Minutes)" title="@($"{d.Date:ddd, MMM d, yyyy}: {(d.Plays == 0 ? "nothing" : $"{Fmt.Duration(d.Minutes)}{(Fmt.HoursTip(d.Minutes) is { } ht ? $" ({ht})" : "")}, {d.Plays} play{(d.Plays == 1 ? "" : "s")}")}")"></span>
                     }
                 </div>
             </div>

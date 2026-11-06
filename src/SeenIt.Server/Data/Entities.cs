@@ -25,6 +25,8 @@ public class AppUser : IdentityUser<Guid>
     public string? Theme { get; set; }
     /// <summary>Rate as 1–10, 0.5–5 stars, or 1–10 with one decimal (stored as 1–10 either way).</summary>
     public RatingScale RatingScale { get; set; }
+    /// <summary>"48d 7h" or "1,159h" for long stretches of time.</summary>
+    public TimeFormat TimeFormat { get; set; }
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
     public List<string> Tabs { get; set; } = [];
 

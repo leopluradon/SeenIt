@@ -43,7 +43,11 @@ public record MeDto(
     IReadOnlyList<string>? HiddenHomeSections = null, IReadOnlyList<string>? Tabs = null,
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
     DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null,
-    IReadOnlyList<string>? HomeOrder = null, string? Theme = null, RatingScale RatingScale = RatingScale.Ten);
+    IReadOnlyList<string>? HomeOrder = null, string? Theme = null, RatingScale RatingScale = RatingScale.Ten,
+    TimeFormat TimeFormat = TimeFormat.DaysHours);
+
+/// <summary>How long stretches of time read: "48d 7h" or "1,159h". Under a day both read "5h 12m".</summary>
+public enum TimeFormat { DaysHours, Hours }
 
 /// <summary>How ratings are given and shown. They're stored as 1–10 (to one decimal) whatever the scale.</summary>
 public enum RatingScale { Ten, FiveStars, Decimal }
@@ -58,7 +62,8 @@ public record PreferencesRequest(
     string? TimeZone = null,        // IANA id, e.g. America/New_York; "" = follow the device
     IReadOnlyList<string>? HomeOrder = null,    // home section keys, top to bottom
     string? Theme = null,                       // key from UiPrefs.Themes; "" = default
-    RatingScale? RatingScale = null);
+    RatingScale? RatingScale = null,
+    TimeFormat? TimeFormat = null);
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }

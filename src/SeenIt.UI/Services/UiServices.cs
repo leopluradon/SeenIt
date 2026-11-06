@@ -106,20 +106,34 @@ public static class Fmt
     public static string Ep(int? s, int? e) => $"S{s:00}E{e:00}";
     public static string Runtime(int? minutes) => minutes is null or 0 ? "" : minutes < 60 ? $"{minutes}m" : $"{minutes / 60}h {minutes % 60}m";
 
-    public static string Duration(long minutes)
-    {
-        var days = minutes / 1440;
-        var hours = minutes % 1440 / 60;
-        return days > 0 ? $"{days}d {hours}h" : hours > 0 ? $"{hours}h {minutes % 60}m" : $"{minutes}m";
-    }
+    /// <summary>The user's choice for long durations: days and hours, or hours.</summary>
+    public static TimeFormat Time { get; set; }
 
-    /// <summary>Hover text for a duration of a day or more ("2d 1h" → "49 hours"); null below a day, which already reads in hours.</summary>
-    public static string? HoursTip(long minutes) => minutes >= 1440 ? $"{minutes / 60:N0} hours" : null;
+    /// <summary>"48d 7h" or "1,159h" (the user's choice) from a day up; "5h 12m" below that.</summary>
+    public static string Duration(long minutes) => minutes >= 1440 ? Long(minutes, Time) : Short(minutes);
+
+    private static string Short(long minutes) => minutes >= 60 ? $"{minutes / 60}h {minutes % 60}m" : $"{minutes}m";
+    private static string Long(long minutes, TimeFormat f) =>
+        f == TimeFormat.Hours ? $"{minutes / 60:N0}h" : $"{minutes / 1440}d {minutes % 1440 / 60}h";
+
+    /// <summary>
+    /// Hover text for a duration of a day or more, in the other format: "2d 1h" → "49 hours",
+    /// "49h" → "2 days 1 hour". Null below a day.
+    /// </summary>
+    public static string? HoursTip(long minutes) => minutes < 1440 ? null
+        : Time == TimeFormat.Hours ? $"{minutes / 1440:N0} day{(minutes / 1440 == 1 ? "" : "s")} {minutes % 1440 / 60} hour{(minutes % 1440 / 60 == 1 ? "" : "s")}"
+        : $"{minutes / 60:N0} hours";
 
     private static readonly System.Text.RegularExpressions.Regex DaysRe = new(@"(\d+)d (\d+)h");
-    /// <summary>The same, for text that contains a "2d 1h" duration (stat boxes, table cells).</summary>
-    public static string? HoursTip(string? text) =>
-        text is not null && DaysRe.Match(text) is { Success: true } m ? $"{long.Parse(m.Groups[1].Value) * 24 + long.Parse(m.Groups[2].Value):N0} hours" : null;
+    private static readonly System.Text.RegularExpressions.Regex HoursRe = new(@"^~?([\d,]+)h$");
+    /// <summary>The same, for text holding a duration (stat boxes, table cells).</summary>
+    public static string? HoursTip(string? text)
+    {
+        if (text is null) return null;
+        if (DaysRe.Match(text) is { Success: true } d) return HoursTip((long.Parse(d.Groups[1].Value) * 24 + long.Parse(d.Groups[2].Value)) * 60);
+        if (HoursRe.Match(text.Trim()) is { Success: true } h && long.TryParse(h.Groups[1].Value.Replace(",", ""), out var hours)) return HoursTip(hours * 60);
+        return null;
+    }
 
     /// <summary>The full date and time, for hovering over a relative one ("3d ago").</summary>
     public static string Exact(DateTimeOffset when) =>

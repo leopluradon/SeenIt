@@ -297,6 +297,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<string>("Theme")
                         .HasColumnType("text");
 
+                    b.Property<int>("TimeFormat")
+                        .HasColumnType("integer");
+
                     b.Property<string>("TimeZone")
                         .HasColumnType("text");
 

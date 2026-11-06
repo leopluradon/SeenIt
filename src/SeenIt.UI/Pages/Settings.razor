@@ -304,6 +304,15 @@
             </div>
         </section>
 
+        <section class="panel" id="time">
+            <h2>Time</h2>
+            <p class="muted small">How long stretches of time read, like time watched. Hover one to see it the other way. Under a day it's always hours and minutes.</p>
+            <div class="segmented">
+                <button class="@(Fmt.Time == TimeFormat.DaysHours ? "on" : "")" @onclick="() => SaveTime(TimeFormat.DaysHours)">Days and hours (48d 7h)</button>
+                <button class="@(Fmt.Time == TimeFormat.Hours ? "on" : "")" @onclick="() => SaveTime(TimeFormat.Hours)">Hours (1,159h)</button>
+            </div>
+        </section>
+
         <section class="panel" id="appearance">
             <h2>Appearance</h2>
             <p class="muted small">Color theme, saved to your account so it follows you to every device.</p>
@@ -745,6 +754,18 @@
             await Api.SetPreferencesAsync(new PreferencesRequest(RatingScale: scale));
             Session.Update(me => me with { RatingScale = scale });
             Toasts.Show(scale switch { RatingScale.FiveStars => "Ratings shown as 5 stars", RatingScale.Decimal => "Ratings out of 10, with decimals", _ => "Ratings shown out of 10" });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task SaveTime(TimeFormat f)
+    {
+        if (f == Fmt.Time) return;
+        try
+        {
+            await Api.SetPreferencesAsync(new PreferencesRequest(TimeFormat: f));
+            Session.Update(me => me with { TimeFormat = f });
+            Toasts.Show(f == TimeFormat.Hours ? "Times shown in hours" : "Times shown in days and hours");
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }
