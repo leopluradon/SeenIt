@@ -1144,7 +1144,11 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .note-panel textarea { resize: vertical; }
 
 /* "Rate it?" after marking watched */
-.rate-prompt { position: fixed; left: 50%; transform: translateX(-50%); bottom: 84px; z-index: 99; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
-    max-width: calc(100vw - 32px); background: var(--surface-3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); animation: pop .2s ease-out; }
+.rate-prompt { position: fixed; left: 50%; transform: translateX(-50%); bottom: 84px; z-index: 99; display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; justify-content: center;
+    width: max-content; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); animation: pop .2s ease-out; }
 .rate-prompt-title { font-size: .9rem; }
 @media (max-width: 700px) { .rate-prompt { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+.rate-prompt .rating-picker { flex: none; }
+.rate-prompt .pip { background: var(--surface-3); }
+.rate-prompt .rating-picker.compact .pip { width: 16px; height: 16px; }
+@media (max-width: 420px) { .rate-prompt { gap: 6px; padding: 8px 10px; } .rate-prompt .rating-picker.compact .pip { width: 13px; height: 13px; } .rate-prompt-title { font-size: .82rem; } }
