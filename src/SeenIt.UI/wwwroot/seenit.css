@@ -1101,3 +1101,7 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
 .rating-picker.decimal input[type=range].unset { opacity: .45; }
 .rating-picker.decimal .rating-number { width: 4.2em; text-align: center; font-weight: 700; padding: 4px 6px; }
 .rating-picker.decimal.compact { max-width: 240px; }
+@media (max-width: 600px) {
+    .segmented-wrap { display: flex; flex-direction: column; align-items: stretch; border-radius: var(--radius); }
+    .segmented-wrap button { justify-content: flex-start; border-radius: calc(var(--radius) - 4px); }
+}
