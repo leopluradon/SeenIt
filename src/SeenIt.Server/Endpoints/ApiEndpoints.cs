@@ -351,6 +351,7 @@ public static class ApiEndpoints
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         });
+        g.MapGet("/progress/franchises", (ClaimsPrincipal p, MoreStatsService m, CancellationToken ct) => m.FranchiseProgressAsync(p.UserId(), ct));
         g.MapGet("/recommendations", (ClaimsPrincipal p, RecommendationService r, CancellationToken ct) => r.ForYouAsync(p.UserId(), ct));
 
         g.MapGet("/notifications", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, CancellationToken ct) =>

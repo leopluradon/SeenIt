@@ -195,6 +195,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<NotInterestedEntry>> NotInterestedAsync() => GetAsync<List<NotInterestedEntry>>("api/not-interested");
     public Task MarkNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Post, "api/not-interested", new FavoriteRequest(type, id));
     public Task UndoNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/not-interested?type={type}&tmdbId={id}");
+    public Task<List<FranchiseProgress>> FranchiseProgressAsync() => GetAsync<List<FranchiseProgress>>("api/progress/franchises");
     public Task<ForYouDto> ForYouAsync() => GetAsync<ForYouDto>("api/recommendations");
 
     public Task<ListFeedsDto> ListFeedsAsync(Guid id) => GetAsync<ListFeedsDto>($"api/lists/{id}/feeds");

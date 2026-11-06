@@ -223,6 +223,36 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
         return new FranchiseStats(items.Count, items.Count(f => f.Seen == f.Released), items);
     }
 
+    /// <summary>
+    /// The Progress page's franchise view: every movie collection you've seen at least one film of,
+    /// in progress first, then most recently watched. Lighter than the full stats.
+    /// </summary>
+    public async Task<List<FranchiseProgress>> FranchiseProgressAsync(Guid userId, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var watched = await db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId && w.Type == MediaType.Movie)
+            .GroupBy(w => w.TmdbId).Select(g => new { Id = g.Key, Last = g.Max(w => w.WatchedAt) }).ToListAsync(ct);
+        var last = watched.ToDictionary(w => w.Id, w => w.Last);
+        var ids = last.Keys.ToList();
+        var collectionIds = await db.Movies.AsNoTracking().Where(m => ids.Contains(m.TmdbId) && m.CollectionId != null)
+            .Select(m => m.CollectionId!.Value).Distinct().ToListAsync(ct);
+        var collections = await db.Collections.AsNoTracking().Where(x => collectionIds.Contains(x.Id)).ToListAsync(ct);
+        return collections.Select(col =>
+            {
+                var released = col.Parts.Where(p => p.ReleaseDate is { } d && d <= today).OrderBy(p => p.ReleaseDate).ToList();
+                var next = released.FirstOrDefault(p => !last.ContainsKey(p.TmdbId));
+                var lastSeen = col.Parts.Where(p => last.ContainsKey(p.TmdbId)).Select(p => (DateTimeOffset?)last[p.TmdbId]).Max();
+                return new FranchiseProgress(col.Id, col.Name, col.PosterPath, released.Count(p => last.ContainsKey(p.TmdbId)), released.Count,
+                    next is null ? null : new MediaSummary(MediaType.Movie, next.TmdbId, next.Title, next.ReleaseDate?.Year, next.PosterPath, null, null, null),
+                    lastSeen is { } l && WatchDates.IsUnknown(l) ? null : lastSeen,
+                    col.Parts.Count(p => p.ReleaseDate is null || p.ReleaseDate > today));
+            })
+            .Where(f => f.Released >= 2 && f.Seen > 0)
+            .OrderBy(f => f.Seen >= f.Released)
+            .ThenByDescending(f => f.LastWatchedAt ?? DateTimeOffset.MinValue)
+            .ToList();
+    }
+
     // ----- Episodes left -----
 
     private async Task<BacklogStats> BacklogAsync(Guid userId, Ctx c, List<ShowProgressDto> progress, CancellationToken ct)

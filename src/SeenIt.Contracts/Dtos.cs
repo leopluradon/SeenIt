@@ -885,7 +885,8 @@ public record RuntimeStats(int Movies, int? AverageMinutes, int ShortPercent, in
 public record EraStats(int? AverageYear, IReadOnlyList<CountBucket> ByMonth);
 
 public record FranchiseStats(int Started, int Completed, IReadOnlyList<FranchiseProgress> Items);
-public record FranchiseProgress(int Id, string Name, string? PosterPath, int Seen, int Released, MediaSummary? Next);
+public record FranchiseProgress(int Id, string Name, string? PosterPath, int Seen, int Released, MediaSummary? Next,
+    DateTimeOffset? LastWatchedAt = null, int Upcoming = 0);   // Upcoming: announced parts not out yet
 
 public record BacklogStats(int Shows, int Episodes, long Minutes, int MinutesPerDay, DateOnly? CaughtUpBy);
 

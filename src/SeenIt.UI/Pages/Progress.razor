@@ -6,6 +6,61 @@
 
 <div class="page-head">
     <h1>Progress</h1>
+    <div class="segmented" role="tablist" aria-label="What to show">
+        <button role="tab" aria-selected="@(!Franchises)" class="@(Franchises ? "" : "on")" @onclick='() => Nav.NavigateTo("progress")'><Icon Name="tv" Size="16" /> TV shows</button>
+        <button role="tab" aria-selected="@Franchises" class="@(Franchises ? "on" : "")" @onclick='() => Nav.NavigateTo("progress?view=franchises")'><Icon Name="film" Size="16" /> Movie franchises</button>
+    </div>
+</div>
+@if (Franchises)
+{
+    <div class="chips">
+        <button class="chip @(ftab == "progress" ? "on" : "")" @onclick='() => ftab = "progress"'>In progress</button>
+        <button class="chip @(ftab == "done" ? "on" : "")" @onclick='() => ftab = "done"'>Completed</button>
+        <button class="chip @(ftab == "all" ? "on" : "")" @onclick='() => ftab = "all"'>All</button>
+    </div>
+    <ErrorBox Message="@ferror" OnRetry="LoadFranchises" />
+    @if (franchises is null && ferror is null) { <Spinner /> }
+    else if (franchises is not null)
+    {
+        var fshown = franchises.Where(f => ftab switch { "progress" => f.Seen < f.Released, "done" => f.Seen >= f.Released, _ => true }).ToList();
+        @if (fshown.Count == 0)
+        {
+            <Empty Title="@(ftab == "done" ? "No finished franchises yet." : "No franchises in progress.")">Watch a movie that's part of a series (Star Wars, Harry Potter, the MCU…) and it shows up here.</Empty>
+        }
+        <div class="progress-list">
+            @foreach (var f in fshown)
+            {
+                var link = f.Next is { } nx ? $"movie/{nx.TmdbId}" : null;
+                <div class="progress-item" @key="f.Id">
+                    <a href="@link"><img src="@Img.Poster(f.PosterPath ?? f.Next?.PosterPath, "w154")" alt="" loading="lazy" /></a>
+                    <div class="progress-body">
+                        <span class="mini-title">@f.Name</span>
+                        <div class="inline">
+                            <ProgressBar Value="f.Seen" Max="f.Released" />
+                            <span class="muted small nowrap">@f.Seen/@f.Released</span>
+                        </div>
+                        @if (f.Next is { } n) { <div class="small">Next: <a href="@($"movie/{n.TmdbId}")"><b>@n.Title</b>@(n.Year is { } y ? $" ({y})" : "")</a></div> }
+                        else { <div class="small ok">Seen them all@(f.Upcoming > 0 ? $" · {f.Upcoming} more coming" : "")</div> }
+                        @if (f.LastWatchedAt is { } lw) { <div class="muted small">Last watched <RelTime At="lw" /></div> }
+                    </div>
+                    <div class="progress-actions">
+                        @if (f.Next is { } next)
+                        {
+                            <button class="btn btn-sm btn-check" @onclick="() => pendingMovie = next" aria-label="@($"Mark {next.Title} watched")"><Icon Name="check" Size="16" /></button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    @if (pendingMovie is { } pm)
+    {
+        <WatchDialog Open="true" OpenChanged="o => { if (!o) pendingMovie = null; }" What="@pm.Title" OnPick="WatchMovie" />
+    }
+}
+else
+{
+<div class="page-head">
     <div class="segmented">
         <button class="@(tab == "watching" ? "on" : "")" @onclick='() => tab = "watching"'>Watching</button>
         <button class="@(tab == "waiting" ? "on" : "")" @onclick='() => tab = "waiting"'>Caught up</button>
@@ -89,7 +144,42 @@ else if (items is not null)
     <WatchDialog Open="true" OpenChanged="o => { if (!o) pending = null; }" What="@($"{ps.Name} {Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber)}")"
                  ReleaseDate="pe.AirDate" OnPick="Watch" />
 }
+}
 @code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+    /// <summary>TV shows are the default; franchises only when asked for.</summary>
+    private bool Franchises => View == "franchises";
+    private List<FranchiseProgress>? franchises;
+    private string? ferror;
+    private string ftab = "progress";
+    private MediaSummary? pendingMovie;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Franchises && franchises is null) await LoadFranchises();
+    }
+
+    private async Task LoadFranchises()
+    {
+        ferror = null;
+        try { franchises = await Api.FranchiseProgressAsync(); }
+        catch (Exception ex) { ferror = ex.Message; }
+    }
+
+    private async Task WatchMovie(WatchChoice c)
+    {
+        if (pendingMovie is not { } m) return;
+        pendingMovie = null;
+        try
+        {
+            await Api.WatchAsync(Fmt.Watch(MediaType.Movie, m.TmdbId, c));
+            Toasts.Show($"Watched {m.Title}{Fmt.When(c)}");
+            await LoadFranchises();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
     private UpNextSort Sort => Session.Me?.UpNextSort ?? UpNextSort.LastWatched;
 
     /// <summary>Saved to your account: Home's Up next uses the same order.</summary>
