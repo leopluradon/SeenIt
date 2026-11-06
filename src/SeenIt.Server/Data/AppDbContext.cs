@@ -33,6 +33,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ImdbRating> ImdbRatings => Set<ImdbRating>();
     public DbSet<ExternalScoreCache> ExternalScores => Set<ExternalScoreCache>();
     public DbSet<ServerState> ServerState => Set<ServerState>();
+    public DbSet<UserAvatar> Avatars => Set<UserAvatar>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -140,6 +141,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.ImdbId).HasMaxLength(16);
         });
         b.Entity<ExternalScoreCache>(e => e.HasKey(x => new { x.Type, x.TmdbId }));
+        b.Entity<UserAvatar>(e =>
+        {
+            e.HasKey(x => x.UserId);
+            e.HasOne<AppUser>().WithOne().HasForeignKey<UserAvatar>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         b.Entity<ServerState>(e =>
         {
             e.HasKey(x => x.Key);

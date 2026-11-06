@@ -130,6 +130,7 @@ builder.Services.Configure<MdbListOptions>(config.GetSection("MdbList"));
 builder.Services.AddHttpClient("mdblist", c => c.Timeout = TimeSpan.FromSeconds(8));
 builder.Services.AddHttpClient("imdb", c => c.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<ScoreService>();
+builder.Services.AddScoped<AvatarService>();
 builder.Services.AddHostedService<ImdbRatingsWorker>();
 
 var app = builder.Build();

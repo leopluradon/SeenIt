@@ -286,6 +286,18 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     public Uri BaseAddress => http.BaseAddress!;
 
+    public async Task UploadAvatarAsync(string fileName, string contentType, Stream content)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new StreamContent(content);
+        file.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
+        form.Add(file, "file", fileName);
+        using var resp = await SendRawAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/auth/avatar") { Content = form }, auth: true);
+        await EnsureOkAsync(resp);
+    }
+
+    public Task RemoveAvatarAsync() => SendAsync(HttpMethod.Delete, "api/auth/avatar");
+
     // ---------- Plumbing ----------
 
     private record IdResult(Guid Id);

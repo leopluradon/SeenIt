@@ -433,6 +433,15 @@
             @if (Session.Me is { } me)
             {
                 <p class="muted small">Signed in as <b>@me.UserName</b> (@me.Email) · member since @me.CreatedAt.ToLocalTime().ToString("MMMM yyyy")</p>
+                <div class="avatar-edit">
+                    <Avatar Name="@(me.DisplayName ?? me.UserName)" Url="@me.Avatar" Class="avatar-lg" />
+                    <label class="btn @(avatarBusy ? "disabled" : "")">
+                        <Icon Name="upload" Size="16" /> @(avatarBusy ? "Uploading…" : me.Avatar is null ? "Add a profile picture" : "Change picture")
+                        <InputFile OnChange="UploadAvatar" accept="image/jpeg,image/png,image/webp,image/gif,image/*" class="visually-hidden" disabled="@avatarBusy" />
+                    </label>
+                    @if (me.Avatar is not null) { <button class="btn btn-ghost" disabled="@avatarBusy" @onclick="RemoveAvatar">Remove</button> }
+                    <span class="muted small">JPEG, PNG or WebP, up to 10 MB. It's cropped to a square.</span>
+                </div>
                 <form class="inline" @onsubmit="SaveProfile">
                     <input placeholder="Display name" @bind="displayName" maxlength="64" aria-label="Display name" />
                     <button class="btn" type="submit">Save</button>
@@ -756,6 +765,37 @@
             Toasts.Show(scale switch { RatingScale.FiveStars => "Ratings shown as 5 stars", RatingScale.Decimal => "Ratings out of 10, with decimals", _ => "Ratings shown out of 10" });
         }
         catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private bool avatarBusy;
+
+    private async Task UploadAvatar(InputFileChangeEventArgs e)
+    {
+        avatarBusy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            await Api.UploadAvatarAsync(e.File.Name, e.File.ContentType, stream);
+            var fresh = await Api.MeAsync();
+            Session.Update(me => me with { Avatar = fresh.Avatar });
+            Toasts.Show("Profile picture updated");
+        }
+        catch (IOException) { Toasts.Show("That picture is over 10 MB.", error: true); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { avatarBusy = false; }
+    }
+
+    private async Task RemoveAvatar()
+    {
+        avatarBusy = true;
+        try
+        {
+            await Api.RemoveAvatarAsync();
+            Session.Update(me => me with { Avatar = null });
+            Toasts.Show("Profile picture removed");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { avatarBusy = false; }
     }
 
     private async Task SaveTime(TimeFormat f)

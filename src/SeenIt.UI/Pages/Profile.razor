@@ -10,7 +10,7 @@
 else if (p is not null)
 {
     <div class="profile-head">
-        <span class="avatar avatar-lg">@p.User.Name[..1].ToUpperInvariant()</span>
+        <Avatar Name="@p.User.Name" Url="@p.User.Avatar" Class="avatar-lg" />
         <div class="profile-info">
             <h1>@p.User.Name</h1>
             <div class="muted small">

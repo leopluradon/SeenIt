@@ -44,7 +44,8 @@ public record MeDto(
     string? Region = null, ProfileVisibility Visibility = ProfileVisibility.Friends,
     DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null,
     IReadOnlyList<string>? HomeOrder = null, string? Theme = null, RatingScale RatingScale = RatingScale.Ten,
-    TimeFormat TimeFormat = TimeFormat.DaysHours);
+    TimeFormat TimeFormat = TimeFormat.DaysHours,
+    string? Avatar = null);   // profile picture path, null when there's none
 
 /// <summary>How long stretches of time read: "48d 7h" or "1,159h". Under a day both read "5h 12m".</summary>
 public enum TimeFormat { DaysHours, Hours }
@@ -514,6 +515,7 @@ public enum ActivityKind
     EditPlay,
     GoalSet, GoalDelete, LetterboxdSync,
     ImportUndo, ImportResolve, ListReorder, ListNote, WatchOrder,
+    ProfilePicture,
 }
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
@@ -660,7 +662,8 @@ public record NowWatchingDto(
 /// </summary>
 public record FriendSeen(UserCard User, int Plays, DateTimeOffset? LastWatched, double? Rating);
 
-public record UserCard(string UserName, string? DisplayName, bool Following, bool FollowsYou)
+/// <summary>Avatar: the profile picture's path on the server (versioned), or null for the initial.</summary>
+public record UserCard(string UserName, string? DisplayName, bool Following, bool FollowsYou, string? Avatar = null)
 {
     public string Name => DisplayName ?? UserName;
 }

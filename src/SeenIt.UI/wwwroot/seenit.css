@@ -1105,3 +1105,9 @@ a.ext-score:hover { border-color: var(--accent); color: var(--text); }
     .segmented-wrap { display: flex; flex-direction: column; align-items: stretch; border-radius: var(--radius); }
     .segmented-wrap button { justify-content: flex-start; border-radius: calc(var(--radius) - 4px); }
 }
+
+/* Profile pictures */
+img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); display: block; flex-shrink: 0; }
+.avatar.has-picture { padding: 0; overflow: hidden; background: var(--surface-2); }
+.avatar.has-picture img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-edit { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }

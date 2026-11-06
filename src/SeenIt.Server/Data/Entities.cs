@@ -25,6 +25,8 @@ public class AppUser : IdentityUser<Guid>
     public string? Theme { get; set; }
     /// <summary>Rate as 1–10, 0.5–5 stars, or 1–10 with one decimal (stored as 1–10 either way).</summary>
     public RatingScale RatingScale { get; set; }
+    /// <summary>When the profile picture last changed (its URL's version); null when there's none.</summary>
+    public long? AvatarVersion { get; set; }
     /// <summary>"48d 7h" or "1,159h" for long stretches of time.</summary>
     public TimeFormat TimeFormat { get; set; }
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
@@ -438,4 +440,11 @@ public class ServerState
 {
     public string Key { get; set; } = "";
     public string Value { get; set; } = "";
+}
+
+/// <summary>A profile picture: a 256×256 JPEG, cropped and resized on upload.</summary>
+public class UserAvatar
+{
+    public Guid UserId { get; set; }
+    public byte[] Data { get; set; } = [];
 }

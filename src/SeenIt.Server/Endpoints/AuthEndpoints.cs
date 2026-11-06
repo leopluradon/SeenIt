@@ -163,7 +163,30 @@ public static partial class AuthEndpoints
                 await users.UpdateAsync(u);
             }
             return TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages,
-                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName), u.TimeZone, u.HomeOrder, u.Theme, u.RatingScale, u.TimeFormat));
+                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName), u.TimeZone, u.HomeOrder, u.Theme, u.RatingScale, u.TimeFormat, AvatarService.Path(u.UserName!, u.AvatarVersion)));
+        });
+
+        // Profile picture: any common image, cropped to a square on the server.
+        me.MapPost("/avatar", async (HttpRequest http, ClaimsPrincipal p, AvatarService avatars, ActivityService a, CancellationToken ct) =>
+        {
+            if (!http.HasFormContentType) return Results.BadRequest(new ProblemInfo("Send the picture as a file upload."));
+            var form = await http.ReadFormAsync(ct);
+            if (form.Files.Count == 0) return Results.BadRequest(new ProblemInfo("No picture was sent."));
+            var file = form.Files[0];
+            if (file.Length > AvatarService.MaxUploadBytes) return Results.BadRequest(new ProblemInfo("That picture is over 10 MB."));
+            try
+            {
+                await using var stream = file.OpenReadStream();
+                await avatars.SetAsync(p.UserId(), stream, ct);
+            }
+            catch (TrackingException ex) { return Results.BadRequest(new ProblemInfo(ex.Message)); }
+            await a.LogAsync(p, ActivityKind.ProfilePicture);
+            return Results.NoContent();
+        }).DisableAntiforgery();
+        me.MapDelete("/avatar", async (ClaimsPrincipal p, AvatarService avatars, CancellationToken ct) =>
+        {
+            await avatars.RemoveAsync(p.UserId(), ct);
+            return Results.NoContent();
         });
 
         me.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>

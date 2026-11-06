@@ -479,6 +479,14 @@ public static class ApiEndpoints
         app.MapGet("/api/users/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.GetProfileAsync(name, p.OptionalUserId(), ct) is { } profile ? Results.Ok(profile) : Results.NotFound());
 
+        // Profile pictures are public, like usernames. The URL carries a version, so it can be cached for good.
+        app.MapGet("/api/users/{name}/avatar", async (string name, HttpContext http, AvatarService avatars, CancellationToken ct) =>
+        {
+            if (await avatars.GetAsync(name, ct) is not { } jpeg) return Results.NotFound();
+            http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return Results.File(jpeg, "image/jpeg");
+        });
+
         // Who someone follows / who follows them (hidden only for private profiles you're not friends with).
         app.MapGet("/api/users/{name}/following", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.ConnectionsOfAsync(name, p.OptionalUserId(), ct) is { } c ? Results.Ok(c.Following) : Results.NotFound());

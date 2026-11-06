@@ -295,7 +295,7 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
         var rows = people.Select(u =>
             {
                 var mine = month.Where(w => w.UserId == u.Id).ToList();
-                return new LeaderRow(new UserCard(u.UserName!, u.DisplayName, following.Contains(u.Id), followers.Contains(u.Id)),
+                return new LeaderRow(new UserCard(u.UserName!, u.DisplayName, following.Contains(u.Id), followers.Contains(u.Id), AvatarService.Path(u.UserName!, u.AvatarVersion)),
                     mine.Sum(w => (long)Mins((int)w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber)), mine.Count, u.Id == userId);
             })
             .OrderByDescending(r => r.Minutes).ToList();

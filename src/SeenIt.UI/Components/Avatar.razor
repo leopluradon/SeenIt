@@ -1,0 +1,26 @@
+@* A member's profile picture, or the first letter of their name when they haven't set one. *@
+@inject ApiClient Api
+@if (Url is { } path && !failed)
+{
+    <img class="avatar avatar-img @Class" src="@Src(path)" alt="" loading="lazy" @onerror="() => failed = true" />
+}
+else
+{
+    <span class="avatar @Class">@(string.IsNullOrEmpty(Name) ? "?" : Name[..1].ToUpperInvariant())</span>
+}
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+    /// <summary>The server path from UserCard.Avatar / MeDto.Avatar.</summary>
+    [Parameter] public string? Url { get; set; }
+    [Parameter] public string? Class { get; set; }
+    private bool failed;
+    private string? lastUrl;
+
+    protected override void OnParametersSet()
+    {
+        if (Url != lastUrl) { failed = false; lastUrl = Url; }
+    }
+
+    // The app loads its pages from the phone, so the picture's address has to point at the server.
+    private string Src(string path) => new Uri(Api.BaseAddress, path).ToString();
+}

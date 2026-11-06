@@ -212,6 +212,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
 
+                    b.Property<long?>("AvatarVersion")
+                        .HasColumnType("bigint");
+
                     b.Property<bool>("BlurSpoilerImages")
                         .HasColumnType("boolean");
 
@@ -1007,6 +1010,20 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("ShowWatchOrders");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.UserAvatar", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("Avatars");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.UserList", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1473,6 +1490,15 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.UserAvatar", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithOne()
+                        .HasForeignKey("SeenIt.Server.Data.UserAvatar", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

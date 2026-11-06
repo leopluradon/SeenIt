@@ -9,7 +9,7 @@
             {
                 <li @key="f.User.UserName">
                     <a href="@Fmt.UserHref(f.User.UserName)" class="friends-seen-who">
-                        <span class="avatar avatar-sm">@f.User.Name[..1].ToUpperInvariant()</span>
+                        <Avatar Name="@f.User.Name" Url="@f.User.Avatar" Class="avatar-sm" />
                         <b>@f.User.Name</b>
                     </a>
                     <span class="muted small">@Detail(f)</span>

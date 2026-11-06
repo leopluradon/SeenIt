@@ -27,7 +27,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var ids = users.Select(u => u.Id).ToList();
         var following = (await db.Follows.Where(f => f.FollowerId == me && ids.Contains(f.FolloweeId)).Select(f => f.FolloweeId).ToListAsync(ct)).ToHashSet();
         var followers = (await db.Follows.Where(f => f.FolloweeId == me && ids.Contains(f.FollowerId)).Select(f => f.FollowerId).ToListAsync(ct)).ToHashSet();
-        return users.Select(u => new UserCard(u.UserName!, u.DisplayName, following.Contains(u.Id), followers.Contains(u.Id))).ToList();
+        return users.Select(u => new UserCard(u.UserName!, u.DisplayName, following.Contains(u.Id), followers.Contains(u.Id), AvatarService.Path(u.UserName!, u.AvatarVersion))).ToList();
     }
 
     public async Task<ProfileStats> StatsAsync(Guid userId, CancellationToken ct)
@@ -44,7 +44,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var (following, followsYou) = await RelationAsync(viewer, owner.Id, ct);
         var isMe = owner.Id == viewer;
         var canView = CanView(owner, viewer, following && followsYou);
-        var card = new UserCard(owner.UserName!, owner.DisplayName, following, followsYou);
+        var card = new UserCard(owner.UserName!, owner.DisplayName, following, followsYou, AvatarService.Path(owner.UserName!, owner.AvatarVersion));
         var followers = await db.Follows.CountAsync(f => f.FolloweeId == owner.Id, ct);
         var followingCount = await db.Follows.CountAsync(f => f.FollowerId == owner.Id, ct);
 
@@ -199,7 +199,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
     private async Task<(bool Ok, UserCard Card)> VisibleAsync(AppUser user, Guid viewer, CancellationToken ct)
     {
         var (following, followsYou) = await RelationAsync(viewer, user.Id, ct);
-        return (CanView(user, viewer, following && followsYou), new UserCard(user.UserName!, user.DisplayName, following, followsYou));
+        return (CanView(user, viewer, following && followsYou), new UserCard(user.UserName!, user.DisplayName, following, followsYou, AvatarService.Path(user.UserName!, user.AvatarVersion)));
     }
 
     /// <summary>Compares two people. The viewer can be either of them or anyone who can see both profiles.</summary>
