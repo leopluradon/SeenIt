@@ -130,7 +130,7 @@
                         <section class="row-section">
                             <div class="section-head">
                                 <h2>Friends' activity</h2>
-                                <div class="section-tools"><a href="friends" class="section-more">Friends <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("friends")' /></div>
+                                <div class="section-tools"><a href="friends?tab=feed" class="section-more">Friends <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("friends")' /></div>
                             </div>
                             @foreach (var w in f.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
                             <div class="poster-scroller">

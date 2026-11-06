@@ -93,14 +93,14 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
-    private string tab = "feed";
+    private string tab = "following";
     private FeedDto? feed;
     private List<UserCard>? people, results;
     private string? error, query;
 
     protected override Task OnInitializedAsync()
     {
-        tab = Tab is "following" or "followers" or "find" ? Tab : "feed";
+        tab = Tab is "feed" or "followers" or "find" ? Tab : "following";
         return Load();
     }
 
