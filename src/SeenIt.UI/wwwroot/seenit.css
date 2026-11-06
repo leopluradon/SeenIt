@@ -1136,3 +1136,4 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .rule-grid .inline input { width: 50%; min-width: 0; }
 .rule-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
 .feed-label { flex: none; width: 80px; font-weight: 600; font-size: .85rem; }
+.format-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }

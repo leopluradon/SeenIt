@@ -26,6 +26,9 @@ else if (s is not null)
                     <Icon Name="heart" Size="18" Class="@(u.IsFavorite ? "filled" : null)" /> Favorite
                 </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
+                <button class="btn @(u.Owned is not null ? "btn-on" : "")" @onclick="() => ownOpen = true" title="Your library: what you own">
+                    <Icon Name="download" Size="18" /> @(u.Owned is { } own ? OwnedFormats.Label(own) : "Own it")
+                </button>
             }
             else
             {
@@ -171,6 +174,7 @@ else if (s is not null)
                      What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode" />
         <WatchDialog Open="pendingSeason is not null" OpenChanged="o => { if (!o) pendingSeason = null; }" What="@(pendingSeason?.Name ?? "")" Bulk="true" OnPick="WatchSeason"
                      Through="seasonThrough" ThroughNote=" in the earlier seasons" />
+        <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Show" TmdbId="Id" Title="@s.Name" Current="s.User?.Owned" OnChanged="Reload" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Title="@s.Name" />
     }
@@ -232,7 +236,8 @@ else if (s is not null)
     [Parameter] public int Id { get; set; }
     private ShowDetail? s;
     private string? error;
-    private bool busy, watchAllOpen, listOpen, fixOpen;
+    private bool busy, watchAllOpen, listOpen, fixOpen, ownOpen;
+    private async Task Reload() { s = await Api.ShowAsync(Id); StateHasChanged(); }
     private EpisodeRef? pendingEpisode;
     private SeasonSummary? pendingSeason;
     private bool seasonThrough;

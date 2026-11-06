@@ -19,15 +19,17 @@ public static class MediaServerPayloads
     public static JellyfinPayload? FromPlex(JsonElement root, string? onlyAccount)
     {
         var ev = Str(root, "event");
-        if (ev is null || !ev.StartsWith("media.", StringComparison.Ordinal)) return null;
+        // library.new: something was added to the server (goes to the server owner's webhook) → your library.
+        if (ev is null || !(ev.StartsWith("media.", StringComparison.Ordinal) || ev == "library.new")) return null;
         if (!string.IsNullOrWhiteSpace(onlyAccount) && root.TryGetProperty("Account", out var account)
             && !string.Equals(Str(account, "title"), onlyAccount.Trim(), StringComparison.OrdinalIgnoreCase))
             return null;
         if (!root.TryGetProperty("Metadata", out var m) || m.ValueKind != JsonValueKind.Object) return null;
 
-        var itemType = Str(m, "type") switch { "movie" => "Movie", "episode" => "Episode", var t => t };
+        var itemType = Str(m, "type") switch { "movie" => "Movie", "episode" => "Episode", "show" => "Series", "season" => "Season", var t => t };
         var notification = ev switch
         {
+            "library.new" => "ItemAdded",
             "media.play" or "media.resume" => "PlaybackStart",
             "media.pause" => "PlaybackProgress",
             "media.stop" or "media.scrobble" => "PlaybackStop",
@@ -52,15 +54,17 @@ public static class MediaServerPayloads
         {
             var (agent, value, isEpisode) = (legacy.Groups[1].Value, legacy.Groups[2].Value, legacy.Groups[3].Success);
             if (agent == "imdb") imdb ??= value;
-            else if (agent == "themoviedb") { if (isEpisode) seriesTmdb = value; else tmdb ??= value; }
-            else if (isEpisode) seriesTvdb = value;
+            else if (agent == "themoviedb") { if (isEpisode || itemType is "Season") seriesTmdb = value; else tmdb ??= value; }
+            else if (isEpisode || itemType is "Season") seriesTvdb = value;
+            else if (itemType is "Series") tvdb ??= value;
         }
 
         long? offset = Long(m, "viewOffset"), duration = Long(m, "duration");
         return new JellyfinPayload(
             notification, itemType, Str(m, "title"), (int?)Long(m, "year"),
-            Str(m, "grandparentTitle"), (int?)Long(m, "parentIndex"), (int?)Long(m, "index"),
-            itemType == "Movie" ? tmdb : null, imdb, tvdb,
+            Str(m, "grandparentTitle") ?? (itemType == "Season" ? Str(m, "parentTitle") : null),
+            itemType == "Season" ? (int?)Long(m, "index") : (int?)Long(m, "parentIndex"), itemType == "Season" ? null : (int?)Long(m, "index"),
+            itemType is "Movie" or "Series" ? tmdb : null, imdb, tvdb,
             offset * TicksPerMs, duration * TicksPerMs,
             ev == "media.scrobble" ? true : null,   // Plex sends this once 90% is played
             null, null, DateTimeOffset.UtcNow,

@@ -37,6 +37,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotInterested> NotInterested => Set<NotInterested>();
     public DbSet<ListLike> ListLikes => Set<ListLike>();
+    public DbSet<LibraryItem> Library => Set<LibraryItem>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -145,6 +146,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
         b.Entity<ExternalScoreCache>(e => e.HasKey(x => new { x.Type, x.TmdbId }));
         b.Entity<NotInterested>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
+        b.Entity<LibraryItem>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
         b.Entity<ListLike>(e =>
         {
             e.HasKey(x => new { x.UserId, x.ListId });
@@ -198,7 +200,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested), typeof(ListLike) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested), typeof(ListLike), typeof(LibraryItem) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

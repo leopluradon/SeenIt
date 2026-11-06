@@ -124,7 +124,7 @@ else if (list is not null)
     /// <summary>A smart list's rules in words, e.g. "From your watchlist", "Movies", "1980–1989", "Not seen yet".</summary>
     private static IEnumerable<string> RuleText(SmartRules r)
     {
-        yield return r.Source switch { SmartSource.History => "From what's been watched", SmartSource.Watchlist => "From the watchlist", _ => "From all of TMDB" };
+        yield return r.Source switch { SmartSource.History => "From what's been watched", SmartSource.Watchlist => "From the watchlist", SmartSource.Library => "From the library", _ => "From all of TMDB" };
         if (r.Type is { } t) yield return t == MediaType.Movie ? "Movies" : "Shows";
         if (r.Genres is { Count: > 0 } g) yield return string.Join(" or ", g);
         if (r.YearFrom is not null || r.YearTo is not null) yield return r.YearFrom == r.YearTo ? $"{r.YearFrom}" : $"{r.YearFrom?.ToString() ?? "…"}–{r.YearTo?.ToString() ?? "now"}";

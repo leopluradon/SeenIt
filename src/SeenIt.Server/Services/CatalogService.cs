@@ -635,6 +635,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
             Last = watches.Max(w => (DateTimeOffset?)w.WatchedAt),
             Favorite = db.Favorites.Any(f => f.UserId == userId && f.Type == type && f.TmdbId == id),
             NotInterested = db.NotInterested.Any(n => n.UserId == userId && n.Type == type && n.TmdbId == id),
+            Owned = db.Library.Where(l => l.UserId == userId && l.Type == type && l.TmdbId == id).Select(l => (OwnedFormat?)l.Format).FirstOrDefault(),
         }).FirstOrDefaultAsync(ct);
         var lists = await db.ListItems
             .Where(i => i.Type == type && i.TmdbId == id && db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId))
@@ -645,7 +646,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, ILogger<CatalogSer
                 ? await watches.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt)
                     .Select(w => new PlayDto(w.Id, w.WatchedAt, w.Source)).ToListAsync(ct)
                 : [];
-        return new UserMediaState(state?.InWatchlist ?? false, state?.Rating, state?.Plays ?? 0, state?.Last, lists, history, state?.Favorite ?? false, state?.NotInterested ?? false);
+        return new UserMediaState(state?.InWatchlist ?? false, state?.Rating, state?.Plays ?? 0, state?.Last, lists, history, state?.Favorite ?? false, state?.NotInterested ?? false, state?.Owned);
     }
 
     private static List<Video> PickVideos(TmdbVideos? v) =>

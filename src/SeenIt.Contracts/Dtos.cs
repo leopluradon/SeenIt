@@ -194,7 +194,8 @@ public record UserMediaState(
     IReadOnlyList<Guid> ListIds,
     IReadOnlyList<PlayDto>? History = null,    // every play, newest first (movies only)
     bool IsFavorite = false,
-    bool NotInterested = false);
+    bool NotInterested = false,
+    OwnedFormat? Owned = null);   // in your library, and how
 
 public record MovieDetail(
     int TmdbId,
@@ -445,6 +446,19 @@ public enum ShowTrackStatus { Watching, Paused, Dropped }
 public record ShowStatusRequest(ShowTrackStatus Status);
 
 public record NotInterestedEntry(MediaSummary Media, DateTimeOffset AddedAt);
+
+/// <summary>How you own something in your library.</summary>
+public enum OwnedFormat { Digital, BluRay, Uhd, Dvd, MediaServer, Other }
+public static class OwnedFormats
+{
+    public static string Label(OwnedFormat f) => f switch
+    {
+        OwnedFormat.BluRay => "Blu-ray", OwnedFormat.Uhd => "4K Blu-ray", OwnedFormat.Dvd => "DVD",
+        OwnedFormat.MediaServer => "Media server", OwnedFormat.Digital => "Digital", _ => "Other",
+    };
+}
+public record LibraryEntry(MediaSummary Media, OwnedFormat Format, DateTimeOffset AddedAt, WatchSource Source, bool Watched);
+public record LibraryRequest(MediaType Type, int TmdbId, OwnedFormat Format);
 /// <summary>A recommendation and the title of yours that led to it ("Because you liked …").</summary>
 public record ForYouItem(MediaSummary Media, string Because, MediaType BecauseType, int BecauseTmdbId);
 public record ForYouGroup(MediaSummary Seed, IReadOnlyList<MediaSummary> Items);
@@ -501,7 +515,7 @@ public record ListDetail(Guid Id, string Name, string? Description, bool IsPubli
     bool Ranked = false, int Saves = 0, bool Saved = false, SmartRules? Rules = null);
 
 /// <summary>Where a smart list looks: what you've watched, your watchlist, or everything on TMDB.</summary>
-public enum SmartSource { History, Watchlist, Tmdb }
+public enum SmartSource { History, Watchlist, Tmdb, Library }
 public enum SmartSort { Popular, Score, Newest, Oldest, RecentlyWatched, Title }
 /// <summary>
 /// A list that fills itself in. Genres match any of them. Watched: true = only ones you've seen,

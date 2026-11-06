@@ -198,6 +198,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<ForYouDto> ForYouAsync() => GetAsync<ForYouDto>("api/recommendations");
 
     public Task<ListFeedsDto> ListFeedsAsync(Guid id) => GetAsync<ListFeedsDto>($"api/lists/{id}/feeds");
+    public Task<List<LibraryEntry>> LibraryAsync() => GetAsync<List<LibraryEntry>>("api/library");
+    public Task AddToLibraryAsync(MediaType type, int id, OwnedFormat format) => SendAsync(HttpMethod.Post, "api/library", new LibraryRequest(type, id, format));
+    public Task RemoveFromLibraryAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/library?type={type}&tmdbId={id}");
     public Task<List<string>> GenresAsync() => GetAsync<List<string>>("api/catalog/genres");
     public Task<List<ListSummary>> SavedListsAsync() => GetAsync<List<ListSummary>>("api/lists/saved");
     public Task<List<ListSummary>> BrowseListsAsync(string? q, bool recent) =>

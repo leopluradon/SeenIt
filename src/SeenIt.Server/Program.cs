@@ -135,6 +135,7 @@ builder.Services.AddScoped<ReleaseAlertService>();
 builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddScoped<SmartListService>();
 builder.Services.AddScoped<FeedService>();
+builder.Services.AddScoped<LibraryService>();
 builder.Services.AddHostedService<MonthlyBackupWorker>();
 builder.Services.AddHostedService<ReleaseAlertWorker>();
 builder.Services.AddHostedService<ImdbRatingsWorker>();

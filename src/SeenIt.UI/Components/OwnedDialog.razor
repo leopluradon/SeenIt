@@ -1,0 +1,55 @@
+@* "In my library": how you own it (or take it out). *@
+@inject ApiClient Api
+@inject Toasts Toasts
+<Modal Open="Open" OpenChanged="OpenChanged" Title="@($"Do you own {Title}?")">
+    <div class="stack">
+        <p class="muted small">Your library is what you own, separate from what you've watched. Plex and Jellyfin can fill it in as things are added to your server (Settings → Media servers).</p>
+        <div class="format-grid">
+            @foreach (var f in Enum.GetValues<OwnedFormat>())
+            {
+                <button class="btn @(Current == f ? "btn-on" : "")" disabled="@busy" @onclick="() => Pick(f)" @key="f">
+                    @if (Current == f) { <Icon Name="check" Size="14" /> } @OwnedFormats.Label(f)
+                </button>
+            }
+        </div>
+        @if (Current is not null) { <button class="btn btn-ghost btn-danger" disabled="@busy" @onclick="Remove">Remove from my library</button> }
+    </div>
+</Modal>
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter, EditorRequired] public MediaType Type { get; set; }
+    [Parameter, EditorRequired] public int TmdbId { get; set; }
+    [Parameter] public string Title { get; set; } = "this";
+    [Parameter] public OwnedFormat? Current { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private bool busy;
+
+    private async Task Pick(OwnedFormat f)
+    {
+        busy = true;
+        try
+        {
+            await Api.AddToLibraryAsync(Type, TmdbId, f);
+            Toasts.Show($"In your library ({OwnedFormats.Label(f)})");
+            await OpenChanged.InvokeAsync(false);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Remove()
+    {
+        busy = true;
+        try
+        {
+            await Api.RemoveFromLibraryAsync(Type, TmdbId);
+            Toasts.Show("Removed from your library");
+            await OpenChanged.InvokeAsync(false);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

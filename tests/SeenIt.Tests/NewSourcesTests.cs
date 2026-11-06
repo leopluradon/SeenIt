@@ -179,3 +179,24 @@ public class NewSourcesTests
         Assert.True(p.Decide(90).Scrobble);   // 94%
     }
 }
+
+public class LibraryEventTests
+{
+    private static SeenIt.Server.Services.JellyfinPayload? Plex(string json) =>
+        MediaServerPayloads.FromPlex(System.Text.Json.JsonDocument.Parse(json).RootElement, null);
+
+    [Fact]
+    public void Plex_library_new_becomes_item_added()
+    {
+        var movie = Plex("""{"event":"library.new","Metadata":{"type":"movie","title":"The Matrix","year":1999,"Guid":[{"id":"tmdb://603"},{"id":"imdb://tt0133093"}]}}""");
+        Assert.Equal(("ItemAdded", "Movie", "603"), (movie!.NotificationType, movie.ItemType, movie.Tmdb));
+
+        var show = Plex("""{"event":"library.new","Metadata":{"type":"show","title":"Seinfeld","year":1989,"Guid":[{"id":"tmdb://1400"},{"id":"tvdb://79169"}]}}""");
+        Assert.Equal(("ItemAdded", "Series", "1400", "79169"), (show!.NotificationType, show.ItemType, show.Tmdb, show.Tvdb));
+
+        var season = Plex("""{"event":"library.new","Metadata":{"type":"season","title":"Season 4","parentTitle":"Seinfeld","index":4,"guid":"com.plexapp.agents.thetvdb://79169/4?lang=en"}}""");
+        Assert.Equal(("Season", "Seinfeld", 4), (season!.ItemType, season.SeriesName, season.SeasonNumber));
+
+        Assert.Null(Plex("""{"event":"admin.database.backup"}"""));
+    }
+}

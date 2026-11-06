@@ -786,6 +786,31 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("LetterboxdSyncs");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.LibraryItem", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Format")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId", "Type", "TmdbId");
+
+                    b.ToTable("Library");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.ListLike", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -1445,6 +1470,15 @@ namespace SeenIt.Server.Data.Migrations
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.LetterboxdSync", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.LibraryItem", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()

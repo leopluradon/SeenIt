@@ -212,6 +212,7 @@
                             </div>
                             <span class="muted small">Keep it private: anyone with it can add plays to your history.</span>
                         </li>
+                        <li class="muted small">If it's your own Plex server, new movies and shows added to it also go into your <a href="library">library</a> (Plex sends "library.new" to the server owner).</li>
                         <li>If other people use your Plex server, enter your Plex username so only your plays count:
                             <form class="inline" @onsubmit="SavePlexUser">
                                 <input type="text" @bind="plexUser" placeholder="Plex username (optional)" aria-label="Plex username" autocapitalize="off" autocomplete="off" spellcheck="false" />
@@ -245,7 +246,7 @@
                         </div>
                         <span class="muted small">Keep it private: anyone with it can add plays to your history.</span>
                     </li>
-                    <li>Under <b>Notification Type</b> tick <b>Playback Stop</b> (and <b>User Data Saved</b> if you want "mark played" in Jellyfin to count). Also tick <b>Playback Start</b> and <b>Playback Progress</b> to show what you're watching live as “Watching now”.</li>
+                    <li>Under <b>Notification Type</b> tick <b>Playback Stop</b> (and <b>User Data Saved</b> if you want "mark played" in Jellyfin to count). Also tick <b>Playback Start</b> and <b>Playback Progress</b> to show what you're watching live as “Watching now”, and <b>Item Added</b> to put new movies and shows on your server into your <a href="library">library</a>.</li>
                     <li>Under <b>User Filter</b> tick only your own Jellyfin user.</li>
                     <li>Under <b>Item Type</b> tick <b>Movies</b> and <b>Episodes</b>, and turn on <b>Send All Properties</b>. If your plugin version doesn't have that option, paste this into <b>Template</b> instead:
                         <div class="copy-field block">

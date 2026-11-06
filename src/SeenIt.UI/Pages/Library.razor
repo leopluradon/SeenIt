@@ -1,0 +1,60 @@
+@page "/library"
+@attribute [Authorize]
+@inject ApiClient Api
+<PageTitle>My library · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>My library</h1>
+    <div class="segmented">
+        <button class="@(type is null ? "on" : "")" @onclick="() => type = null">All</button>
+        <button class="@(type == MediaType.Movie ? "on" : "")" @onclick="() => type = MediaType.Movie">Movies</button>
+        <button class="@(type == MediaType.Show ? "on" : "")" @onclick="() => type = MediaType.Show">Shows</button>
+    </div>
+</div>
+<p class="muted small">What you own, separate from what you've watched. Add things with <b>Own it</b> on any movie or show; Plex and Jellyfin can add what lands on your server (Settings → Media servers).</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items is null && error is null) { <Spinner /> }
+else if (items is { Count: 0 }) { <Empty Title="Your library is empty." /> }
+else if (items is not null)
+{
+    <div class="searchbar">
+        <Icon Name="search" Size="18" />
+        <input type="search" @bind="find" @bind:event="oninput" placeholder="Filter your library" aria-label="Filter your library" />
+    </div>
+    <div class="chips">
+        <button class="chip @(format is null ? "on" : "")" @onclick="() => format = null">Any format</button>
+        @foreach (var f in items.Select(i => i.Format).Distinct().Order())
+        {
+            <button class="chip @(format == f ? "on" : "")" @onclick="() => format = format == f ? null : f" @key="f">@OwnedFormats.Label(f) · @items.Count(i => i.Format == f)</button>
+        }
+        <button class="chip @(unwatched ? "on" : "")" @onclick="() => unwatched = !unwatched">Not watched yet</button>
+    </div>
+    var shown = items.Where(i => (type is null || i.Media.Type == type) && (format is null || i.Format == format) && (!unwatched || !i.Watched)
+        && TextMatch.Contains(i.Media.Title, find)).ToList();
+    <p class="muted small">@shown.Count of @items.Count</p>
+    <div class="poster-grid">
+        @foreach (var i in shown)
+        {
+            <PosterCard Media="i.Media" Badge="@OwnedFormats.Label(i.Format)" Sub="@(i.Watched ? "Watched" : "Not watched yet")"
+                        SubTitle="@($"Added {i.AddedAt.ToLocalTime():MMM d, yyyy}{(i.Source == WatchSource.Manual ? "" : $" by {WatchSources.Name(i.Source)}")}")" @key="(i.Media.Type, i.Media.TmdbId)" />
+        }
+    </div>
+}
+@code {
+    private List<LibraryEntry>? items;
+    private string? error;
+    private MediaType? type;
+    private OwnedFormat? format;
+    private bool unwatched;
+    private string find = "";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { items = await Api.LibraryAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

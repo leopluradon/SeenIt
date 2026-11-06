@@ -113,7 +113,7 @@ public record JellyfinPayload(
     }
 }
 
-public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService tracking, CheckInService checkIns, ActivityService activity, ILogger<JellyfinService> log)
+public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService tracking, CheckInService checkIns, ActivityService activity, LibraryService library, ILogger<JellyfinService> log)
 {
     private static readonly TimeSpan DuplicateWindow = TimeSpan.FromHours(3);
 
@@ -170,6 +170,13 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
 
     private async Task<string> ProcessAsync(AppUser user, JellyfinPayload p, WatchSource source, CancellationToken ct)
     {
+        // Jellyfin's "Item Added" / Plex's library.new: it's on your server now, so it's in your library.
+        if (p.NotificationType == "ItemAdded")
+        {
+            if (await ResolveOwnedAsync(p, ct) is not { } owned) return "Added to the server, but couldn't match it to TMDB";
+            return await library.AddAsync(user.Id, owned.Type, owned.Id, OwnedFormat.MediaServer, source, ct)
+                ? "Added to your library" : "Already in your library";
+        }
         if (p.NotificationType is "PlaybackStart" or "PlaybackProgress" && p.ItemType is "Movie" or "Episode")
             return await NowPlayingAsync(user, p, source, ct);
         if (p.NotificationType == "PlaybackStop")
@@ -217,6 +224,34 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
     }
 
     /// <summary>Maps a Jellyfin item to TMDB using provider ids first, then a title search.</summary>
+    /// <summary>The movie or show something added to a server belongs to (an episode or season counts as its show).</summary>
+    public async Task<(MediaType Type, int Id)?> ResolveOwnedAsync(JellyfinPayload p, CancellationToken ct)
+    {
+        switch (p.ItemType)
+        {
+            case "Movie":
+                return await ResolveAsync(p, ct) is { } m ? (MediaType.Movie, m.TmdbId) : null;
+            case "Episode":
+                return await ResolveAsync(p, ct) is { } e ? (MediaType.Show, e.TmdbId) : null;
+            case "Series" or "Season":
+                var ids = p.ItemType == "Series"
+                    ? new[] { (p.Tmdb, "tmdb"), (p.Tvdb, "tvdb_id"), (p.Imdb, "imdb_id") }
+                    : [(p.SeriesTmdb, "tmdb"), (p.SeriesTvdb, "tvdb_id"), (p.SeriesImdb, "imdb_id")];
+                foreach (var (value, source) in ids)
+                {
+                    if (string.IsNullOrEmpty(value)) continue;
+                    if (source == "tmdb" && int.TryParse(value, out var id)) return (MediaType.Show, id);
+                    if (source != "tmdb" && (await tmdb.FindAsync(value, source, ct))?.TvResults?.FirstOrDefault() is { } show) return (MediaType.Show, show.Id);
+                }
+                var name = p.ItemType == "Series" ? p.Name : p.SeriesName;
+                if (name is not null && (await tmdb.SearchShowAsync(name, p.ItemType == "Series" ? p.Year : null, ct))?.Results.FirstOrDefault() is { } hit)
+                    return (MediaType.Show, hit.Id);
+                return null;
+            default:
+                return null;
+        }
+    }
+
     public async Task<WatchRequest?> ResolveAsync(JellyfinPayload p, CancellationToken ct)
     {
         if (p.ItemType == "Movie")

@@ -496,3 +496,15 @@ public class ListLike
     public Guid ListId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>Something you own (disc, digital purchase, on your media server), separate from what you've watched.</summary>
+public class LibraryItem
+{
+    public Guid UserId { get; set; }
+    public MediaType Type { get; set; }   // Movie or Show
+    public int TmdbId { get; set; }
+    public OwnedFormat Format { get; set; }
+    /// <summary>Manual, or the media server that added it (Plex, Jellyfin).</summary>
+    public WatchSource Source { get; set; } = WatchSource.Manual;
+    public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+}

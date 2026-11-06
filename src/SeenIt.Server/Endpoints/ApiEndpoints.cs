@@ -321,6 +321,19 @@ public static class ApiEndpoints
             await db.NotInterested.Where(n => n.UserId == p.UserId() && n.Type == type && n.TmdbId == tmdbId).ExecuteDeleteAsync(ct);
             return Results.NoContent();
         });
+        // Your library: what you own (by hand, or added by Plex/Jellyfin).
+        g.MapGet("/library", (ClaimsPrincipal p, LibraryService l, CancellationToken ct) => l.ListAsync(p.UserId(), ct));
+        g.MapPost("/library", async (LibraryRequest req, ClaimsPrincipal p, LibraryService l, CancellationToken ct) =>
+        {
+            if (!Enum.IsDefined(req.Format)) return Results.BadRequest(new ProblemInfo("Unknown format."));
+            await l.AddAsync(p.UserId(), req.Type, req.TmdbId, req.Format, WatchSource.Manual, ct);
+            return Results.NoContent();
+        });
+        g.MapDelete("/library", async (MediaType type, int tmdbId, ClaimsPrincipal p, LibraryService l, CancellationToken ct) =>
+        {
+            await l.RemoveAsync(p.UserId(), type, tmdbId, ct);
+            return Results.NoContent();
+        });
         g.MapGet("/recommendations", (ClaimsPrincipal p, RecommendationService r, CancellationToken ct) => r.ForYouAsync(p.UserId(), ct));
 
         g.MapGet("/notifications", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, CancellationToken ct) =>

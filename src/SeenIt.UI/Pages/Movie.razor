@@ -29,6 +29,9 @@ else if (m is not null)
                     <Icon Name="heart" Size="18" Class="@(u.IsFavorite ? "filled" : null)" /> Favorite
                 </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
+                <button class="btn @(u.Owned is not null ? "btn-on" : "")" @onclick="() => ownOpen = true" title="Your library: what you own">
+                    <Icon Name="download" Size="18" /> @(u.Owned is { } own ? OwnedFormats.Label(own) : "Own it")
+                </button>
                 @if (m.ReleaseDate is null || m.ReleaseDate <= DateOnly.FromDateTime(DateTime.Today))
                 {
                     <CheckInButton Request="@(new CheckInRequest(MediaType.Movie, Id))" />
@@ -144,6 +147,7 @@ else if (m is not null)
     {
         <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" />
         <EditPlayDialog @bind-Play="editing" What="@m.Title" ReleaseDate="m.ReleaseDate" OnSaved="Reload" />
+        <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" Current="m.User?.Owned" OnChanged="Reload" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Title="@m.Title" />
     }
@@ -153,7 +157,7 @@ else if (m is not null)
     [Parameter] public int Id { get; set; }
     private MovieDetail? m;
     private string? error;
-    private bool busy, watchOpen, listOpen, fixOpen;
+    private bool busy, watchOpen, listOpen, fixOpen, ownOpen;
     private PlayDto? editing;
 
     private async Task Reload() { m = await Api.MovieAsync(Id); StateHasChanged(); }
