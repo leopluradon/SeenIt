@@ -280,7 +280,12 @@ public static class ApiEndpoints
             if (await c.CancelAsync(p.UserId(), ct)) await a.LogAsync(p, ActivityKind.CheckInCancel);
             return Results.NoContent();
         });
-        g.MapGet("/notifications", (ClaimsPrincipal p, ReleaseAlertService a, CancellationToken ct) => a.ListAsync(p.UserId(), ct));
+        g.MapGet("/notifications", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, CancellationToken ct) =>
+        {
+            // Opening the page picks up today's releases straight away, rather than at the next hourly check.
+            if (await db.Users.FirstOrDefaultAsync(u => u.Id == p.UserId(), ct) is { } me) await a.ScanAsync(me, ct);
+            return await a.ListAsync(p.UserId(), ct);
+        });
         g.MapGet("/notifications/unread", async (ClaimsPrincipal p, ReleaseAlertService a, CancellationToken ct) => new { unread = await a.UnreadAsync(p.UserId(), ct) });
         g.MapPost("/notifications/read", async (ClaimsPrincipal p, ReleaseAlertService a, CancellationToken ct) =>
         {
