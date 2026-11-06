@@ -44,6 +44,7 @@ public class ImportService(AppDbContext db, ImportRunner runner, CatalogService 
         var ratings = await db.Ratings.Where(r => r.UserId == userId && r.ImportJobId == id).ExecuteDeleteAsync(ct);
         var watchlist = await db.Watchlist.Where(w => w.UserId == userId && w.ImportJobId == id).ExecuteDeleteAsync(ct);
         var favorites = await db.Favorites.Where(f => f.UserId == userId && f.ImportJobId == id).ExecuteDeleteAsync(ct);
+        var library = await db.Library.Where(l => l.UserId == userId && l.ImportJobId == id).ExecuteDeleteAsync(ct);
         var mine = db.Lists.Where(l => l.UserId == userId).Select(l => l.Id);
         var listItems = await db.ListItems.Where(i => i.ImportJobId == id && mine.Contains(i.ListId)).ExecuteDeleteAsync(ct);
         var lists = await db.Lists.Where(l => l.UserId == userId && l.ImportJobId == id && !l.Items.Any()).ExecuteDeleteAsync(ct);
@@ -60,7 +61,7 @@ public class ImportService(AppDbContext db, ImportRunner runner, CatalogService 
         job.PendingJson = null;
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return new UndoImportResult(plays, ratings, watchlist, listItems, favorites, lists);
+        return new UndoImportResult(plays, ratings, watchlist, listItems, favorites, lists, library);
     }
 
     /// <summary>Brings in an unmatched title's rows as the title the user picked.</summary>

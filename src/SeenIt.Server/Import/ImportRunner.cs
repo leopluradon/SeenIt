@@ -66,6 +66,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         await ImportRatingsAsync(job, parsed.Ratings, ct);
         foreach (var list in parsed.Lists) await ImportListAsync(job, list, ct);
         if (parsed.Favorites.Count > 0) await ImportFavoritesAsync(job, parsed.Favorites, ct);
+        if (parsed.Library.Count > 0) await ImportLibraryAsync(job, parsed.Library, ct);
 
         if (Tag(job) is not null)
         {
@@ -277,6 +278,29 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             await StepAsync(job, ct);
         }
         list.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Owned titles (Trakt's collection) into the library; ones already there keep what you set.</summary>
+    private async Task ImportLibraryAsync(ImportJob job, List<ImportOwned> owned, CancellationToken ct)
+    {
+        var existing = (await db.Library.Where(l => l.UserId == job.UserId).Select(l => new { l.Type, l.TmdbId }).ToListAsync(ct))
+            .Select(l => (l.Type, l.TmdbId)).ToHashSet();
+        var source = WatchSources.ForImport(job.Kind);
+        foreach (var o in owned)
+        {
+            if (await ResolveAsync(job, o.Item, ct) is { } id)
+            {
+                if (!existing.Add((o.Item.Type, id))) job.Skipped++;
+                else
+                {
+                    db.Library.Add(new LibraryItem { UserId = job.UserId, Type = o.Item.Type, TmdbId = id, Format = o.Format, Source = source,
+                        AddedAt = o.AddedAt == default ? DateTimeOffset.UtcNow : o.AddedAt.ToUniversalTime(), ImportJobId = Tag(job) });
+                    job.Imported++;
+                }
+            }
+            await StepAsync(job, ct);
+        }
         await db.SaveChangesAsync(ct);
     }
 

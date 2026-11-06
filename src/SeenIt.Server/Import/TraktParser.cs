@@ -31,6 +31,8 @@ public static class TraktParser
                 foreach (var e in root.EnumerateArray()) AddHistory(result, e);
             else if (first.TryGetProperty("rated_at", out _) && first.TryGetProperty("rating", out _))
                 foreach (var e in root.EnumerateArray()) AddRating(result, e);
+            else if (first.TryGetProperty("collected_at", out _) || first.TryGetProperty("last_collected_at", out _))
+                foreach (var e in root.EnumerateArray()) AddCollected(result, e);
             else if (first.TryGetProperty("listed_at", out _))
                 listFiles.Add((name, root));
             else if (first.TryGetProperty("last_watched_at", out _) && first.TryGetProperty("plays", out _))
@@ -91,6 +93,54 @@ public static class TraktParser
         else if (type == "episode" && e.TryGetProperty("show", out var show) && e.TryGetProperty("episode", out var ep)
                  && ShowRef(show) is { } s && Int(ep, "season") is { } sn && Int(ep, "number") is { } en)
             result.History.Add(new ImportWatch(s, sn, en, at));
+    }
+
+    /// <summary>
+    /// Trakt's collection (what you own): movies, shows (with seasons of collected episodes), or single
+    /// episodes. A show counts once however many of its episodes are collected.
+    /// </summary>
+    private static void AddCollected(ParsedImport result, JsonElement e)
+    {
+        var at = Date(e, "collected_at") is var c && c != default ? c : Date(e, "last_collected_at");
+        if (e.TryGetProperty("movie", out var mv) && MovieRef(mv) is { } movie)
+        {
+            result.Library.Add(new ImportOwned(movie, Format(e), at));
+            return;
+        }
+        if (!e.TryGetProperty("show", out var show) || ShowRef(show) is not { } s) return;
+        // A show's format: the first collected episode's, if it says.
+        var meta = e;
+        if (e.TryGetProperty("seasons", out var seasons) && seasons.ValueKind == JsonValueKind.Array)
+            foreach (var season in seasons.EnumerateArray())
+                if (season.TryGetProperty("episodes", out var eps) && eps.ValueKind == JsonValueKind.Array && eps.GetArrayLength() > 0) { meta = eps[0]; break; }
+        var format = Format(meta);
+        var already = result.Library.FindIndex(l => l.Item.Type == MediaType.Show && SameShow(l.Item, s));
+        if (already >= 0)
+        {
+            // Seen in another collection file: keep one entry, preferring one that names a real format.
+            if (result.Library[already].Format == OwnedFormat.Digital && format != OwnedFormat.Digital)
+                result.Library[already] = result.Library[already] with { Format = format };
+            return;
+        }
+        result.Library.Add(new ImportOwned(s, format, at));
+    }
+
+    private static bool SameShow(ImportRef a, ImportRef b) =>
+        (a.TmdbId is { } x && x == b.TmdbId) || (a.TvdbId is { } t && t == b.TvdbId) || (a.ImdbId is { } i && i == b.ImdbId) || (a.TmdbId is null && a.Title == b.Title && a.Year == b.Year);
+
+    /// <summary>Trakt's metadata.media_type / resolution to a format; plain collections (no metadata) count as digital.</summary>
+    private static OwnedFormat Format(JsonElement e)
+    {
+        var type = Str(e, "metadata", "media_type")?.ToLowerInvariant();
+        var resolution = Str(e, "metadata", "resolution")?.ToLowerInvariant();
+        return type switch
+        {
+            "bluray" when resolution is "uhd_4k" => OwnedFormat.Uhd,
+            "bluray" => OwnedFormat.BluRay,
+            "dvd" => OwnedFormat.Dvd,
+            "digital" or null => OwnedFormat.Digital,
+            _ => OwnedFormat.Other,   // hddvd, vhs, laserdisc, vcd…
+        };
     }
 
     private static void AddRating(ParsedImport result, JsonElement e)

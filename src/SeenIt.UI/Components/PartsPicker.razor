@@ -25,7 +25,7 @@
 
     private static readonly (ImportParts, string)[] Kinds = [(ImportParts.Movies, "Movies"), (ImportParts.Shows, "TV shows")];
     private static readonly (ImportParts, string)[] Data =
-        [(ImportParts.History, "Watch history"), (ImportParts.Ratings, "Ratings"), (ImportParts.Watchlist, "Watchlist"), (ImportParts.Lists, "Lists & favorites")];
+        [(ImportParts.History, "Watch history"), (ImportParts.Ratings, "Ratings"), (ImportParts.Watchlist, "Watchlist"), (ImportParts.Lists, "Lists & favorites"), (ImportParts.Library, "Library (what you own)")];
 
     private Task Toggle(ImportParts flag, ChangeEventArgs e) =>
         ValueChanged.InvokeAsync(e.Value is true ? Value | flag : Value & ~flag);
@@ -39,7 +39,7 @@
             (true, false) => "movie ", (false, true) => "TV ", _ => "",
         };
         var data = Data.Where(d => p.HasFlag(d.Item1)).Select(d => d.Item2.ToLowerInvariant()).ToList();
-        if (data.Count == 4) return kind == "" ? "everything" : $"all {kind}data";
+        if (data.Count == Data.Length) return kind == "" ? "everything" : $"all {kind}data";
         var list = data.Count <= 1 ? string.Join("", data) : string.Join(", ", data[..^1]) + " and " + data[^1];
         return kind + list;
     }

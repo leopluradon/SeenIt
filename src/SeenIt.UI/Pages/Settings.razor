@@ -49,7 +49,7 @@
                         <li>On trakt.tv open <b>Settings → Data</b> and export your data.</li>
                         <li>Upload the <code>.zip</code> you get (or individual <code>.json</code> files from it).</li>
                     </ol>
-                    <p class="muted small">Imports watch history, ratings, watchlist, favorites and custom lists.</p>
+                    <p class="muted small">Imports watch history, ratings, watchlist, favorites, custom lists and your collection (into your <a href="library">library</a>).</p>
                     <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Trakt export
                         <InputFile OnChange="e => Upload(ImportKind.Trakt, e)" accept=".zip,.json,application/zip,application/x-zip-compressed,application/json" class="visually-hidden" disabled="@uploading" />
                     </label>
@@ -650,7 +650,7 @@
         try
         {
             var r = await Api.UndoImportAsync(j.Id);
-            Toasts.Show(r is null ? "Import undone" : $"Import undone: removed {r.Plays:N0} plays, {r.Ratings:N0} ratings, {r.Watchlist + r.ListItems + r.Favorites:N0} watchlist, list and favorite entries");
+            Toasts.Show(r is null ? "Import undone" : $"Import undone: removed {r.Plays:N0} plays, {r.Ratings:N0} ratings, {r.Watchlist + r.ListItems + r.Favorites:N0} watchlist, list and favorite entries{(r.Library > 0 ? $" and {r.Library:N0} library entries" : "")}");
             await LoadImports();
         }
         catch (Exception ex) { Toasts.Error(ex); }

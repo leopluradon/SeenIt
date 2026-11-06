@@ -862,6 +862,9 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         if (parts.HasFlag(ImportParts.Ratings))
             ratings = await db.Ratings.Where(r => r.UserId == userId
                 && (movies && r.Type == MediaType.Movie || shows && r.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+        if (parts.HasFlag(ImportParts.Library))
+            await db.Library.Where(l => l.UserId == userId
+                && (movies && l.Type == MediaType.Movie || shows && l.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
         if (parts.HasFlag(ImportParts.Watchlist))
             watchlist = await db.Watchlist.Where(w => w.UserId == userId
                 && (movies && w.Type == MediaType.Movie || shows && w.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);

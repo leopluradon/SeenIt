@@ -569,7 +569,8 @@ public enum ImportParts
     None = 0,
     Movies = 1, Shows = 2,
     History = 4, Ratings = 8, Watchlist = 16, Lists = 32,   // Lists includes favorites
-    All = Movies | Shows | History | Ratings | Watchlist | Lists,
+    Library = 64,                                           // what you own (Trakt's collection)
+    All = Movies | Shows | History | Ratings | Watchlist | Lists | Library,
 }
 
 public record ImportJobDto(
@@ -595,7 +596,7 @@ public record ImportJobDto(
 public record PendingTitle(string Key, string Label, MediaType Type, string? Title, int? Year, string Summary);
 public record ResolveImportRequest(string Key, int TmdbId);
 public record ResolveImportResult(int Imported, int Skipped);
-public record UndoImportResult(int Plays, int Ratings, int Watchlist, int ListItems, int Favorites, int Lists);
+public record UndoImportResult(int Plays, int Ratings, int Watchlist, int ListItems, int Favorites, int Lists, int Library = 0);
 
 /// <summary>Several plays at once: one date for all (kept in their order, a minute apart), each one's release date, or unknown.</summary>
 public record BulkEditPlaysRequest(IReadOnlyList<Guid> Ids, WatchTime When, DateTimeOffset? WatchedAt = null);

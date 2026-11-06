@@ -17,6 +17,8 @@ public record ImportRef(MediaType Type, int? TmdbId, string? ImdbId, string? Tit
 public record ImportWatch(ImportRef Item, int? Season, int? Episode, DateTimeOffset WatchedAt, bool Approximate = false);
 public record ImportRating(ImportRef Item, int? Season, int? Episode, int Rating, DateTimeOffset RatedAt);
 public record ImportListItem(ImportRef Item, DateTimeOffset AddedAt);
+/// <summary>Something owned (Trakt's collection), and in what format.</summary>
+public record ImportOwned(ImportRef Item, OwnedFormat Format, DateTimeOffset AddedAt);
 /// <summary>"Watched up to S02E05" (int.MaxValue for "all of it"): expanded into plays once the show's episodes are known.</summary>
 public record ImportProgress(ImportRef Show, int Season, int Episode, DateTimeOffset? LastWatchedAt);
 /// <param name="LegacyName">What an older importer called this list, so a re-import renames it instead of duplicating it.</param>
@@ -31,6 +33,7 @@ public class ParsedImport
     /// <summary>Favorite movies/shows, best first.</summary>
     public List<ImportListItem> Favorites { get; } = [];
     public List<ImportProgress> Progress { get; } = [];
+    public List<ImportOwned> Library { get; } = [];
 
     /// <summary>Drops whatever the user chose not to import.</summary>
     public void Keep(ImportParts parts)
@@ -42,11 +45,12 @@ public class ParsedImport
         if (!parts.HasFlag(ImportParts.Watchlist)) Watchlist.Clear(); else Watchlist.RemoveAll(w => !Type(w.Item));
         if (!parts.HasFlag(ImportParts.Lists)) { Lists.Clear(); Favorites.Clear(); }
         Favorites.RemoveAll(f => !Type(f.Item));
+        if (!parts.HasFlag(ImportParts.Library)) Library.Clear(); else Library.RemoveAll(l => !Type(l.Item));
         foreach (var l in Lists) l.Items.RemoveAll(i => !Type(i.Item));
         Lists.RemoveAll(l => l.Items.Count == 0);
     }
 
-    public int Total => History.Count + Watchlist.Count + Ratings.Count + Lists.Sum(l => l.Items.Count) + Favorites.Count + Progress.Count;
+    public int Total => History.Count + Watchlist.Count + Ratings.Count + Lists.Sum(l => l.Items.Count) + Favorites.Count + Progress.Count + Library.Count;
 }
 
 public static class ImportFiles

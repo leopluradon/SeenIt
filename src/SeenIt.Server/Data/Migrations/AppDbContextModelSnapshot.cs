@@ -803,6 +803,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int>("Format")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("ImportJobId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Source")
                         .HasColumnType("integer");
 

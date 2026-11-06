@@ -507,4 +507,6 @@ public class LibraryItem
     /// <summary>Manual, or the media server that added it (Plex, Jellyfin).</summary>
     public WatchSource Source { get; set; } = WatchSource.Manual;
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The import that added this, so the import can be undone.</summary>
+    public Guid? ImportJobId { get; set; }
 }

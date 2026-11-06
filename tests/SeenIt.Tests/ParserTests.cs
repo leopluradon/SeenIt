@@ -218,3 +218,25 @@ public class JellyfinPayloadTests
         Assert.Equal("Heat", Assert.Single(Assert.Single(parsed.Lists, l => l.Name == "Liked on Letterboxd").Items).Item.Title);
     }
 }
+
+public class TraktCollectionTests
+{
+    [Fact]
+    public void Collection_files_become_library_entries_with_their_format()
+    {
+        var movies = """[{"collected_at":"2024-03-01T10:00:00.000Z","updated_at":"2024-03-01T10:00:00.000Z","movie":{"title":"The Matrix","year":1999,"ids":{"tmdb":603,"imdb":"tt0133093"}},"metadata":{"media_type":"bluray","resolution":"uhd_4k"}},{"collected_at":"2024-03-02T10:00:00.000Z","movie":{"title":"Heat","year":1995,"ids":{"tmdb":949}}}]""";
+        var shows = """[{"last_collected_at":"2024-04-01T10:00:00.000Z","show":{"title":"Seinfeld","year":1989,"ids":{"tmdb":1400}},"seasons":[{"number":1,"episodes":[{"number":1,"collected_at":"2024-04-01T10:00:00.000Z","metadata":{"media_type":"dvd"}}]}]}]""";
+        var episodes = """[{"collected_at":"2024-05-01T10:00:00.000Z","episode":{"season":2,"number":3},"show":{"title":"Seinfeld","year":1989,"ids":{"tmdb":1400}}}]""";
+
+        var parsed = SeenIt.Server.Import.TraktParser.Parse(new Dictionary<string, string>
+        {
+            ["collection-movies.json"] = movies, ["collection-shows.json"] = shows, ["collection-episodes.json"] = episodes,
+        });
+
+        Assert.Equal(3, parsed.Library.Count);   // the episode file's Seinfeld is the same show
+        Assert.Equal(SeenIt.Contracts.OwnedFormat.Uhd, parsed.Library.Single(l => l.Item.TmdbId == 603).Format);
+        Assert.Equal(SeenIt.Contracts.OwnedFormat.Digital, parsed.Library.Single(l => l.Item.TmdbId == 949).Format);   // no metadata
+        Assert.Equal(SeenIt.Contracts.OwnedFormat.Dvd, parsed.Library.Single(l => l.Item.TmdbId == 1400).Format);
+        Assert.Empty(parsed.History);   // collected isn't watched
+    }
+}
