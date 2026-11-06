@@ -263,8 +263,17 @@ else if (list is not null)
 
     private async Task Delete()
     {
-        if (!await Js.InvokeAsync<bool>("confirm", $"Delete “{list!.Name}”? This can't be undone.")) return;
-        try { await Api.DeleteListAsync(Id); Nav.NavigateTo("lists"); }
+        var (id, name) = (Id, list!.Name);
+        try
+        {
+            await Api.DeleteListAsync(id);
+            Toasts.Show($"Deleted “{name}”", undo: async () =>
+            {
+                await Api.RestoreListAsync(id);
+                await InvokeAsync(() => Nav.NavigateTo($"lists/{id}"));
+            });
+            Nav.NavigateTo("lists");
+        }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

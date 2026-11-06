@@ -1,6 +1,7 @@
 @page "/show/{Id:int}/season/{Season:int}/episode/{Number:int}"
 @inject ApiClient Api
 @inject Toasts Toasts
+@inject NavigationManager Nav
 <PageTitle>@(e is null ? "Episode" : $"{e.ShowName} {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" />
@@ -40,6 +41,10 @@ else if (e is not null)
                     <button class="btn @(plays.Count > 0 ? "btn-watched" : "btn-primary")" disabled="@(busy || !aired)" @onclick="() => { through = false; watchOpen = true; }">
                         <Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })
                     </button>
+                    @if (plays.Count == 0 && aired && e.Next is { } nx)
+                    {
+                        <button class="btn" disabled="@busy" @onclick="WatchAndNext" title="@($"Mark watched now and go to {Fmt.Ep(nx.SeasonNumber, nx.EpisodeNumber)}")">Watched, next episode <Icon Name="chevron-right" Size="16" /></button>
+                    }
                     @if (plays.Count == 0 && aired && Fmt.CanThrough(Season, Number))
                     {
                         <button class="btn" disabled="@busy" @onclick="() => { through = true; watchOpen = true; }" title="Mark this and every earlier episode watched">Mark up to here</button>
@@ -116,6 +121,7 @@ else if (e is not null)
     <CastRow Cast="@(e.Cast ?? [])" Title="Cast" />
     <CastRow Cast="e.GuestStars" Title="Guest stars" />
 
+    <RatePrompt @bind-Open="ratePrompt" Title="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" OnRate="Rate" />
     <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch"
                  Through="through" ThroughNote="@(Season == 0 ? " (specials only)" : ", in season order")" ScopeSeason="@(Season > 1 && Number > 1 ? Season : null)" />
     <EditPlayDialog @bind-Play="editing" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnSaved="Reload" />
@@ -127,7 +133,7 @@ else if (e is not null)
     [Parameter] public int Number { get; set; }
     private EpisodeDetail? e;
     private string? error;
-    private bool busy, watchOpen, through;
+    private bool busy, watchOpen, through, ratePrompt;
     private PlayDto? editing;
 
     private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); StateHasChanged(); }
@@ -156,9 +162,32 @@ else if (e is not null)
         busy = false;
     }
 
-    private Task Watch(WatchChoice c) => c.Through
-        ? Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Season, Number, c.When, c.At, SeasonOnly: c.SeasonOnly)), c)))
-        : Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
+    private async Task Watch(WatchChoice c)
+    {
+        if (c.Through)
+        {
+            await Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Season, Number, c.When, c.At, SeasonOnly: c.SeasonOnly)), c)));
+            return;
+        }
+        var unrated = e?.Rating is null;
+        await Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
+        if (unrated && e is { Rating: null, Plays.Count: > 0 }) ratePrompt = true;   // offer a rating while it's fresh
+    }
+
+    /// <summary>One tap: mark this watched now and go to the next episode.</summary>
+    private async Task WatchAndNext()
+    {
+        if (e?.Next is not { } next) return;
+        busy = true;
+        try
+        {
+            await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, new WatchChoice(WatchTime.Now), Season, Number));
+            Toasts.Show($"Watched {Fmt.Ep(Season, Number)}");
+            Nav.NavigateTo(Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
 
     private Task RemovePlay(PlayDto p) => Act(async () =>
     {

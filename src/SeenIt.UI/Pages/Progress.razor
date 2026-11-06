@@ -1,6 +1,7 @@
 @page "/progress"
 @attribute [Authorize]
 @inject ApiClient Api
+@inject SessionState Session
 <PageTitle>Progress · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -12,12 +13,18 @@
         <button class="@(tab == "dropped" ? "on" : "")" @onclick='() => tab = "dropped"'>Dropped@(Count(ShowTrackStatus.Dropped))</button>
         <button class="@(tab == "all" ? "on" : "")" @onclick='() => tab = "all"'>All</button>
     </div>
+    <label class="sort-pick">
+        <span class="muted small">Sort</span>
+        <select value="@Sort" @onchange="SetSort" aria-label="Sort shows">
+            @foreach (var s in Enum.GetValues<UpNextSort>()) { <option value="@s">@UpNextSorts.Label(s)</option> }
+        </select>
+    </label>
 </div>
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }
 else if (items is not null)
 {
-    var shown = items.Where(p => tab switch
+    var shown = UpNextSorts.Apply(items, Sort).Where(p => tab switch
     {
         "watching" => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching,
         "waiting" => p.NextEpisode is null && p.Status != ShowTrackStatus.Dropped,
@@ -83,6 +90,17 @@ else if (items is not null)
                  ReleaseDate="pe.AirDate" OnPick="Watch" />
 }
 @code {
+    private UpNextSort Sort => Session.Me?.UpNextSort ?? UpNextSort.LastWatched;
+
+    /// <summary>Saved to your account: Home's Up next uses the same order.</summary>
+    private async Task SetSort(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<UpNextSort>(e.Value?.ToString(), out var s) || s == Sort) return;
+        Session.Update(me => me with { UpNextSort = s });
+        try { await Api.SetPreferencesAsync(new PreferencesRequest(UpNextSort: s)); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
     [Inject] private Toasts Toasts { get; set; } = default!;
     private (ShowProgressDto Show, EpisodeRef Episode)? pending;
     private List<ShowProgressDto>? items;

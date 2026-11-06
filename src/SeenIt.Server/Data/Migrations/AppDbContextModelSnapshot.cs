@@ -328,6 +328,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("UpNextSort")
+                        .HasColumnType("integer");
+
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -1148,6 +1151,30 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("ShowWatchOrders");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.TitleNote", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "Type", "TmdbId");
+
+                    b.ToTable("Notes");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.UserAvatar", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -1169,6 +1196,9 @@ namespace SeenIt.Server.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
@@ -1669,6 +1699,15 @@ namespace SeenIt.Server.Data.Migrations
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.ShowWatchOrder", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.TitleNote", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()

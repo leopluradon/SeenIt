@@ -45,7 +45,8 @@ public record MeDto(
     DateOnly? TrackingSince = null, bool IsAdmin = false, string? TimeZone = null,
     IReadOnlyList<string>? HomeOrder = null, string? Theme = null, RatingScale RatingScale = RatingScale.Ten,
     TimeFormat TimeFormat = TimeFormat.DaysHours,
-    string? Avatar = null);   // profile picture path, null when there's none
+    string? Avatar = null,    // profile picture path, null when there's none
+    UpNextSort UpNextSort = UpNextSort.LastWatched);
 
 /// <summary>How long stretches of time read: "48d 7h" or "1,159h". Under a day both read "5h 12m".</summary>
 public enum TimeFormat { DaysHours, Hours }
@@ -64,7 +65,8 @@ public record PreferencesRequest(
     IReadOnlyList<string>? HomeOrder = null,    // home section keys, top to bottom
     string? Theme = null,                       // key from UiPrefs.Themes; "" = default
     RatingScale? RatingScale = null,
-    TimeFormat? TimeFormat = null);
+    TimeFormat? TimeFormat = null,
+    UpNextSort? UpNextSort = null);
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
 public enum ProfileVisibility { Public, Friends, Private }
@@ -195,7 +197,8 @@ public record UserMediaState(
     IReadOnlyList<PlayDto>? History = null,    // every play, newest first (movies only)
     bool IsFavorite = false,
     bool NotInterested = false,
-    OwnedFormat? Owned = null);   // in your library, and how
+    OwnedFormat? Owned = null,    // in your library, and how
+    string? Note = null);         // your private note
 
 public record MovieDetail(
     int TmdbId,
@@ -439,7 +442,21 @@ public record ShowProgressDto(
     ShowTrackStatus Status = ShowTrackStatus.Watching,
     int? Rewatch = null,       // rewatch in progress: Watched/NextEpisode count only plays since it started
     int RewatchesCompleted = 0,
-    string? WatchOrder = null); // name of the alternative order being followed ("Chronological"), if any
+    string? WatchOrder = null,  // name of the alternative order being followed ("Chronological"), if any
+    DateOnly? LatestAired = null);   // newest episode that has aired (for "newest episode" sorting)
+
+/// <summary>How Up Next and Progress are ordered.</summary>
+public enum UpNextSort { LastWatched, NewestEpisode, FewestLeft }
+public static class UpNextSorts
+{
+    public static IEnumerable<ShowProgressDto> Apply(IEnumerable<ShowProgressDto> items, UpNextSort sort) => sort switch
+    {
+        UpNextSort.NewestEpisode => items.OrderByDescending(p => p.LatestAired ?? DateOnly.MinValue).ThenByDescending(p => p.LastWatchedAt),
+        UpNextSort.FewestLeft => items.OrderBy(p => p.NextEpisode is null ? int.MaxValue : p.Aired - p.Watched).ThenByDescending(p => p.LastWatchedAt),
+        _ => items.OrderByDescending(p => p.LastWatchedAt),
+    };
+    public static string Label(UpNextSort s) => s switch { UpNextSort.NewestEpisode => "Newest episode", UpNextSort.FewestLeft => "Fewest left", _ => "Last watched" };
+}
 
 /// <summary>Paused and dropped shows are kept out of Up Next and the widget until you resume them.</summary>
 public enum ShowTrackStatus { Watching, Paused, Dropped }
@@ -459,6 +476,8 @@ public static class OwnedFormats
 }
 public record LibraryEntry(MediaSummary Media, OwnedFormat Format, DateTimeOffset AddedAt, WatchSource Source, bool Watched);
 public record LibraryRequest(MediaType Type, int TmdbId, OwnedFormat Format);
+/// <summary>An empty Text removes the note.</summary>
+public record NoteRequest(MediaType Type, int TmdbId, string? Text);
 /// <summary>A recommendation and the title of yours that led to it ("Because you liked …").</summary>
 public record ForYouItem(MediaSummary Media, string Because, MediaType BecauseType, int BecauseTmdbId);
 public record ForYouGroup(MediaSummary Seed, IReadOnlyList<MediaSummary> Items);

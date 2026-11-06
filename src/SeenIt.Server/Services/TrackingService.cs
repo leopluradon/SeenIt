@@ -761,7 +761,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     public async Task<DashboardDto> GetDashboardAsync(Guid userId, CancellationToken ct)
     {
         var progress = await GetProgressAsync(userId, ct);
-        var upNext = progress.Where(p => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching).Take(12).ToList();
+        var sort = await db.Users.Where(u => u.Id == userId).Select(u => u.UpNextSort).FirstOrDefaultAsync(ct);
+        var upNext = UpNextSorts.Apply(progress.Where(p => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching), sort).Take(12).ToList();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var upcoming = (await GetCalendarAsync(userId, today, 14, ct)).Take(12).ToList();
         var recent = await db.WatchEvents.Where(w => w.UserId == userId)

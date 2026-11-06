@@ -187,6 +187,8 @@ public class ReleaseAlertWorker(IServiceScopeFactory scopes, ILogger<ReleaseAler
                     // Old alerts go after two months.
                     var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-60);
                     await db.Notifications.Where(n => n.Day < cutoff).ExecuteDeleteAsync(stoppingToken);
+                    // Lists deleted over a day ago (past their Undo) go for good.
+                    await ListService.PurgeDeletedAsync(db, stoppingToken);
                 }
                 foreach (var id in ids)
                 {

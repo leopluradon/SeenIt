@@ -57,6 +57,10 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
             .ToListAsync(ct);
         var favorites = (await tracking.GetFavoritesAsync(userId, ct))
             .Select(f => new { Type = f.Media.Type.ToString().ToLowerInvariant(), f.Media.TmdbId, f.Media.Title, f.Media.Year, f.AddedAt }).ToList();
+        var notes = await db.Notes.AsNoTracking().Where(n => n.UserId == userId)
+            .Select(n => new { Type = n.Type.ToString().ToLowerInvariant(), n.TmdbId, n.Text, n.UpdatedAt }).ToListAsync(ct);
+        var library = await db.Library.AsNoTracking().Where(l => l.UserId == userId)
+            .Select(l => new { Type = l.Type.ToString().ToLowerInvariant(), l.TmdbId, Format = l.Format.ToString(), l.AddedAt }).ToListAsync(ct);
         var following = await db.Follows.Where(f => f.FollowerId == userId).Join(db.Users, f => f.FolloweeId, u => u.Id, (f, u) => u.UserName).ToListAsync(ct);
 
         using var ms = new MemoryStream();
@@ -98,6 +102,8 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
             AddJson("show-status.json", showStatus);
             AddJson("rewatches.json", rewatches);
             AddJson("favorites.json", favorites);
+            AddJson("notes.json", notes);
+            AddJson("library.json", library);
         }
         return ms.ToArray();
     }

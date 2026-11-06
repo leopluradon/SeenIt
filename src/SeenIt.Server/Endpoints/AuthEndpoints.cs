@@ -163,7 +163,7 @@ public static partial class AuthEndpoints
                 await users.UpdateAsync(u);
             }
             return TypedResults.Ok(new MeDto(u.Id, u.UserName!, u.Email!, u.DisplayName, u.CreatedAt, u.HideSpoilers, u.BlurSpoilerImages,
-                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName), u.TimeZone, u.HomeOrder, u.Theme, u.RatingScale, u.TimeFormat, AvatarService.Path(u.UserName!, u.AvatarVersion)));
+                u.HiddenHomeSections, u.Tabs, u.Region, u.Visibility, u.TrackingSince, admins.IsAdmin(u.UserName), u.TimeZone, u.HomeOrder, u.Theme, u.RatingScale, u.TimeFormat, AvatarService.Path(u.UserName!, u.AvatarVersion), u.UpNextSort));
         });
 
         // Profile picture: any common image, cropped to a square on the server.
@@ -206,6 +206,7 @@ public static partial class AuthEndpoints
             if (req.HideSpoilers is { } hide) u.HideSpoilers = hide;
             if (req.RatingScale is { } scale && Enum.IsDefined(scale)) u.RatingScale = scale;
             if (req.TimeFormat is { } tf && Enum.IsDefined(tf)) u.TimeFormat = tf;
+            if (req.UpNextSort is { } us && Enum.IsDefined(us)) u.UpNextSort = us;
             if (req.BlurSpoilerImages is { } blur) u.BlurSpoilerImages = blur;
             if (req.HiddenHomeSections is { } hidden)
                 u.HiddenHomeSections = hidden.Where(k => UiPrefs.HomeSections.Any(s => s.Key == k)).Distinct().ToList();

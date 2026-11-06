@@ -39,6 +39,7 @@ public class AppUser : IdentityUser<Guid>
 
     /// <summary>When the profile picture last changed (its URL's version); null when there's none.</summary>
     public long? AvatarVersion { get; set; }
+    public UpNextSort UpNextSort { get; set; }
     /// <summary>"48d 7h" or "1,159h" for long stretches of time.</summary>
     public TimeFormat TimeFormat { get; set; }
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>
@@ -205,6 +206,8 @@ public class UserList
     public bool IsPublic { get; set; }
     /// <summary>A ranking: shown numbered, in the owner's order.</summary>
     public bool Ranked { get; set; }
+    /// <summary>Deleted, but restorable for a day (Undo); then removed for good. Hidden everywhere meanwhile.</summary>
+    public DateTimeOffset? DeletedAt { get; set; }
     /// <summary>Smart list rules (SmartRules as JSON); its entries are worked out, not stored. Null for ordinary lists.</summary>
     public string? RulesJson { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -509,4 +512,14 @@ public class LibraryItem
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
     /// <summary>The import that added this, so the import can be undone.</summary>
     public Guid? ImportJobId { get; set; }
+}
+
+/// <summary>A private note on a movie or show ("Recommended by Sam"). Only its owner sees it.</summary>
+public class TitleNote
+{
+    public Guid UserId { get; set; }
+    public MediaType Type { get; set; }
+    public int TmdbId { get; set; }
+    public string Text { get; set; } = "";
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

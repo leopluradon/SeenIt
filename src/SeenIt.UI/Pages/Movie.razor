@@ -52,6 +52,7 @@ else if (m is not null)
                     <span>Your rating</span>
                     <RatingPicker Value="u.Rating" ValueChanged="Rate" />
                 </div>
+                <TitleNote Type="MediaType.Movie" TmdbId="Id" Note="@u.Note" />
                 @if (u.History is { Count: > 0 } plays)
                 {
                     <div class="panel">
@@ -147,6 +148,7 @@ else if (m is not null)
     {
         <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" />
         <EditPlayDialog @bind-Play="editing" What="@m.Title" ReleaseDate="m.ReleaseDate" OnSaved="Reload" />
+        <RatePrompt @bind-Open="ratePrompt" Title="@m.Title" OnRate="Rate" />
         <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" Current="m.User?.Owned" OnChanged="Reload" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Title="@m.Title" />
@@ -157,7 +159,7 @@ else if (m is not null)
     [Parameter] public int Id { get; set; }
     private MovieDetail? m;
     private string? error;
-    private bool busy, watchOpen, listOpen, fixOpen, ownOpen;
+    private bool busy, watchOpen, listOpen, fixOpen, ownOpen, ratePrompt;
     private PlayDto? editing;
 
     private async Task Reload() { m = await Api.MovieAsync(Id); StateHasChanged(); }
@@ -185,8 +187,12 @@ else if (m is not null)
         busy = false;
     }
 
-    private Task Watch(WatchChoice c) =>
-        Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Movie, Id, c)), $"Watched {m!.Title}{Fmt.When(c)}");
+    private async Task Watch(WatchChoice c)
+    {
+        var unrated = m?.User?.Rating is null;
+        await Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Movie, Id, c)), $"Watched {m!.Title}{Fmt.When(c)}");
+        if (unrated && m?.User is { Plays: > 0, Rating: null }) ratePrompt = true;   // offer a rating while it's fresh
+    }
 
     private Task RemovePlay(PlayDto p) => Act(async () =>
     {

@@ -173,13 +173,29 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
         return new Guid(bytes);
     }
 
+    /// <summary>Hides the list for a day so it can be restored (Undo); a worker then removes it for good.</summary>
     public async Task<bool> DeleteAsync(Guid userId, Guid listId, CancellationToken ct)
     {
         var list = await db.Lists.FirstOrDefaultAsync(l => l.Id == listId && l.UserId == userId, ct);
         if (list is null) return false;
-        db.Lists.Remove(list);
+        list.DeletedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    public async Task<bool> RestoreAsync(Guid userId, Guid listId, CancellationToken ct)
+    {
+        var list = await db.Lists.IgnoreQueryFilters().FirstOrDefaultAsync(l => l.Id == listId && l.UserId == userId && l.DeletedAt != null, ct);
+        if (list is null) return false;
+        list.DeletedAt = null;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public static Task<int> PurgeDeletedAsync(AppDbContext db, CancellationToken ct)
+    {
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-1);
+        return db.Lists.IgnoreQueryFilters().Where(l => l.DeletedAt != null && l.DeletedAt < cutoff).ExecuteDeleteAsync(ct);
     }
 
     public async Task<bool> AddItemAsync(Guid userId, Guid listId, MediaType type, int tmdbId, CancellationToken ct, DateTimeOffset? addedAt = null)

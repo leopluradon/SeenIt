@@ -1,0 +1,48 @@
+@* "Rate it?" right after marking something watched: a strip at the bottom that goes away on its own. *@
+@implements IDisposable
+@if (Open)
+{
+    <div class="rate-prompt" role="dialog" aria-label="@($"Rate {Title}")">
+        <span class="rate-prompt-title">Rate <b>@Title</b>?</span>
+        <RatingPicker Value="null" ValueChanged="Pick" Compact="true" />
+        <button class="icon-btn" @onclick="Close" aria-label="Not now"><Icon Name="x" Size="16" /></button>
+    </div>
+}
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public EventCallback<double?> OnRate { get; set; }
+    private CancellationTokenSource? timer;
+    private bool wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !wasOpen) Start();
+        wasOpen = Open;
+    }
+
+    /// <summary>Gone after 15 seconds unless you're using it.</summary>
+    private void Start()
+    {
+        timer?.Cancel();
+        timer = new CancellationTokenSource();
+        var token = timer.Token;
+        _ = Task.Delay(TimeSpan.FromSeconds(15), token).ContinueWith(t => { if (!t.IsCanceled) InvokeAsync(Close); }, TaskScheduler.Default);
+    }
+
+    private async Task Pick(double? v)
+    {
+        await Close();
+        if (v is not null) await OnRate.InvokeAsync(v);
+    }
+
+    private async Task Close()
+    {
+        timer?.Cancel();
+        wasOpen = false;
+        await OpenChanged.InvokeAsync(false);
+    }
+
+    public void Dispose() => timer?.Cancel();
+}

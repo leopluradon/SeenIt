@@ -54,6 +54,7 @@ else if (s is not null)
                     <span>Your rating</span>
                     <RatingPicker Value="u.Rating" ValueChanged="Rate" />
                 </div>
+                <TitleNote Type="MediaType.Show" TmdbId="Id" Note="@u.Note" />
             }
             @* Nothing to pause or drop once an ended show is finished (unless it's mid-rewatch, or already paused/dropped and needs undoing). *@
             @if (s.User is not null && (s.Progress is not null || s.TrackStatus != ShowTrackStatus.Watching)

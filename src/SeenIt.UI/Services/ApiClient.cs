@@ -198,6 +198,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<ForYouDto> ForYouAsync() => GetAsync<ForYouDto>("api/recommendations");
 
     public Task<ListFeedsDto> ListFeedsAsync(Guid id) => GetAsync<ListFeedsDto>($"api/lists/{id}/feeds");
+    public Task SaveNoteAsync(MediaType type, int id, string? text) => SendAsync(HttpMethod.Put, "api/notes", new NoteRequest(type, id, text));
     public Task<List<LibraryEntry>> LibraryAsync() => GetAsync<List<LibraryEntry>>("api/library");
     public Task AddToLibraryAsync(MediaType type, int id, OwnedFormat format) => SendAsync(HttpMethod.Post, "api/library", new LibraryRequest(type, id, format));
     public Task RemoveFromLibraryAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/library?type={type}&tmdbId={id}");
@@ -243,6 +244,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public async Task<Guid> CreateListAsync(CreateListRequest r) => (await SendAsync<IdResult>(HttpMethod.Post, "api/lists", r))!.Id;
     public Task UpdateListAsync(Guid id, CreateListRequest r) => SendAsync(HttpMethod.Put, $"api/lists/{id}", r);
     public Task DeleteListAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/lists/{id}");
+    public Task RestoreListAsync(Guid id) => SendAsync(HttpMethod.Post, $"api/lists/{id}/restore");
     public Task AddToListAsync(Guid id, MediaType type, int tmdbId) => SendAsync(HttpMethod.Post, $"api/lists/{id}/items", new ListItemRequest(type, tmdbId));
     public Task RemoveFromListAsync(Guid id, MediaType type, int tmdbId) => SendAsync(HttpMethod.Delete, $"api/lists/{id}/items?type={type}&tmdbId={tmdbId}");
 

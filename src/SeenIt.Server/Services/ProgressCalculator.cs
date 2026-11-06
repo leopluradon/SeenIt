@@ -104,6 +104,16 @@ public class ProgressCalculator(AppDbContext db)
                     result[i] = result[i] with { NextEpisode = n with { Name = ep.Name, AirDate = n.AirDate ?? ep.AirDate } };
         }
 
+        // Newest aired episode per show, for "newest episode" sorting.
+        if (result.Count > 0)
+        {
+            var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
+            var shown = result.Select(r => r.ShowTmdbId).ToList();
+            var latest = await db.Episodes.AsNoTracking().Where(e => shown.Contains(e.ShowTmdbId) && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= asOf)
+                .GroupBy(e => e.ShowTmdbId).Select(g => new { g.Key, Latest = g.Max(e => e.AirDate) }).ToDictionaryAsync(x => x.Key, x => x.Latest, ct);
+            for (var i = 0; i < result.Count; i++)
+                if (latest.TryGetValue(result[i].ShowTmdbId, out var d)) result[i] = result[i] with { LatestAired = d };
+        }
         return result.OrderByDescending(p => p.LastWatchedAt).ToList();
     }
 }

@@ -334,6 +334,23 @@ public static class ApiEndpoints
             await l.RemoveAsync(p.UserId(), type, tmdbId, ct);
             return Results.NoContent();
         });
+        // Private notes on movies and shows.
+        g.MapPut("/notes", async (NoteRequest req, ClaimsPrincipal p, AppDbContext db, TrackingService t, CancellationToken ct) =>
+        {
+            if (req.Type is not (MediaType.Movie or MediaType.Show)) return Results.BadRequest(new ProblemInfo("Notes go on movies and shows."));
+            var text = req.Text?.Trim() ?? "";
+            if (text.Length > 2000) text = text[..2000];
+            var row = await db.Notes.FirstOrDefaultAsync(n => n.UserId == p.UserId() && n.Type == req.Type && n.TmdbId == req.TmdbId, ct);
+            if (text.Length == 0) { if (row is not null) db.Notes.Remove(row); }
+            else
+            {
+                await t.EnsureMetaAsync(req.Type, req.TmdbId, ct);
+                if (row is null) db.Notes.Add(new TitleNote { UserId = p.UserId(), Type = req.Type, TmdbId = req.TmdbId, Text = text });
+                else { row.Text = text; row.UpdatedAt = DateTimeOffset.UtcNow; }
+            }
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
         g.MapGet("/recommendations", (ClaimsPrincipal p, RecommendationService r, CancellationToken ct) => r.ForYouAsync(p.UserId(), ct));
 
         g.MapGet("/notifications", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, CancellationToken ct) =>
@@ -437,6 +454,8 @@ public static class ApiEndpoints
             await a.LogAsync(p, ActivityKind.ListDelete, detail: $"\"{name}\"");
             return Results.NoContent();
         });
+        g.MapPost("/{id:guid}/restore", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
+            await l.RestoreAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
         g.MapPost("/{id:guid}/items", async (Guid id, ListItemRequest req, ClaimsPrincipal p, ListService l, AppDbContext db, ActivityService a, CancellationToken ct) =>
         {
             if (!await l.AddItemAsync(p.UserId(), id, req.Type, req.TmdbId, ct)) return Results.NotFound();
