@@ -45,7 +45,12 @@ public class TvmazeService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory 
         {
             if (!times.TryGetValue((e.SeasonNumber, e.EpisodeNumber), out var at)) continue;
             // TVmaze sometimes lists an episode on a different day than TMDB (time zones, schedule changes); trust it only near TMDB's day.
-            if (e.AirDate is { } day && at is { } a && Math.Abs(DateOnly.FromDateTime(a.UtcDateTime).DayNumber - day.DayNumber) > 2) continue;
+            // A day either way is just the time zone (10 PM Eastern is 3 AM UTC); more means the sources disagree, so show no time.
+            if (e.AirDate is { } day && at is { } a && Math.Abs(DateOnly.FromDateTime(a.UtcDateTime).DayNumber - day.DayNumber) > 1)
+            {
+                if (e.AirStamp is not null) { e.AirStamp = null; set++; }
+                continue;
+            }
             if (e.AirStamp != at) { e.AirStamp = at; set++; }
         }
         await db.SaveChangesAsync(ct);

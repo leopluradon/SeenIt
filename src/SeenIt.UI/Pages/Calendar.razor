@@ -13,7 +13,7 @@
         <button class="btn btn-sm" @onclick="() => Shift(-1)" aria-label="Earlier"><Icon Name="chevron-left" Size="16" /></button>
         <button class="btn btn-sm" @onclick="Today">Today</button>
         <button class="btn btn-sm" @onclick="() => Shift(1)" aria-label="Later"><Icon Name="chevron-right" Size="16" /></button>
-        <input type="date" class="cal-jump" value="@anchor.ToString("yyyy-MM-dd")" @onchange="Jump" aria-label="Go to a date" />
+        <input type="date" class="cal-jump" value="@((month ? picked ?? anchor : from.AddDays(3)).ToString("yyyy-MM-dd"))" @onchange="Jump" aria-label="Go to a date" />
     </div>
 </div>
 <div class="chips">
