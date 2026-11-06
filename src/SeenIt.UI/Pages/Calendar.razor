@@ -21,7 +21,7 @@ else if (items is not null)
     @foreach (var day in items.GroupBy(i => i.Date))
     {
         <section class="cal-day @(day.Key == DateOnly.FromDateTime(DateTime.Today) ? "today" : "")">
-            <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString("MMM d")</span></h3>
+            <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString("MMM d")</span>@if (day.Key > DateOnly.FromDateTime(DateTime.Today).AddDays(1) && Fmt.Countdown(day.Key) is { } cd) { <span class="countdown small"> · @cd</span> }</h3>
             <div class="mini-list">
                 @foreach (var c in day)
                 {

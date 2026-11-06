@@ -218,6 +218,10 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("BlurSpoilerImages")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("CalendarToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("text");
@@ -253,6 +257,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<string>("JellyfinToken")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateOnly?>("LastReleaseEmail")
+                        .HasColumnType("date");
 
                     b.Property<DateTimeOffset?>("LastSeenAt")
                         .HasColumnType("timestamp with time zone");
@@ -290,6 +297,9 @@ namespace SeenIt.Server.Data.Migrations
                         .HasMaxLength(2)
                         .HasColumnType("character varying(2)");
 
+                    b.Property<bool>("ReleaseEmails")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
@@ -320,6 +330,9 @@ namespace SeenIt.Server.Data.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CalendarToken")
+                        .IsUnique();
 
                     b.HasIndex("JellyfinToken")
                         .IsUnique();
@@ -826,6 +839,60 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasIndex("CollectionId");
 
                     b.ToTable("Movies");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<int?>("EpisodeNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PosterPath")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("SeasonNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber"), false);
+
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.Rating", b =>
@@ -1397,6 +1464,15 @@ namespace SeenIt.Server.Data.Migrations
                     b.Navigation("Cast");
 
                     b.Navigation("Directors");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Notification", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.Rating", b =>

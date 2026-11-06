@@ -14,6 +14,7 @@ else if (m is not null)
             @if (m.Runtime is > 0) { <span>@Fmt.Runtime(m.Runtime)</span> }
             @if (m.Genres.Count > 0) { <span>@string.Join(", ", m.Genres)</span> }
             @if (m.Status is not null and not "Released") { <span class="pill">@m.Status</span> }
+            @if (m.ReleaseDate is { } rel && rel > DateOnly.FromDateTime(DateTime.Today) && Fmt.Countdown(rel) is { } cdm) { <span class="countdown">Out @cdm</span> }
         </Facts>
         <Actions>
             @if (m.User is { } u)
@@ -125,7 +126,7 @@ else if (m is not null)
                     <div class="collection-part @(signedIn && part.Released && !part.Watched ? "unseen" : "") @(part.Media.TmdbId == Id ? "current" : "")" @key="part.Media.TmdbId">
                         <PosterCard Media="part.Media" ShowScore="false"
                                     Badge="@(!part.Released ? "Coming" : signedIn && part.Watched ? "✓ Seen" : null)"
-                                    Sub="@(part.ReleaseDate is { } rd ? (part.Released ? rd.Year.ToString() : Fmt.Day(rd)) : "TBA")" />
+                                    Sub="@(part.ReleaseDate is { } rd ? (part.Released ? rd.Year.ToString() : $"{Fmt.Day(rd)} · {Fmt.Countdown(rd)}") : "TBA")" />
                     </div>
                 }
             </div>

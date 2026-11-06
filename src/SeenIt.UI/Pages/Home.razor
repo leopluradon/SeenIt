@@ -115,7 +115,7 @@
                                                 <div class="mini-title">@c.Title</div>
                                                 <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }</div>
                                             </div>
-                                            <span class="mini-date">@Fmt.Day(c.Date)</span>
+                                            <span class="mini-date">@Fmt.Day(c.Date)@if (c.Date > DateOnly.FromDateTime(DateTime.Today).AddDays(1) && Fmt.Countdown(c.Date) is { } cd) { <span class="countdown"> · @cd</span> }</span>
                                         </a>
                                     }
                                 </div>

@@ -1111,3 +1111,11 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .avatar.has-picture { padding: 0; overflow: hidden; background: var(--surface-2); }
 .avatar.has-picture img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar-edit { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+/* Release alerts */
+.bell { position: relative; }
+.bell-badge { position: absolute; top: 2px; right: 0; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: .68rem; font-weight: 700; display: grid; place-items: center; line-height: 1; }
+.mini-item.unread { border-color: var(--accent); }
+.cal-link { display: flex; gap: 8px; align-items: center; }
+.cal-link input { flex: 1; min-width: 0; font-family: var(--mono, monospace); font-size: .8rem; }
+.countdown { color: var(--accent); font-weight: 600; }

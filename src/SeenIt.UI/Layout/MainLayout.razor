@@ -38,6 +38,7 @@
             <a href="search" class="icon-btn only-mobile" aria-label="Search"><Icon Name="search" /></a>
             <AuthorizeView>
                 <Authorized>
+                    <NotificationBell />
                     <div class="usermenu">
                         <button class="avatar @(Session.Me?.Avatar is not null ? "has-picture" : "")" @onclick="() => menuOpen = !menuOpen" aria-label="Account menu" aria-expanded="@menuOpen">
                             @if (Session.Me?.Avatar is { } pic) { <img src="@(new Uri(Api.BaseAddress, pic).ToString())" alt="" /> }

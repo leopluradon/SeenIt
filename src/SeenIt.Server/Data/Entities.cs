@@ -25,6 +25,13 @@ public class AppUser : IdentityUser<Guid>
     public string? Theme { get; set; }
     /// <summary>Rate as 1–10, 0.5–5 stars, or 1–10 with one decimal (stored as 1–10 either way).</summary>
     public RatingScale RatingScale { get; set; }
+    /// <summary>Secret in the private calendar (iCal) feed URL.</summary>
+    public string CalendarToken { get; set; } = NewToken();
+    /// <summary>Email a digest on days something you follow comes out.</summary>
+    public bool ReleaseEmails { get; set; }
+    /// <summary>The last local day a release digest was emailed, so it goes once a day.</summary>
+    public DateOnly? LastReleaseEmail { get; set; }
+
     /// <summary>When the profile picture last changed (its URL's version); null when there's none.</summary>
     public long? AvatarVersion { get; set; }
     /// <summary>"48d 7h" or "1,159h" for long stretches of time.</summary>
@@ -447,4 +454,21 @@ public class UserAvatar
 {
     public Guid UserId { get; set; }
     public byte[] Data { get; set; } = [];
+}
+
+/// <summary>"A new episode / movie you follow is out today", shown under the bell (and in the daily email).</summary>
+public class Notification
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public MediaType Type { get; set; }          // Movie or Episode
+    public int TmdbId { get; set; }              // movie, or the show for episodes
+    public int? SeasonNumber { get; set; }
+    public int? EpisodeNumber { get; set; }
+    public string Title { get; set; } = "";
+    public string? Detail { get; set; }          // "S02E05 · Episode name"
+    public string? PosterPath { get; set; }
+    public DateOnly Day { get; set; }            // release day
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ReadAt { get; set; }
 }

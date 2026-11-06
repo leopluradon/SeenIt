@@ -23,6 +23,7 @@
         <a href="settings#imports">Import</a>
         <a href="settings#tracking">Stats</a>
         <a href="settings#jellyfin">Media servers</a>
+        <a href="settings#alerts">Alerts</a>
         <a href="settings#spoilers">Spoilers</a>
         <a href="settings#ratings">Ratings</a>
         <a href="settings#time">Time</a>
@@ -279,6 +280,32 @@
                     </table>
                 }
             }
+        </section>
+
+        <section class="panel" id="alerts">
+            <h2>Alerts</h2>
+            <p class="muted small">When a new episode of a show you watch (or have on your watchlist) or a watchlist movie comes out, it shows under the bell <Icon Name="bell" Size="14" /> at the top. Dropped shows are left out.</p>
+            @if (alerts is { } al)
+            {
+                <label class="check @(al.EmailAvailable ? "" : "disabled")">
+                    <input type="checkbox" checked="@al.Emails" disabled="@(!al.EmailAvailable)" @onchange="e => SaveAlerts(new AlertSettingsRequest(Emails: (bool)e.Value!))" />
+                    Also email me a short list each morning something comes out
+                </label>
+                @if (!al.EmailAvailable) { <p class="muted small">Email isn't set up on this server.</p> }
+
+                <h3>Calendar feed</h3>
+                <p class="muted small">Subscribe in Google Calendar, Apple Calendar or Outlook to see releases there. Keep the link private: anyone with it can see your calendar.</p>
+                <div class="cal-link">
+                    <input readonly value="@al.CalendarUrl" aria-label="Calendar feed link" onfocus="this.select()" />
+                    <button class="btn btn-sm" @onclick="() => Copy(al.CalendarUrl)"><Icon Name="copy" Size="14" /> Copy</button>
+                </div>
+                <div class="inline wrap">
+                    <a class="btn btn-sm" href="@($"https://calendar.google.com/calendar/r?cid={Uri.EscapeDataString(Webcal(al.CalendarUrl))}")" target="_blank" rel="noopener">Add to Google Calendar</a>
+                    <a class="btn btn-sm" href="@Webcal(al.CalendarUrl)">Open in Apple Calendar / Outlook</a>
+                    <button class="btn btn-sm btn-ghost" @onclick="NewCalendarUrl">New link</button>
+                </div>
+            }
+            else { <Spinner /> }
         </section>
 
         <section class="panel" id="spoilers">
@@ -672,6 +699,7 @@
         region = Session.Me?.Region;
         _ = LoadFeatures();
         _ = LoadInvites();
+        _ = LoadAlerts();
         await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions(), LoadTimeZones(), LoadAndroid(), LoadLetterboxd());
         StartPolling();
     }
@@ -798,6 +826,32 @@
         }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { avatarBusy = false; }
+    }
+
+    private AlertSettingsDto? alerts;
+
+    private async Task LoadAlerts()
+    {
+        try { alerts = await Api.AlertSettingsAsync(); StateHasChanged(); } catch { /* the section shows a spinner */ }
+    }
+
+    private static string Webcal(string url) => System.Text.RegularExpressions.Regex.Replace(url, "^https?://", "webcal://");
+
+    private async Task SaveAlerts(AlertSettingsRequest r)
+    {
+        try
+        {
+            alerts = await Api.SetAlertSettingsAsync(r);
+            if (r.Emails is { } on) Toasts.Show(on ? "You'll get an email on days something comes out" : "Release emails off");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task NewCalendarUrl()
+    {
+        if (!await Js.InvokeAsync<bool>("confirm", "Make a new calendar link? The old one stops working, so calendars subscribed to it need the new link.")) return;
+        await SaveAlerts(new AlertSettingsRequest(NewCalendarUrl: true));
+        Toasts.Show("New calendar link made");
     }
 
     private async Task SaveTime(TimeFormat f)

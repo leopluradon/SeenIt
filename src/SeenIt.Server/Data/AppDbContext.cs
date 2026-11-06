@@ -34,6 +34,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ExternalScoreCache> ExternalScores => Set<ExternalScoreCache>();
     public DbSet<ServerState> ServerState => Set<ServerState>();
     public DbSet<UserAvatar> Avatars => Set<UserAvatar>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -141,6 +142,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.ImdbId).HasMaxLength(16);
         });
         b.Entity<ExternalScoreCache>(e => e.HasKey(x => new { x.Type, x.TmdbId }));
+        b.Entity<Notification>(e =>
+        {
+            e.HasIndex(x => new { x.UserId, x.Type, x.TmdbId, x.SeasonNumber, x.EpisodeNumber }).IsUnique().AreNullsDistinct(false);
+            e.HasIndex(x => new { x.UserId, x.CreatedAt });
+            e.Property(x => x.Title).HasMaxLength(300);
+            e.Property(x => x.Detail).HasMaxLength(400);
+        });
+        b.Entity<AppUser>().HasIndex(u => u.CalendarToken).IsUnique();
         b.Entity<UserAvatar>(e =>
         {
             e.HasKey(x => x.UserId);
@@ -180,7 +189,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

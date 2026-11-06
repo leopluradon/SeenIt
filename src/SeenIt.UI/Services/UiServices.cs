@@ -151,6 +151,22 @@ public static class Fmt
         return when.ToLocalTime().ToString("MMM d, yyyy");
     }
 
+    /// <summary>Time until a release day: "today", "tomorrow", "in 5 days", "in 3 weeks", "in 2 months". Null once it's past.</summary>
+    public static string? Countdown(DateOnly d)
+    {
+        var days = d.DayNumber - DateOnly.FromDateTime(DateTime.Now).DayNumber;
+        return days switch
+        {
+            < 0 => null,
+            0 => "today",
+            1 => "tomorrow",
+            < 14 => $"in {days} days",
+            < 60 => $"in {(int)Math.Round(days / 7.0)} weeks",
+            < 365 => $"in {(int)Math.Round(days / 30.4)} months",
+            _ => $"in {days / 365} year{(days / 365 == 1 ? "" : "s")}{(days % 365 / 30 is > 0 and var m ? $" {m} month{(m == 1 ? "" : "s")}" : "")}",
+        };
+    }
+
     public static string Day(DateOnly d)
     {
         var today = DateOnly.FromDateTime(DateTime.Now);

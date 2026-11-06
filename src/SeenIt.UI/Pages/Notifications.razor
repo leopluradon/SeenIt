@@ -1,0 +1,58 @@
+@page "/notifications"
+@attribute [Authorize]
+@inject ApiClient Api
+<PageTitle>Release alerts · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Release alerts</h1>
+    <a class="btn btn-sm btn-ghost" href="settings#alerts"><Icon Name="settings" Size="16" /> Alert settings</a>
+</div>
+<p class="muted small">New episodes of shows you watch or have on your watchlist, and watchlist movies, on the day they come out.</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (data is null && error is null) { <Spinner /> }
+else if (data is { Items.Count: 0 })
+{
+    <Empty Title="Nothing yet.">
+        <span>When something you follow comes out, it shows up here. You can also get an email, or subscribe to your calendar, in <a href="settings#alerts">Settings → Alerts</a>.</span>
+    </Empty>
+}
+else if (data is not null)
+{
+    @foreach (var day in data.Items.GroupBy(n => n.Day))
+    {
+        <section class="cal-day">
+            <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString("MMM d")</span></h3>
+            <div class="mini-list">
+                @foreach (var n in day)
+                {
+                    <a class="mini-item @(n.Read ? "" : "unread")" href="@(n.Type == MediaType.Movie ? $"movie/{n.TmdbId}" : Fmt.EpisodeHref(n.TmdbId, n.SeasonNumber, n.EpisodeNumber))" @key="n.Id">
+                        <img src="@Img.Poster(n.PosterPath, "w92")" alt="" loading="lazy" />
+                        <div>
+                            <div class="mini-title">@n.Title</div>
+                            <div class="muted small">@if (n.Type == MediaType.Movie) { <span>Movie release</span> } else { <Spoiler>@n.Detail</Spoiler> }</div>
+                        </div>
+                        @if (!n.Read) { <span class="pill pill-sm">New</span> }
+                    </a>
+                }
+            </div>
+        </section>
+    }
+}
+@code {
+    private NotificationsDto? data;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try
+        {
+            data = await Api.NotificationsAsync();
+            if (data.Unread > 0) await Api.MarkNotificationsReadAsync();   // seen now; "New" stays until you leave
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

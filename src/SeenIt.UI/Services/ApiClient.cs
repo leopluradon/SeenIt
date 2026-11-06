@@ -192,6 +192,13 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     public Task<ProfileDto> ProfileAsync(string userName) => GetAsync<ProfileDto>($"api/users/{Uri.EscapeDataString(userName)}");
     public Task<FeedDto> FeedAsync(int take = 40) => GetAsync<FeedDto>($"api/social/feed?take={take}");
+    public Task<NotificationsDto> NotificationsAsync() => GetAsync<NotificationsDto>("api/notifications");
+    public async Task<int> UnreadNotificationsAsync() => (await GetAsync<UnreadResult>("api/notifications/unread")).Unread;
+    public Task MarkNotificationsReadAsync() => SendAsync(HttpMethod.Post, "api/notifications/read");
+    public Task<AlertSettingsDto> AlertSettingsAsync() => GetAsync<AlertSettingsDto>("api/alerts");
+    public async Task<AlertSettingsDto> SetAlertSettingsAsync(AlertSettingsRequest r) => (await SendAsync<AlertSettingsDto>(HttpMethod.Put, "api/alerts", r))!;
+    private sealed record UnreadResult(int Unread);
+
     public Task<List<FriendSeen>> SeenByAsync(MediaType type, int id, int? season = null, int? episode = null) =>
         GetAsync<List<FriendSeen>>($"api/social/seen/{type}/{id}" + (season is { } s ? $"?season={s}" + (episode is { } e ? $"&episode={e}" : "") : ""));
 

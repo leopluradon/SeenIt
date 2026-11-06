@@ -280,6 +280,29 @@ public static class ApiEndpoints
             if (await c.CancelAsync(p.UserId(), ct)) await a.LogAsync(p, ActivityKind.CheckInCancel);
             return Results.NoContent();
         });
+        g.MapGet("/notifications", (ClaimsPrincipal p, ReleaseAlertService a, CancellationToken ct) => a.ListAsync(p.UserId(), ct));
+        g.MapGet("/notifications/unread", async (ClaimsPrincipal p, ReleaseAlertService a, CancellationToken ct) => new { unread = await a.UnreadAsync(p.UserId(), ct) });
+        g.MapPost("/notifications/read", async (ClaimsPrincipal p, ReleaseAlertService a, CancellationToken ct) =>
+        {
+            await a.MarkAllReadAsync(p.UserId(), ct);
+            return Results.NoContent();
+        });
+        g.MapGet("/alerts", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, EmailService email, CancellationToken ct) =>
+        {
+            var u = await db.Users.AsNoTracking().FirstAsync(x => x.Id == p.UserId(), ct);
+            return new AlertSettingsDto(u.ReleaseEmails, email.Enabled, $"{a.BaseUrl()}cal/{u.CalendarToken}.ics");
+        });
+        g.MapPut("/alerts", async (AlertSettingsRequest req, ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, EmailService email, CancellationToken ct) =>
+        {
+            var u = await db.Users.FirstAsync(x => x.Id == p.UserId(), ct);
+            if (req.Emails is { } on) u.ReleaseEmails = on;
+            if (req.NewCalendarUrl) u.CalendarToken = AppUser.NewToken();
+            await db.SaveChangesAsync(ct);
+            // Turning emails on today still sends today's digest.
+            if (req.Emails == true) { u.LastReleaseEmail = null; await db.SaveChangesAsync(ct); await a.ScanAsync(u, ct); }
+            return new AlertSettingsDto(u.ReleaseEmails, email.Enabled, $"{a.BaseUrl()}cal/{u.CalendarToken}.ics");
+        });
+
         g.MapGet("/calendar", (DateOnly? from, int? days, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.GetCalendarAsync(p.UserId(), from ?? DateOnly.FromDateTime(DateTime.UtcNow), days ?? 30, ct));
         g.MapGet("/dashboard", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetDashboardAsync(p.UserId(), ct));
@@ -478,6 +501,10 @@ public static class ApiEndpoints
         // Profiles respect the owner's visibility setting; signed-out visitors see public ones only.
         app.MapGet("/api/users/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.GetProfileAsync(name, p.OptionalUserId(), ct) is { } profile ? Results.Ok(profile) : Results.NotFound());
+
+        // Private calendar feed (subscribe in Google/Apple Calendar). The token in the URL is the only key.
+        app.MapGet("/cal/{token}.ics", async (string token, ReleaseAlertService alerts, CancellationToken ct) =>
+            await alerts.CalendarAsync(token, ct) is { } ics ? Results.Text(ics, "text/calendar; charset=utf-8") : Results.NotFound());
 
         // Profile pictures are public, like usernames. The URL carries a version, so it can be cached for good.
         app.MapGet("/api/users/{name}/avatar", async (string name, HttpContext http, AvatarService avatars, CancellationToken ct) =>

@@ -442,6 +442,13 @@ public record ShowProgressDto(
 public enum ShowTrackStatus { Watching, Paused, Dropped }
 public record ShowStatusRequest(ShowTrackStatus Status);
 
+public record NotificationDto(Guid Id, MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, string Title, string? Detail,
+    string? PosterPath, DateOnly Day, bool Read);
+public record NotificationsDto(IReadOnlyList<NotificationDto> Items, int Unread);
+/// <summary>Release alerts and the private calendar feed. CalendarUrl is secret: anyone with it sees your calendar.</summary>
+public record AlertSettingsDto(bool Emails, bool EmailAvailable, string CalendarUrl);
+public record AlertSettingsRequest(bool? Emails = null, bool NewCalendarUrl = false);
+
 public record CalendarEntry(
     DateOnly Date,
     MediaType Type,

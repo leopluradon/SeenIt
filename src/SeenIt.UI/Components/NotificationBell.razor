@@ -1,0 +1,34 @@
+@* The bell in the top bar: how many release alerts you haven't seen. Rechecks as you move around (at most every two minutes). *@
+@implements IDisposable
+@inject ApiClient Api
+@inject NavigationManager Nav
+<a href="notifications" class="icon-btn bell @(unread > 0 ? "has-unread" : "")" aria-label="@(unread > 0 ? $"{unread} new release alert{(unread == 1 ? "" : "s")}" : "Release alerts")">
+    <Icon Name="bell" />
+    @if (unread > 0) { <span class="bell-badge">@(unread > 99 ? "99+" : unread.ToString())</span> }
+</a>
+@code {
+    private int unread;
+    private DateTime checkedAt = DateTime.MinValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnMove;
+        await Check();
+    }
+
+    private void OnMove(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Opening the alerts page reads them all.
+        if (Nav.ToBaseRelativePath(e.Location).StartsWith("notifications")) { unread = 0; checkedAt = DateTime.UtcNow; StateHasChanged(); return; }
+        if (DateTime.UtcNow - checkedAt > TimeSpan.FromMinutes(2)) _ = InvokeAsync(Check);
+    }
+
+    private async Task Check()
+    {
+        checkedAt = DateTime.UtcNow;
+        try { unread = await Api.UnreadNotificationsAsync(); StateHasChanged(); }
+        catch { /* offline or signed out: leave it */ }
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnMove;
+}
