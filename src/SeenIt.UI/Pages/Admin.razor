@@ -243,7 +243,7 @@ else
                             </div>
                             <div class="muted small">
                                 @j.CreatedAt.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")
-                                @if (j.StartedAt is { } s && j.FinishedAt is { } f) { <span> · took @Fmt.Duration((long)Math.Max(1, (f - s).TotalMinutes))</span> }
+                                @if (j.StartedAt is { } s && j.FinishedAt is { } f) { <span> · took <Dur Minutes="(long)Math.Max(1, (f - s).TotalMinutes)" /></span> }
                                 @if (j.Parts != ImportParts.All) { <span> · @PartsPicker.Describe(j.Parts)</span> }
                                 · @j.Processed.ToString("N0")/@j.Total.ToString("N0") processed
                             </div>

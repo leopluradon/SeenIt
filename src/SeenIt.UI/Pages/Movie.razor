@@ -52,7 +52,7 @@ else if (m is not null)
                 {
                     <div class="panel">
                         <div class="panel-head">
-                            <h2>Your plays <span class="muted small">@plays.Count@(m.Runtime is > 0 ? " · " + Fmt.Duration((long)m.Runtime.Value * plays.Count) : "")</span></h2>
+                            <h2>Your plays <span class="muted small">@plays.Count@if (m.Runtime is > 0) { <span> · <Dur Minutes="(long)m.Runtime.Value * plays.Count" /></span> }</span></h2>
                             @if (plays.Count > 1) { <button class="btn btn-sm btn-ghost" @onclick="UnwatchAll"><Icon Name="trash" Size="14" /> Remove all</button> }
                         </div>
                         <div class="plays">

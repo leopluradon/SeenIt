@@ -101,7 +101,7 @@ else if (data is not null)
     }
     else
     {
-        <p class="muted small">@(Type == MediaType.Show ? "Episodes grouped by show and day" : $"{data.TotalResults:N0} play{(data.TotalResults == 1 ? "" : "s")}")@(data.TotalMinutes > 0 ? $" · {Fmt.Duration(data.TotalMinutes)}" : "")@(Summary is { } sm ? $" · {sm}" : "")</p>
+        <p class="muted small" title="@Fmt.HoursTip(data.TotalMinutes)">@(Type == MediaType.Show ? "Episodes grouped by show and day" : $"{data.TotalResults:N0} play{(data.TotalResults == 1 ? "" : "s")}")@(data.TotalMinutes > 0 ? $" · {Fmt.Duration(data.TotalMinutes)}" : "")@(Summary is { } sm ? $" · {sm}" : "")</p>
         <div class="history">
             @foreach (var day in data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
             {
@@ -110,7 +110,7 @@ else if (data is not null)
                 <div class="day-divider">
                     <h3>@(day.Key is { } dk ? Fmt.Day(dk) : "Date unknown")</h3>
                     <span class="day-line" aria-hidden="true"></span>
-                    <span class="day-total">@totals.Plays play@(totals.Plays == 1 ? "" : "s")@(totals.Minutes > 0 ? " · " + Fmt.Duration(totals.Minutes) : "")</span>
+                    <span class="day-total" title="@Fmt.HoursTip(totals.Minutes)">@totals.Plays play@(totals.Plays == 1 ? "" : "s")@(totals.Minutes > 0 ? " · " + Fmt.Duration(totals.Minutes) : "")</span>
                 </div>
                 @foreach (var h in day)
                 {

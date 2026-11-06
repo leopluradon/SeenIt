@@ -27,8 +27,8 @@ else if (c is not null)
         @foreach (var (label, a, b) in Rows())
         {
             <span class="muted">@label</span>
-            <span class="@(a.Value > b.Value ? "lead" : "")">@a.Text</span>
-            <span class="@(b.Value > a.Value ? "lead" : "")">@b.Text</span>
+            <span class="@(a.Value > b.Value ? "lead" : "")" title="@Fmt.HoursTip(a.Text)">@a.Text</span>
+            <span class="@(b.Value > a.Value ? "lead" : "")" title="@Fmt.HoursTip(b.Text)">@b.Text</span>
         }
         <span class="muted">In common</span>
         <span class="span2">@c.SharedMovies movie@(c.SharedMovies == 1 ? "" : "s") · @c.SharedShows show@(c.SharedShows == 1 ? "" : "s")</span>

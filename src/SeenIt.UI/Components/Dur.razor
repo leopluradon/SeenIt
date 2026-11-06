@@ -1,0 +1,5 @@
+@* A running time like "2d 1h", with the total in hours on hover. *@
+<span title="@Fmt.HoursTip(Minutes)">@Fmt.Duration(Minutes)</span>
+@code {
+    [Parameter, EditorRequired] public long Minutes { get; set; }
+}

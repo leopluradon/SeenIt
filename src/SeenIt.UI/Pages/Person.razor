@@ -44,7 +44,7 @@ else if (p is not null)
             }
             else
             {
-                <p class="muted small">@WatchedSummary(p)</p>
+                <p class="muted small" title="@Fmt.HoursTip(p.WatchedMinutes)">@WatchedSummary(p)</p>
                 <div class="watched-with">
                     @foreach (var w in watched)
                     {
@@ -53,7 +53,7 @@ else if (p is not null)
                             <div class="ww-body">
                                 <a href="@Fmt.Href(w.Type, w.TmdbId)" class="mini-title">@w.Title</a>
                                 @if (w.Character is not null) { <div class="small">as @w.Character</div> }
-                                <div class="muted small">
+                                <div class="muted small" title="@Fmt.HoursTip(w.Minutes)">
                                     @(w.Type == MediaType.Movie
                                         ? (w.Plays > 1 ? $"Watched {w.Plays}× · " : "Watched · ") + Fmt.Duration(w.Minutes)
                                         : (w.GuestRole ? $"{Plural(w.Episodes.Count, "episode")} you watched" : $"{Plural(w.Plays, "episode")} watched") + " · " + Fmt.Duration(w.Minutes))

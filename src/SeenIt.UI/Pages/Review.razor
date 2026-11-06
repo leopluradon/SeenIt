@@ -51,7 +51,7 @@ else if (r is not null)
         var t = r.Totals;
         var p = r.Previous;
         <section class="stat-tiles review-tiles">
-            <div class="stat big"><span class="stat-value">@Fmt.Duration(t.Minutes)</span><span class="stat-label">watched <Delta Now="t.Minutes" Then="p.Minutes" /></span></div>
+            <div class="stat big"><span class="stat-value"><Dur Minutes="t.Minutes" /></span><span class="stat-label">watched <Delta Now="t.Minutes" Then="p.Minutes" /></span></div>
             <div class="stat"><span class="stat-value">@t.Plays.ToString("N0")</span><span class="stat-label">plays <Delta Now="t.Plays" Then="p.Plays" /></span></div>
             <div class="stat"><span class="stat-value">@t.Movies.ToString("N0")</span><span class="stat-label">movies@(t.MoviePlays > t.Movies ? $" · {t.MoviePlays} plays" : "") <Delta Now="t.Movies" Then="p.Movies" /></span></div>
             <div class="stat"><span class="stat-value">@t.Episodes.ToString("N0")</span><span class="stat-label">episodes of @t.Shows show@(t.Shows == 1 ? "" : "s") <Delta Now="t.Episodes" Then="p.Episodes" /></span></div>
@@ -71,7 +71,7 @@ else if (r is not null)
         <section class="review-facts">
             <div class="fact"><b>@r.DaysActive</b><span>of @r.DaysInPeriod days with something watched</span></div>
             <div class="fact"><b>@r.LongestStreak.Days day@(r.LongestStreak.Days == 1 ? "" : "s")</b><span>longest streak@(r.LongestStreak.Start is { } ss && r.LongestStreak.Days > 1 ? $" ({ss:MMM d} – {r.LongestStreak.End:MMM d})" : "")</span></div>
-            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString("ddd, MMM d")</b><span>busiest day: @bd.Plays plays, @Fmt.Duration(bd.Minutes)</span></div> }
+            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString("ddd, MMM d")</b><span>busiest day: @bd.Plays plays, <Dur Minutes="bd.Minutes" /></span></div> }
             <div class="fact"><b>@r.AveragePlaysPerActiveDay</b><span>plays per active day</span></div>
             @if (r.FavoriteWeekday is { } fw) { <div class="fact"><b>@(fw)s</b><span>favorite day to watch</span></div> }
             @if (r.PeakHour is { } ph) { <div class="fact"><b>@HourLabel(ph)</b><span>peak viewing hour</span></div> }
@@ -96,7 +96,7 @@ else if (r is not null)
                     {
                         rank++;
                         <PosterCard Media="@(new MediaSummary(MediaType.Show, s.TmdbId, s.Title, null, s.PosterPath, null, null, null))"
-                                    Badge="@($"#{rank}")" ShowScore="false" Sub="@($"{s.Detail} · {Fmt.Duration(s.Minutes)}")" @key="s.TmdbId" />
+                                    Badge="@($"#{rank}")" ShowScore="false" Sub="@($"{s.Detail} · {Fmt.Duration(s.Minutes)}")" SubTitle="@Fmt.HoursTip(s.Minutes)" @key="s.TmdbId" />
                     }
                 </div>
             </section>

@@ -15,9 +15,9 @@
 else if (s is not null)
 {
     <div class="stat-tiles">
-        <div class="stat"><span class="stat-value">@Fmt.Duration(s.MinutesMovies + s.MinutesEpisodes)</span><span class="stat-label">Total time watched</span></div>
-        <div class="stat"><span class="stat-value">@s.MoviesWatched.ToString("N0")</span><span class="stat-label">Movies (@s.MoviePlays.ToString("N0") plays · @Fmt.Duration(s.MinutesMovies))</span></div>
-        <div class="stat"><span class="stat-value">@s.EpisodesWatched.ToString("N0")</span><span class="stat-label">Episodes (@s.EpisodePlays.ToString("N0") plays · @Fmt.Duration(s.MinutesEpisodes))</span></div>
+        <div class="stat"><span class="stat-value"><Dur Minutes="s.MinutesMovies + s.MinutesEpisodes" /></span><span class="stat-label">Total time watched</span></div>
+        <div class="stat"><span class="stat-value">@s.MoviesWatched.ToString("N0")</span><span class="stat-label">Movies (@s.MoviePlays.ToString("N0") plays · <Dur Minutes="s.MinutesMovies" />)</span></div>
+        <div class="stat"><span class="stat-value">@s.EpisodesWatched.ToString("N0")</span><span class="stat-label">Episodes (@s.EpisodePlays.ToString("N0") plays · <Dur Minutes="s.MinutesEpisodes" />)</span></div>
         <div class="stat"><span class="stat-value">@s.ShowsWatched.ToString("N0")</span><span class="stat-label">Shows</span></div>
         <div class="stat"><span class="stat-value">@s.Ratings.ToString("N0")</span><span class="stat-label">Ratings @if (s.AverageRating is { } avg) { <span>· avg @Fmt.Avg(avg)</span> }</span></div>
     </div>
@@ -55,7 +55,7 @@ else if (s is not null)
                     @for (var pad = 0; pad < (int)(m.Heatmap.FirstOrDefault()?.Date.DayOfWeek ?? 0); pad++) { <span class="hm-cell hm-pad"></span> }
                     @foreach (var d in m.Heatmap)
                     {
-                        <span class="hm-cell hm-@Level(d.Minutes)" title="@($"{d.Date:ddd, MMM d, yyyy}: {(d.Plays == 0 ? "nothing" : $"{Fmt.Duration(d.Minutes)}, {d.Plays} play{(d.Plays == 1 ? "" : "s")}")}")"></span>
+                        <span class="hm-cell hm-@Level(d.Minutes)" title="@($"{d.Date:ddd, MMM d, yyyy}: {(d.Plays == 0 ? "nothing" : $"{Fmt.Duration(d.Minutes)}{(d.Minutes >= 1440 ? $" ({d.Minutes / 60:N0} hours)" : "")}, {d.Plays} play{(d.Plays == 1 ? "" : "s")}")}")"></span>
                     }
                 </div>
             </div>
@@ -140,10 +140,10 @@ else if (s is not null)
                 {
                     <div class="mini-facts">
                         <div><b>@b.Episodes.ToString("N0")</b><span>episodes in @b.Shows show@(b.Shows == 1 ? "" : "s")</span></div>
-                        <div><b>@Fmt.Duration(b.Minutes)</b><span>to watch</span></div>
+                        <div><b><Dur Minutes="b.Minutes" /></b><span>to watch</span></div>
                     </div>
                     <p class="muted small">
-                        @if (b.CaughtUpBy is { } by) { <span>At your recent pace (@Fmt.Duration(b.MinutesPerDay) a day), you'd catch up around <b>@by.ToString("MMMM yyyy")</b>.</span> }
+                        @if (b.CaughtUpBy is { } by) { <span>At your recent pace (<Dur Minutes="b.MinutesPerDay" /> a day), you'd catch up around <b>@by.ToString("MMMM yyyy")</b>.</span> }
                         else { <span>Watch some episodes this month to see when you'd catch up.</span> }
                     </p>
                 }
@@ -238,7 +238,7 @@ else if (s is not null)
                         <li class="@(r.IsMe ? "me" : "")" @key="r.User.UserName">
                             <a href="@Fmt.UserHref(r.User.UserName)">@(r.IsMe ? "You" : r.User.Name)</a>
                             <span class="muted small">@r.Plays play@(r.Plays == 1 ? "" : "s")</span>
-                            <b>@Fmt.Duration(r.Minutes)</b>
+                            <b><Dur Minutes="r.Minutes" /></b>
                         </li>
                     }
                 </ol>

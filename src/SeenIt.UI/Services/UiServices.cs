@@ -113,6 +113,14 @@ public static class Fmt
         return days > 0 ? $"{days}d {hours}h" : hours > 0 ? $"{hours}h {minutes % 60}m" : $"{minutes}m";
     }
 
+    /// <summary>Hover text for a duration of a day or more ("2d 1h" → "49 hours"); null below a day, which already reads in hours.</summary>
+    public static string? HoursTip(long minutes) => minutes >= 1440 ? $"{minutes / 60:N0} hours" : null;
+
+    private static readonly System.Text.RegularExpressions.Regex DaysRe = new(@"(\d+)d (\d+)h");
+    /// <summary>The same, for text that contains a "2d 1h" duration (stat boxes, table cells).</summary>
+    public static string? HoursTip(string? text) =>
+        text is not null && DaysRe.Match(text) is { Success: true } m ? $"{long.Parse(m.Groups[1].Value) * 24 + long.Parse(m.Groups[2].Value):N0} hours" : null;
+
     /// <summary>The full date and time, for hovering over a relative one ("3d ago").</summary>
     public static string Exact(DateTimeOffset when) =>
         WatchDates.IsUnknown(when) ? "Date unknown" : when.ToLocalTime().ToString("dddd, MMMM d, yyyy, h:mm tt");

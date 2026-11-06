@@ -3,7 +3,7 @@
     @foreach (var y in Periods)
     {
         <div class="period-year" @key="y.Year">
-            <a class="period-year-link" href="@($"review/{y.Year}")"><b>@y.Year</b> <span class="muted small">@y.Plays.ToString("N0") plays · @Fmt.Duration(y.Minutes)</span></a>
+            <a class="period-year-link" href="@($"review/{y.Year}")"><b>@y.Year</b> <span class="muted small">@y.Plays.ToString("N0") plays · <Dur Minutes="y.Minutes" /></span></a>
             <div class="chips">
                 @foreach (var m in y.Months)
                 {
