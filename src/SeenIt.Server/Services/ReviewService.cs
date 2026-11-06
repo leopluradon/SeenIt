@@ -97,11 +97,14 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
                 shows.GetValueOrDefault(g.Key)?.PosterPath, g.Count(), g.Sum(p => minutes(p)),
                 titleRating.TryGetValue((MediaType.Show, g.Key), out var r) ? r : null,
                 g.Select(p => (p.Season, p.Episode)).Distinct().Count() is var n && n == 1 ? "1 episode" : $"{n} episodes"))
-            .OrderByDescending(i => i.Plays).ThenByDescending(i => i.Minutes).Take(10).ToList();
+            .OrderByDescending(i => i.Plays).ThenByDescending(i => i.Minutes).ToList();
 
-        var topMovies = inPeriod.Where(p => p.Type == MediaType.Movie).GroupBy(p => p.TmdbId)
+        var allMovies = inPeriod.Where(p => p.Type == MediaType.Movie).GroupBy(p => p.TmdbId)
             .Select(g => MovieItem(g.Key, g.Count(), g.Sum(p => minutes(p))))
-            .OrderByDescending(i => i.Rating ?? 0).ThenByDescending(i => i.Plays).ThenByDescending(i => i.Minutes).Take(10).ToList();
+            .OrderByDescending(i => i.Rating ?? 0).ThenByDescending(i => i.Plays).ThenByDescending(i => i.Minutes).ToList();
+        var allShows = topShows;
+        topShows = allShows.Take(10).ToList();
+        var topMovies = allMovies.Take(10).ToList();
 
         ReviewItem MovieItem(int id, int plays, long mins, string? detail = null)
         {
@@ -243,7 +246,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             longest, oldest, newest,
             bookendEntries.FirstOrDefault(b => b.Id == inPeriod.FirstOrDefault()?.Id),
             bookendEntries.FirstOrDefault(b => b.Id == inPeriod.LastOrDefault()?.Id),
-            mostRewatched, since);
+            mostRewatched, since, allShows, allMovies);
     }
 
     internal async Task<List<Play>> LoadPlaysAsync(Guid userId, TimeZoneInfo tz, DateOnly? since, CancellationToken ct)

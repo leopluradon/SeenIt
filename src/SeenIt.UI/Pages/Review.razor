@@ -88,11 +88,18 @@ else if (r is not null)
 
         @if (r.TopShows.Count > 0)
         {
+            var allShows = r.AllShows ?? r.TopShows;
             <section class="row-section">
-                <div class="section-head"><h2>Top shows</h2></div>
-                <div class="poster-scroller">
+                <div class="section-head">
+                    <h2>@(showAllShows ? $"All shows · {allShows.Count}" : "Top shows")</h2>
+                    @if (allShows.Count > r.TopShows.Count)
+                    {
+                        <button class="section-more link-btn" @onclick="() => showAllShows = !showAllShows">@(showAllShows ? "Show top 10" : $"See all {allShows.Count}") <Icon Name="@(showAllShows ? "chevron-up" : "chevron-down")" Size="16" /></button>
+                    }
+                </div>
+                <div class="@(showAllShows ? "poster-grid" : "poster-scroller")">
                     @{ var rank = 0; }
-                    @foreach (var s in r.TopShows)
+                    @foreach (var s in showAllShows ? allShows : r.TopShows)
                     {
                         rank++;
                         <PosterCard Media="@(new MediaSummary(MediaType.Show, s.TmdbId, s.Title, null, s.PosterPath, null, null, null))"
@@ -103,10 +110,17 @@ else if (r is not null)
         }
         @if (r.TopMovies.Count > 0)
         {
+            var allMovies = r.AllMovies ?? r.TopMovies;
             <section class="row-section">
-                <div class="section-head"><h2>Movies</h2></div>
-                <div class="poster-scroller">
-                    @foreach (var m in r.TopMovies)
+                <div class="section-head">
+                    <h2>@(showAllMovies ? $"All movies · {allMovies.Count}" : "Movies")</h2>
+                    @if (allMovies.Count > r.TopMovies.Count)
+                    {
+                        <button class="section-more link-btn" @onclick="() => showAllMovies = !showAllMovies">@(showAllMovies ? "Show top 10" : $"See all {allMovies.Count}") <Icon Name="@(showAllMovies ? "chevron-up" : "chevron-down")" Size="16" /></button>
+                    }
+                </div>
+                <div class="@(showAllMovies ? "poster-grid" : "poster-scroller")">
+                    @foreach (var m in showAllMovies ? allMovies : r.TopMovies)
                     {
                         <PosterCard Media="@(new MediaSummary(MediaType.Movie, m.TmdbId, m.Title, null, m.PosterPath, null, null, null))"
                                     Badge="@(m.Rating is { } mr ? Fmt.RatingBadge(mr) : null)" ShowScore="false"
@@ -159,6 +173,7 @@ else if (r is not null)
 }
 
 @code {
+    private bool showAllShows, showAllMovies;
     [Parameter] public int Year { get; set; }
     [Parameter] public int? Month { get; set; }
     private ReviewDto? r;
@@ -180,6 +195,7 @@ else if (r is not null)
     protected override async Task OnParametersSetAsync()
     {
         r = null;
+        showAllShows = showAllMovies = false;   // a new year or month starts collapsed
         await Load();
         if (periods is null)
         {

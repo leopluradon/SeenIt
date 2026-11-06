@@ -619,7 +619,9 @@ public record ReviewDto(
     HistoryEntry? FirstPlay,
     HistoryEntry? LastPlay,
     ReviewItem? MostRewatched,
-    DateOnly? TrackingSince = null);   // reviews only count from here (see Settings → Stats)
+    DateOnly? TrackingSince = null,    // reviews only count from here (see Settings → Stats)
+    IReadOnlyList<ReviewItem>? AllShows = null,     // every show / movie in the period, same order as the top lists
+    IReadOnlyList<ReviewItem>? AllMovies = null);
 
 public record ReviewMonth(int Month, int Plays, long Minutes);
 public record ReviewYear(int Year, int Plays, long Minutes, IReadOnlyList<ReviewMonth> Months);
