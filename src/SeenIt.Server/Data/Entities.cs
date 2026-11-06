@@ -200,6 +200,8 @@ public class UserList
     public bool IsPublic { get; set; }
     /// <summary>A ranking: shown numbered, in the owner's order.</summary>
     public bool Ranked { get; set; }
+    /// <summary>Smart list rules (SmartRules as JSON); its entries are worked out, not stored. Null for ordinary lists.</summary>
+    public string? RulesJson { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     /// <summary>The import that created this list (undoing the import removes it once it's empty).</summary>
     public Guid? ImportJobId { get; set; }

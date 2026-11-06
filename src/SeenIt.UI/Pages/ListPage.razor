@@ -13,7 +13,7 @@ else if (list is not null)
     <div class="page-head">
         <div>
             <h1>@list.Name</h1>
-            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items@(list.Ranked ? " · Ranked" : "") · @(list.IsPublic ? "Public" : "Private")@(list.IsOwner && list.Saves > 0 ? $" · saved by {list.Saves}" : "")</p>
+            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items@(list.Rules is not null ? " · Smart list" : list.Ranked ? " · Ranked" : "") · @(list.IsPublic ? "Public" : "Private")@(list.IsOwner && list.Saves > 0 ? $" · saved by {list.Saves}" : "")</p>
         </div>
         @if (list.IsPublic && !list.IsOwner)
         {
@@ -31,14 +31,19 @@ else if (list is not null)
             <div class="inline">
                 @if (list.IsPublic) { <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
                 else { <span class="muted small" title="Make the list public in Edit to share it">Private: only you can see it</span> }
-                @if (list.Items.Count > 1) { <button class="btn btn-sm @(arranging ? "btn-on" : "")" @onclick="ToggleArranging">@(arranging ? "Done" : "Reorder & notes")</button> }
+                @if (list.Items.Count > 1 && list.Rules is null) { <button class="btn btn-sm @(arranging ? "btn-on" : "")" @onclick="ToggleArranging">@(arranging ? "Done" : "Reorder & notes")</button> }
                 <button class="btn btn-sm" @onclick="() => editOpen = true">Edit</button>
                 <button class="btn btn-sm btn-danger" @onclick="Delete">Delete</button>
             </div>
         }
     </div>
     @if (list.Description is not null) { <p class="overview">@list.Description</p> }
-    @if (list.Items.Count == 0) { <Empty Title="This list is empty.">Add movies and shows from their pages with the “Lists” button.</Empty> }
+    @if (list.Rules is { } rules)
+    {
+        <div class="rule-summary">@foreach (var r in RuleText(rules)) { <span class="pill pill-sm">@r</span> }</div>
+        @if (list.Items.Count == 0) { <Empty Title="Nothing matches these rules right now.">@(list.IsOwner ? "Edit the rules to widen them." : "")</Empty> }
+    }
+    else if (list.Items.Count == 0) { <Empty Title="This list is empty.">Add movies and shows from their pages with the “Lists” button.</Empty> }
     @if (arranging && order is not null)
     {
         <p class="muted small">Drag entries (or use the arrows) to put them in order, and add a note to any of them. Notes save when you leave the box.</p>
@@ -83,7 +88,7 @@ else if (list is not null)
             <div class="poster-wrap" @key="i.Id">
                 <PosterCard Media="i.Media" Badge="@(list.Ranked ? $"#{rank}" : null)" />
                 @if (i.Note is { Length: > 0 } note) { <p class="list-note">@note</p> }
-                @if (list.IsOwner)
+                @if (list.IsOwner && list.Rules is null)
                 {
                     <button class="poster-remove" @onclick="() => Remove(i)" aria-label="Remove @i.Media.Title"><Icon Name="x" Size="14" /></button>
                 }
@@ -94,10 +99,29 @@ else if (list is not null)
     }
 
     <Modal @bind-Open="editOpen" Title="Edit list">
-        <ListForm Name="@list.Name" Description="@list.Description" IsPublic="list.IsPublic" Ranked="list.Ranked" OnSave="Save" />
+        <ListForm Name="@list.Name" Description="@list.Description" IsPublic="list.IsPublic" Ranked="list.Ranked" Rules="list.Rules" OnSave="Save" />
     </Modal>
 }
 @code {
+    /// <summary>A smart list's rules in words, e.g. "From your watchlist", "Movies", "1980–1989", "Not seen yet".</summary>
+    private static IEnumerable<string> RuleText(SmartRules r)
+    {
+        yield return r.Source switch { SmartSource.History => "From what's been watched", SmartSource.Watchlist => "From the watchlist", _ => "From all of TMDB" };
+        if (r.Type is { } t) yield return t == MediaType.Movie ? "Movies" : "Shows";
+        if (r.Genres is { Count: > 0 } g) yield return string.Join(" or ", g);
+        if (r.YearFrom is not null || r.YearTo is not null) yield return r.YearFrom == r.YearTo ? $"{r.YearFrom}" : $"{r.YearFrom?.ToString() ?? "…"}–{r.YearTo?.ToString() ?? "now"}";
+        if (r.MinScore is { } ms) yield return $"TMDB {ms:0.#}+";
+        if (r.MinMyRating is { } mr) yield return $"Rated {Fmt.Stars(mr)}+";
+        if (r.Language is { } l) yield return $"Language: {l}";
+        if (r.Watched is { } w) yield return w ? "Already seen" : "Not seen yet";
+        yield return r.Sort switch
+        {
+            SmartSort.Score => "Highest scored first", SmartSort.Newest => "Newest first", SmartSort.Oldest => "Oldest first",
+            SmartSort.RecentlyWatched => "Recently watched first", SmartSort.Title => "A–Z", _ => r.Source == SmartSource.Tmdb ? "Most popular first" : "Most played first",
+        };
+        yield return $"Up to {r.Limit}";
+    }
+
     private bool saving;
 
     private async Task ToggleSave()

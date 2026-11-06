@@ -4,7 +4,7 @@
         @foreach (var p in List.Posters.Take(4)) { <img src="@Img.Poster(p, "w154")" alt="" loading="lazy" /> }
     </div>
     <div class="list-meta">
-        <b>@List.Name</b>
+        <b>@List.Name @if (List.Smart) { <span class="pill pill-sm">Smart</span> }</b>
         <span class="muted small">
             @List.ItemCount items
             @if (List.Owner is { } owner) { <span> · by @owner</span> } else { <span> · @(List.IsPublic ? "Public" : "Private")</span> }

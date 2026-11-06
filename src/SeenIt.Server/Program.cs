@@ -133,6 +133,7 @@ builder.Services.AddScoped<ScoreService>();
 builder.Services.AddScoped<AvatarService>();
 builder.Services.AddScoped<ReleaseAlertService>();
 builder.Services.AddScoped<RecommendationService>();
+builder.Services.AddScoped<SmartListService>();
 builder.Services.AddHostedService<ReleaseAlertWorker>();
 builder.Services.AddHostedService<ImdbRatingsWorker>();
 

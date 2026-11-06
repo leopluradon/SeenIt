@@ -25,6 +25,7 @@ public record TmdbListItem(
 public record TmdbSearchPerson(int Id, string Name, string? ProfilePath, string? KnownForDepartment, List<TmdbListItem>? KnownFor);
 
 public record TmdbGenre(int Id, string Name);
+public record TmdbGenres(List<TmdbGenre>? Genres);
 public record TmdbRole(string? Character, int EpisodeCount);
 /// <summary>Movie credits carry Character; TV aggregate credits carry Roles instead.</summary>
 public record TmdbCast(int Id, string Name, string? Character, string? ProfilePath, int Order, List<TmdbRole>? Roles, int? TotalEpisodeCount = null)

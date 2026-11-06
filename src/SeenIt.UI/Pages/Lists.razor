@@ -74,7 +74,7 @@ else if (lists is not null)
 }
 
 <Modal @bind-Open="createOpen" Title="New list">
-    <ListForm OnSave="Create" />
+    <ListForm OnSave="Create" AllowSmart="true" />
 </Modal>
 
 @code {

@@ -1,14 +1,113 @@
+@* Name, description and options for a list; for a smart list, also the rules that fill it in. *@
+@inject ApiClient Api
 <form class="stack" @onsubmit="Save">
+    @if (AllowSmart)
+    {
+        <div class="segmented" role="radiogroup" aria-label="Kind of list">
+            <button type="button" role="radio" aria-checked="@(!smart)" class="@(smart ? "" : "on")" @onclick="() => smart = false">Ordinary list</button>
+            <button type="button" role="radio" aria-checked="@smart" class="@(smart ? "on" : "")" @onclick="() => smart = true">Smart list</button>
+        </div>
+        @if (smart) { <p class="muted small">A smart list fills itself in from rules and stays up to date, e.g. "sci-fi movies from the 80s I haven't seen" or "shows I rated 9+".</p> }
+    }
     <div class="field">
         <label for="list-name">Name</label>
         <input id="list-name" @bind="name" @bind:event="oninput" maxlength="100" required />
     </div>
     <div class="field">
         <label for="list-desc">Description</label>
-        <textarea id="list-desc" @bind="description" rows="3" maxlength="2000"></textarea>
+        <textarea id="list-desc" @bind="description" rows="2" maxlength="2000"></textarea>
     </div>
+
+    @if (smart)
+    {
+        <fieldset class="smart-rules">
+            <legend>Rules</legend>
+            <div class="rule-grid">
+                <div class="field">
+                    <label for="r-source">From</label>
+                    <select id="r-source" @bind="source">
+                        <option value="@SmartSource.History">What I've watched</option>
+                        <option value="@SmartSource.Watchlist">My watchlist</option>
+                        <option value="@SmartSource.Tmdb">Everything on TMDB</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="r-type">Type</label>
+                    <select id="r-type" @bind="typeKey">
+                        <option value="">Movies and shows</option>
+                        <option value="Movie">Movies</option>
+                        <option value="Show">Shows</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="r-from">Years</label>
+                    <div class="inline">
+                        <input id="r-from" type="number" min="1900" max="2100" placeholder="from" @bind="yearFrom" aria-label="From year" />
+                        <input type="number" min="1900" max="2100" placeholder="to" @bind="yearTo" aria-label="To year" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="r-score">Min TMDB score</label>
+                    <input id="r-score" type="number" min="0" max="10" step="0.5" placeholder="any" @bind="minScore" />
+                </div>
+                <div class="field">
+                    <label for="r-mine">Min rating from me</label>
+                    <input id="r-mine" type="number" min="1" max="10" step="0.5" placeholder="any (1–10)" @bind="minMine" />
+                </div>
+                <div class="field">
+                    <label for="r-lang">Original language</label>
+                    <select id="r-lang" @bind="language">
+                        <option value="">Any</option>
+                        @foreach (var (lang, label) in Languages) { <option value="@lang">@label</option> }
+                    </select>
+                </div>
+                @if (source != SmartSource.History)
+                {
+                    <div class="field">
+                        <label for="r-watched">Watched</label>
+                        <select id="r-watched" @bind="watchedKey">
+                            <option value="">Either</option>
+                            <option value="no">Only ones I haven't seen</option>
+                            <option value="yes">Only ones I've seen</option>
+                        </select>
+                    </div>
+                }
+                <div class="field">
+                    <label for="r-sort">Order</label>
+                    <select id="r-sort" @bind="sort">
+                        <option value="@SmartSort.Popular">@(source == SmartSource.Tmdb ? "Most popular" : "Most played / newest added")</option>
+                        <option value="@SmartSort.Score">Highest TMDB score</option>
+                        <option value="@SmartSort.Newest">Newest</option>
+                        <option value="@SmartSort.Oldest">Oldest</option>
+                        @if (source != SmartSource.Tmdb) { <option value="@SmartSort.RecentlyWatched">Recently watched</option> }
+                        <option value="@SmartSort.Title">Title</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="r-limit">Up to</label>
+                    <select id="r-limit" @bind="limit">
+                        @foreach (var n in new[] { 25, 50, 100, 200 }) { <option value="@n">@n titles</option> }
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label>Genres <span class="muted small">(any of them)</span></label>
+                @if (genres is null) { <span class="muted small">Loading…</span> }
+                else
+                {
+                    <div class="chips">
+                        @foreach (var g in genres)
+                        {
+                            <button type="button" class="chip @(picked.Contains(g) ? "on" : "")" @onclick="() => Toggle(g)" @key="g">@g</button>
+                        }
+                    </div>
+                }
+            </div>
+        </fieldset>
+    }
+
     <label class="check"><input type="checkbox" @bind="isPublic" /> Public: anyone with the link can view it</label>
-    <label class="check"><input type="checkbox" @bind="ranked" /> Ranked: number the entries in your order (a top 10, a ranking)</label>
+    @if (!smart) { <label class="check"><input type="checkbox" @bind="ranked" /> Ranked: number the entries in your order (a top 10, a ranking)</label> }
     <button class="btn btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(name)">Save</button>
 </form>
 @code {
@@ -16,18 +115,62 @@
     [Parameter] public string? Description { get; set; }
     [Parameter] public bool IsPublic { get; set; }
     [Parameter] public bool Ranked { get; set; }
+    /// <summary>Editing a smart list: its current rules.</summary>
+    [Parameter] public SmartRules? Rules { get; set; }
+    /// <summary>Creating: offer the ordinary/smart choice.</summary>
+    [Parameter] public bool AllowSmart { get; set; }
     [Parameter] public EventCallback<CreateListRequest> OnSave { get; set; }
+
+    private static readonly (string, string)[] Languages =
+        [("en", "English"), ("ja", "Japanese"), ("ko", "Korean"), ("fr", "French"), ("es", "Spanish"), ("de", "German"),
+         ("it", "Italian"), ("hi", "Hindi"), ("zh", "Chinese"), ("pt", "Portuguese"), ("sv", "Swedish"), ("da", "Danish"), ("no", "Norwegian")];
+
     private string name = "";
     private string? description;
-    private bool isPublic, ranked;
+    private bool isPublic, ranked, smart;
+    private SmartSource source = SmartSource.History;
+    private string typeKey = "", language = "", watchedKey = "";
+    private int? yearFrom, yearTo;
+    private double? minScore, minMine;
+    private SmartSort sort = SmartSort.Popular;
+    private int limit = 50;
+    private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
+    private List<string>? genres;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         name = Name ?? "";
         description = Description;
         isPublic = IsPublic;
         ranked = Ranked;
+        if (Rules is { } r)
+        {
+            smart = true;
+            source = r.Source;
+            typeKey = r.Type?.ToString() ?? "";
+            yearFrom = r.YearFrom; yearTo = r.YearTo;
+            minScore = r.MinScore; minMine = r.MinMyRating;
+            language = r.Language ?? "";
+            watchedKey = r.Watched switch { true => "yes", false => "no", _ => "" };
+            sort = r.Sort; limit = r.Limit;
+            foreach (var g in r.Genres ?? []) picked.Add(g);
+        }
+        if (AllowSmart || Rules is not null)
+        {
+            try { genres = await Api.GenresAsync(); } catch { genres = []; }
+        }
     }
 
-    private Task Save() => OnSave.InvokeAsync(new CreateListRequest(name.Trim(), description, isPublic, ranked));
+    private void Toggle(string g) { if (!picked.Remove(g)) picked.Add(g); }
+
+    private Task Save()
+    {
+        SmartRules? rules = smart
+            ? new SmartRules(source, typeKey == "" ? null : Enum.Parse<MediaType>(typeKey), picked.ToList(), yearFrom, yearTo, minScore, minMine,
+                language == "" ? null : language,
+                source == SmartSource.History ? null : watchedKey switch { "yes" => true, "no" => false, _ => null },
+                source == SmartSource.Tmdb && sort == SmartSort.RecentlyWatched ? SmartSort.Popular : sort, limit)
+            : null;
+        return OnSave.InvokeAsync(new CreateListRequest(name.Trim(), description, isPublic, !smart && ranked, rules));
+    }
 }

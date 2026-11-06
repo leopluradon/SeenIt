@@ -494,11 +494,22 @@ public record DashboardDto(
 // ---------- Lists ----------
 
 public record ListSummary(Guid Id, string Name, string? Description, bool IsPublic, int ItemCount, DateTimeOffset UpdatedAt, IReadOnlyList<string?> Posters,
-    string? Owner = null, int Saves = 0);   // Owner: set when it's someone else's list
+    string? Owner = null, int Saves = 0, bool Smart = false);   // Owner: set when it's someone else's list
 public record ListDetail(Guid Id, string Name, string? Description, bool IsPublic, string OwnerUserName, bool IsOwner, IReadOnlyList<ListItemDto> Items,
-    bool Ranked = false, int Saves = 0, bool Saved = false);
+    bool Ranked = false, int Saves = 0, bool Saved = false, SmartRules? Rules = null);
+
+/// <summary>Where a smart list looks: what you've watched, your watchlist, or everything on TMDB.</summary>
+public enum SmartSource { History, Watchlist, Tmdb }
+public enum SmartSort { Popular, Score, Newest, Oldest, RecentlyWatched, Title }
+/// <summary>
+/// A list that fills itself in. Genres match any of them. Watched: true = only ones you've seen,
+/// false = only ones you haven't, null = either. MinMyRating looks at your own ratings.
+/// </summary>
+public record SmartRules(SmartSource Source, MediaType? Type = null, IReadOnlyList<string>? Genres = null,
+    int? YearFrom = null, int? YearTo = null, double? MinScore = null, double? MinMyRating = null,
+    string? Language = null, bool? Watched = null, SmartSort Sort = SmartSort.Popular, int Limit = 50);
 public record ListItemDto(Guid Id, MediaSummary Media, DateTimeOffset AddedAt, int Position, string? Note = null);
-public record CreateListRequest(string Name, string? Description, bool IsPublic, bool Ranked = false);
+public record CreateListRequest(string Name, string? Description, bool IsPublic, bool Ranked = false, SmartRules? Rules = null);
 /// <summary>Every item id of the list, in the new order.</summary>
 public record ListOrderRequest(IReadOnlyList<Guid> ItemIds);
 public record ListNoteRequest(string? Note);

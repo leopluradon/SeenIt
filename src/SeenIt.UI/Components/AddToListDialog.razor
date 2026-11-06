@@ -5,7 +5,7 @@
     else
     {
         <div class="stack">
-            @foreach (var l in lists)
+            @foreach (var l in lists.Where(x => !x.Smart))   // smart lists fill themselves in
             {
                 var inList = Selected.Contains(l.Id);
                 <button class="list-choice @(inList ? "on" : "")" @onclick="() => Toggle(l.Id, inList)" @key="l.Id">

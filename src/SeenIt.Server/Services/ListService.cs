@@ -4,17 +4,28 @@ using SeenIt.Server.Data;
 
 namespace SeenIt.Server.Services;
 
-public class ListService(AppDbContext db, TrackingService tracking)
+public class ListService(AppDbContext db, TrackingService tracking, SmartListService smart)
 {
     public async Task<List<ListSummary>> GetMineAsync(Guid userId, CancellationToken ct)
     {
         var lists = await db.Lists.Where(l => l.UserId == userId).Include(l => l.Items)
             .OrderByDescending(l => l.UpdatedAt).ToListAsync(ct);
         var (movies, shows) = await tracking.LoadMetaAsync(lists.SelectMany(l => l.Items.OrderBy(i => i.Position).Take(4)).Select(i => (i.Type, i.TmdbId)), ct);
-        return lists.Select(l => new ListSummary(l.Id, l.Name, l.Description, l.IsPublic, l.Items.Count, l.UpdatedAt,
-            l.Items.OrderBy(i => i.Position).Take(4)
-                .Select(i => i.Type == MediaType.Movie ? movies.GetValueOrDefault(i.TmdbId)?.PosterPath : shows.GetValueOrDefault(i.TmdbId)?.PosterPath)
-                .ToList())).ToList();
+        var result = new List<ListSummary>();
+        foreach (var l in lists)
+        {
+            if (SmartListService.Parse(l.RulesJson) is { } rules)
+            {
+                var items = await smart.EvaluateAsync(userId, rules, ct);
+                result.Add(new ListSummary(l.Id, l.Name, l.Description, l.IsPublic, items.Count, l.UpdatedAt, items.Take(4).Select(m => m.PosterPath).ToList(), Smart: true));
+                continue;
+            }
+            result.Add(new ListSummary(l.Id, l.Name, l.Description, l.IsPublic, l.Items.Count, l.UpdatedAt,
+                l.Items.OrderBy(i => i.Position).Take(4)
+                    .Select(i => i.Type == MediaType.Movie ? movies.GetValueOrDefault(i.TmdbId)?.PosterPath : shows.GetValueOrDefault(i.TmdbId)?.PosterPath)
+                    .ToList()));
+        }
+        return result;
     }
 
     /// <summary>Save or unsave someone's public list. False if it isn't a public list you can save.</summary>
@@ -107,6 +118,15 @@ public class ListService(AppDbContext db, TrackingService tracking)
     {
         var list = await db.Lists.Include(l => l.Items).Include(l => l.User).FirstOrDefaultAsync(l => l.Id == listId, ct);
         if (list is null || (!list.IsPublic && list.UserId != viewerId)) return null;
+        var saves = await db.ListLikes.CountAsync(l => l.ListId == list.Id, ct);
+        var saved = viewerId is { } v && await db.ListLikes.AnyAsync(l => l.ListId == list.Id && l.UserId == v, ct);
+        if (SmartListService.Parse(list.RulesJson) is { } rules)
+        {
+            // Worked out from the owner's library (or TMDB) each time; the ids just need to be stable.
+            var found = await smart.EvaluateAsync(list.UserId, rules, ct);
+            var entries = found.Select((m, i) => new ListItemDto(SmartItemId(list.Id, m), m, list.UpdatedAt, i + 1)).ToList();
+            return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, entries, false, saves, saved, rules);
+        }
         var (movies, shows) = await tracking.LoadMetaAsync(list.Items.Select(i => (i.Type, i.TmdbId)), ct);
         var items = list.Items.OrderBy(i => i.Position).Select(i =>
         {
@@ -115,14 +135,16 @@ public class ListService(AppDbContext db, TrackingService tracking)
                 : shows.TryGetValue(i.TmdbId, out var s) ? CatalogService.ToSummary(s) : null;
             return media is null ? null : new ListItemDto(i.Id, media, i.AddedAt, i.Position, i.Note);
         }).OfType<ListItemDto>().ToList();
-        var saves = await db.ListLikes.CountAsync(l => l.ListId == list.Id, ct);
-        var saved = viewerId is { } v && await db.ListLikes.AnyAsync(l => l.ListId == list.Id && l.UserId == v, ct);
         return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, items, list.Ranked, saves, saved);
     }
 
     public async Task<UserList> CreateAsync(Guid userId, CreateListRequest req, CancellationToken ct)
     {
-        var list = new UserList { UserId = userId, Name = Validate(req.Name), Description = Trim(req.Description, 2000), IsPublic = req.IsPublic, Ranked = req.Ranked };
+        var list = new UserList
+        {
+            UserId = userId, Name = Validate(req.Name), Description = Trim(req.Description, 2000), IsPublic = req.IsPublic,
+            Ranked = req.Rules is null && req.Ranked, RulesJson = req.Rules is { } r ? SmartListService.Serialize(r) : null,
+        };
         db.Lists.Add(list);
         await db.SaveChangesAsync(ct);
         return list;
@@ -135,10 +157,20 @@ public class ListService(AppDbContext db, TrackingService tracking)
         list.Name = Validate(req.Name);
         list.Description = Trim(req.Description, 2000);
         list.IsPublic = req.IsPublic;
-        list.Ranked = req.Ranked;
+        // A smart list stays smart (its rules change); an ordinary list stays ordinary.
+        if (list.RulesJson is not null && req.Rules is { } r) list.RulesJson = SmartListService.Serialize(r);
+        list.Ranked = list.RulesJson is null && req.Ranked;
         list.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    private static Guid SmartItemId(Guid listId, MediaSummary m)
+    {
+        var bytes = listId.ToByteArray();
+        var key = BitConverter.GetBytes(((long)m.Type << 32) | (uint)m.TmdbId);
+        for (var i = 0; i < key.Length; i++) bytes[8 + i] ^= key[i];
+        return new Guid(bytes);
     }
 
     public async Task<bool> DeleteAsync(Guid userId, Guid listId, CancellationToken ct)
@@ -155,6 +187,7 @@ public class ListService(AppDbContext db, TrackingService tracking)
         if (type is not (MediaType.Movie or MediaType.Show)) throw new TrackingException("Lists hold movies and shows.");
         var list = await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.Id == listId && l.UserId == userId, ct);
         if (list is null) return false;
+        if (list.RulesJson is not null) throw new TrackingException("A smart list fills itself in from its rules; edit the rules instead.");
         if (list.Items.Any(i => i.Type == type && i.TmdbId == tmdbId)) return true;
         await tracking.EnsureMetaAsync(type, tmdbId, ct);
         db.ListItems.Add(new UserListItem
@@ -183,6 +216,7 @@ public class ListService(AppDbContext db, TrackingService tracking)
     {
         var list = await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.Id == listId && l.UserId == userId, ct);
         if (list is null) return false;
+        if (list.RulesJson is not null) throw new TrackingException("A smart list fills itself in from its rules; edit the rules instead.");
         var rank = itemIds.Select((id, i) => (id, i)).GroupBy(x => x.id).ToDictionary(g => g.Key, g => g.First().i);
         var ordered = list.Items.OrderBy(i => rank.TryGetValue(i.Id, out var r) ? r : int.MaxValue).ThenBy(i => i.Position).ToList();
         for (var i = 0; i < ordered.Count; i++) ordered[i].Position = i;

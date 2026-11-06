@@ -73,6 +73,13 @@ public class TmdbClient
     public Task<TmdbPage<TmdbListItem>?> SearchMultiAsync(string query, int page, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbListItem>>($"search/multi?query={Uri.EscapeDataString(query)}&page={page}&include_adult=false", TimeSpan.FromMinutes(30), ct);
 
+    public Task<TmdbGenres?> GetGenresAsync(string kind, CancellationToken ct = default) =>
+        GetAsync<TmdbGenres>($"genre/{kind}/list", TimeSpan.FromDays(1), ct);
+
+    /// <summary>discover/movie or discover/tv with a ready-made query string.</summary>
+    public Task<TmdbPage<TmdbListItem>?> DiscoverAsync(string kind, string query, int page, CancellationToken ct = default) =>
+        GetAsync<TmdbPage<TmdbListItem>>($"discover/{kind}?include_adult=false&{query}&page={page}", TimeSpan.FromHours(6), ct);
+
     public Task<TmdbPage<TmdbListItem>?> GetRecommendationsAsync(string kind, int id, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbListItem>>($"{kind}/{id}/recommendations", TimeSpan.FromHours(12), ct);
 

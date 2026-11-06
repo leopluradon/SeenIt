@@ -45,6 +45,8 @@ public static class ApiEndpoints
         g.MapGet("/lookup", async (string q, CatalogService c, CancellationToken ct) =>
             string.IsNullOrWhiteSpace(q) || await c.LookupAsync(q, ct) is not { } found ? Results.NoContent() : Results.Ok(found));
 
+        g.MapGet("/genres", (SmartListService s, CancellationToken ct) => s.GenresAsync(ct));
+
         g.MapGet("/search/people", (string q, int? page, CatalogService c, CancellationToken ct) =>
             string.IsNullOrWhiteSpace(q)
                 ? Task.FromResult(new PagedResult<PersonHit>([], 1, 0, 0))

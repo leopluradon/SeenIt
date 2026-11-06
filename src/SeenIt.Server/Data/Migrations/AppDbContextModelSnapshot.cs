@@ -1155,6 +1155,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<bool>("Ranked")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("RulesJson")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 

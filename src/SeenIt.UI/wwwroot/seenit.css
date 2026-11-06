@@ -1128,3 +1128,10 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .poster-score + .poster-dismiss, .poster-dismiss { z-index: 2; }
 .because { font-size: .78rem; }
 .discover-links { display: flex; gap: 8px; margin: -4px 0 10px; flex-wrap: wrap; }
+
+/* Smart list rules */
+.smart-rules { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px 4px; }
+.smart-rules legend { padding: 0 6px; font-weight: 650; }
+.rule-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 14px; }
+.rule-grid .inline input { width: 50%; min-width: 0; }
+.rule-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
