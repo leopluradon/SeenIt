@@ -198,6 +198,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<UserCard>> SearchUsersAsync(string q) => GetAsync<List<UserCard>>($"api/social/search?q={Uri.EscapeDataString(q)}");
     public Task<List<UserCard>> FollowingAsync() => GetAsync<List<UserCard>>("api/social/following");
     public Task<List<UserCard>> FollowersAsync() => GetAsync<List<UserCard>>("api/social/followers");
+    /// <summary>Someone else's lists: kind is "following" or "followers".</summary>
+    public Task<List<UserCard>> ConnectionsOfAsync(string userName, string kind) =>
+        GetAsync<List<UserCard>>($"api/users/{Uri.EscapeDataString(userName)}/{kind}");
     public Task FollowAsync(string userName, bool follow) =>
         SendAsync(follow ? HttpMethod.Post : HttpMethod.Delete, $"api/social/follow/{Uri.EscapeDataString(userName)}");
     public Task<CompareDto> CompareAsync(string a, string b) =>

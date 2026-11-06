@@ -63,6 +63,24 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             await tracking.GetFavoritesAsync(owner.Id, ct));
     }
 
+    /// <summary>
+    /// Who someone follows and who follows them. Open unless the profile is private and you're not
+    /// friends (following each other). Cards show your own relation to each person.
+    /// </summary>
+    public async Task<(List<UserCard> Following, List<UserCard> Followers)?> ConnectionsOfAsync(string userName, Guid? viewer, CancellationToken ct)
+    {
+        var owner = await FindAsync(userName);
+        if (owner is null) return null;
+        var (following, followsYou) = await RelationAsync(viewer, owner.Id, ct);
+        if (owner.Id != viewer && owner.Visibility == ProfileVisibility.Private && !(following && followsYou)) return null;
+        var theyFollow = await db.Follows.Where(f => f.FollowerId == owner.Id).OrderByDescending(f => f.CreatedAt)
+            .Join(db.Users, f => f.FolloweeId, u => u.Id, (f, u) => u).AsNoTracking().ToListAsync(ct);
+        var followThem = await db.Follows.Where(f => f.FolloweeId == owner.Id).OrderByDescending(f => f.CreatedAt)
+            .Join(db.Users, f => f.FollowerId, u => u.Id, (f, u) => u).AsNoTracking().ToListAsync(ct);
+        var me = viewer ?? Guid.Empty;   // signed out: nobody is "following" or "follows you"
+        return (await CardsAsync(me, theyFollow, ct), await CardsAsync(me, followThem, ct));
+    }
+
     /// <summary>The account behind a profile, if the viewer may see its history (same rule as the profile).</summary>
     public async Task<AppUser?> ViewableAsync(string userName, Guid? viewer, CancellationToken ct)
     {

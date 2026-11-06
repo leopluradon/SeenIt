@@ -6,9 +6,11 @@
             <span class="muted small">@@@User.UserName@(User.FollowsYou && User.Following ? " · friends" : User.FollowsYou ? " · follows you" : "")</span>
         </span>
     </a>
-    <FollowButton User="User" UserChanged="UserChanged" />
+    @if (ShowFollow) { <FollowButton User="User" UserChanged="UserChanged" /> }
 </div>
 @code {
     [Parameter, EditorRequired] public UserCard User { get; set; } = default!;
     [Parameter] public EventCallback<UserCard> UserChanged { get; set; }
+    /// <summary>Off for yourself, and when signed out.</summary>
+    [Parameter] public bool ShowFollow { get; set; } = true;
 }

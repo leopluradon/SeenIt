@@ -18,8 +18,9 @@ else if (p is not null)
                 @if (p.User.FollowsYou) { <span> · follows you</span> }
             </div>
             <div class="small profile-counts">
-                <a href="@(p.IsMe ? "friends?tab=followers" : null)"><b>@p.Followers</b> follower@(p.Followers == 1 ? "" : "s")</a>
-                <a href="@(p.IsMe ? "friends?tab=following" : null)"><b>@p.Following</b> following</a>
+                @{ var lists = p.IsMe || p.Visibility != ProfileVisibility.Private || (p.User.Following && p.User.FollowsYou); }
+                <a href="@(p.IsMe ? "friends?tab=followers" : lists ? $"{Fmt.UserHref(p.User.UserName)}/followers" : null)"><b>@p.Followers</b> follower@(p.Followers == 1 ? "" : "s")</a>
+                <a href="@(p.IsMe ? "friends?tab=following" : lists ? $"{Fmt.UserHref(p.User.UserName)}/following" : null)"><b>@p.Following</b> following</a>
             </div>
         </div>
         <div class="profile-actions">

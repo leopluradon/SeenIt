@@ -1,0 +1,62 @@
+@page "/u/{Name}/followers"
+@page "/u/{Name}/following"
+@* Who someone follows and who follows them. Hidden only for a private profile you're not friends with. *@
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject SessionState Session
+<PageTitle>@Name · @(Kind == "followers" ? "Followers" : "Following") · SeenIt</PageTitle>
+
+<nav class="crumbs"><a href="@Fmt.UserHref(Name)"><Icon Name="chevron-left" Size="16" /> @Name</a></nav>
+<div class="page-head">
+    <h1>@Name</h1>
+    <div class="segmented">
+        <button class="@(Kind == "followers" ? "on" : "")" @onclick='() => Nav.NavigateTo($"{Fmt.UserHref(Name)}/followers")'>Followers</button>
+        <button class="@(Kind == "following" ? "on" : "")" @onclick='() => Nav.NavigateTo($"{Fmt.UserHref(Name)}/following")'>Following</button>
+    </div>
+</div>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (people is null && error is null) { <Spinner /> }
+else if (people is { Count: 0 })
+{
+    <Empty Title="@(Kind == "followers" ? $"Nobody follows {Name} yet." : $"{Name} isn't following anyone yet.")" />
+}
+else if (people is not null)
+{
+    <div class="stack">
+        @foreach (var u in people)
+        {
+            var self = string.Equals(u.UserName, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase);
+            <UserRow User="u" UserChanged="Changed" ShowFollow="@(Session.Me is not null && !self)" @key="u.UserName" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    private string Kind => Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].EndsWith("/following", StringComparison.OrdinalIgnoreCase) ? "following" : "followers";
+    private List<UserCard>? people;
+    private string? error;
+    private string? loadedFor;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        var key = $"{Name}/{Kind}";
+        if (key == loadedFor && people is not null) return;
+        loadedFor = key;
+        people = null;
+        error = null;
+        try { people = await Api.ConnectionsOfAsync(Name, Kind); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = $"{Name}'s profile is private, or there's no such member."; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void Changed(UserCard u)
+    {
+        if (people is null) return;
+        var i = people.FindIndex(p => p.UserName == u.UserName);
+        if (i >= 0) people[i] = u;
+    }
+}

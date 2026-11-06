@@ -479,6 +479,12 @@ public static class ApiEndpoints
         app.MapGet("/api/users/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.GetProfileAsync(name, p.OptionalUserId(), ct) is { } profile ? Results.Ok(profile) : Results.NotFound());
 
+        // Who someone follows / who follows them (hidden only for private profiles you're not friends with).
+        app.MapGet("/api/users/{name}/following", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.ConnectionsOfAsync(name, p.OptionalUserId(), ct) is { } c ? Results.Ok(c.Following) : Results.NotFound());
+        app.MapGet("/api/users/{name}/followers", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.ConnectionsOfAsync(name, p.OptionalUserId(), ct) is { } c ? Results.Ok(c.Followers) : Results.NotFound());
+
         // Someone's full history, read-only: visible to whoever can see their profile.
         app.MapGet("/api/users/{name}/history", async (string name, MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
                 string? sort, int? page, int? pageSize, string? tz, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
