@@ -23,8 +23,8 @@ public static class ApiEndpoints
         FeatureEndpoints.Map(api);
         MapSocial(app);
 
-        api.MapGet("/export", async (ClaimsPrincipal p, ExportService export, CancellationToken ct) =>
-            Results.File(await export.BuildAsync(p.UserId(), ct), "application/zip", $"seenit-export-{DateTime.UtcNow:yyyy-MM-dd}.zip"));
+        api.MapGet("/export", async (ExportFormat? format, ClaimsPrincipal p, ExportService export, CancellationToken ct) =>
+            Results.File(await export.BuildAsync(p.UserId(), ct, format ?? ExportFormat.Both), "application/zip", $"seenit-export-{DateTime.UtcNow:yyyy-MM-dd}.zip"));
     }
 
     // ---------- Catalog: public, with your own state when signed in ----------
