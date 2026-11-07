@@ -3,7 +3,7 @@
 @inject Toasts Toasts
 <div class="panel note-panel">
     <label for="title-note">Private note <span class="muted small">only you can see it</span></label>
-    <textarea id="title-note" rows="@(string.IsNullOrEmpty(text) ? 1 : 3)" maxlength="2000" placeholder="e.g. Recommended by Sam · Watch the director's cut"
+    <textarea id="title-note" rows="@(string.IsNullOrEmpty(text) ? 1 : 3)" maxlength="2000" placeholder="e.g. Recommended by Sam"
               value="@text" @onchange="Save"></textarea>
 </div>
 @code {
