@@ -1226,8 +1226,8 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .you-plays .panel-head h2 { font-size: 1rem; }
 .detail-info .crew { margin-top: 16px; }
 
-/* Season page: your rating and friends side by side (one column on phones, or when no friends have seen it) */
-.season-you { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
-.season-you > .panel { margin-bottom: 0; }
+/* Season and episode pages: your rating and friends side by side (one column on phones, or when no friends have seen it) */
+.you-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
+.you-split > .panel { margin-bottom: 0; }
 .season-rate { flex-direction: column; align-items: flex-start; gap: 10px; }
 .season-score { margin: -6px 0 14px; }

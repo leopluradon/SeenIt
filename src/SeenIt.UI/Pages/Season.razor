@@ -59,7 +59,7 @@ else if (season is not null)
         ("Left to watch", watchedMinutes > 0 && season.CompletedAt is null ? Fmt.Duration(eps.Where(x => x.Plays == 0 && x.AirDate is { } d && d <= today).Sum(x => (long)(x.Runtime ?? 0))) : null),
     ])" />
     <AuthorizeView>
-        <div class="season-you">
+        <div class="you-split">
             <div class="panel rate-panel season-rate">
                 <span>Your rating for @season.Name</span>
                 <RatingPicker Value="season.Rating" ValueChanged="RateSeason" />

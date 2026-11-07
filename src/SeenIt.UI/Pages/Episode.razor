@@ -63,14 +63,16 @@ else if (e is not null)
     <div class="detail-body">
         @if (e.Plays is { } myPlays)
         {
-            <div class="panel rate-panel">
+            <div class="you-split">
+            <div class="panel you-panel">
+            <div class="rate-panel">
                 <span>Your rating</span>
                 <RatingPicker Value="e.Rating" ValueChanged="Rate" />
             </div>
             @if (myPlays.Count > 0)
             {
-                <div class="panel">
-                    <h2>Your plays</h2>
+                <div class="you-plays">
+                    <div class="panel-head"><h2>Your plays</h2></div>
                     <div class="plays">
                         @foreach (var p in myPlays)
                         {
@@ -85,7 +87,9 @@ else if (e is not null)
                     </div>
                 </div>
             }
+            </div>
             <FriendsSeen Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" />
+            </div>
         }
         @if (e.Overview is not null) { <Spoiler Watched="Seen" Block="true"><p class="overview">@e.Overview</p></Spoiler> }
         @if (e.Crew.Count > 0)
