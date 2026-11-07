@@ -338,7 +338,9 @@ public record SeasonDetail(
     int? Rewatch = null,       // number of the rewatch in progress (2 = second time through)
     DateTimeOffset? CompletedAt = null,
     double? Rating = null,        // your rating of the season itself
-    int? PreviousSeason = null, int? NextSeason = null);   // neighbors in season order (specials sit outside, except Specials → Season 1)
+    int? PreviousSeason = null, int? NextSeason = null,   // neighbors in season order, see below
+    double? VoteAverage = null);  // TMDB's score for the season
+// PreviousSeason/NextSeason: neighbors in season order (specials sit outside, except Specials → Season 1)
 
 // ---------- Tracking ----------
 

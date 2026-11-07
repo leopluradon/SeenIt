@@ -585,7 +585,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             Cast(seasonCredits?.Cast),
             rewatch?.Number,
             SeasonCompleted(seasonPlays, season.Episodes?.Count ?? 0),
-            seasonRating, previous, nextSeason);
+            seasonRating, previous, nextSeason, season.VoteAverage is > 0 ? season.VoteAverage : null);
     }
 
     /// <summary>

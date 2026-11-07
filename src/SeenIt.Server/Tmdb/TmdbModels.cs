@@ -168,7 +168,7 @@ public record TmdbPerson(
 public record TmdbCreditMedia(List<TmdbEpisodeRef>? Episodes, List<TmdbSeasonSummary>? Seasons);
 public record TmdbCreditDetail(string? Id, string? MediaType, TmdbCreditMedia? Media);
 
-public record TmdbSeason(int Id, int SeasonNumber, string? Name, string? Overview, string? PosterPath, string? AirDate, List<TmdbEpisode>? Episodes);
+public record TmdbSeason(int Id, int SeasonNumber, string? Name, string? Overview, string? PosterPath, string? AirDate, List<TmdbEpisode>? Episodes, double? VoteAverage = null);
 
 /// <summary>/tv/{id}/episode_groups: a show's alternative orders (chronological, DVD, story arcs...).</summary>
 public record TmdbEpisodeGroups(List<TmdbEpisodeGroupSummary>? Results);
