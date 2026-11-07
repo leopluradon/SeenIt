@@ -11,7 +11,7 @@
     <div class="segmented">
         <button class="@(tab == "feed" ? "on" : "")" @onclick='() => Show("feed")'>Activity</button>
         <button class="@(tab == "following" ? "on" : "")" @onclick='() => Show("following")'>Following</button>
-        <button class="@(tab == "followers" ? "on" : "")" @onclick='() => Show("followers")'>Followers@if (requests?.Count > 0) { <span class="tab-count" title="Follow requests">@requests.Count</span> }</button>
+        <button class="@(tab == "followers" ? "on" : "")" @onclick='() => Show("followers")'><span>Followers</span>@if (requests is { Count: > 0 } pendingRequests) { <span class="tab-count" title="Follow requests">@pendingRequests.Count</span> }</button>
         <button class="@(tab == "find" ? "on" : "")" @onclick='() => Show("find")'>Find</button>
     </div>
 </div>
