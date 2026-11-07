@@ -26,10 +26,9 @@
     [Parameter] public int Episode { get; set; }
     private List<ExternalScore>? scores;
 
-    /// <summary>The sites you chose, in your order (Settings → Display → Scores); all of them by default.</summary>
-    private List<ExternalScore>? Shown => scores is null ? null
-        : Fmt.Prefs.Scores is { } pick ? scores.Where(s => pick.Contains(s.Source)).OrderBy(s => pick.ToList().IndexOf(s.Source)).ToList()
-        : scores;
+    /// <summary>The sites you chose for this kind of title, in your order (Settings → Display → Scores); all of them by default.</summary>
+    private List<ExternalScore>? Shown => scores?.Where(s => Fmt.ShowsScore(s.Source, Type))
+        .OrderBy(s => Fmt.Prefs.Scores is { } pick ? pick.ToList().IndexOf(s.Source) : 0).ToList();
     private (MediaType, int, int, int) loadedFor;
 
     protected override async Task OnParametersSetAsync()

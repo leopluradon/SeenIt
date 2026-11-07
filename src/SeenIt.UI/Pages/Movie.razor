@@ -8,7 +8,7 @@
 @if (m is null && error is null) { <Spinner /> }
 else if (m is not null)
 {
-    <MediaHero Title="@m.Title" Year="m.ReleaseDate?.Year" Tagline="@m.Tagline" Poster="@m.PosterPath" Backdrop="@m.BackdropPath" Score="m.VoteAverage" Votes="m.VoteCount" ScoresFor="(MediaType.Movie, Id)">
+    <MediaHero Title="@m.Title" Year="m.ReleaseDate?.Year" Tagline="@m.Tagline" Poster="@m.PosterPath" Backdrop="@m.BackdropPath" Score="m.VoteAverage" Votes="m.VoteCount" ScoresFor="(MediaType.Movie, Id)" Watched="@(m.User?.Plays > 0)">
         <Facts>
             @if (m.ReleaseDate is { } d) { <span>@d.ToString(Fmt.DateLong)</span> }
             @if (m.Runtime is > 0) { <span>@Fmt.Runtime(m.Runtime)</span> }
@@ -78,7 +78,7 @@ else if (m is not null)
                     </div>
                 }
                 </div>
-                <FriendsSeen Type="MediaType.Movie" TmdbId="Id" />
+                <FriendsSeen Type="MediaType.Movie" TmdbId="Id" Watched="@(u.Plays > 0)" />
                 @if (Fmt.Prefs.PrivateNotes) { <TitleNote Type="MediaType.Movie" TmdbId="Id" Note="@u.Note" /> }
                 </div>
             }

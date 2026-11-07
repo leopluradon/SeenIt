@@ -73,6 +73,8 @@ public record PreferencesRequest(
 public enum DateStyle { MonthFirst, DayFirst, Iso }
 /// <summary>What tapping ✓ / Mark watched does: ask when, or record it straight away.</summary>
 public enum WatchDefault { Ask, Now, ReleaseDate }
+/// <summary>Whether scores (TMDB, IMDb, friends' ratings...) are blurred until tapped.</summary>
+public enum ScoreSpoilers { Off, Unwatched, Always }
 /// <summary>Parts of your profile that can have their own audience (null = same as the profile).</summary>
 public enum ProfilePart { History, Ratings, Stats, WatchingNow, Favorites }
 
@@ -91,7 +93,9 @@ public record UserPrefs(
     int ComingUpDays = 14,
     WatchDefault WatchDefault = WatchDefault.Ask,
     IReadOnlyDictionary<ProfilePart, ProfileVisibility>? PartVisibility = null,
-    bool PrivateNotes = true)                        // false: no private-note box on movie and show pages (notes are kept)
+    bool PrivateNotes = true,                        // false: no private-note box on movie and show pages (notes are kept)
+    IReadOnlyList<string>? HiddenScores = null,      // "source/kind" pairs turned off, e.g. "imdb/episode", "friends/season"
+    ScoreSpoilers ScoreSpoilers = ScoreSpoilers.Off)
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -99,6 +103,19 @@ public record UserPrefs(
         [("imdb", "IMDb"), ("tomatoes", "Rotten Tomatoes"), ("popcorn", "RT audience"), ("metacritic", "Metacritic"),
          ("metacriticuser", "Metacritic users"), ("letterboxd", "Letterboxd"), ("trakt", "Trakt"), ("rogerebert", "Roger Ebert"), ("myanimelist", "MyAnimeList")];
     public const int DefaultRowCount = 12;
+    /// <summary>What a score can be about. A season has its own kind; everything else follows MediaType.</summary>
+    public static readonly (string Key, string Name)[] ScoreKinds = [("movie", "Movies"), ("show", "Shows"), ("season", "Seasons"), ("episode", "Episodes")];
+    /// <summary>Which kinds SeenIt has this source's score for. TMDB and friends cover everything; IMDb also has episodes; the rest are titles only.</summary>
+    public static string[] KindsFor(string source) => source switch
+    {
+        "tmdb" or "friends" => ["movie", "show", "season", "episode"],
+        "imdb" => ["movie", "show", "episode"],
+        _ => ["movie", "show"],
+    };
+    public static string Kind(MediaType type, bool season = false) => season ? "season" : type switch { MediaType.Movie => "movie", MediaType.Episode => "episode", _ => "show" };
+    /// <summary>Whether to show this source's score on this kind of page. Sources left out of Scores are off everywhere.</summary>
+    public bool ShowsScore(string source, string kind) =>
+        (source is "tmdb" or "friends" || Scores is null || Scores.Contains(source)) && HiddenScores?.Contains($"{source}/{kind}") != true;
     public int Count(string section) => HomeCounts?.TryGetValue(section, out var n) == true ? n : DefaultRowCount;
     /// <summary>Who can see this part: its own setting, or the profile's.</summary>
     public ProfileVisibility For(ProfilePart part, ProfileVisibility profile) =>
@@ -111,6 +128,9 @@ public record UserPrefs(
         Scores = Scores?.Where(s => ScoreSources.Any(x => x.Key == s)).Distinct().ToList(),
         HomeCounts = HomeCounts?.Where(kv => UiPrefs.HomeSections.Any(h => h.Key == kv.Key)).ToDictionary(kv => kv.Key, kv => Math.Clamp(kv.Value, 4, 40)),
         ComingUpDays = ComingUpDays is 7 or 14 or 30 ? ComingUpDays : 14,
+        HiddenScores = HiddenScores?.Where(h => h.Split('/') is [var src, var kind] && (src is "tmdb" or "friends" || ScoreSources.Any(x => x.Key == src))
+            && ScoreKinds.Any(k => k.Key == kind)).Distinct().ToList(),
+        ScoreSpoilers = Enum.IsDefined(ScoreSpoilers) ? ScoreSpoilers : ScoreSpoilers.Off,
         PartVisibility = PartVisibility?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
     };
 }

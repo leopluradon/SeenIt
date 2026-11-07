@@ -267,22 +267,52 @@ else { <h1>Settings</h1> }
         </section>
         <section class="panel" id="scores">
             <h2>Scores</h2>
-            <p class="muted small">Which other sites' scores show on movie and show pages, and in what order. TMDB's always shows.</p>
-            <div class="tab-editor">
-                @{ var order = ScoreOrder(); }
-                @for (var i = 0; i < order.Count; i++)
-                {
-                    var index = i;
-                    var (key, name) = order[index];
-                    var on = Fmt.Prefs.Scores is null || Fmt.Prefs.Scores.Contains(key);
-                    <div class="tab-row @(on ? "" : "off")" @key="key">
-                        <label class="check"><input type="checkbox" checked="@on" @onchange="e => ToggleScore(key, (bool)e.Value!)" /> <span>@name</span></label>
-                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveScore(index, -1)" aria-label="@($"Move {name} up")"><Icon Name="chevron-up" Size="16" /></button>
-                        <button class="icon-btn" disabled="@(index == order.Count - 1)" @onclick="() => MoveScore(index, 1)" aria-label="@($"Move {name} down")"><Icon Name="chevron-down" Size="16" /></button>
-                    </div>
-                }
+            <p class="muted small">Pick which scores show for each kind of title. The arrows set the order other sites' scores appear in. A dash means SeenIt doesn't have that score.</p>
+            <div class="score-grid-wrap">
+                <table class="score-grid">
+                    <thead><tr><th scope="col">Source</th>@foreach (var (_, kname) in UserPrefs.ScoreKinds) { <th scope="col">@kname</th> }<th scope="col"><span class="sr-only">Order</span></th></tr></thead>
+                    <tbody>
+                        @{ var order = ScoreOrder(); var rows = new List<(string Key, string Name, int Index)> { ("tmdb", "TMDB", -1) };
+                           rows.AddRange(order.Select((o, i) => (o.Key, o.Name, i))); rows.Add(("friends", "Friends' ratings", -1)); }
+                        @foreach (var (key, name, index) in rows)
+                        {
+                            var kinds = UserPrefs.KindsFor(key);
+                            <tr @key="key">
+                                <th scope="row">@name</th>
+                                @foreach (var (kind, kname) in UserPrefs.ScoreKinds)
+                                {
+                                    <td>
+                                        @if (kinds.Contains(kind))
+                                        {
+                                            <input type="checkbox" checked="@Fmt.Prefs.ShowsScore(key, kind)" aria-label="@($"{name} on {kname.ToLowerInvariant()}")"
+                                                   @onchange="e => SetScore(key, kind, (bool)e.Value!)" />
+                                        }
+                                        else { <span class="muted" aria-label="Not available">–</span> }
+                                    </td>
+                                }
+                                <td class="score-order">
+                                    @if (index >= 0)
+                                    {
+                                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveScore(index, -1)" aria-label="@($"Move {name} up")"><Icon Name="chevron-up" Size="16" /></button>
+                                        <button class="icon-btn" disabled="@(index == order.Count - 1)" @onclick="() => MoveScore(index, 1)" aria-label="@($"Move {name} down")"><Icon Name="chevron-down" Size="16" /></button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-            <button class="btn btn-sm btn-ghost" @onclick='() => SavePrefs(p => p with { Scores = null }, "Scores back to the default")'>Reset to default</button>
+            <div class="field">
+                <label for="score-spoilers">Spoiler-tag scores</label>
+                <select id="score-spoilers" class="narrow-select" value="@Fmt.Prefs.ScoreSpoilers"
+                        @onchange='e => SavePrefs(p => p with { ScoreSpoilers = Enum.TryParse<ScoreSpoilers>(e.Value?.ToString(), out var v) ? v : ScoreSpoilers.Off }, "Saved")'>
+                    <option value="@ScoreSpoilers.Off">No, show them right away</option>
+                    <option value="@ScoreSpoilers.Unwatched">Hide until tapped on things I haven't watched</option>
+                    <option value="@ScoreSpoilers.Always">Hide until tapped everywhere</option>
+                </select>
+            </div>
+            <p class="muted small">Hidden scores are blurred; tap one to see it. A show or season counts as watched once you've seen every aired episode. Your own ratings always show.</p>
+            <button class="btn btn-sm btn-ghost" @onclick='() => SavePrefs(p => p with { Scores = null, HiddenScores = null, ScoreSpoilers = ScoreSpoilers.Off }, "Scores back to the default")'>Reset to default</button>
         </section>
 
         <section class="panel" id="time">
@@ -1085,17 +1115,20 @@ else { <h1>Settings</h1> }
         return [.. chosen.Select(k => UserPrefs.ScoreSources.First(s => s.Key == k)), .. UserPrefs.ScoreSources.Where(s => !chosen.Contains(s.Key))];
     }
 
-    private Task ToggleScore(string key, bool on)
+    /// <summary>
+    /// Turns one source on or off for one kind. Sources switched off entirely by the older setting
+    /// (left out of Scores) become per-kind entries, so every box can be changed on its own.
+    /// </summary>
+    private Task SetScore(string key, string kind, bool on)
     {
-        var chosen = (Fmt.Prefs.Scores ?? UserPrefs.ScoreSources.Select(s => s.Key)).ToList();
-        if (on && !chosen.Contains(key))
-        {
-            // Back in the position it has in the full list.
-            var order = ScoreOrder().Select(s => s.Key).ToList();
-            chosen = order.Where(k => chosen.Contains(k) || k == key).ToList();
-        }
-        if (!on) chosen.Remove(key);
-        return SavePrefs(p => p with { Scores = chosen });
+        var prefs = Fmt.Prefs;
+        var hidden = new HashSet<string>(prefs.HiddenScores ?? []);
+        foreach (var (src, _) in UserPrefs.ScoreSources)
+            if (prefs.Scores is { } chosen && !chosen.Contains(src))
+                foreach (var k in UserPrefs.KindsFor(src)) hidden.Add($"{src}/{k}");
+        if (on) hidden.Remove($"{key}/{kind}"); else hidden.Add($"{key}/{kind}");
+        var order = ScoreOrder().Select(s => s.Key).ToList();
+        return SavePrefs(p => p with { Scores = order, HiddenScores = hidden.Order().ToList() });
     }
 
     private Task MoveScore(int index, int step)
@@ -1103,6 +1136,7 @@ else { <h1>Settings</h1> }
         var order = ScoreOrder().Select(s => s.Key).ToList();
         (order[index], order[index + step]) = (order[index + step], order[index]);
         var chosen = Fmt.Prefs.Scores ?? UserPrefs.ScoreSources.Select(s => s.Key).ToList();
+        // Keep sources switched off by the older setting off: only reorder what's on, then the rest.
         return SavePrefs(p => p with { Scores = order.Where(chosen.Contains).ToList() });
     }
 

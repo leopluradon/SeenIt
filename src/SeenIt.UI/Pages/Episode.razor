@@ -30,11 +30,13 @@ else if (e is not null)
                 @if (e.Runtime is > 0) { <span>@Fmt.Runtime(e.Runtime)</span> }
                 @if (!aired) { <span class="pill">Not aired yet</span> }
             </div>
-            @if (e.VoteAverage is > 0)
+            <ScoreSpoiler Watched="Seen" Block="true">
+            @if (e.VoteAverage is > 0 && Fmt.ShowsScore("tmdb", MediaType.Episode))
             {
                 <div class="score"><Icon Name="star" Size="16" /> <b>@e.VoteAverage.Value.ToString("0.0")</b> <span class="muted small">TMDB · @e.VoteCount?.ToString("N0") votes</span></div>
             }
             <ExternalScores Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" />
+            </ScoreSpoiler>
             <div class="actions">
                 @if (e.Plays is { } plays)
                 {
@@ -88,7 +90,7 @@ else if (e is not null)
                 </div>
             }
             </div>
-            <FriendsSeen Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" />
+            <FriendsSeen Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" Watched="Seen" />
             </div>
         }
         @if (e.Overview is not null) { <Spoiler Watched="Seen" Block="true"><p class="overview">@e.Overview</p></Spoiler> }

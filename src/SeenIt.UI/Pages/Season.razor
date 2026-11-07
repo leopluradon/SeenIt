@@ -43,11 +43,14 @@ else if (season is not null)
     var rated = eps.Where(x => x.Rating is not null).ToList();
     var tmdbEpisodes = eps.Where(x => x.VoteAverage is > 0).ToList();
     var tmdbScore = season.VoteAverage ?? (tmdbEpisodes.Count > 0 ? tmdbEpisodes.Average(x => x.VoteAverage!.Value) : (double?)null);
-    @if (tmdbScore is { } ts)
+    var seasonSeen = Aired > 0 && Watched >= Aired;
+    @if (tmdbScore is { } ts && Fmt.ShowsScore("tmdb", MediaType.Show, season: true))
     {
+        <ScoreSpoiler Watched="seasonSeen">
         <div class="score season-score" title="@(season.VoteAverage is null ? "Average of TMDB's episode scores" : "TMDB's score for this season")">
             <Icon Name="star" Size="16" /> <b>@ts.ToString("0.0")</b> <span class="muted small">TMDB@(season.VoteAverage is null ? " · episode average" : "")</span>
         </div>
+        </ScoreSpoiler>
     }
     <DetailStats Items="@([
         ("Episodes", airedCount < eps.Count ? $"{airedCount} aired of {eps.Count}" : eps.Count.ToString()),
@@ -68,7 +71,7 @@ else if (season is not null)
                     <span class="muted small season-ep-avg" title="@Fmt.Rating(rated.Average(x => x.Rating!.Value))">Your episode average: <b>@Fmt.Stars(Math.Round(rated.Average(x => x.Rating!.Value), 1))</b> from @rated.Count rated</span>
                 }
             </div>
-            <FriendsSeen Type="MediaType.Show" TmdbId="Id" Season="Number" Total="airedCount" />
+            <FriendsSeen Type="MediaType.Show" TmdbId="Id" Season="Number" Total="airedCount" Watched="seasonSeen" />
         </div>
     </AuthorizeView>
     @if (season.Overview is not null) { <p class="overview">@season.Overview</p> }

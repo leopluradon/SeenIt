@@ -108,6 +108,10 @@ public static class Fmt
 
     /// <summary>Display, tracking and privacy choices (set from the signed-in profile).</summary>
     public static UserPrefs Prefs { get; set; } = UserPrefs.Default;
+    /// <summary>Settings → Display → Scores: whether this source's score shows for this kind of title.</summary>
+    public static bool ShowsScore(string source, MediaType type, bool season = false) => Prefs.ShowsScore(source, UserPrefs.Kind(type, season));
+    /// <summary>Whether scores start blurred (until tapped) for something you have or haven't watched.</summary>
+    public static bool HideScores(bool watched) => Prefs.ScoreSpoilers == ScoreSpoilers.Always || (Prefs.ScoreSpoilers == ScoreSpoilers.Unwatched && !watched);
 
     // Date and time patterns in the user's style ("Nov 6, 2026" / "6 Nov 2026" / "2026-11-06", 12/24-hour clock).
     public static string DateLong => Prefs.DateStyle switch { DateStyle.DayFirst => "d MMM yyyy", DateStyle.Iso => "yyyy-MM-dd", _ => "MMM d, yyyy" };

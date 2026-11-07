@@ -7,7 +7,7 @@
 @if (s is null && error is null) { <Spinner /> }
 else if (s is not null)
 {
-    <MediaHero Title="@s.Name" Year="s.FirstAirDate?.Year" Tagline="@s.Tagline" Poster="@s.PosterPath" Backdrop="@s.BackdropPath" Score="s.VoteAverage" Votes="s.VoteCount" ScoresFor="(MediaType.Show, Id)">
+    <MediaHero Title="@s.Name" Year="s.FirstAirDate?.Year" Tagline="@s.Tagline" Poster="@s.PosterPath" Backdrop="@s.BackdropPath" Score="s.VoteAverage" Votes="s.VoteCount" ScoresFor="(MediaType.Show, Id)" Watched="@(s.Progress?.Completed == true)">
         <Facts>
             @if (s.Networks.Count > 0) { <span>@string.Join(", ", s.Networks)</span> }
             @if (s.Genres.Count > 0) { <span>@string.Join(", ", s.Genres)</span> }
@@ -117,7 +117,7 @@ else if (s is not null)
                 </div>
             }
             </div>
-            <FriendsSeen Type="MediaType.Show" TmdbId="Id" Total="s.AiredEpisodes" />
+            <FriendsSeen Type="MediaType.Show" TmdbId="Id" Total="s.AiredEpisodes" Watched="@(s.Progress?.Completed == true)" />
             @if (Fmt.Prefs.PrivateNotes) { <TitleNote Type="MediaType.Show" TmdbId="Id" Note="@u.Note" /> }
         </div>
         }

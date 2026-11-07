@@ -1231,3 +1231,19 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .you-split > .panel { margin-bottom: 0; }
 .season-rate { flex-direction: column; align-items: flex-start; gap: 10px; }
 .season-score { margin: -6px 0 14px; }
+
+/* Scores blurred until tapped (Settings → Display → Scores) */
+.score-spoiler { cursor: pointer; }
+.score-spoiler.is-hidden .score-spoiler-content { filter: blur(7px); user-select: none; pointer-events: none; }
+span.score-spoiler.is-hidden .score-spoiler-content { display: inline-block; filter: blur(4px); }
+div.score-spoiler { position: relative; width: fit-content; max-width: 100%; min-width: 200px; min-height: 2.4em; margin-bottom: 16px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.score-grid-wrap { overflow-x: auto; margin: 8px 0 16px; }
+.score-grid { border-collapse: collapse; width: 100%; min-width: 440px; font-size: .92rem; }
+.score-grid th, .score-grid td { padding: 6px 8px; text-align: center; border-bottom: 1px solid var(--border); }
+.score-grid thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+.score-grid tbody th { text-align: left; font-weight: 600; white-space: nowrap; }
+.score-grid thead th:first-child { text-align: left; }
+.score-grid input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.score-grid .score-order { white-space: nowrap; text-align: right; width: 1%; }
+.score-grid .score-order .icon-btn { padding: 2px; }

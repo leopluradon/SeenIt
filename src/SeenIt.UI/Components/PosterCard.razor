@@ -10,7 +10,7 @@
             <div class="poster-fallback"><Icon Name="@(Media.Type == MediaType.Movie ? "film" : "tv")" Size="32" /><span>@Media.Title</span></div>
         }
         @if (Badge is not null) { <span class="poster-badge">@Badge</span> }
-        @if (Media.VoteAverage is > 0 && ShowScore) { <span class="poster-score">@Media.VoteAverage.Value.ToString("0.0")</span> }
+        @if (Media.VoteAverage is > 0 && ShowScore && Fmt.ShowsScore("tmdb", Media.Type)) { <span class="poster-score"><ScoreSpoiler>@Media.VoteAverage.Value.ToString("0.0")</ScoreSpoiler></span> }
         @if (OnDismiss.HasDelegate)
         {
             <button type="button" class="poster-dismiss" title="Not interested" aria-label="@($"Not interested in {Media.Title}")"

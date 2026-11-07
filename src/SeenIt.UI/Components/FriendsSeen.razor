@@ -13,7 +13,7 @@
                         <b>@f.User.Name</b>
                     </a>
                     <span class="muted small">@Detail(f)</span>
-                    @if (f.Rating is { } r) { <span class="pill pill-sm friends-seen-rating" title="@($"{f.User.Name} rated it {Fmt.Rating(r)}")">@Fmt.RatingBadge(r)</span> }
+                    @if (f.Rating is { } r && Fmt.ShowsScore("friends", Type, Season is not null && Episode is null)) { <span class="friends-seen-rating"><ScoreSpoiler Watched="Watched"><span class="pill pill-sm" title="@($"{f.User.Name} rated it {Fmt.Rating(r)}")">@Fmt.RatingBadge(r)</span></ScoreSpoiler></span> }
                 </li>
             }
         </ul>
@@ -27,6 +27,8 @@
     [Parameter] public int? Episode { get; set; }
     /// <summary>Episodes aired in the show or season, for "12 of 24 episodes".</summary>
     [Parameter] public int? Total { get; set; }
+    /// <summary>You've seen it yourself (for "hide scores of things I haven't watched").</summary>
+    [Parameter] public bool Watched { get; set; }
     private const int Shown = 6;
     private List<FriendSeen>? people;
     private bool all;

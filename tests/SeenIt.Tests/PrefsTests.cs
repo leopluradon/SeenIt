@@ -8,6 +8,22 @@ namespace SeenIt.Tests;
 public class PrefsTests
 {
     [Fact]
+    public void Scores_can_be_hidden_per_source_and_kind()
+    {
+        var p = new UserPrefs(Scores: ["imdb", "letterboxd"], HiddenScores: ["imdb/episode", "tmdb/season", "friends/movie", "bogus/movie", "imdb/nope"]).Clean();
+        Assert.Equal(["imdb/episode", "tmdb/season", "friends/movie"], p.HiddenScores);
+        Assert.True(p.ShowsScore("imdb", "movie"));
+        Assert.False(p.ShowsScore("imdb", "episode"));
+        Assert.False(p.ShowsScore("tomatoes", "movie"));     // left out of Scores: off everywhere
+        Assert.True(p.ShowsScore("tmdb", "movie"));          // TMDB and friends aren't in Scores
+        Assert.False(p.ShowsScore("tmdb", "season"));
+        Assert.False(p.ShowsScore("friends", "movie"));
+        Assert.True(p.ShowsScore("friends", "episode"));
+        Assert.True(UserPrefs.Default.ShowsScore("metacritic", "show"));
+        Assert.Equal("season", UserPrefs.Kind(MediaType.Show, season: true));
+    }
+
+    [Fact]
     public void Parts_follow_the_profile_unless_given_their_own_audience()
     {
         var owner = new AppUser { Id = Guid.NewGuid(), Visibility = ProfileVisibility.Friends };
