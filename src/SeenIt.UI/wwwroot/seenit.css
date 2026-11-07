@@ -1257,3 +1257,4 @@ div.score-spoiler { position: relative; width: fit-content; max-width: 100%; min
     .score-grid tbody th { white-space: normal; }
     .score-grid .score-order .icon-btn { display: block; padding: 0; }
 }
+.fit-select { width: auto; max-width: 100%; }

@@ -304,7 +304,7 @@ else { <h1>Settings</h1> }
             </div>
             <div class="field">
                 <label for="score-spoilers">Spoiler-tag scores</label>
-                <select id="score-spoilers" class="narrow-select" value="@Fmt.Prefs.ScoreSpoilers"
+                <select id="score-spoilers" class="fit-select" value="@Fmt.Prefs.ScoreSpoilers"
                         @onchange='e => SavePrefs(p => p with { ScoreSpoilers = Enum.TryParse<ScoreSpoilers>(e.Value?.ToString(), out var v) ? v : ScoreSpoilers.Off }, "Saved")'>
                     <option value="@ScoreSpoilers.Off">No, show them right away</option>
                     <option value="@ScoreSpoilers.Unwatched">Hide until tapped on things I haven't watched</option>
