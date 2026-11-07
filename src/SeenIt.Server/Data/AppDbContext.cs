@@ -20,6 +20,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ShowState> ShowStates => Set<ShowState>();
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Follow> Follows => Set<Follow>();
+    public DbSet<FollowRequest> FollowRequests => Set<FollowRequest>();
     public DbSet<Invite> Invites => Set<Invite>();
     public DbSet<ShowRewatch> Rewatches => Set<ShowRewatch>();
     public DbSet<ActivityEntry> Activity => Set<ActivityEntry>();
@@ -112,6 +113,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             e.HasKey(x => x.UserId);
             e.HasIndex(x => x.EndsAt);
+        });
+        b.Entity<FollowRequest>(e =>
+        {
+            e.HasKey(x => new { x.RequesterId, x.TargetId });
+            e.HasIndex(x => x.TargetId);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.RequesterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.TargetId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<Follow>(e =>
         {

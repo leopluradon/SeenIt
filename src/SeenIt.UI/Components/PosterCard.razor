@@ -1,3 +1,4 @@
+@inject BadgeScores Badges
 <a class="poster-card" href="@(Href ?? Fmt.Href(Media.Type, Media.TmdbId))" title="@Media.Title">
     <div class="poster">
         @if (Img.Poster(Media.PosterPath) is { } src)
@@ -10,8 +11,8 @@
             <div class="poster-fallback"><Icon Name="@(Media.Type == MediaType.Movie ? "film" : "tv")" Size="32" /><span>@Media.Title</span></div>
         }
         @if (Badge is not null) { <span class="poster-badge">@Badge</span> }
-        @if (Media.VoteAverage is > 0 && ShowScore && Fmt.ShowsScore("tmdb", Media.Type)) { <span class="poster-score"><ScoreSpoiler>@Media.VoteAverage.Value.ToString("0.0")</ScoreSpoiler></span> }
-        @if (OnDismiss.HasDelegate)
+        @if (ShowScore && ScoreText is { } score) { <span class="poster-score" title="@ScoreSource"><ScoreSpoiler>@score</ScoreSpoiler></span> }
+        @if (OnDismiss.HasDelegate && Fmt.Prefs.DismissButtons)
         {
             <button type="button" class="poster-dismiss" title="Not interested" aria-label="@($"Not interested in {Media.Title}")"
                     @onclick="() => OnDismiss.InvokeAsync(Media)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="x" Size="14" /></button>
@@ -24,6 +25,22 @@
     </div>
 </a>
 @code {
+    /// <summary>Which site's score the badge shows (Settings → Display → Scores → On posters).</summary>
+    private string Source => Media.Type == MediaType.Movie ? Fmt.Prefs.PosterScoreMovies : Fmt.Prefs.PosterScoreShows;
+    private string ScoreSource => UserPrefs.PosterScoreChoices(Media.Type == MediaType.Movie).FirstOrDefault(c => c.Key == Source).Name ?? "TMDB";
+    private string? ScoreText => Source switch
+    {
+        "none" => null,
+        "tmdb" => Media.VoteAverage is > 0 ? Media.VoteAverage.Value.ToString("0.0") : null,
+        var other => Badges.Get(other, Media.Type, Media.TmdbId) is { } b ? BadgeScores.Format(b) : null,
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ShowScore && Source is not ("tmdb" or "none") && Badges.Get(Source, Media.Type, Media.TmdbId) is null)
+            await Badges.LoadAsync(Source, Media.Type, Media.TmdbId);
+    }
+
     [Parameter, EditorRequired] public MediaSummary Media { get; set; } = default!;
     [Parameter] public string? Badge { get; set; }
     [Parameter] public string? Sub { get; set; }

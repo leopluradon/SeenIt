@@ -99,10 +99,28 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     // ---------- Tracking ----------
 
     // "Now" is pinned to the moment of the tap, so a play queued offline keeps its real time.
-    public Task WatchAsync(WatchRequest r) => SendQueueableAsync(HttpMethod.Post, "api/watch",
-        r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
-    public Task BulkWatchAsync(BulkWatchRequest r) => SendQueueableAsync(HttpMethod.Post, "api/watch/bulk",
-        r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
+    public async Task WatchAsync(WatchRequest r)
+    {
+        await SendQueueableAsync(HttpMethod.Post, "api/watch",
+            r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
+        await RaiseWatched(r.Type, r.TmdbId);
+    }
+    public async Task BulkWatchAsync(BulkWatchRequest r)
+    {
+        await SendQueueableAsync(HttpMethod.Post, "api/watch/bulk",
+            r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
+        await RaiseWatched(MediaType.Show, r.ShowTmdbId);
+    }
+    /// <summary>After marking something watched (the watchlist "ask" prompt listens).</summary>
+    public event Func<MediaType, int, Task>? Watched;
+    private Task RaiseWatched(MediaType type, int tmdbId) { _ = Watched?.Invoke(type, tmdbId); return Task.CompletedTask; }   // the prompt shouldn't hold up marking
+    public async Task<bool> OnWatchlistAsync(MediaType type, int tmdbId) =>
+        await SendAsync<OnWatchlistResult>(HttpMethod.Get, $"api/watchlist/contains?type={type}&tmdbId={tmdbId}") is { OnWatchlist: true };
+    private sealed record OnWatchlistResult(bool OnWatchlist);
+    public async Task<List<BadgeScore>> BadgesAsync(BadgeRequest r) => await SendAsync<List<BadgeScore>>(HttpMethod.Post, "api/catalog/scores/badges", r) ?? [];
+    public async Task<List<UserCard>> FollowRequestsAsync() => await GetAsync<List<UserCard>>("api/social/requests");
+    public Task AnswerFollowRequestAsync(string userName, bool approve) =>
+        SendAsync(approve ? HttpMethod.Post : HttpMethod.Delete, $"api/social/requests/{Uri.EscapeDataString(userName)}");
     /// <summary>Returns what was removed, for <see cref="RestorePlaysAsync"/> (undo).</summary>
     public async Task<RemovedPlays> UnwatchAsync(MediaType type, int tmdbId, int? season = null, int? episode = null) =>
         await SendAsync<RemovedPlays>(HttpMethod.Delete, $"api/watch?type={type}&tmdbId={tmdbId}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"))
@@ -232,8 +250,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>Someone else's lists: kind is "following" or "followers".</summary>
     public Task<List<UserCard>> ConnectionsOfAsync(string userName, string kind) =>
         GetAsync<List<UserCard>>($"api/users/{Uri.EscapeDataString(userName)}/{kind}");
-    public Task FollowAsync(string userName, bool follow) =>
-        SendAsync(follow ? HttpMethod.Post : HttpMethod.Delete, $"api/social/follow/{Uri.EscapeDataString(userName)}");
+    /// <summary>Follows (Requested when they approve followers first) or unfollows / withdraws a request.</summary>
+    public async Task<FollowResult> FollowAsync(string userName, bool follow)
+    {
+        if (!follow) { await SendAsync(HttpMethod.Delete, $"api/social/follow/{Uri.EscapeDataString(userName)}"); return new FollowResult(false); }
+        return await SendAsync<FollowResult>(HttpMethod.Post, $"api/social/follow/{Uri.EscapeDataString(userName)}") ?? new FollowResult(false);
+    }
     public Task<CompareDto> CompareAsync(string a, string b) =>
         GetAsync<CompareDto>($"api/social/compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}");
     public Task<MoreStatsDto> MoreStatsAsync() => GetAsync<MoreStatsDto>($"api/stats/more?tz={Tz}");
@@ -302,8 +324,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>The order you follow for the show, or null for TMDB's seasons.</summary>
     public Task<WatchOrderDto?> WatchOrderAsync(int showId) => SendAsync<WatchOrderDto>(HttpMethod.Get, $"api/shows/{showId}/order");
     public Task SetWatchOrderAsync(int showId, string? orderId) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/order", new SetWatchOrderRequest(orderId));
-    public async Task<int> WatchThroughAsync(int showId, WatchThroughRequest r) =>
-        (await SendAsync<AddedResult>(HttpMethod.Post, $"api/shows/{showId}/watch-through", r))?.Added ?? 0;
+    public async Task<int> WatchThroughAsync(int showId, WatchThroughRequest r)
+    {
+        var added = (await SendAsync<AddedResult>(HttpMethod.Post, $"api/shows/{showId}/watch-through", r))?.Added ?? 0;
+        if (added > 0) await RaiseWatched(MediaType.Show, showId);
+        return added;
+    }
     private sealed record AddedResult(int Added);
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");
     public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content)

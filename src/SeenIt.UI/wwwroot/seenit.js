@@ -15,6 +15,13 @@ window.seenit = {
         }
     },
     dialogClosed(id) { this._dialogs = this._dialogs.filter(d => d.id !== id); },
+    // Settings → Display: compact spacing and poster size, as classes on <html>.
+    setLayout(compact, posters) {
+        const c = document.documentElement.classList;
+        c.toggle('compact', !!compact);
+        c.toggle('posters-small', posters === 'Small');
+        c.toggle('posters-large', posters === 'Large');
+    },
     scrollToId(id) {
         const el = document.getElementById(id);
         if (el) el.scrollIntoView({ block: 'start', behavior: 'instant' });

@@ -5,7 +5,7 @@
     {
         <div class="toast @(t.Error ? "toast-error" : "")" @key="t.Id">
             <span>@t.Message</span>
-            @if (t.Undo is not null) { <button class="toast-undo" @onclick="() => Toasts.UndoAsync(t)">Undo</button> }
+            @if (t.Undo is not null) { <button class="toast-undo" @onclick="() => Toasts.UndoAsync(t)">@(t.ActionLabel ?? "Undo")</button> }
         </div>
     }
 </div>

@@ -3,6 +3,7 @@
 @inject ApiClient Api
 @inject SessionState Session
 @inject NavigationManager Nav
+@inject Toasts Toasts
 <PageTitle>Friends · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -10,7 +11,7 @@
     <div class="segmented">
         <button class="@(tab == "feed" ? "on" : "")" @onclick='() => Show("feed")'>Activity</button>
         <button class="@(tab == "following" ? "on" : "")" @onclick='() => Show("following")'>Following</button>
-        <button class="@(tab == "followers" ? "on" : "")" @onclick='() => Show("followers")'>Followers</button>
+        <button class="@(tab == "followers" ? "on" : "")" @onclick='() => Show("followers")'>Followers@if (requests?.Count > 0) { <span class="tab-count" title="Follow requests">@requests.Count</span> }</button>
         <button class="@(tab == "find" ? "on" : "")" @onclick='() => Show("find")'>Find</button>
     </div>
 </div>
@@ -36,6 +37,25 @@
 
     case "following":
     case "followers":
+        @if (tab == "followers" && requests is { Count: > 0 } waiting)
+        {
+            <section class="panel follow-requests">
+                <h2>Follow requests <span class="muted small">@waiting.Count</span></h2>
+                <p class="muted small">You approve followers first (<a href="settings?tab=account">change</a>). Until you approve, they see only what you share with everyone.</p>
+                <div class="user-list">
+                    @foreach (var r in waiting)
+                    {
+                        <div class="request-row" @key="r.UserName">
+                            <UserRow User="r" ShowFollow="false" />
+                            <span class="inline">
+                                <button class="btn btn-sm btn-primary" disabled="@answering" @onclick="() => Answer(r, true)"><Icon Name="check" Size="14" /> Approve</button>
+                                <button class="btn btn-sm btn-ghost" disabled="@answering" @onclick="() => Answer(r, false)">Decline</button>
+                            </span>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
         @if (people is null && error is null) { <Spinner /> }
         else if (people is { Count: 0 })
         {
@@ -79,6 +99,8 @@
     [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
     private string tab = "", loaded = "";
     private List<FriendWatching>? watching;
+    private List<UserCard>? requests;
+    private bool answering;
     private List<UserCard>? people, results;
     private string? error, query;
 
@@ -87,12 +109,27 @@
     {
         var next = Tab is "feed" or "followers" or "find" ? Tab : "following";
         if (next == loaded) return;   // only a filter changed: the history view reloads itself
+        if (requests is null) { try { requests = await Api.FollowRequestsAsync(); } catch { requests = []; } }
         loaded = next;
         // Switch on the next tick: the Activity tab's history view reads the query string, and adding
         // it while Blazor is still telling query readers about this navigation throws.
         await Task.Yield();
         tab = next;
         await Load();
+    }
+
+    private async Task Answer(UserCard who, bool approve)
+    {
+        answering = true;
+        try
+        {
+            await Api.AnswerFollowRequestAsync(who.UserName, approve);
+            requests?.Remove(who);
+            Toasts.Show(approve ? $"{who.Name} now follows you" : "Request declined");
+            if (approve && tab == "followers") { people = null; people = await Api.FollowersAsync(); }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { answering = false; }
     }
 
     private void Show(string t) => Nav.NavigateTo(t == "following" ? "friends" : $"friends?tab={t}");

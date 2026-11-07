@@ -1,7 +1,9 @@
 @inject ApiClient Api
 @inject Toasts Toasts
-<button class="btn btn-sm @(User.Following ? "btn-on" : "btn-primary")" disabled="@busy" @onclick="Toggle" @onclick:stopPropagation @onclick:preventDefault>
+<button class="btn btn-sm @(User.Following || User.Requested ? "btn-on" : "btn-primary")" disabled="@busy" @onclick="Toggle" @onclick:stopPropagation @onclick:preventDefault
+        title="@(User.Requested ? "Waiting for them to approve. Tap to cancel the request." : null)">
     @if (User.Following) { <Icon Name="check" Size="14" /> <span>Following</span> }
+    else if (User.Requested) { <Icon Name="clock" Size="14" /> <span>Requested</span> }
     else { <Icon Name="user-plus" Size="14" /> <span>@(User.FollowsYou ? "Follow back" : "Follow")</span> }
 </button>
 @code {
@@ -14,9 +16,12 @@
         busy = true;
         try
         {
-            await Api.FollowAsync(User.UserName, !User.Following);
-            var updated = User with { Following = !User.Following };
+            var follow = !(User.Following || User.Requested);
+            var result = await Api.FollowAsync(User.UserName, follow);
+            var updated = User with { Following = follow && !result.Requested, Requested = follow && result.Requested };
             if (updated.Following) Toasts.Show($"Following {User.Name}");
+            else if (updated.Requested) Toasts.Show($"Asked to follow {User.Name}. You'll follow them once they approve.");
+            else if (User.Requested) Toasts.Show("Request cancelled");
             await UserChanged.InvokeAsync(updated);
         }
         catch (Exception ex) { Toasts.Error(ex); }

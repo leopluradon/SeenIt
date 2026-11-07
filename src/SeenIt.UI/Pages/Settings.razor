@@ -95,6 +95,14 @@ else { <h1>Settings</h1> }
                     </select>
                 }
             </div>
+            <h3>Who can follow you</h3>
+            <div class="segmented" role="radiogroup" aria-label="Who can follow you">
+                <button role="radio" aria-checked="@(!Fmt.Prefs.ApproveFollowers)" class="@(Fmt.Prefs.ApproveFollowers ? "" : "on")"
+                        @onclick='() => SavePrefs(p => p with { ApproveFollowers = false }, "Anyone can follow you")'>Anyone</button>
+                <button role="radio" aria-checked="@Fmt.Prefs.ApproveFollowers" class="@(Fmt.Prefs.ApproveFollowers ? "on" : "")"
+                        @onclick='() => SavePrefs(p => p with { ApproveFollowers = true }, "New followers need your OK")'>Only people I approve</button>
+            </div>
+            <p class="muted small">@(Fmt.Prefs.ApproveFollowers ? "Follow requests wait on the Followers tab of Friends. Switching back to Anyone lets everyone waiting in." : "Anyone can follow you right away. People who already follow you aren't affected either way.")</p>
             @if (Session.Me is { } who) { <p class="small"><a href="@Fmt.UserHref(who.UserName)">View your profile</a> · <a href="friends">Friends</a></p> }
         </section>
         <section class="panel" id="invites">
@@ -215,6 +223,32 @@ else { <h1>Settings</h1> }
         </section>
         <section class="panel" id="layout">
             <h2>Layout</h2>
+            <div class="pref-rows">
+                <span>Poster size</span>
+                <div class="segmented" role="radiogroup" aria-label="Poster size">
+                    @foreach (var size in Enum.GetValues<PosterSize>())
+                    {
+                        <button role="radio" aria-checked="@(Fmt.Prefs.PosterSize == size)" class="@(Fmt.Prefs.PosterSize == size ? "on" : "")"
+                                @onclick="() => SaveLayout(p => p with { PosterSize = size })">@size</button>
+                    }
+                </div>
+                <span>Lists show as</span>
+                <div class="segmented" role="radiogroup" aria-label="Lists show as">
+                    <button role="radio" aria-checked="@(Fmt.Prefs.ListLayout == ListLayout.Posters)" class="@(Fmt.Prefs.ListLayout == ListLayout.Posters ? "on" : "")"
+                            @onclick='() => SavePrefs(p => p with { ListLayout = ListLayout.Posters }, "Lists show as posters")'>Posters</button>
+                    <button role="radio" aria-checked="@(Fmt.Prefs.ListLayout == ListLayout.Rows)" class="@(Fmt.Prefs.ListLayout == ListLayout.Rows ? "on" : "")"
+                            @onclick='() => SavePrefs(p => p with { ListLayout = ListLayout.Rows }, "Lists show as rows")'>Rows</button>
+                </div>
+            </div>
+            <label class="check">
+                <input type="checkbox" checked="@Fmt.Prefs.Compact" @onchange="e => SaveLayout(p => p with { Compact = (bool)e.Value! })" />
+                Compact mode: tighter spacing everywhere
+            </label>
+            <label class="check">
+                <input type="checkbox" checked="@Fmt.Prefs.DismissButtons" @onchange='e => SavePrefs(p => p with { DismissButtons = (bool)e.Value! }, "Saved")' />
+                Show the “Not interested” × on posters
+            </label>
+            <p class="muted small">Each list can still switch between posters and rows. “Not interested” is always on a title's page.</p>
             <h3>Tabs at the bottom of the app</h3>
             <p class="muted small">Pick up to @UiPrefs.MaxTabs, in order. “More” is always last and links to everything else. These tabs appear on phones and narrow windows.</p>
             <div class="tab-editor">
@@ -267,7 +301,7 @@ else { <h1>Settings</h1> }
         </section>
         <section class="panel" id="scores">
             <h2>Scores</h2>
-            <p class="muted small">Pick which scores show for each kind of title. The arrows set the order other sites' scores appear in. A dash means SeenIt doesn't have that score.</p>
+            <p class="muted small">Pick which scores show on movie, show, season and episode pages. The arrows set the order other sites' scores appear in. A dash means SeenIt doesn't have that score.</p>
             <div class="score-grid-wrap">
                 <table class="score-grid">
                     <thead><tr><th scope="col">Source</th>@foreach (var (_, kname) in UserPrefs.ScoreKinds) { <th scope="col" title="@kname"><span class="kind-long">@kname</span><span class="kind-short" aria-hidden="true">@(kname == "Episodes" ? "Ep." : kname.TrimEnd('s'))</span></th> }<th scope="col"><span class="sr-only">Order</span></th></tr></thead>
@@ -302,6 +336,19 @@ else { <h1>Settings</h1> }
                     </tbody>
                 </table>
             </div>
+            <h3>On posters</h3>
+            <p class="muted small">The score in the corner of each poster. Scores from other sites fill in as they load.</p>
+            <div class="pref-rows">
+                @foreach (var (movies, label) in new[] { (true, "Movies"), (false, "TV") })
+                {
+                    var current = movies ? Fmt.Prefs.PosterScoreMovies : Fmt.Prefs.PosterScoreShows;
+                    <span>@label</span>
+                    <select class="narrow-select" value="@current" aria-label="@($"Score on {label.ToLowerInvariant()} posters")"
+                            @onchange='e => SavePrefs(p => movies ? p with { PosterScoreMovies = e.Value?.ToString() ?? "tmdb" } : p with { PosterScoreShows = e.Value?.ToString() ?? "tmdb" }, "Saved")'>
+                        @foreach (var (key, name) in UserPrefs.PosterScoreChoices(movies)) { <option value="@key">@name</option> }
+                    </select>
+                }
+            </div>
             <div class="field">
                 <label for="score-spoilers">Spoiler-tag scores</label>
                 <select id="score-spoilers" class="fit-select" value="@Fmt.Prefs.ScoreSpoilers"
@@ -334,6 +381,10 @@ else { <h1>Settings</h1> }
                 <label class="check @(hideSpoilers ? "" : "disabled")">
                     <input type="checkbox" checked="@blurImages" disabled="@(!hideSpoilers)" @onchange="e => SavePreferences(hideSpoilers, (bool)e.Value!)" />
                     Also blur their images
+                </label>
+                <label class="check">
+                    <input type="checkbox" checked="@Fmt.Prefs.HideGuestStars" @onchange='e => SavePrefs(p => p with { HideGuestStars = (bool)e.Value! }, "Saved")' />
+                    Hide guest stars of episodes I haven't watched
                 </label>
             </div>
         </section>
@@ -384,6 +435,16 @@ else { <h1>Settings</h1> }
                 Count rewatches in stats and reviews
             </label>
             <p class="muted small">Off: play counts, time watched and reviews count each movie and episode once, at its first watch. Your history keeps every play either way.</p>
+            <div class="field">
+                <label for="watchlist-on-watch">When something on your watchlist is marked watched</label>
+                <select id="watchlist-on-watch" class="fit-select" value="@Fmt.Prefs.WatchlistOnWatch"
+                        @onchange='e => SavePrefs(p => p with { WatchlistOnWatch = Enum.TryParse<WatchlistOnWatch>(e.Value?.ToString(), out var w) ? w : WatchlistOnWatch.Remove }, "Saved")'>
+                    <option value="@WatchlistOnWatch.Remove">Take it off the watchlist</option>
+                    <option value="@WatchlistOnWatch.Ask">Ask me</option>
+                    <option value="@WatchlistOnWatch.Keep">Leave it on the watchlist</option>
+                </select>
+            </div>
+            <p class="muted small">For shows, this happens with the first episode you mark. Plays from media servers never ask; with “Ask me” the title stays on.</p>
             <label class="check">
                 <input type="checkbox" checked="@Fmt.Prefs.PrivateNotes" @onchange='e => SavePrefs(p => p with { PrivateNotes = (bool)e.Value! }, (bool)e.Value! ? "Private notes on" : "Private notes hidden")' />
                 Private notes on movie and show pages
@@ -682,10 +743,28 @@ else { <h1>Settings</h1> }
             <button class="btn" @onclick="Export" disabled="@exporting"><Icon Name="download" Size="16" /> @(exporting ? "Preparing…" : "Download my data")</button>
             @if (alerts is { } ex)
             {
+                <h3>Backup emails</h3>
                 <label class="check @(ex.EmailAvailable ? "" : "disabled")">
                     <input type="checkbox" checked="@ex.MonthlyBackup" disabled="@(!ex.EmailAvailable)" @onchange="e => SaveBackup((bool)e.Value!)" />
-                    Email me this backup on the 1st of every month (to @Session.Me?.Email)
+                    Email me a backup (to @Session.Me?.Email)
                 </label>
+                <div class="pref-rows">
+                    <span>How often</span>
+                    <div class="segmented" role="radiogroup" aria-label="How often">
+                        <button role="radio" aria-checked="@(Fmt.Prefs.BackupEvery == BackupEvery.Monthly)" class="@(Fmt.Prefs.BackupEvery == BackupEvery.Monthly ? "on" : "")"
+                                @onclick='() => SavePrefs(p => p with { BackupEvery = BackupEvery.Monthly }, "Backups monthly, on the 1st")'>Monthly</button>
+                        <button role="radio" aria-checked="@(Fmt.Prefs.BackupEvery == BackupEvery.Weekly)" class="@(Fmt.Prefs.BackupEvery == BackupEvery.Weekly ? "on" : "")"
+                                @onclick='() => SavePrefs(p => p with { BackupEvery = BackupEvery.Weekly }, "Backups weekly, on Mondays")'>Weekly</button>
+                    </div>
+                    <span>Files</span>
+                    <select class="fit-select" value="@Fmt.Prefs.BackupFormat" aria-label="Backup files"
+                            @onchange='e => SavePrefs(p => p with { BackupFormat = Enum.TryParse<ExportFormat>(e.Value?.ToString(), out var f) ? f : ExportFormat.Both }, "Saved")'>
+                        <option value="@ExportFormat.Both">JSON and CSV</option>
+                        <option value="@ExportFormat.Json">JSON only</option>
+                        <option value="@ExportFormat.Csv">CSV only (opens in a spreadsheet)</option>
+                    </select>
+                </div>
+                <p class="muted small">@(Fmt.Prefs.BackupEvery == BackupEvery.Weekly ? "Sent each Monday" : "Sent on the 1st of each month"), as one .zip. Turning it on sends one right away.</p>
             }
         </section>
         <section class="panel" id="clear">
@@ -1091,6 +1170,13 @@ else { <h1>Settings</h1> }
     private static string VisibilityName(ProfileVisibility v) => v switch { ProfileVisibility.Public => "everyone", ProfileVisibility.Private => "only me", _ => "friends" };
 
     /// <summary>Changes the UserPrefs bundle, applies it straight away and saves it.</summary>
+    /// <summary>Compact mode and poster size change the whole app's look, so apply them straight away.</summary>
+    private async Task SaveLayout(Func<UserPrefs, UserPrefs> change)
+    {
+        await SavePrefs(change, "Saved");
+        try { await Js.InvokeVoidAsync("seenit.setLayout", Fmt.Prefs.Compact, Fmt.Prefs.PosterSize.ToString()); } catch (JSException) { }
+    }
+
     private async Task SavePrefs(Func<UserPrefs, UserPrefs> change, string? done = null)
     {
         var prefs = change(Fmt.Prefs).Clean();

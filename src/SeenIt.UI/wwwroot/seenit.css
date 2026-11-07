@@ -1262,3 +1262,50 @@ div.score-spoiler { position: relative; width: fit-content; max-width: 100%; min
 .season-scores .season-score { margin: 0; }
 .season-scores .ext-scores { margin: 0; }
 .season-scores > div.score-spoiler { margin-bottom: 0; }
+
+/* Follow requests (Friends → Followers) */
+.tab-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px;
+    background: var(--accent); color: #fff; font-size: .7rem; font-weight: 700; }
+.follow-requests h2 { margin-top: 0; }
+.request-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+.request-row .user-row { flex: 1; min-width: 200px; }
+
+/* Settings → Display: poster size */
+html.posters-small .poster-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 16px 12px; }
+html.posters-small .poster-scroller { grid-auto-columns: 116px; }
+html.posters-small .poster-title { font-size: .82rem; }
+html.posters-large .poster-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+html.posters-large .poster-scroller { grid-auto-columns: 200px; }
+@media (max-width: 700px) {
+    html.posters-small .poster-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 12px 8px; }
+    html.posters-small .poster-scroller { grid-auto-columns: 88px; }
+    html.posters-small .poster-title { font-size: .74rem; }
+    html.posters-small .poster-sub { font-size: .7rem; }
+    html.posters-large .poster-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    html.posters-large .poster-scroller { grid-auto-columns: 150px; }
+}
+
+/* Settings → Display: compact mode (tighter spacing everywhere) */
+html.compact .row-section { margin: 20px 0; }
+html.compact .panel { padding: 12px 14px; margin-bottom: 10px; }
+html.compact .page-head { margin-bottom: 10px; }
+html.compact .section-head { margin-bottom: 8px; }
+html.compact .poster-grid { gap: 14px 10px; }
+html.compact .history-item, html.compact .episode { padding-top: 6px; padding-bottom: 6px; }
+html.compact .detail-stats > div { padding: 5px 9px; }
+html.compact .btn { padding-top: 6px; padding-bottom: 6px; }
+html.compact .you-panel > * { padding: 10px 0; }
+html.compact .hero-detail { padding-bottom: 16px; }
+html.compact .overview { line-height: 1.5; }
+
+/* Lists shown as rows */
+.list-layout { margin-bottom: 14px; }
+.list-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.list-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; }
+.list-row-link { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: var(--text); }
+.list-row-link img { width: 44px; height: 66px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: var(--surface-2); }
+.list-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.list-row-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-row .list-note { margin: 2px 0 0; -webkit-line-clamp: 2; }
+.list-rank { font-weight: 800; color: var(--muted); min-width: 1.6em; text-align: right; }
+.hidden-guests { margin-top: 2px; }

@@ -75,6 +75,13 @@ public enum DateStyle { MonthFirst, DayFirst, Iso }
 public enum WatchDefault { Ask, Now, ReleaseDate }
 /// <summary>Whether scores (TMDB, IMDb, friends' ratings...) are blurred until tapped.</summary>
 public enum ScoreSpoilers { Off, Unwatched, Always }
+/// <summary>What marking something watched does to it being on your watchlist.</summary>
+public enum WatchlistOnWatch { Remove, Ask, Keep }
+public enum ListLayout { Posters, Rows }
+public enum PosterSize { Small, Medium, Large }
+public enum BackupEvery { Monthly, Weekly }
+/// <summary>Which files a backup holds: JSON and CSV, or just one kind.</summary>
+public enum ExportFormat { Both, Json, Csv }
 /// <summary>Parts of your profile that can have their own audience (null = same as the profile).</summary>
 public enum ProfilePart { History, Ratings, Stats, WatchingNow, Favorites }
 
@@ -95,7 +102,18 @@ public record UserPrefs(
     IReadOnlyDictionary<ProfilePart, ProfileVisibility>? PartVisibility = null,
     bool PrivateNotes = true,                        // false: no private-note box on movie and show pages (notes are kept)
     IReadOnlyList<string>? HiddenScores = null,      // "source/kind" pairs turned off, e.g. "imdb/episode", "friends/season"
-    ScoreSpoilers ScoreSpoilers = ScoreSpoilers.Off)
+    ScoreSpoilers ScoreSpoilers = ScoreSpoilers.Off,
+    string PosterScoreMovies = "tmdb",               // the score on movie posters: tmdb, imdb, an MDBList source, or none
+    string PosterScoreShows = "tmdb",
+    bool HideGuestStars = false,                     // spoilers: guest stars of episodes you haven't watched
+    WatchlistOnWatch WatchlistOnWatch = WatchlistOnWatch.Remove,
+    ListLayout ListLayout = ListLayout.Posters,
+    bool Compact = false,                            // tighter spacing everywhere
+    PosterSize PosterSize = PosterSize.Medium,
+    bool DismissButtons = true,                      // the "not interested" × on posters
+    bool ApproveFollowers = false,                   // new followers need your OK
+    BackupEvery BackupEvery = BackupEvery.Monthly,
+    ExportFormat BackupFormat = ExportFormat.Both)
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -113,6 +131,9 @@ public record UserPrefs(
         "trakt" => ["movie", "show", "season", "episode"],
         _ => ["movie", "show"],
     };
+    /// <summary>Sources a poster's score badge can show, per kind (Letterboxd has movies only, MyAnimeList shows only).</summary>
+    public static (string Key, string Name)[] PosterScoreChoices(bool movies) =>
+        [("tmdb", "TMDB"), ("imdb", "IMDb"), .. ScoreSources.Where(s => s.Key != "imdb" && (movies ? s.Key != "myanimelist" : s.Key != "letterboxd")), ("none", "No score")];
     public static string Kind(MediaType type, bool season = false) => season ? "season" : type switch { MediaType.Movie => "movie", MediaType.Episode => "episode", _ => "show" };
     /// <summary>Whether to show this source's score on this kind of page. Sources left out of Scores are off everywhere.</summary>
     public bool ShowsScore(string source, string kind) =>
@@ -132,6 +153,8 @@ public record UserPrefs(
         HiddenScores = HiddenScores?.Where(h => h.Split('/') is [var src, var kind] && (src is "tmdb" or "friends" || ScoreSources.Any(x => x.Key == src))
             && ScoreKinds.Any(k => k.Key == kind)).Distinct().ToList(),
         ScoreSpoilers = Enum.IsDefined(ScoreSpoilers) ? ScoreSpoilers : ScoreSpoilers.Off,
+        PosterScoreMovies = PosterScoreChoices(true).Any(c => c.Key == PosterScoreMovies) ? PosterScoreMovies : "tmdb",
+        PosterScoreShows = PosterScoreChoices(false).Any(c => c.Key == PosterScoreShows) ? PosterScoreShows : "tmdb",
         PartVisibility = PartVisibility?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
     };
 }
@@ -804,7 +827,7 @@ public record NowWatchingDto(
 public record FriendSeen(UserCard User, int Plays, DateTimeOffset? LastWatched, double? Rating);
 
 /// <summary>Avatar: the profile picture's path on the server (versioned), or null for the initial.</summary>
-public record UserCard(string UserName, string? DisplayName, bool Following, bool FollowsYou, string? Avatar = null)
+public record UserCard(string UserName, string? DisplayName, bool Following, bool FollowsYou, string? Avatar = null, bool Requested = false)   // Requested: you asked to follow and they haven't answered
 {
     public string Name => DisplayName ?? UserName;
 }
@@ -827,6 +850,12 @@ public record FavoriteRequest(MediaType Type, int TmdbId);
 
 public record ActivityItem(UserCard User, HistoryEntry Entry);
 public record FriendWatching(UserCard User, NowWatchingDto Item);
+/// <summary>Answer to a follow: Requested when they approve followers first.</summary>
+public record FollowResult(bool Requested);
+/// <summary>Poster badges: one source's score for many titles at once.</summary>
+public record BadgeRequest(string Source, IReadOnlyList<BadgeTitle> Titles);
+public record BadgeTitle(MediaType Type, int TmdbId);
+public record BadgeScore(MediaType Type, int TmdbId, double Value, double Max, bool Percent);
 public record FeedDto(IReadOnlyList<FriendWatching> WatchingNow, IReadOnlyList<ActivityItem> Activity);
 
 /// <summary>Two people side by side (/compare/{a}/{b}). Every list is complete; the page pages them.</summary>

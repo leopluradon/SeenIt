@@ -126,7 +126,14 @@ else if (e is not null)
     <SeasonEpisodes ShowId="Id" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" OnChanged="Reload" CanWatch="e.Plays is not null" />
 
     <CastRow Cast="@(e.Cast ?? [])" Title="Cast" />
-    <CastRow Cast="e.GuestStars" Title="Guest stars" />
+    @if (Fmt.Prefs.HideGuestStars && !Seen && !showGuests && e.GuestStars.Count > 0)
+    {
+        <section class="row-section">
+            <div class="section-head"><h2>Guest stars <span class="muted small">@e.GuestStars.Count</span></h2></div>
+            <button class="btn btn-sm hidden-guests" @onclick="() => showGuests = true"><Icon Name="eye" Size="14" /> Hidden to avoid spoilers. Show guest stars</button>
+        </section>
+    }
+    else { <CastRow Cast="e.GuestStars" Title="Guest stars" /> }
 
     <RatePrompt @bind-Open="ratePrompt" Title="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" OnRate="Rate" />
     <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch" AskWhen="askWhen"
@@ -145,6 +152,7 @@ else if (e is not null)
 
     private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); StateHasChanged(); }
     private bool Seen => e?.Plays is { Count: > 0 };
+    private bool showGuests;
 
     protected override Task OnParametersSetAsync() => Load();
 

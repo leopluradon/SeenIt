@@ -35,7 +35,9 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var ids = users.Select(u => u.Id).ToList();
         var following = (await db.Follows.Where(f => f.FollowerId == me && ids.Contains(f.FolloweeId)).Select(f => f.FolloweeId).ToListAsync(ct)).ToHashSet();
         var followers = (await db.Follows.Where(f => f.FolloweeId == me && ids.Contains(f.FollowerId)).Select(f => f.FollowerId).ToListAsync(ct)).ToHashSet();
-        return users.Select(u => new UserCard(u.UserName!, u.DisplayName, following.Contains(u.Id), followers.Contains(u.Id), AvatarService.Path(u.UserName!, u.AvatarVersion))).ToList();
+        var requested = (await db.FollowRequests.Where(r => r.RequesterId == me && ids.Contains(r.TargetId)).Select(r => r.TargetId).ToListAsync(ct)).ToHashSet();
+        return users.Select(u => new UserCard(u.UserName!, u.DisplayName, following.Contains(u.Id), followers.Contains(u.Id), AvatarService.Path(u.UserName!, u.AvatarVersion),
+            requested.Contains(u.Id))).ToList();
     }
 
     public async Task<ProfileStats> StatsAsync(Guid userId, CancellationToken ct)
@@ -54,7 +56,8 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var mutual = following && followsYou;
         bool See(ProfilePart part) => CanSee(owner, viewer, mutual, part);
         var canView = Enum.GetValues<ProfilePart>().Any(See);
-        var card = new UserCard(owner.UserName!, owner.DisplayName, following, followsYou, AvatarService.Path(owner.UserName!, owner.AvatarVersion));
+        var requested = viewer is { } vid && !following && await db.FollowRequests.AnyAsync(r => r.RequesterId == vid && r.TargetId == owner.Id, ct);
+        var card = new UserCard(owner.UserName!, owner.DisplayName, following, followsYou, AvatarService.Path(owner.UserName!, owner.AvatarVersion), requested);
         var followers = await db.Follows.CountAsync(f => f.FolloweeId == owner.Id, ct);
         var followingCount = await db.Follows.CountAsync(f => f.FollowerId == owner.Id, ct);
 
@@ -104,16 +107,67 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         return CanSee(owner, viewer, following && followsYou, ProfilePart.History) ? owner : null;
     }
 
-    public async Task<bool> FollowAsync(Guid me, string userName, bool follow, CancellationToken ct)
+    /// <summary>
+    /// Follows or unfollows. Someone who approves followers gets a request instead (Requested = true);
+    /// unfollowing also withdraws a pending request. Null when there's no such member.
+    /// </summary>
+    public async Task<FollowResult?> FollowAsync(Guid me, string userName, bool follow, CancellationToken ct)
+    {
+        var them = await FindAsync(userName);
+        if (them is null) return null;
+        if (them.Id == me) throw new TrackingException("You can't follow yourself.");
+        var existing = await db.Follows.FirstOrDefaultAsync(f => f.FollowerId == me && f.FolloweeId == them.Id, ct);
+        var request = await db.FollowRequests.FirstOrDefaultAsync(r => r.RequesterId == me && r.TargetId == them.Id, ct);
+        var requested = false;
+        if (follow && existing is null)
+        {
+            if (them.Prefs().ApproveFollowers)
+            {
+                if (request is null) db.FollowRequests.Add(new FollowRequest { RequesterId = me, TargetId = them.Id });
+                requested = true;
+            }
+            else db.Follows.Add(new Follow { FollowerId = me, FolloweeId = them.Id });
+        }
+        if (!follow)
+        {
+            if (existing is not null) db.Follows.Remove(existing);
+            if (request is not null) db.FollowRequests.Remove(request);
+        }
+        await db.SaveChangesAsync(ct);
+        return new FollowResult(requested);
+    }
+
+    /// <summary>People waiting for you to approve their follow, newest first.</summary>
+    public async Task<List<UserCard>> RequestsAsync(Guid me, CancellationToken ct)
+    {
+        var users = await db.FollowRequests.Where(r => r.TargetId == me).OrderByDescending(r => r.CreatedAt)
+            .Join(db.Users, r => r.RequesterId, u => u.Id, (r, u) => u).AsNoTracking().ToListAsync(ct);
+        return await CardsAsync(me, users, ct);
+    }
+
+    /// <summary>Approves (they now follow you) or declines a follow request. False when there's no such request.</summary>
+    public async Task<bool> AnswerRequestAsync(Guid me, string userName, bool approve, CancellationToken ct)
     {
         var them = await FindAsync(userName);
         if (them is null) return false;
-        if (them.Id == me) throw new TrackingException("You can't follow yourself.");
-        var existing = await db.Follows.FirstOrDefaultAsync(f => f.FollowerId == me && f.FolloweeId == them.Id, ct);
-        if (follow && existing is null) db.Follows.Add(new Follow { FollowerId = me, FolloweeId = them.Id });
-        if (!follow && existing is not null) db.Follows.Remove(existing);
+        var request = await db.FollowRequests.FirstOrDefaultAsync(r => r.RequesterId == them.Id && r.TargetId == me, ct);
+        if (request is null) return false;
+        db.FollowRequests.Remove(request);
+        if (approve && !await db.Follows.AnyAsync(f => f.FollowerId == them.Id && f.FolloweeId == me, ct))
+            db.Follows.Add(new Follow { FollowerId = them.Id, FolloweeId = me });
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    /// <summary>Turning approval off lets everyone who was waiting in.</summary>
+    public async Task ApproveAllAsync(Guid me, CancellationToken ct)
+    {
+        var waiting = await db.FollowRequests.Where(r => r.TargetId == me).ToListAsync(ct);
+        if (waiting.Count == 0) return;
+        var already = (await db.Follows.Where(f => f.FolloweeId == me).Select(f => f.FollowerId).ToListAsync(ct)).ToHashSet();
+        db.Follows.AddRange(waiting.Where(r => !already.Contains(r.RequesterId)).Select(r => new Follow { FollowerId = r.RequesterId, FolloweeId = me }));
+        db.FollowRequests.RemoveRange(waiting);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<List<UserCard>> SearchAsync(Guid me, string q, CancellationToken ct)

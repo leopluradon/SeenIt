@@ -41,6 +41,7 @@ public static class ApiEndpoints
         g.MapGet("/show/{id:int}/scores", (int id, ScoreService s, CancellationToken ct) => s.GetAsync(MediaType.Show, id, ct));
         g.MapGet("/show/{id:int}/season/{season:int}/episode/{episode:int}/scores", (int id, int season, int episode, ScoreService s, CancellationToken ct) =>
             s.EpisodeAsync(id, season, episode, ct));
+        g.MapPost("/scores/badges", (BadgeRequest req, ScoreService s, CancellationToken ct) => s.BadgesAsync(req, ct));
         g.MapGet("/show/{id:int}/season/{season:int}/scores", (int id, int season, ScoreService s, CancellationToken ct) => s.SeasonAsync(id, season, ct));
 
         g.MapGet("/lookup", async (string q, CatalogService c, CancellationToken ct) =>
@@ -186,6 +187,11 @@ public static class ApiEndpoints
         });
 
         g.MapGet("/watchlist", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetWatchlistAsync(p.UserId(), ct));
+        g.MapGet("/watchlist/contains", async (MediaType type, int tmdbId, ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
+        {
+            var me = p.UserId();
+            return new { OnWatchlist = await db.Watchlist.AnyAsync(w => w.UserId == me && w.Type == type && w.TmdbId == tmdbId, ct) };
+        });
         g.MapPost("/watchlist", async (WatchlistRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             await t.AddToWatchlistAsync(p.UserId(), req.Type, req.TmdbId, ct);
@@ -381,12 +387,9 @@ public static class ApiEndpoints
             await db.SaveChangesAsync(ct);
             // Turning emails on today still sends today's digest.
             if (req.Emails == true) { u.LastReleaseEmail = null; await db.SaveChangesAsync(ct); await a.ScanAsync(u, ct); }
-            // Turning the monthly backup on sends this month's straight away, so you can see it works.
+            // Turning backups on sends this period's straight away, so you can see it works.
             if (req.MonthlyBackup == true && email.Enabled && u.Email is { Length: > 0 } to)
-            {
-                var local = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ReviewService.Zone(u.TimeZone)).DateTime);
-                await MonthlyBackupWorker.SendAsync(http.RequestServices, db, email, u, to, new DateOnly(local.Year, local.Month, 1), ct);
-            }
+                await MonthlyBackupWorker.SendAsync(http.RequestServices, db, email, u, to, MonthlyBackupWorker.PeriodStart(u), ct);
             return Alerts(u, a, email);
         });
 
@@ -659,13 +662,18 @@ public static class ApiEndpoints
         g.MapGet("/followers", async (ClaimsPrincipal p, SocialService s, CancellationToken ct) => (await s.ConnectionsAsync(p.UserId(), ct)).Followers);
         g.MapPost("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, ActivityService a, CancellationToken ct) =>
         {
-            if (!await s.FollowAsync(p.UserId(), name, true, ct)) return Results.NotFound();
-            await a.LogAsync(p, ActivityKind.Follow, detail: name);
-            return Results.NoContent();
+            if (await s.FollowAsync(p.UserId(), name, true, ct) is not { } result) return Results.NotFound();
+            await a.LogAsync(p, ActivityKind.Follow, detail: result.Requested ? $"{name} (requested)" : name);
+            return Results.Ok(result);
         });
+        g.MapGet("/requests", (ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.RequestsAsync(p.UserId(), ct));
+        g.MapPost("/requests/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.AnswerRequestAsync(p.UserId(), name, true, ct) ? Results.NoContent() : Results.NotFound());
+        g.MapDelete("/requests/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
+            await s.AnswerRequestAsync(p.UserId(), name, false, ct) ? Results.NoContent() : Results.NotFound());
         g.MapDelete("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, ActivityService a, CancellationToken ct) =>
         {
-            if (!await s.FollowAsync(p.UserId(), name, false, ct)) return Results.NotFound();
+            if (await s.FollowAsync(p.UserId(), name, false, ct) is null) return Results.NotFound();
             await a.LogAsync(p, ActivityKind.Unfollow, detail: name);
             return Results.NoContent();
         });

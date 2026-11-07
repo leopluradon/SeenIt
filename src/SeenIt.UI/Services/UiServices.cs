@@ -17,6 +17,8 @@ public static class UiServices
         services.AddScoped<SessionState>();
         services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<SessionState>());
         services.AddScoped<Toasts>();
+        services.AddScoped<BadgeScores>();
+        services.AddScoped<WatchlistNudge>();
         services.AddScoped<ThemeService>();
         services.AddScoped<ConnectivityState>();
         if (services.All(s => s.ServiceType != typeof(IOfflineStore)))
@@ -251,15 +253,20 @@ public static class TextMatch
 /// <summary>Little pop-up confirmations ("Added to watchlist").</summary>
 public class Toasts
 {
-    public record Toast(Guid Id, string Message, bool Error, Func<Task>? Undo = null);
+    public record Toast(Guid Id, string Message, bool Error, Func<Task>? Undo = null, string? ActionLabel = null);
     private readonly List<Toast> _items = [];
     public IReadOnlyList<Toast> Items => _items;
     public event Action? Changed;
 
     /// <param name="undo">Shows an Undo button that runs this (stays up longer so there's time to tap it).</param>
-    public void Show(string message, bool error = false, Func<Task>? undo = null)
+    public void Show(string message, bool error = false, Func<Task>? undo = null) => Add(new Toast(Guid.NewGuid(), message, error, undo));
+
+    /// <summary>A toast with its own button ("Remove") instead of Undo.</summary>
+    public void Offer(string message, string label, Func<Task> action) => Add(new Toast(Guid.NewGuid(), message, false, action, label));
+
+    private void Add(Toast t)
     {
-        var t = new Toast(Guid.NewGuid(), message, error, undo);
+        var undo = t.Undo; var error = t.Error;
         _items.Add(t);
         Changed?.Invoke();
         _ = Task.Delay(undo is not null ? 7000 : error ? 5000 : 2800).ContinueWith(_ => Dismiss(t));
@@ -277,10 +284,85 @@ public class Toasts
         try
         {
             await undo();
-            Show("Undone");
+            if (t.ActionLabel is null) Show("Undone");
         }
         catch (Exception ex) { Error(ex); }
     }
 
     public void Error(Exception ex) => Show(ex is ApiException ? ex.Message : "Something went wrong.", error: true);
+}
+
+
+/// <summary>
+/// Scores for poster badges from a site other than TMDB (Settings → Display → Scores). Cards ask
+/// for their title; requests made in the same moment go to the server as one batch per source.
+/// </summary>
+public sealed class BadgeScores(ApiClient api)
+{
+    private static readonly TimeSpan RetryMissing = TimeSpan.FromMinutes(2);
+    private readonly Dictionary<(string, MediaType, int), BadgeScore> known = [];
+    private readonly Dictionary<(string, MediaType, int), DateTimeOffset> missing = [];
+    private readonly Dictionary<string, (HashSet<BadgeTitle> Titles, TaskCompletionSource Done)> pending = [];
+
+    public BadgeScore? Get(string source, MediaType type, int tmdbId) => known.GetValueOrDefault((source, type, tmdbId));
+
+    public Task LoadAsync(string source, MediaType type, int tmdbId)
+    {
+        var key = (source, type, tmdbId);
+        if (known.ContainsKey(key) || missing.TryGetValue(key, out var at) && DateTimeOffset.UtcNow - at < RetryMissing) return Task.CompletedTask;
+        if (!pending.TryGetValue(source, out var batch))
+        {
+            batch = ([], new TaskCompletionSource());
+            pending[source] = batch;
+            _ = FlushAsync(source);
+        }
+        batch.Titles.Add(new BadgeTitle(type, tmdbId));
+        return batch.Done.Task;
+    }
+
+    private async Task FlushAsync(string source)
+    {
+        await Task.Delay(50);   // let the rest of the row ask too
+        var (titles, done) = pending[source];
+        pending.Remove(source);
+        try
+        {
+            var got = await api.BadgesAsync(new BadgeRequest(source, [.. titles]));
+            foreach (var b in got) known[(source, b.Type, b.TmdbId)] = b;
+            foreach (var t in titles.Where(t => !known.ContainsKey((source, t.Type, t.TmdbId)))) missing[(source, t.Type, t.TmdbId)] = DateTimeOffset.UtcNow;
+        }
+        catch { /* badges are a nicety */ }
+        done.TrySetResult();
+    }
+
+    public static string Format(BadgeScore b) => b.Percent ? $"{b.Value:0}%" : b.Max >= 100 ? $"{b.Value:0}" : b.Value.ToString("0.0");
+}
+
+/// <summary>
+/// "Ask" for Settings → Tracking → watchlist: after marking something watched that's still on your
+/// watchlist, offers to take it off.
+/// </summary>
+public sealed class WatchlistNudge
+{
+    private readonly ApiClient api;
+    private readonly Toasts toasts;
+    public WatchlistNudge(ApiClient api, Toasts toasts)
+    {
+        this.api = api;
+        this.toasts = toasts;
+        api.Watched += OnWatched;
+    }
+
+    private async Task OnWatched(MediaType type, int tmdbId)
+    {
+        if (Fmt.Prefs.WatchlistOnWatch != WatchlistOnWatch.Ask) return;
+        var kind = type == MediaType.Movie ? MediaType.Movie : MediaType.Show;
+        try
+        {
+            if (!await api.OnWatchlistAsync(kind, tmdbId)) return;
+            toasts.Offer(kind == MediaType.Movie ? "This movie is still on your watchlist." : "This show is still on your watchlist.", "Remove",
+                async () => { await api.RemoveFromWatchlistAsync(kind, tmdbId); toasts.Show("Removed from watchlist"); });
+        }
+        catch { /* offline or similar: no prompt */ }
+    }
 }

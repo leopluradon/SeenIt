@@ -21,7 +21,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 if (await catalog.EnsureMovieAsync(req.TmdbId, ct) is not { } movie) throw new TrackingException("Movie not found.");
                 var at = PlayTime(when, req.WatchedAt, movie.ReleaseDate);
                 db.WatchEvents.Add(new WatchEvent { UserId = userId, Type = MediaType.Movie, TmdbId = req.TmdbId, WatchedAt = at, Source = source });
-                await RemoveFromWatchlistAsync(userId, MediaType.Movie, req.TmdbId, ct);
+                await DropFromWatchlistAsync(userId, MediaType.Movie, req.TmdbId, ct);
                 await db.SaveChangesAsync(ct);
                 return 1;
 
@@ -34,7 +34,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                     UserId = userId, Type = MediaType.Episode, TmdbId = req.TmdbId, SeasonNumber = s, EpisodeNumber = e,
                     WatchedAt = PlayTime(when, req.WatchedAt, ep.AirDate), Source = source,
                 });
-                await RemoveFromWatchlistAsync(userId, MediaType.Show, req.TmdbId, ct);
+                await DropFromWatchlistAsync(userId, MediaType.Show, req.TmdbId, ct);
                 // Watching a new episode of a paused show picks it back up.
                 if ((source == WatchSource.Manual || WatchSources.IsScrobbler(source))
                     && await db.ShowStates.FirstOrDefaultAsync(x => x.UserId == userId && x.ShowTmdbId == req.TmdbId && x.Status == ShowTrackStatus.Paused, ct) is { } paused)
@@ -84,7 +84,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             });
             added++;
         }
-        if (added > 0) await RemoveFromWatchlistAsync(userId, MediaType.Show, req.ShowTmdbId, ct);
+        if (added > 0) await DropFromWatchlistAsync(userId, MediaType.Show, req.ShowTmdbId, ct);
         await db.SaveChangesAsync(ct);
         if (added > 0) await CompleteRewatchIfDoneAsync(userId, req.ShowTmdbId, ct);
         return added;
@@ -585,6 +585,16 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         if (await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == type && w.TmdbId == tmdbId, ct)) return;
         db.Watchlist.Add(new WatchlistItem { UserId = userId, Type = type, TmdbId = tmdbId, AddedAt = addedAt ?? DateTimeOffset.UtcNow });
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Marking something watched takes it off the watchlist, unless the user chose to keep it
+    /// or to be asked (the app offers a "remove" button then; media servers just keep it).
+    /// </summary>
+    private async Task DropFromWatchlistAsync(Guid userId, MediaType type, int tmdbId, CancellationToken ct)
+    {
+        var json = await db.Users.Where(u => u.Id == userId).Select(u => u.PrefsJson).FirstOrDefaultAsync(ct);
+        if (UserPrefsStore.Read(json).WatchlistOnWatch == WatchlistOnWatch.Remove) await RemoveFromWatchlistAsync(userId, type, tmdbId, ct);
     }
 
     public async Task RemoveFromWatchlistAsync(Guid userId, MediaType type, int tmdbId, CancellationToken ct)

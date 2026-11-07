@@ -5,6 +5,8 @@
 @inject SessionState Session
 @inject ApiClient Api
 @inject ThemeService Theme
+@* WatchlistNudge listens for "watched" to offer taking it off the watchlist; injecting it here starts it. *@
+@inject WatchlistNudge WatchlistNudge
 
 <div class="app">
     <header class="topbar">
@@ -106,10 +108,18 @@
         // Follow the account's theme once it's known (also after signing in on a new device).
         if (Session.Me is { } me) await Theme.ApplyAsync(me.Theme);
         else if (firstRender) await Theme.ApplyDeviceThemeAsync();
+        var layout = (Fmt.Prefs.Compact, Fmt.Prefs.PosterSize);
+        if (layout != appliedLayout)
+        {
+            appliedLayout = layout;
+            try { await Js.InvokeVoidAsync("seenit.setLayout", layout.Compact, layout.PosterSize.ToString()); } catch (JSException) { }
+        }
         if (!firstRender) return;
         self = DotNetObjectReference.Create(this);
         try { await Js.InvokeVoidAsync("seenit.pullToRefresh", self); } catch (JSException) { }
     }
+
+    private (bool, PosterSize)? appliedLayout;
 
     [JSInvokable]
     public async Task Refresh()

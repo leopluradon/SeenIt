@@ -112,10 +112,9 @@ public class MonthlyBackupWorker(IServiceScopeFactory scopes, ILogger<MonthlyBac
                 {
                     foreach (var user in await db.Users.Where(u => u.MonthlyBackup).ToListAsync(stoppingToken))
                     {
-                        var local = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ReviewService.Zone(user.TimeZone)).DateTime);
-                        var month = new DateOnly(local.Year, local.Month, 1);
-                        if (user.LastMonthlyBackup >= month || user.Email is not { Length: > 0 } to) continue;
-                        await SendAsync(scope.ServiceProvider, db, email, user, to, month, stoppingToken);
+                        var period = PeriodStart(user);
+                        if (user.LastMonthlyBackup >= period || user.Email is not { Length: > 0 } to) continue;
+                        await SendAsync(scope.ServiceProvider, db, email, user, to, period, stoppingToken);
                     }
                 }
             }
@@ -125,19 +124,32 @@ public class MonthlyBackupWorker(IServiceScopeFactory scopes, ILogger<MonthlyBac
         }
     }
 
-    public static async Task SendAsync(IServiceProvider services, AppDbContext db, EmailService email, AppUser user, string to, DateOnly month, CancellationToken ct)
+    /// <summary>The first day of the user's current backup period: this month, or this week (from Monday), in their time zone.</summary>
+    public static DateOnly PeriodStart(AppUser user)
     {
-        var zip = await services.GetRequiredService<ExportService>().BuildAsync(user.Id, ct);
+        var local = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ReviewService.Zone(user.TimeZone)).DateTime);
+        return user.Prefs().BackupEvery == BackupEvery.Weekly
+            ? local.AddDays(-(((int)local.DayOfWeek + 6) % 7))
+            : new DateOnly(local.Year, local.Month, 1);
+    }
+
+    public static async Task SendAsync(IServiceProvider services, AppDbContext db, EmailService email, AppUser user, string to, DateOnly period, CancellationToken ct)
+    {
+        var prefs = user.Prefs();
+        var weekly = prefs.BackupEvery == BackupEvery.Weekly;
+        var zip = await services.GetRequiredService<ExportService>().BuildAsync(user.Id, ct, prefs.BackupFormat);
         var site = services.GetRequiredService<ReleaseAlertService>().BaseUrl();
-        var name = $"seenit-backup-{month:yyyy-MM}.zip";
+        var name = weekly ? $"seenit-backup-{period:yyyy-MM-dd}.zip" : $"seenit-backup-{period:yyyy-MM}.zip";
+        var label = weekly ? $"the week of {period:MMMM d, yyyy}" : $"{period:MMMM yyyy}";
+        var kinds = prefs.BackupFormat switch { ExportFormat.Json => "JSON", ExportFormat.Csv => "CSV", _ => "JSON and CSV" };
         var big = zip.Length > MaxAttachmentBytes;
         var note = big
             ? $"Your backup is {zip.Length / 1024 / 1024} MB, too big to attach. Download it any time from Settings → Export: {site}settings#export"
-            : $"Your SeenIt backup for {month:MMMM yyyy} is attached ({Math.Max(1, zip.Length / 1024):N0} KB): history, ratings, watchlist, lists and settings as JSON and CSV.";
-        email.Queue(new EmailMessage(to, $"Your SeenIt backup for {month:MMMM yyyy}",
+            : $"Your SeenIt backup for {label} is attached ({Math.Max(1, zip.Length / 1024):N0} KB): history, ratings, watchlist, lists and settings as {kinds}.";
+        email.Queue(new EmailMessage(to, $"Your SeenIt backup for {label}",
             $"{note}\n\nTurn these off in Settings → Export: {site}settings#export\n",
             $"<p>{WebUtility.HtmlEncode(note)}</p><p style=\"color:#888;font-size:12px\">Turn these off in <a href=\"{site}settings#export\">Settings → Export</a>.</p>",
             big ? null : [new EmailAttachment(name, "application/zip", zip)]));
-        await db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastMonthlyBackup, month), ct);
+        await db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastMonthlyBackup, period), ct);
     }
 }

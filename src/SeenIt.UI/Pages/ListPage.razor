@@ -100,6 +100,38 @@ else if (list is not null)
             @if (list.IsOwner) { <a class="btn btn-sm btn-ghost" href="lists">Search all lists</a> }
         </div>
     }
+    @if (list.Items.Count > 0)
+    {
+        <div class="segmented list-layout" role="radiogroup" aria-label="Show as">
+            <button role="radio" aria-checked="@(Layout == ListLayout.Posters)" class="@(Layout == ListLayout.Posters ? "on" : "")" @onclick="() => layout = ListLayout.Posters"><Icon Name="grid" Size="14" /> Posters</button>
+            <button role="radio" aria-checked="@(Layout == ListLayout.Rows)" class="@(Layout == ListLayout.Rows ? "on" : "")" @onclick="() => layout = ListLayout.Rows"><Icon Name="list" Size="14" /> Rows</button>
+        </div>
+    }
+    @if (Layout == ListLayout.Rows)
+    {
+        <ol class="list-rows">
+            @foreach (var (i, rank) in list.Items.Select((x, n) => (x, n + 1)).Where(x => TextMatch.Contains(x.x.Media.Title, find)))
+            {
+                <li class="list-row" @key="i.Id">
+                    @if (list.Ranked) { <span class="list-rank">@rank</span> }
+                    <a href="@Fmt.Href(i.Media.Type, i.Media.TmdbId)" class="list-row-link">
+                        <img src="@Img.Poster(i.Media.PosterPath, "w92")" alt="" loading="lazy" />
+                        <span class="list-row-main">
+                            <b>@i.Media.Title</b>
+                            <span class="muted small">@(i.Media.Year?.ToString() ?? "")<span class="dot-sep">@(i.Media.Type == MediaType.Movie ? "Movie" : "TV")</span></span>
+                            @if (i.Note is { Length: > 0 } note) { <span class="list-note">@note</span> }
+                        </span>
+                    </a>
+                    @if (list.IsOwner && list.Rules is null)
+                    {
+                        <button class="icon-btn" @onclick="() => Remove(i)" aria-label="Remove @i.Media.Title"><Icon Name="x" Size="16" /></button>
+                    }
+                </li>
+            }
+        </ol>
+    }
+    else
+    {
     <div class="poster-grid">
         @foreach (var (i, rank) in list.Items.Select((x, n) => (x, n + 1)).Where(x => TextMatch.Contains(x.x.Media.Title, find)))
         {
@@ -113,6 +145,7 @@ else if (list is not null)
             </div>
         }
     </div>
+    }
 
     }
 
@@ -121,6 +154,10 @@ else if (list is not null)
     </Modal>
 }
 @code {
+    /// <summary>Posters or rows: the default from Settings → Display, switchable here.</summary>
+    private ListLayout? layout;
+    private ListLayout Layout => layout ?? Fmt.Prefs.ListLayout;
+
     /// <summary>A smart list's rules in words, e.g. "From your watchlist", "Movies", "1980–1989", "Not seen yet".</summary>
     private static IEnumerable<string> RuleText(SmartRules r)
     {

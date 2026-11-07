@@ -324,6 +324,14 @@ public class Invite
     public DateTimeOffset? UsedAt { get; set; }
 }
 
+/// <summary>Someone asked to follow a person who approves followers first.</summary>
+public class FollowRequest
+{
+    public Guid RequesterId { get; set; }
+    public Guid TargetId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public class Follow
 {
     public Guid FollowerId { get; set; }

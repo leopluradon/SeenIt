@@ -9,7 +9,7 @@ using SeenIt.Server.Data;
 
 namespace SeenIt.Server.Services;
 
-/// <summary>Everything a user has put into SeenIt, as a zip of JSON and CSV files.</summary>
+/// <summary>Everything a user has put into SeenIt, as a zip of JSON and/or CSV files.</summary>
 public class ExportService(AppDbContext db, TrackingService tracking, ListService lists)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -19,8 +19,10 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public async Task<byte[]> BuildAsync(Guid userId, CancellationToken ct)
+    public async Task<byte[]> BuildAsync(Guid userId, CancellationToken ct, ExportFormat format = ExportFormat.Both)
     {
+        var json = format != ExportFormat.Csv;
+        var csv = format != ExportFormat.Json;
         var user = await db.Users.AsNoTracking().FirstAsync(u => u.Id == userId, ct);
 
         var events = await db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId).OrderBy(w => w.WatchedAt).ToListAsync(ct);
@@ -39,14 +41,16 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
         var watchlist = (await tracking.GetWatchlistAsync(userId, ct)).ToList();
 
         var myLists = new List<object>();
+        var myListRows = new List<(string List, bool Public, string Type, int TmdbId, string Title, int? Year, DateTimeOffset AddedAt)>();
         foreach (var summary in await lists.GetMineAsync(userId, ct))
         {
             if (await lists.GetAsync(summary.Id, userId, ct) is not { } l) continue;
             myLists.Add(new
             {
-                l.Id, l.Name, l.Description, l.IsPublic,
+                l.Id, l.Name, l.Description, l.IsPublic, Ranked = l.Ranked,
                 Items = l.Items.Select(i => new { Type = i.Media.Type.ToString().ToLowerInvariant(), i.Media.TmdbId, i.Media.Title, i.Media.Year, i.AddedAt }),
             });
+            myListRows.AddRange(l.Items.Select(i => (l.Name, l.IsPublic, i.Media.Type.ToString().ToLowerInvariant(), i.Media.TmdbId, i.Media.Title, i.Media.Year, i.AddedAt)));
         }
 
         var rewatches = await db.Rewatches.AsNoTracking().Where(r => r.UserId == userId)
@@ -72,31 +76,39 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
                 using var w = new StreamWriter(entry.Open(), new UTF8Encoding(false));
                 w.Write(content);
             }
-            void AddJson(string name, object value) => Add(name, JsonSerializer.Serialize(value, Json));
+            void AddJson(string name, object value) { if (json) Add(name, JsonSerializer.Serialize(value, Json)); }
+            void AddCsv(string name, string[] header, IEnumerable<object?[]> rows) { if (csv) Add(name, Csv(header, rows)); }
+            var kinds = format switch { ExportFormat.Json => "JSON", ExportFormat.Csv => "CSV", _ => "JSON and CSV" };
 
             Add("README.txt", $"""
-                SeenIt export for {user.UserName}, created {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm} UTC.
+                SeenIt export for {user.UserName}, created {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm} UTC, as {kinds}.
 
-                history.json / history.csv  every play (watchedAt is empty when the date is unknown)
-                ratings.json / ratings.csv  your ratings, 1-10
-                watchlist.json              things you want to watch
-                lists.json                  your lists and their items
-                show-status.json            shows you've paused or dropped
-                profile.json                account details, settings and who you follow
+                history      every play (watched_at is empty when the date is unknown)
+                ratings      your ratings, 1-10
+                watchlist    things you want to watch
+                lists        your lists and their items
+                show-status  shows you've paused or dropped
+                rewatches, favorites, notes, library
+                profile      account details, settings and who you follow
 
-                IDs are TMDB ids (https://www.themoviedb.org). For episodes, tmdbId is the show's id.
+                IDs are TMDB ids (https://www.themoviedb.org). For episodes, tmdb_id is the show's id.
                 """);
+            AddCsv("profile.csv", ["field", "value"], new object?[][]
+            {
+                ["user_name", user.UserName], ["email", user.Email], ["display_name", user.DisplayName], ["created_at", user.CreatedAt.ToString("O")],
+                ["visibility", user.Visibility], ["region", user.Region], ["following", string.Join(' ', following)],
+            });
             AddJson("profile.json", new
             {
                 user.UserName, user.Email, user.DisplayName, user.CreatedAt, Visibility = user.Visibility.ToString(), user.Region,
                 user.HideSpoilers, user.BlurSpoilerImages, Following = following,
             });
             AddJson("history.json", history);
-            Add("history.csv", Csv(["type", "tmdb_id", "title", "season", "episode", "episode_title", "watched_at", "source"],
-                history.Select(h => new object?[] { h.Type, h.TmdbId, h.Title, h.Season, h.Episode, h.EpisodeTitle, h.WatchedAt?.ToString("O"), h.Source })));
+            AddCsv("history.csv", ["type", "tmdb_id", "title", "season", "episode", "episode_title", "watched_at", "source"],
+                history.Select(h => new object?[] { h.Type, h.TmdbId, h.Title, h.Season, h.Episode, h.EpisodeTitle, h.WatchedAt?.ToString("O"), h.Source }));
             AddJson("ratings.json", ratings);
-            Add("ratings.csv", Csv(["type", "tmdb_id", "title", "season", "episode", "rating", "rated_at"],
-                ratings.Select(r => new object?[] { r.Type, r.TmdbId, r.Title, r.Season, r.Episode, r.Rating, r.RatedAt.ToString("O") })));
+            AddCsv("ratings.csv", ["type", "tmdb_id", "title", "season", "episode", "rating", "rated_at"],
+                ratings.Select(r => new object?[] { r.Type, r.TmdbId, r.Title, r.Season, r.Episode, r.Rating, r.RatedAt.ToString("O") }));
             AddJson("watchlist.json", watchlist);
             AddJson("lists.json", myLists);
             AddJson("show-status.json", showStatus);
@@ -104,6 +116,20 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
             AddJson("favorites.json", favorites);
             AddJson("notes.json", notes);
             AddJson("library.json", library);
+            AddCsv("watchlist.csv", ["type", "tmdb_id", "title", "year", "added_at"],
+                watchlist.Select(w => new object?[] { w.Media.Type.ToString().ToLowerInvariant(), w.Media.TmdbId, w.Media.Title, w.Media.Year, w.AddedAt.ToString("O") }));
+            AddCsv("lists.csv", ["list", "public", "type", "tmdb_id", "title", "year", "added_at"],
+                myListRows.Select(r => new object?[] { r.List, r.Public, r.Type, r.TmdbId, r.Title, r.Year, r.AddedAt.ToString("O") }));
+            AddCsv("show-status.csv", ["tmdb_id", "show", "status", "updated_at"],
+                showStatus.Select(s => new object?[] { s.TmdbId, s.Name, s.Status, s.UpdatedAt.ToString("O") }));
+            AddCsv("rewatches.csv", ["tmdb_id", "show", "number", "started_at", "completed_at"],
+                rewatches.Select(r => new object?[] { r.tmdbId, r.show, r.number, r.startedAt.ToString("O"), r.completedAt?.ToString("O") }));
+            AddCsv("favorites.csv", ["type", "tmdb_id", "title", "year", "added_at"],
+                favorites.Select(f => new object?[] { f.Type, f.TmdbId, f.Title, f.Year, f.AddedAt.ToString("O") }));
+            AddCsv("notes.csv", ["type", "tmdb_id", "note", "updated_at"],
+                notes.Select(n => new object?[] { n.Type, n.TmdbId, n.Text, n.UpdatedAt.ToString("O") }));
+            AddCsv("library.csv", ["type", "tmdb_id", "format", "added_at"],
+                library.Select(l => new object?[] { l.Type, l.TmdbId, l.Format, l.AddedAt.ToString("O") }));
         }
         return ms.ToArray();
     }

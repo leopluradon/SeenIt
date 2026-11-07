@@ -584,6 +584,24 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Follows");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.FollowRequest", b =>
+                {
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("RequesterId", "TargetId");
+
+                    b.HasIndex("TargetId");
+
+                    b.ToTable("FollowRequests");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.Goal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1472,6 +1490,21 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("FollowerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.FollowRequest", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("TargetId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

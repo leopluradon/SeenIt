@@ -56,6 +56,59 @@ public class ScoreService(AppDbContext db, TmdbClient tmdb, CatalogService catal
         return scores;
     }
 
+    /// <summary>At most this many titles per request are looked up live; the rest show once they're cached.</summary>
+    private const int BadgeLookups = 8;
+
+    /// <summary>
+    /// One source's score for many movies/shows at once, for poster badges. Uses what's already
+    /// known (IMDb's ratings file, cached MDBList answers) and looks up a few missing ones each time,
+    /// so rows fill in as they're seen rather than costing dozens of calls up front.
+    /// </summary>
+    public async Task<List<BadgeScore>> BadgesAsync(BadgeRequest req, CancellationToken ct)
+    {
+        var titles = req.Titles.Where(t => t.Type is MediaType.Movie or MediaType.Show).Distinct().Take(100).ToList();
+        var result = new List<BadgeScore>();
+        if (titles.Count == 0 || req.Source is "tmdb" or "none") return result;
+
+        if (req.Source == "imdb")
+        {
+            var movieIds = titles.Where(t => t.Type == MediaType.Movie).Select(t => t.TmdbId).ToList();
+            var imdbIds = await db.Movies.AsNoTracking().Where(m => movieIds.Contains(m.TmdbId) && m.ImdbId != null)
+                .ToDictionaryAsync(m => (MediaType.Movie, m.TmdbId), m => m.ImdbId!, ct);
+            var lookups = 0;
+            foreach (var t in titles.Where(t => !imdbIds.ContainsKey((t.Type, t.TmdbId))))
+            {
+                if (lookups++ >= BadgeLookups * 2) break;   // TMDB's external ids are cached for a day
+                try
+                {
+                    if ((await tmdb.GetExternalIdsAsync(t.Type == MediaType.Movie ? "movie" : "tv", t.TmdbId, ct))?.ImdbId is { Length: > 0 } id)
+                        imdbIds[(t.Type, t.TmdbId)] = id;
+                }
+                catch (HttpRequestException) { /* skip this one */ }
+            }
+            var wanted = imdbIds.Values.Distinct().ToList();
+            var ratings = await db.ImdbRatings.AsNoTracking().Where(r => wanted.Contains(r.ImdbId)).ToDictionaryAsync(r => r.ImdbId, r => r.Rating, ct);
+            foreach (var ((type, tmdbId), imdbId) in imdbIds)
+                if (ratings.TryGetValue(imdbId, out var r)) result.Add(new BadgeScore(type, tmdbId, r, 10, false));
+            return result;
+        }
+
+        if (!HasMdbList || !Sources.Any(s => s.Source == req.Source)) return result;
+        var keys = titles.Select(t => t.TmdbId).ToList();
+        var cached = (await db.ExternalScores.AsNoTracking().Where(x => keys.Contains(x.TmdbId)).ToListAsync(ct))
+            .Where(x => titles.Contains(new BadgeTitle(x.Type, x.TmdbId))).ToDictionary(x => (x.Type, x.TmdbId));
+        var live = 0;
+        foreach (var t in titles)
+        {
+            List<ExternalScore>? scores = null;
+            if (cached.TryGetValue((t.Type, t.TmdbId), out var c)) scores = JsonSerializer.Deserialize<List<ExternalScore>>(c.Json, Json);
+            else if (live++ < BadgeLookups) scores = await MdbListAsync(t.Type, t.TmdbId, null, ct);
+            if (scores?.FirstOrDefault(s => s.Source == req.Source) is { } hit)
+                result.Add(new BadgeScore(t.Type, t.TmdbId, hit.Value, hit.Max, hit.Percent));
+        }
+        return result;
+    }
+
     /// <summary>Episodes: IMDb and Trakt (MDBList and the others don't score single episodes).</summary>
     public async Task<List<ExternalScore>> EpisodeAsync(int showId, int season, int episode, CancellationToken ct)
     {

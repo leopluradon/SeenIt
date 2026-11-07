@@ -199,7 +199,7 @@ public static partial class AuthEndpoints
             return Results.NoContent();
         });
 
-        me.MapPut("/preferences", async (PreferencesRequest req, ClaimsPrincipal p, UserManager<AppUser> users) =>
+        me.MapPut("/preferences", async (PreferencesRequest req, ClaimsPrincipal p, UserManager<AppUser> users, SocialService social, CancellationToken ct) =>
         {
             var u = await users.FindByIdAsync(p.UserId().ToString());
             if (u is null) return Results.Unauthorized();
@@ -207,6 +207,7 @@ public static partial class AuthEndpoints
             if (req.RatingScale is { } scale && Enum.IsDefined(scale)) u.RatingScale = scale;
             if (req.TimeFormat is { } tf && Enum.IsDefined(tf)) u.TimeFormat = tf;
             if (req.UpNextSort is { } us && Enum.IsDefined(us)) u.UpNextSort = us;
+            var wasApproving = u.Prefs().ApproveFollowers;
             if (req.Prefs is { } prefs) u.PrefsJson = UserPrefsStore.Write(prefs);
             if (req.BlurSpoilerImages is { } blur) u.BlurSpoilerImages = blur;
             if (req.HiddenHomeSections is { } hidden)
@@ -242,6 +243,7 @@ public static partial class AuthEndpoints
                 else return Results.BadRequest(new ProblemInfo("That isn't a valid date."));
             }
             await users.UpdateAsync(u);
+            if (wasApproving && !u.Prefs().ApproveFollowers) await social.ApproveAllAsync(u.Id, ct);
             return Results.NoContent();
         });
 
