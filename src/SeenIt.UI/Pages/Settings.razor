@@ -354,6 +354,11 @@ else { <h1>Settings</h1> }
                 Count rewatches in stats and reviews
             </label>
             <p class="muted small">Off: play counts, time watched and reviews count each movie and episode once, at its first watch. Your history keeps every play either way.</p>
+            <label class="check">
+                <input type="checkbox" checked="@Fmt.Prefs.PrivateNotes" @onchange='e => SavePrefs(p => p with { PrivateNotes = (bool)e.Value! }, (bool)e.Value! ? "Private notes on" : "Private notes hidden")' />
+                Private notes on movie and show pages
+            </label>
+            <p class="muted small">Off hides the note box everywhere. Notes you've already written are kept and come back if you turn this on again.</p>
         </section>
 
         <section class="panel" id="jellyfin">

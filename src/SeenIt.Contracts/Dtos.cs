@@ -90,7 +90,8 @@ public record UserPrefs(
     IReadOnlyDictionary<string, int>? HomeCounts = null,   // items per home row, by section key
     int ComingUpDays = 14,
     WatchDefault WatchDefault = WatchDefault.Ask,
-    IReadOnlyDictionary<ProfilePart, ProfileVisibility>? PartVisibility = null)
+    IReadOnlyDictionary<ProfilePart, ProfileVisibility>? PartVisibility = null,
+    bool PrivateNotes = true)                        // false: no private-note box on movie and show pages (notes are kept)
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];

@@ -117,8 +117,8 @@ else if (s is not null)
                 </div>
             }
             </div>
-            <TitleNote Type="MediaType.Show" TmdbId="Id" Note="@u.Note" />
             <FriendsSeen Type="MediaType.Show" TmdbId="Id" Total="s.AiredEpisodes" />
+            @if (Fmt.Prefs.PrivateNotes) { <TitleNote Type="MediaType.Show" TmdbId="Id" Note="@u.Note" /> }
         </div>
         }
         <div class="detail-info">
