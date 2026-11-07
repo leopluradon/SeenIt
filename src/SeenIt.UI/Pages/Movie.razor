@@ -45,18 +45,19 @@ else if (m is not null)
         </Actions>
     </MediaHero>
 
-    <div class="detail-body">
-        <div class="detail-main">
+    <div class="detail-body detail-wide">
+        <div class="detail-cols">
             @if (m.User is { } u)
             {
-                <div class="panel rate-panel">
+                <div class="detail-you">
+                <div class="panel you-panel">
+                <div class="rate-panel">
                     <span>Your rating</span>
                     <RatingPicker Value="u.Rating" ValueChanged="Rate" />
                 </div>
-                <TitleNote Type="MediaType.Movie" TmdbId="Id" Note="@u.Note" />
                 @if (u.History is { Count: > 0 } plays)
                 {
-                    <div class="panel">
+                    <div class="you-plays">
                         <div class="panel-head">
                             <h2>Your plays <span class="muted small">@plays.Count@if (m.Runtime is > 0) { <span> · <Dur Minutes="(long)m.Runtime.Value * plays.Count" /></span> }</span></h2>
                             @if (plays.Count > 1) { <button class="btn btn-sm btn-ghost" @onclick="UnwatchAll"><Icon Name="trash" Size="14" /> Remove all</button> }
@@ -76,8 +77,12 @@ else if (m is not null)
                         </div>
                     </div>
                 }
+                </div>
+                <TitleNote Type="MediaType.Movie" TmdbId="Id" Note="@u.Note" />
                 <FriendsSeen Type="MediaType.Movie" TmdbId="Id" />
+                </div>
             }
+            <div class="detail-info">
             @if (m.Overview is not null) { <p class="overview">@m.Overview</p> }
             <WhereToWatch Type="MediaType.Movie" TmdbId="Id" />
             @if (m.Crew.Count > 0)
@@ -100,6 +105,7 @@ else if (m is not null)
                 {
                     <button class="link-btn" disabled="@busy" @onclick="ToggleNotInterested" title="Keep it out of Discover, trending and For you">@(ni.NotInterested ? "Not interested ✓ (undo)" : "Not interested")</button>
                 }
+            </div>
             </div>
         </div>
     </div>

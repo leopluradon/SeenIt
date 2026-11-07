@@ -37,7 +37,7 @@ else if (s is not null)
         </Actions>
     </MediaHero>
 
-    <div class="detail-body show-body">
+    <div class="detail-body detail-wide">
             <DetailStats Items="@([
                 ("Seasons", s.Seasons.Count(x => x.SeasonNumber > 0).ToString()),
                 ("Episodes", s.AiredEpisodes > 0 && s.AiredEpisodes < s.NumberOfEpisodes ? $"{s.AiredEpisodes} aired of {s.NumberOfEpisodes}" : s.NumberOfEpisodes.ToString()),
@@ -47,10 +47,10 @@ else if (s is not null)
                 ("Left to watch", s.User is not null && s.WatchedMinutes > 0 ? Fmt.Duration(s.RemainingMinutes) : null),
                 ("Aired", s.FirstAirDate is { } fa ? $"{fa.Year}–{(s.Status is "Ended" or "Canceled" ? s.LastAirDate?.Year.ToString() : "")}" : null),
             ])" />
-        <div class="show-cols">
+        <div class="detail-cols">
         @if (s.User is { } u)
         {
-        <div class="show-you">
+        <div class="detail-you">
             <div class="panel you-panel">
                 <div class="rate-panel">
                     <span>Your rating</span>
@@ -121,7 +121,7 @@ else if (s is not null)
             <FriendsSeen Type="MediaType.Show" TmdbId="Id" Total="s.AiredEpisodes" />
         </div>
         }
-        <div class="show-info">
+        <div class="detail-info">
             @if (s.Overview is not null) { <p class="overview">@s.Overview</p> }
             @if (s.NextEpisodeToAir is { } next)
             {
