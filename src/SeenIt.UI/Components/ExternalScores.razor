@@ -24,19 +24,22 @@
     /// <summary>For an episode (Type = Episode, TmdbId = the show).</summary>
     [Parameter] public int Season { get; set; }
     [Parameter] public int Episode { get; set; }
+    /// <summary>A season's scores (Type = Show, TmdbId = the show, Season = its number).</summary>
+    [Parameter] public bool IsSeason { get; set; }
     private List<ExternalScore>? scores;
 
     /// <summary>The sites you chose for this kind of title, in your order (Settings → Display → Scores); all of them by default.</summary>
-    private List<ExternalScore>? Shown => scores?.Where(s => Fmt.ShowsScore(s.Source, Type))
+    private List<ExternalScore>? Shown => scores?.Where(s => Fmt.ShowsScore(s.Source, Type, IsSeason))
         .OrderBy(s => Fmt.Prefs.Scores is { } pick ? pick.ToList().IndexOf(s.Source) : 0).ToList();
     private (MediaType, int, int, int) loadedFor;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (loadedFor == (Type, TmdbId, Season, Episode)) return;
-        loadedFor = (Type, TmdbId, Season, Episode);
+        if (loadedFor == (Type, TmdbId, Season, IsSeason ? -1 : Episode)) return;
+        loadedFor = (Type, TmdbId, Season, IsSeason ? -1 : Episode);
         scores = null;
-        try { scores = Type == MediaType.Episode ? await Api.EpisodeScoresAsync(TmdbId, Season, Episode) : await Api.ScoresAsync(Type, TmdbId); }
+        try { scores = IsSeason ? await Api.SeasonScoresAsync(TmdbId, Season)
+                : Type == MediaType.Episode ? await Api.EpisodeScoresAsync(TmdbId, Season, Episode) : await Api.ScoresAsync(Type, TmdbId); }
         catch { scores = null; }   // extra scores are a nicety; the page is fine without them
     }
 }

@@ -44,14 +44,17 @@ else if (season is not null)
     var tmdbEpisodes = eps.Where(x => x.VoteAverage is > 0).ToList();
     var tmdbScore = season.VoteAverage ?? (tmdbEpisodes.Count > 0 ? tmdbEpisodes.Average(x => x.VoteAverage!.Value) : (double?)null);
     var seasonSeen = Aired > 0 && Watched >= Aired;
-    @if (tmdbScore is { } ts && Fmt.ShowsScore("tmdb", MediaType.Show, season: true))
-    {
-        <ScoreSpoiler Watched="seasonSeen">
-        <div class="score season-score" title="@(season.VoteAverage is null ? "Average of TMDB's episode scores" : "TMDB's score for this season")">
-            <Icon Name="star" Size="16" /> <b>@ts.ToString("0.0")</b> <span class="muted small">TMDB@(season.VoteAverage is null ? " · episode average" : "")</span>
-        </div>
+    <div class="season-scores">
+        <ScoreSpoiler Watched="seasonSeen" Block="true">
+            @if (tmdbScore is { } ts && Fmt.ShowsScore("tmdb", MediaType.Show, season: true))
+            {
+                <div class="score season-score" title="@(season.VoteAverage is null ? "Average of TMDB's episode scores" : "TMDB's score for this season")">
+                    <Icon Name="star" Size="16" /> <b>@ts.ToString("0.0")</b> <span class="muted small">TMDB@(season.VoteAverage is null ? " · episode average" : "")</span>
+                </div>
+            }
+            <ExternalScores Type="MediaType.Show" TmdbId="Id" Season="Number" IsSeason="true" />
         </ScoreSpoiler>
-    }
+    </div>
     <DetailStats Items="@([
         ("Episodes", airedCount < eps.Count ? $"{airedCount} aired of {eps.Count}" : eps.Count.ToString()),
         ("Total runtime", total > 0 ? Fmt.Duration(total) : null),

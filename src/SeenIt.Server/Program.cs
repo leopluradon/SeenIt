@@ -130,6 +130,15 @@ builder.Services.Configure<MdbListOptions>(config.GetSection("MdbList"));
 builder.Services.AddHttpClient("mdblist", c => c.Timeout = TimeSpan.FromSeconds(8));
 builder.Services.AddHttpClient("imdb", c => c.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<ScoreService>();
+builder.Services.Configure<TraktOptions>(config.GetSection("Trakt"));
+builder.Services.AddHttpClient("trakt", c =>
+{
+    c.BaseAddress = new Uri("https://api.trakt.tv/");
+    c.Timeout = TimeSpan.FromSeconds(8);
+    c.DefaultRequestHeaders.Add("trakt-api-version", "2");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("SeenIt/1.0");
+});
+builder.Services.AddSingleton<TraktScores>();
 builder.Services.AddScoped<AvatarService>();
 builder.Services.AddScoped<ReleaseAlertService>();
 builder.Services.AddScoped<RecommendationService>();

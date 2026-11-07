@@ -110,6 +110,7 @@ public record UserPrefs(
     {
         "tmdb" or "friends" => ["movie", "show", "season", "episode"],
         "imdb" => ["movie", "show", "episode"],
+        "trakt" => ["movie", "show", "season", "episode"],
         _ => ["movie", "show"],
     };
     public static string Kind(MediaType type, bool season = false) => season ? "season" : type switch { MediaType.Movie => "movie", MediaType.Episode => "episode", _ => "show" };

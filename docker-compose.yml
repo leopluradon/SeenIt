@@ -31,6 +31,8 @@ services:
       # Optional: leave SMTP_HOST empty to turn off email (password reset).
       # Optional: a free mdblist.com API key adds Rotten Tomatoes, Metacritic, Letterboxd and Trakt scores.
       MdbList__ApiKey: "${MDBLIST_API_KEY:-}"
+      # Optional: a Trakt API app's client ID (no secret needed) adds Trakt's season and episode ratings.
+      Trakt__ClientId: "${TRAKT_CLIENT_ID:-}"
       Smtp__Host: "${SMTP_HOST:-}"
       Smtp__Port: "${SMTP_PORT:-587}"
       Smtp__User: "${SMTP_USER:-}"

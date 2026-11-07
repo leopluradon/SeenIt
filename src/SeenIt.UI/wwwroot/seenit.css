@@ -1258,3 +1258,7 @@ div.score-spoiler { position: relative; width: fit-content; max-width: 100%; min
     .score-grid .score-order .icon-btn { display: block; padding: 0; }
 }
 .fit-select { width: auto; max-width: 100%; }
+.season-scores { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: -6px 0 14px; }
+.season-scores .season-score { margin: 0; }
+.season-scores .ext-scores { margin: 0; }
+.season-scores > div.score-spoiler { margin-bottom: 0; }

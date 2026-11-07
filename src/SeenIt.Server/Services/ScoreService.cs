@@ -20,7 +20,7 @@ public class MdbListOptions
 /// Rotten Tomatoes, Metacritic, Letterboxd, Trakt and others come from MDBList when a key is set.
 /// </summary>
 public class ScoreService(AppDbContext db, TmdbClient tmdb, CatalogService catalog, IHttpClientFactory http,
-    Microsoft.Extensions.Options.IOptions<MdbListOptions> options, ILogger<ScoreService> log)
+    Microsoft.Extensions.Options.IOptions<MdbListOptions> options, TraktScores trakt, ILogger<ScoreService> log)
 {
     private static readonly TimeSpan Fresh = TimeSpan.FromDays(3);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -56,15 +56,21 @@ public class ScoreService(AppDbContext db, TmdbClient tmdb, CatalogService catal
         return scores;
     }
 
-    /// <summary>Episodes: IMDb only (MDBList and the others don't score single episodes).</summary>
+    /// <summary>Episodes: IMDb and Trakt (MDBList and the others don't score single episodes).</summary>
     public async Task<List<ExternalScore>> EpisodeAsync(int showId, int season, int episode, CancellationToken ct)
     {
+        var traktTask = trakt.EpisodeAsync(showId, season, episode, ct);
+        var scores = new List<ExternalScore>();
         var imdbId = (await tmdb.GetEpisodeExternalIdsAsync(showId, season, episode, ct))?.ImdbId;
-        if (string.IsNullOrEmpty(imdbId)) return [];
-        return await db.ImdbRatings.AsNoTracking().FirstOrDefaultAsync(r => r.ImdbId == imdbId, ct) is { } imdb
-            ? [new ExternalScore("imdb", "IMDb", imdb.Rating, 10, false, imdb.Votes, $"https://www.imdb.com/title/{imdbId}/")]
-            : [];
+        if (!string.IsNullOrEmpty(imdbId) && await db.ImdbRatings.AsNoTracking().FirstOrDefaultAsync(r => r.ImdbId == imdbId, ct) is { } imdb)
+            scores.Add(new ExternalScore("imdb", "IMDb", imdb.Rating, 10, false, imdb.Votes, $"https://www.imdb.com/title/{imdbId}/"));
+        if (await traktTask is { } t) scores.Add(t);
+        return scores;
     }
+
+    /// <summary>Seasons: Trakt only (IMDb and the rest don't score seasons; TMDB's comes with the season itself).</summary>
+    public async Task<List<ExternalScore>> SeasonAsync(int showId, int season, CancellationToken ct) =>
+        await trakt.SeasonAsync(showId, season, ct) is { } t ? [t] : [];
 
     private async Task<List<ExternalScore>> MdbListAsync(MediaType type, int tmdbId, string? imdbId, CancellationToken ct)
     {

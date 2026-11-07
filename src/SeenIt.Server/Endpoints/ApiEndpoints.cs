@@ -41,6 +41,7 @@ public static class ApiEndpoints
         g.MapGet("/show/{id:int}/scores", (int id, ScoreService s, CancellationToken ct) => s.GetAsync(MediaType.Show, id, ct));
         g.MapGet("/show/{id:int}/season/{season:int}/episode/{episode:int}/scores", (int id, int season, int episode, ScoreService s, CancellationToken ct) =>
             s.EpisodeAsync(id, season, episode, ct));
+        g.MapGet("/show/{id:int}/season/{season:int}/scores", (int id, int season, ScoreService s, CancellationToken ct) => s.SeasonAsync(id, season, ct));
 
         g.MapGet("/lookup", async (string q, CatalogService c, CancellationToken ct) =>
             string.IsNullOrWhiteSpace(q) || await c.LookupAsync(q, ct) is not { } found ? Results.NoContent() : Results.Ok(found));
