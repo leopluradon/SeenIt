@@ -270,7 +270,7 @@ else { <h1>Settings</h1> }
             <p class="muted small">Pick which scores show for each kind of title. The arrows set the order other sites' scores appear in. A dash means SeenIt doesn't have that score.</p>
             <div class="score-grid-wrap">
                 <table class="score-grid">
-                    <thead><tr><th scope="col">Source</th>@foreach (var (_, kname) in UserPrefs.ScoreKinds) { <th scope="col">@kname</th> }<th scope="col"><span class="sr-only">Order</span></th></tr></thead>
+                    <thead><tr><th scope="col">Source</th>@foreach (var (_, kname) in UserPrefs.ScoreKinds) { <th scope="col" title="@kname"><span class="kind-long">@kname</span><span class="kind-short" aria-hidden="true">@(kname == "Episodes" ? "Ep." : kname.TrimEnd('s'))</span></th> }<th scope="col"><span class="sr-only">Order</span></th></tr></thead>
                     <tbody>
                         @{ var order = ScoreOrder(); var rows = new List<(string Key, string Name, int Index)> { ("tmdb", "TMDB", -1) };
                            rows.AddRange(order.Select((o, i) => (o.Key, o.Name, i))); rows.Add(("friends", "Friends' ratings", -1)); }
