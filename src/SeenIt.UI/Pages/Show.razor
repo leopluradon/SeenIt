@@ -37,8 +37,7 @@ else if (s is not null)
         </Actions>
     </MediaHero>
 
-    <div class="detail-body">
-        <div class="detail-main">
+    <div class="detail-body show-body">
             <DetailStats Items="@([
                 ("Seasons", s.Seasons.Count(x => x.SeasonNumber > 0).ToString()),
                 ("Episodes", s.AiredEpisodes > 0 && s.AiredEpisodes < s.NumberOfEpisodes ? $"{s.AiredEpisodes} aired of {s.NumberOfEpisodes}" : s.NumberOfEpisodes.ToString()),
@@ -48,19 +47,20 @@ else if (s is not null)
                 ("Left to watch", s.User is not null && s.WatchedMinutes > 0 ? Fmt.Duration(s.RemainingMinutes) : null),
                 ("Aired", s.FirstAirDate is { } fa ? $"{fa.Year}–{(s.Status is "Ended" or "Canceled" ? s.LastAirDate?.Year.ToString() : "")}" : null),
             ])" />
-            @if (s.User is { } u)
-            {
-                <div class="panel rate-panel">
+        <div class="show-cols">
+        @if (s.User is { } u)
+        {
+        <div class="show-you">
+            <div class="panel you-panel">
+                <div class="rate-panel">
                     <span>Your rating</span>
                     <RatingPicker Value="u.Rating" ValueChanged="Rate" />
                 </div>
-                <TitleNote Type="MediaType.Show" TmdbId="Id" Note="@u.Note" />
-            }
             @* Nothing to pause or drop once an ended show is finished (unless it's mid-rewatch, or already paused/dropped and needs undoing). *@
             @if (s.User is not null && (s.Progress is not null || s.TrackStatus != ShowTrackStatus.Watching)
                  && !(s.Status is "Ended" or "Canceled" && s.Progress is { Completed: true, Rewatch: null } && s.TrackStatus == ShowTrackStatus.Watching))
             {
-                <div class="panel status-panel">
+                <div class="status-panel">
                     <span>Status</span>
                     <div class="segmented">
                         @foreach (var (st, label) in StatusLabels)
@@ -73,7 +73,7 @@ else if (s is not null)
             }
             @if (s.User is not null && orders is { Options.Count: > 0 } wo)
             {
-                <div class="panel order-panel">
+                <div class="order-panel">
                     <label for="watch-order">Watch order</label>
                     <select id="watch-order" value="@(wo.SelectedId ?? "")" disabled="@busy" @onchange="SetOrder">
                         <option value="">TMDB's seasons</option>
@@ -84,7 +84,7 @@ else if (s is not null)
             }
             @if (s.Progress is { } p)
             {
-                <div class="panel progress-panel">
+                <div class="progress-panel">
                     @if (p.Rewatch is { } rw)
                     {
                         <div class="inline spread rewatch-head">
@@ -116,15 +116,20 @@ else if (s is not null)
                     }
                 </div>
             }
-            @if (s.User is not null) { <FriendsSeen Type="MediaType.Show" TmdbId="Id" Total="s.AiredEpisodes" /> }
+            </div>
+            <TitleNote Type="MediaType.Show" TmdbId="Id" Note="@u.Note" />
+            <FriendsSeen Type="MediaType.Show" TmdbId="Id" Total="s.AiredEpisodes" />
+        </div>
+        }
+        <div class="show-info">
+            @if (s.Overview is not null) { <p class="overview">@s.Overview</p> }
             @if (s.NextEpisodeToAir is { } next)
             {
-                <p class="muted">Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> <Spoiler>@next.Name</Spoiler></a> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }
+                <p class="next-airing"><Icon Name="calendar" Size="16" /> <span>Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> <Spoiler>@next.Name</Spoiler></a> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }
                     @if (Fmt.AirTime(next.AirsAt, next.Network) is { } when) { <span>· @when</span> }
-                    @if (NextCountdown(next) is { } cd) { <span class="countdown"> · @cd</span> }</p>
+                    @if (NextCountdown(next) is { } cd) { <span class="countdown"> · @cd</span> }</span></p>
             }
             <WhereToWatch Type="MediaType.Show" TmdbId="Id" />
-            @if (s.Overview is not null) { <p class="overview">@s.Overview</p> }
             <div class="links">
                 <a href="@($"https://www.themoviedb.org/tv/{s.TmdbId}")" target="_blank" rel="noopener">TMDB</a>
                 @if (s.User is { } mine && (mine.Plays > 0 || mine.Rating is not null || mine.InWatchlist || mine.ListIds.Count > 0))
@@ -136,6 +141,7 @@ else if (s is not null)
                     <button class="link-btn" disabled="@busy" @onclick="ToggleNotInterested" title="Keep it out of Discover, trending and For you">@(ni.NotInterested ? "Not interested ✓ (undo)" : "Not interested")</button>
                 }
             </div>
+        </div>
         </div>
     </div>
 

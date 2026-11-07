@@ -1197,3 +1197,24 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .history-who { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .avatar-xs { width: 20px; height: 20px; font-size: .7rem; display: grid; place-items: center; flex-shrink: 0; }
 .friends-watching { display: grid; gap: 12px; margin-bottom: 16px; }
+
+/* Show page: stats across the top, then the show (left) and your tracking (right); one column on phones, yours first */
+.show-body { max-width: none; }
+.show-cols { display: grid; gap: 0 28px; grid-template-columns: minmax(0, 1fr); }
+.show-you, .show-info { min-width: 0; }
+@media (min-width: 900px) {
+    .show-cols { grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); align-items: start; }
+    .show-you { grid-column: 2; grid-row: 1; }
+    .show-info { grid-column: 1; grid-row: 1; }
+}
+.you-panel { display: flex; flex-direction: column; gap: 0; }
+.you-panel > * { padding: 14px 0; }
+.you-panel > *:first-child { padding-top: 0; }
+.you-panel > *:last-child { padding-bottom: 0; }
+.you-panel > * + * { border-top: 1px solid var(--border); }
+.you-panel .status-panel { gap: 8px 14px; }
+.you-panel .status-panel > .muted { flex-basis: 100%; }
+.show-info .overview { margin-top: 0; }
+.next-airing { display: flex; gap: 8px; align-items: baseline; color: var(--text-2); background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 14px; }
+.next-airing > svg { flex-shrink: 0; align-self: center; color: var(--accent); }
