@@ -65,3 +65,15 @@ public class PrefsTests
         Assert.Equal((1, 170L), (stats.MoviePlays, stats.MinutesMovies));
     }
 }
+
+public class TraktScoreTests
+{
+    [Theory]
+    [InlineData("""{"rating":8.37554,"votes":5051,"distribution":{}}""", 8.37554, 5051)]
+    [InlineData("""{"trakt":{"rating":8.50597,"votes":5014},"tmdb":{"rating":null,"votes":null}}""", 8.50597, 5014)]
+    public void Reads_episode_and_season_shapes(string json, double rating, int votes)
+    {
+        var parsed = SeenIt.Server.Services.TraktScores.Parse(System.Text.Json.JsonDocument.Parse(json).RootElement);
+        Assert.Equal((rating, votes), parsed);
+    }
+}

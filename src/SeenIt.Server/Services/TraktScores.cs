@@ -41,7 +41,7 @@ public class TraktScores(IHttpClientFactory http, IMemoryCache cache, IOptions<T
             if (await SlugAsync(showId, ct) is not { } slug) return null;
             using var resp = await Client().GetAsync($"shows/{slug}/{apiPath}/ratings", ct);
             ExternalScore? score = null;
-            if (resp.IsSuccessStatusCode && await resp.Content.ReadFromJsonAsync<TraktRating>(Json, ct) is { Votes: > 0, Rating: > 0 } r)
+            if (resp.IsSuccessStatusCode && Parse(await resp.Content.ReadFromJsonAsync<JsonElement>(Json, ct)) is { Votes: > 0, Rating: > 0 } r)
                 score = new ExternalScore("trakt", "Trakt", Math.Round(r.Rating * 10), 100, true, r.Votes, $"https://trakt.tv/shows/{slug}/{webPath}");
             else if (!resp.IsSuccessStatusCode && resp.StatusCode != System.Net.HttpStatusCode.NotFound)
             {
@@ -77,7 +77,16 @@ public class TraktScores(IHttpClientFactory http, IMemoryCache cache, IOptions<T
         return c;
     }
 
-    private sealed record TraktRating(double Rating, int Votes);
+
+    /// <summary>Episodes answer {"rating", "votes"}; seasons nest Trakt's own under "trakt" (next to TMDB's, IMDb's...).</summary>
+    public static (double Rating, int Votes)? Parse(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return null;
+        if (root.TryGetProperty("trakt", out var nested) && nested.ValueKind == JsonValueKind.Object) root = nested;
+        return root.TryGetProperty("rating", out var r) && r.ValueKind == JsonValueKind.Number
+            && root.TryGetProperty("votes", out var v) && v.ValueKind == JsonValueKind.Number
+            ? (r.GetDouble(), v.GetInt32()) : null;
+    }
     private sealed record SearchHit(SearchShow? Show);
     private sealed record SearchShow(SearchIds? Ids);
     private sealed record SearchIds(int? Trakt, string? Slug);
