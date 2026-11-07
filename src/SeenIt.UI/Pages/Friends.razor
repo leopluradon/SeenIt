@@ -83,12 +83,16 @@
     private string? error, query;
 
     // The tab lives in the URL (?tab=), so Activity's filters, back and forward all work.
-    protected override Task OnParametersSetAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        tab = Tab is "feed" or "followers" or "find" ? Tab : "following";
-        if (tab == loaded) return Task.CompletedTask;   // only a filter changed: the history view reloads itself
-        loaded = tab;
-        return Load();
+        var next = Tab is "feed" or "followers" or "find" ? Tab : "following";
+        if (next == loaded) return;   // only a filter changed: the history view reloads itself
+        loaded = next;
+        // Switch on the next tick: the Activity tab's history view reads the query string, and adding
+        // it while Blazor is still telling query readers about this navigation throws.
+        await Task.Yield();
+        tab = next;
+        await Load();
     }
 
     private void Show(string t) => Nav.NavigateTo(t == "following" ? "friends" : $"friends?tab={t}");
