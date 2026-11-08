@@ -45,7 +45,7 @@ else if (s is not null)
                 ("Per episode", s.EpisodeRuntime is > 0 ? "~" + Fmt.Runtime(s.EpisodeRuntime) : null),
                 ("You've watched", s.WatchedMinutes > 0 ? Fmt.Duration(s.WatchedMinutes) : null),
                 ("Left to watch", s.User is not null && s.WatchedMinutes > 0 ? Fmt.Duration(s.RemainingMinutes) : null),
-                ("Aired", s.FirstAirDate is { } fa ? $"{fa.Year}–{(s.Status is "Ended" or "Canceled" ? s.LastAirDate?.Year.ToString() : "")}" : null),
+                ("Aired", s.FirstAirDate is { } fa ? $"{fa.Year}–{(s.Status is "Ended" or "Canceled" or "Removed from TMDB" ? s.LastAirDate?.Year.ToString() : "")}" : null),
             ])" />
         <div class="detail-cols">
         @if (s.User is { } u)
@@ -131,7 +131,8 @@ else if (s is not null)
             }
             <WhereToWatch Type="MediaType.Show" TmdbId="Id" />
             <div class="links">
-                <a href="@($"https://www.themoviedb.org/tv/{s.TmdbId}")" target="_blank" rel="noopener">TMDB</a>
+                @if (s.Status != "Removed from TMDB") { <a href="@($"https://www.themoviedb.org/tv/{s.TmdbId}")" target="_blank" rel="noopener">TMDB</a> }
+                else { <span class="muted small">TMDB no longer lists this show. Your plays and ratings are kept, and its pages come from SeenIt's saved copy.</span> }
                 @if (s.User is { } mine && (mine.Plays > 0 || mine.Rating is not null || mine.InWatchlist || mine.ListIds.Count > 0))
                 {
                     <button class="link-btn" @onclick="() => fixOpen = true">Wrong title?</button>

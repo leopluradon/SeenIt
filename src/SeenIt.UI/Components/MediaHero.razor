@@ -17,7 +17,7 @@
             @if (tmdb || ScoresFor is not null)
             {
                 <ScoreSpoiler Watched="Watched" Block="true">
-                    @if (tmdb) { <div class="score"><Icon Name="star" Size="16" /> <b>@Score!.Value.ToString("0.0")</b> <span class="muted small">TMDB · @Votes?.ToString("N0") votes</span></div> }
+                    @if (tmdb) { <div class="score"><Icon Name="star" Size="16" /> <b>@Score!.Value.ToString("0.0")</b> <span class="muted small">TMDB@(Votes is > 0 ? $" · {Votes:N0} votes" : "")</span></div> }
                     @if (ScoresFor is { } sf) { <ExternalScores Type="sf.Type" TmdbId="sf.Id" /> }
                 </ScoreSpoiler>
             }
