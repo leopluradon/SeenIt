@@ -263,7 +263,12 @@ public class PersonFollowWorker(IServiceScopeFactory scopes, ILogger<PersonFollo
             {
                 List<int> ids;
                 await using (var scope = scopes.CreateAsyncScope())
-                    ids = await scope.ServiceProvider.GetRequiredService<AppDbContext>().PersonFollows.Select(f => f.PersonId).Distinct().ToListAsync(stoppingToken);
+                {
+                    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    ids = await db.PersonFollows.Select(f => f.PersonId).Distinct().ToListAsync(stoppingToken);
+                    // People nobody follows any more (accounts deleted): their upcoming list isn't needed.
+                    await db.PersonUpcoming.Where(u => !db.PersonFollows.Any(f => f.PersonId == u.PersonId)).ExecuteDeleteAsync(stoppingToken);
+                }
                 foreach (var id in ids)
                 {
                     await using var scope = scopes.CreateAsyncScope();
