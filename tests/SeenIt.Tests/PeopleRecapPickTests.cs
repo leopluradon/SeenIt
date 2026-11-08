@@ -85,7 +85,7 @@ public class PeopleRecapPickTests
                 type == "movie" ? date : null, type == "tv" ? date : null, character, job, null, null, "/p.jpg", 10, $"c{id}", genres);
         var person = new TmdbPerson(7, "Someone", null, null, null, null, null, "Directing", new TmdbPersonCredits(
             Cast: [Credit(1, "movie", "2027-07-17", "Lead"), Credit(2, "movie", "2020-01-01", "Lead"), Credit(3, "tv", "2027-01-01", "Herself"),
-                   Credit(4, "tv", "2027-02-01", "Guest", genres: [10767]), Credit(5, "movie", null, "Cameo")],
+                   Credit(4, "tv", "2027-02-01", "Guest", genres: [10767]), Credit(5, "movie", null, "Cameo"), Credit(9, "movie", null, genres: [99])],
             Crew: [Credit(1, "movie", "2027-07-17", job: "Director"), Credit(6, "movie", "2027-03-01", job: "Executive Producer"), Credit(8, "tv", "2027-05-05", job: "Creator")]), null);
 
         var up = PersonService.Upcoming(person, today).OrderBy(u => u.TmdbId).ToList();

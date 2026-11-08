@@ -9,6 +9,7 @@ namespace SeenIt.Server.Services;
 public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonService> log)
 {
     private static readonly HashSet<int> AppearanceGenres = [10767, 10763]; // Talk, News
+    private const int Documentary = 99;
 
     public async Task<PersonDetail?> GetAsync(int id, Guid? userId, CancellationToken ct)
     {
@@ -99,7 +100,9 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
     {
         var cast = (p.CombinedCredits?.Cast ?? [])
             .Where(c => !(c.GenreIds ?? []).Any(AppearanceGenres.Contains)
-                        && !(c.Character is { } ch && (ch.Contains("Self", StringComparison.OrdinalIgnoreCase) || ch is "Himself" or "Herself")))
+                        && !(c.Character is { } ch && (ch.Contains("Self", StringComparison.OrdinalIgnoreCase) || ch is "Himself" or "Herself"))
+                        // Making-of documentaries list the subject in the cast with no character.
+                        && !(string.IsNullOrWhiteSpace(c.Character) && (c.GenreIds ?? []).Contains(Documentary)))
             .Select(c => (Credit: c, Role: c.Character));
         var crew = (p.CombinedCredits?.Crew ?? []).Where(c => c.Job is { } j && NotableJobs.Contains(j)).Select(c => (Credit: c, Role: c.Job));
         return cast.Concat(crew)
