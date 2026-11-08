@@ -33,29 +33,7 @@
                     </nav>
                 </NotAuthorized>
             </AuthorizeView>
-            <form class="topsearch" @onsubmit="Search" role="search">
-                <Icon Name="search" Size="16" />
-                <input type="search" placeholder="Search titles, people, members" @bind="query" @bind:event="oninput" aria-label="Search"
-                       @ref="searchBox" @onfocus="SearchFocused" @onblur="() => searchOpen = false" @onkeydown="SearchKey" autocomplete="off" />
-                @if (query.Length > 0)
-                {
-                    <button type="button" class="search-clear" @onmousedown:preventDefault @onclick="ClearSearch" aria-label="Clear search"><Icon Name="x" Size="14" /></button>
-                }
-                @if (searchOpen && query.Length == 0 && recent.Count > 0)
-                {
-                    @* mousedown:preventDefault keeps focus in the box, so blur doesn't close this before the click lands. *@
-                    <div class="search-recent" @onmousedown:preventDefault>
-                        <div class="search-recent-head"><span>Recent searches</span><button type="button" @onclick="ClearRecent">Clear</button></div>
-                        @foreach (var r in recent)
-                        {
-                            <div class="search-recent-row" @key="r">
-                                <button type="button" class="search-recent-go" @onclick="() => SearchFor(r)"><Icon Name="clock" Size="14" /> <span>@r</span></button>
-                                <button type="button" class="icon-btn" @onclick="() => RemoveRecent(r)" aria-label="@($"Remove {r}")"><Icon Name="x" Size="12" /></button>
-                            </div>
-                        }
-                    </div>
-                }
-            </form>
+            <SearchBox Class="topsearch" IconSize="16" Placeholder="Search titles, people, members" ClearAfter="true" />
             <a href="search" class="icon-btn only-mobile" aria-label="Search"><Icon Name="search" /></a>
             <AuthorizeView>
                 <Authorized>
@@ -123,7 +101,6 @@
 </div>
 
 @code {
-    private string query = "";
     private bool menuOpen;
     private ServerFeatures? features;
     private int refreshKey;
@@ -164,50 +141,6 @@
     {
         LaunchPath ??= Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0];
         try { features = await Api.FeaturesAsync(); } catch { /* offline: keep the Join button */ }
-    }
-
-    private void Search()
-    {
-        if (string.IsNullOrWhiteSpace(query)) return;
-        SearchFor(query);
-    }
-
-    private ElementReference searchBox;
-    private bool searchOpen;
-    private List<string> recent = [];
-
-    private async Task SearchFocused()
-    {
-        recent = await RecentSearches.GetAsync(Js);
-        searchOpen = true;
-    }
-
-    private void SearchFor(string q)
-    {
-        searchOpen = false;
-        query = "";
-        Nav.NavigateTo("search?q=" + Uri.EscapeDataString(q.Trim()));
-    }
-
-    private void SearchKey(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") searchOpen = false;
-    }
-
-    private async Task ClearSearch()
-    {
-        query = "";
-        searchOpen = true;
-        recent = await RecentSearches.GetAsync(Js);
-        try { await searchBox.FocusAsync(); } catch (JSException) { }
-    }
-
-    private async Task RemoveRecent(string q) => recent = await RecentSearches.RemoveAsync(Js, q);
-
-    private async Task ClearRecent()
-    {
-        await RecentSearches.ClearAsync(Js);
-        recent = [];
     }
 
     private async Task Logout()

@@ -87,12 +87,14 @@ public class SuggestIndex(IHttpClientFactory http, IConfiguration config, ILogge
     /// </summary>
     public static double Score(Entry e, string norm, string q, int offset)
     {
-        var boost = norm == q ? 6.0
-            : offset == 0 ? 3.0
-            : offset == 4 && norm.StartsWith("the ", StringComparison.Ordinal) ? 2.5   // "dark kn" → The Dark Knight
+        // Popularity does most of the work; where the match is only nudges it, so a well-known title matched
+        // on a later word (Le Fabuleux Destin d'Amélie Poulain for "amel") still beats obscure ones starting with it.
+        var boost = norm == q ? 4.0
+            : offset == 0 ? 1.6
+            : offset == 4 && norm.StartsWith("the ", StringComparison.Ordinal) ? 1.5   // "dark kn" → The Dark Knight
             : 1.0;
         var wholeWord = norm.Length == offset + q.Length || norm[offset + q.Length] == ' ';
-        if (wholeWord) boost *= 1.5;
+        if (wholeWord) boost *= 1.3;
         // People's popularity runs on a different scale from titles'; pull it into line.
         var pop = e.Kind == Kind.Person ? e.Popularity * 0.6 : e.Popularity;
         return Math.Log(1 + pop) * boost;

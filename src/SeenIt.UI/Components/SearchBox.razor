@@ -1,0 +1,235 @@
+@* A search input with a clear button, recent searches and suggestions as you type.
+   Used in the header (desktop) and on the Search page. ↑/↓ pick a suggestion, Enter opens it (or searches), Esc closes. *@
+@implements IDisposable
+@inject ApiClient Api
+@inject IJSRuntime Js
+@inject NavigationManager Nav
+<form class="@Class" @onsubmit="Submit" role="search" autocomplete="off">
+    <Icon Name="search" Size="@IconSize" />
+    <input type="search" @ref="box" value="@text" @oninput="OnInput" @onfocus="Focused" @onblur="Blurred" @onkeydown="Key"
+           placeholder="@Placeholder" aria-label="Search" enterkeyhint="search" autocomplete="off" spellcheck="false"
+           role="combobox" aria-autocomplete="list" aria-expanded="@(Open ? "true" : "false")" aria-controls="@listId"
+           aria-activedescendant="@(active >= 0 ? $"{listId}-{active}" : null)" data-suggest-open="@(Open ? "1" : null)" />
+    @if (text.Length > 0)
+    {
+        <button type="button" class="search-clear" @onmousedown:preventDefault @onclick="Clear" aria-label="Clear search"><Icon Name="x" Size="@(IconSize - 2)" /></button>
+    }
+    @ChildContent
+    @if (Open)
+    {
+        @* mousedown:preventDefault keeps focus in the box, so blur doesn't close this before a click lands. *@
+        <div class="search-pop" @onmousedown:preventDefault>
+            @if (ShowingRecent)
+            {
+                <div class="search-recent-head"><span>Recent searches</span><button type="button" @onclick="ClearRecent">Clear</button></div>
+                @foreach (var r in recent)
+                {
+                    <div class="search-recent-row" @key="r">
+                        <button type="button" class="search-recent-go" @onclick="() => Search(r)"><Icon Name="clock" Size="14" /> <span>@r</span></button>
+                        <button type="button" class="icon-btn" @onclick="() => RemoveRecent(r)" aria-label="@($"Remove {r}")"><Icon Name="x" Size="12" /></button>
+                    </div>
+                }
+            }
+            else
+            {
+                <ul class="suggest-list" id="@listId" role="listbox">
+                    @for (var i = 0; i < shown.Count; i++)
+                    {
+                        var s = shown[i];
+                        var index = i;
+                        @if (i > 0 && s.Kind == "person" && shown[i - 1].Kind != "person") { <li class="suggest-sep" role="presentation">People</li> }
+                        <li id="@($"{listId}-{i}")" role="option" aria-selected="@(active == i ? "true" : "false")" @key="(s.Kind, s.Id)">
+                            <a href="@Href(s)" class="suggest-item @(active == i ? "on" : "")" @onclick="() => Picked(s)" @onclick:preventDefault @onmouseenter="() => active = index">
+                                <span class="suggest-img @(s.Kind == "person" ? "round" : "")">
+                                    @if (s.Image is not null) { <img src="@Img.Poster(s.Image, "w92")" alt="" loading="lazy" /> }
+                                    else { <Icon Name="@(s.Kind == "person" ? "users" : s.Kind == "show" ? "tv" : "film")" Size="14" /> }
+                                </span>
+                                <span class="suggest-text">
+                                    <span class="suggest-title">@s.Title</span>
+                                    <span class="suggest-sub">@Sub(s)</span>
+                                </span>
+                            </a>
+                        </li>
+                    }
+                    <li role="option" id="@($"{listId}-{shown.Count}")" aria-selected="@(active == shown.Count ? "true" : "false")">
+                        <a href="@SearchHref(text)" class="suggest-item suggest-all @(active == shown.Count ? "on" : "")" @onclick="() => Search(text)" @onclick:preventDefault
+                           @onmouseenter="() => active = shown.Count">
+                            <span class="suggest-img"><Icon Name="search" Size="14" /></span>
+                            <span class="suggest-text"><span class="suggest-title">Search for “@text.Trim()”</span></span>
+                        </a>
+                    </li>
+                </ul>
+            }
+        </div>
+    }
+</form>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Search";
+    [Parameter] public string Class { get; set; } = "searchbar";
+    [Parameter] public int IconSize { get; set; } = 18;
+    /// <summary>Show recent searches under the empty box (the Search page lists them on the page instead).</summary>
+    [Parameter] public bool RecentDropdown { get; set; } = true;
+    /// <summary>Clear the box after going somewhere (the header), or keep the text (the Search page).</summary>
+    [Parameter] public bool ClearAfter { get; set; }
+    /// <summary>Extra content after the input, e.g. a Search button.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    // Waiting this long after a keystroke before asking the server; typing faster than this sends nothing.
+    private const int DebounceMs = 90;
+    // Suggestions already fetched this session, so backspacing and retyping are instant.
+    private static readonly Dictionary<string, List<Suggestion>> Fetched = new();
+
+    private readonly string listId = "suggest-" + Guid.NewGuid().ToString("N")[..8];
+    private ElementReference box;
+    private string text = "";
+    private string? lastValue;
+    private bool focused;
+    private List<string> recent = [];
+    private List<Suggestion> shown = [];
+    private string shownFor = "";
+    private int active = -1;
+    private CancellationTokenSource? pending;
+
+    private bool ShowingRecent => text.Length == 0;
+    // Typed since the page set the box (so the Search page doesn't pop suggestions over its own results).
+    private bool typed;
+    private bool Open => focused && (ShowingRecent ? RecentDropdown && recent.Count > 0 : typed && shownFor.Length > 0);
+
+    protected override void OnParametersSet()
+    {
+        // Follow the page's query (the Search page after a search), but don't clobber what's being typed.
+        if (Value != lastValue) { lastValue = Value; text = Value ?? ""; typed = false; Reset(); }
+    }
+
+    /// <summary>The input, for the Search page's mobile keyboard handling (seenit.focusInput).</summary>
+    public ElementReference Input => box;
+
+    private async Task Focused()
+    {
+        focused = true;
+        if (RecentDropdown) recent = await RecentSearches.GetAsync(Js);
+    }
+
+    private void Blurred() { focused = false; active = -1; }
+
+    private void Reset()
+    {
+        pending?.Cancel();
+        shown = [];
+        shownFor = "";
+        active = -1;
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        text = e.Value as string ?? "";
+        focused = typed = true;
+        active = -1;
+        var q = Norm(text);
+        pending?.Cancel();
+        if (q.Length == 0) { shown = []; shownFor = ""; return; }
+        if (Fetched.TryGetValue(q, out var known)) { shown = known; shownFor = q; return; }
+        // Until the server answers, narrow what's already shown to what still matches, so the list reacts at once.
+        if (shownFor.Length > 0 && q.StartsWith(shownFor, StringComparison.Ordinal))
+            shown = shown.Where(s => Matches(s.Title, q)).ToList();
+
+        var cts = pending = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(DebounceMs, cts.Token);
+            var result = await Api.SuggestAsync(q, cts.Token);
+            if (cts.IsCancellationRequested) return;
+            if (Fetched.Count > 500) Fetched.Clear();
+            Fetched[q] = result;
+            if (Norm(text) != q) return; // the box has moved on
+            shown = result;
+            shownFor = q;
+            active = Math.Min(active, shown.Count - 1);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { /* offline or a hiccup: keep what's shown */ }
+    }
+
+    private void Key(KeyboardEventArgs e)
+    {
+        if (!Open) return;
+        var count = ShowingRecent ? 0 : shown.Count + 1; // + "Search for …"
+        switch (e.Key)
+        {
+            case "ArrowDown" when count > 0: active = (active + 1) % count; break;
+            case "ArrowUp" when count > 0: active = active <= 0 ? count - 1 : active - 1; break;
+            case "Escape": focused = false; active = -1; break;
+        }
+    }
+
+    private void Submit()
+    {
+        if (active >= 0 && active < shown.Count) { Picked(shown[active]); return; }
+        Search(text);
+    }
+
+    private void Picked(Suggestion s)
+    {
+        _ = RecentSearches.AddAsync(Js, s.Title);
+        Leave();
+        Nav.NavigateTo(Href(s));
+    }
+
+    private void Search(string q)
+    {
+        if (string.IsNullOrWhiteSpace(q)) return;
+        Leave();
+        Nav.NavigateTo(SearchHref(q));
+    }
+
+    private void Leave()
+    {
+        pending?.Cancel();
+        focused = typed = false;
+        active = -1;
+        if (ClearAfter) { text = ""; shown = []; shownFor = ""; }
+    }
+
+    private async Task Clear()
+    {
+        text = "";
+        Reset();
+        focused = true;
+        if (RecentDropdown) recent = await RecentSearches.GetAsync(Js);
+        try { await box.FocusAsync(); } catch (JSException) { }
+    }
+
+    private async Task RemoveRecent(string q) => recent = await RecentSearches.RemoveAsync(Js, q);
+
+    private async Task ClearRecent()
+    {
+        await RecentSearches.ClearAsync(Js);
+        recent = [];
+    }
+
+    private static string Norm(string s) => s.Trim().ToLowerInvariant();
+
+    /// <summary>Does a title still fit what's typed (any word starting with it)? For narrowing while a request is out.</summary>
+    private static bool Matches(string title, string q)
+    {
+        var t = title.ToLowerInvariant();
+        return t.StartsWith(q, StringComparison.Ordinal) || t.Contains(" " + q, StringComparison.Ordinal);
+    }
+
+    private static string Href(Suggestion s) => s.Kind switch
+    {
+        "movie" => $"movie/{s.Id}",
+        "show" => $"show/{s.Id}",
+        _ => $"person/{s.Id}",
+    };
+
+    private static string SearchHref(string q) => "search?q=" + Uri.EscapeDataString(q.Trim());
+
+    private static string Sub(Suggestion s) => s.Kind == "person"
+        ? s.Sub ?? "Person"
+        : string.Join(" · ", new[] { s.Year?.ToString(), s.Kind == "movie" ? "Movie" : "TV" }.Where(x => x is not null));
+
+    public void Dispose() => pending?.Cancel();
+}

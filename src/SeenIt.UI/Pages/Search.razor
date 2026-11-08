@@ -6,12 +6,9 @@
 <PageTitle>Search · SeenIt</PageTitle>
 
 <h1>Search</h1>
-<form class="searchbar" @onsubmit="Submit" role="search">
-    <Icon Name="search" Size="18" />
-    <input type="search" @ref="box" @bind="input" @bind:event="oninput" placeholder="@(Session.Me is null ? "Movies, shows and people" : "Movies, shows, people and members")" aria-label="Search" enterkeyhint="search" />
-    @if (input.Length > 0) { <button type="button" class="search-clear" @onclick="Clear" aria-label="Clear search"><Icon Name="x" Size="16" /></button> }
+<SearchBox @ref="box" Value="@Q" RecentDropdown="false" Placeholder="@(Session.Me is null ? "Movies, shows and people" : "Movies, shows, people and members")">
     <button class="btn btn-primary" type="submit">Search</button>
-</form>
+</SearchBox>
 <div class="chips">
     <button class="chip @(Type is null ? "on" : "")" @onclick='() => Go(Q, null)'>All</button>
     <button class="chip @(Type == "movie" ? "on" : "")" @onclick='() => Go(Q, "movie")'>Movies</button>
@@ -140,8 +137,7 @@ else if (!string.IsNullOrWhiteSpace(Q))
     private bool Exact => ExactParam == "1";
     private LookupResult? lookup;
     private const int PeopleShown = 12, MembersShown = 4;
-    private string input = "";
-    private ElementReference box;
+    private SearchBox? box;
     private PagedResult<MediaSummary>? titles;
     private PagedResult<PersonHit>? people;
     private List<UserCard>? members;
@@ -154,13 +150,12 @@ else if (!string.IsNullOrWhiteSpace(Q))
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || !string.IsNullOrEmpty(Q)) return;
-        try { await Js.InvokeVoidAsync("seenit.focusInput", box); }
+        try { if (box is not null) await Js.InvokeVoidAsync("seenit.focusInput", box.Input); }
         catch (JSException) { }
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        input = Q ?? "";
         titles = null;
         people = null;
         members = null;
@@ -221,12 +216,6 @@ else if (!string.IsNullOrWhiteSpace(Q))
         if (i >= 0) members[i] = u;
     }
 
-    private async Task Clear()
-    {
-        input = "";   // results stay until a new search, like other search boxes
-        try { await Js.InvokeVoidAsync("seenit.focusInput", box); } catch (JSException) { }
-    }
-
     private async Task RemoveRecent(string q) => recent = await RecentSearches.RemoveAsync(Js, q);
 
     private async Task ClearRecent()
@@ -234,8 +223,6 @@ else if (!string.IsNullOrWhiteSpace(Q))
         await RecentSearches.ClearAsync(Js);
         recent = [];
     }
-
-    private void Submit() => Go(input, Type, Exact);
 
     private void Go(string? q, string? type) => Go(q, type, Exact);
 

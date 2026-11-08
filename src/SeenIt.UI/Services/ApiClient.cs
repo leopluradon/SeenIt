@@ -44,6 +44,14 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public async Task<string?> ServerVersionAsync() =>
         (await SendAsync<ServerFeatures>(HttpMethod.Get, "api/auth/features", null, auth: false))?.Version;
 
+    /// <summary>Search-as-you-type. Cancelable (a newer keystroke wins); errors just mean no suggestions.</summary>
+    public async Task<List<Suggestion>> SuggestAsync(string q, CancellationToken ct)
+    {
+        using var resp = await http.GetAsync($"api/catalog/suggest?q={Uri.EscapeDataString(q)}", ct);
+        if (!resp.IsSuccessStatusCode) return [];
+        return await resp.Content.ReadFromJsonAsync<List<Suggestion>>(Json, ct) ?? [];
+    }
+
     public Task<InviteCheck?> CheckInviteAsync(string code) => SendAsync<InviteCheck>(HttpMethod.Get, $"api/auth/invite/{Uri.EscapeDataString(code)}", null, auth: false);
     public Task<List<InviteDto>?> InvitesAsync() => SendAsync<List<InviteDto>>(HttpMethod.Get, "api/auth/invites");
     public Task<InviteDto?> CreateInviteAsync() => SendAsync<InviteDto>(HttpMethod.Post, "api/auth/invites");

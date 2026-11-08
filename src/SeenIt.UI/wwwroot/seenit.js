@@ -197,3 +197,8 @@ document.addEventListener('click', e => {
     };
     window.addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
 })();
+
+// Search suggestions: ↑/↓ move through the list instead of jumping the cursor to the start or end of the box.
+document.addEventListener('keydown', e => {
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target instanceof HTMLInputElement && e.target.dataset.suggestOpen) e.preventDefault();
+}, true);

@@ -68,11 +68,25 @@ public class SuggestService(SuggestIndex index, TmdbClient tmdb, IMemoryCache ca
         // Index-only matches need a poster, year and the English title: look them up together (cached a day).
         var filled = await Task.WhenAll(chosen.Select(async c =>
             c.Value.Ready ?? await Bounded(DetailsAsync(c.Key.Kind, c.Key.Id), null)));
-        var result = filled.OfType<Suggestion>().ToList();
+        // The index matches TMDB's original titles; when the title we'd show doesn't match what was typed
+        // (a foreign film under its English name), it's a less likely pick.
+        var result = chosen.Zip(filled, (c, f) => (c.Value.Score, Item: f))
+            .Where(x => x.Item is not null)
+            .Select(x => (Score: ShownMatches(x.Item!.Title, q) ? x.Score : x.Score * 0.5, x.Item))
+            .OrderBy(x => x.Item!.Kind == "person")
+            .ThenByDescending(x => x.Score)
+            .Select(x => x.Item!)
+            .ToList();
 
         // Keep a complete answer for a while; a partial one (TMDB was slow) only briefly.
         cache.Set(key, result, late ? TimeSpan.FromSeconds(10) : TimeSpan.FromMinutes(30));
         return result;
+    }
+
+    private static bool ShownMatches(string title, string q)
+    {
+        var n = SuggestIndex.Normalize(title);
+        return n.StartsWith(q, StringComparison.Ordinal) || n.Contains(" " + q, StringComparison.Ordinal);
     }
 
     private async Task<List<TmdbListItem>> SafeSearchAsync(string query)
