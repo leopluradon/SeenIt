@@ -183,3 +183,17 @@ document.addEventListener('click', e => {
     const search = new URL('search', document.baseURI);
     if (url.origin === search.origin && url.pathname === search.pathname && !url.searchParams.get('q')) window.seenit.primeKeyboard();
 }, true);
+
+// "Back to top": appears after scrolling about two screens down, hides near the top.
+(() => {
+    let queued = false;
+    const update = () => {
+        queued = false;
+        const btn = document.getElementById('seenit-to-top');
+        if (!btn) return;
+        const show = window.scrollY > Math.max(1200, window.innerHeight * 2);
+        btn.classList.toggle('show', show);
+        btn.tabIndex = show ? 0 : -1;
+    };
+    window.addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
+})();

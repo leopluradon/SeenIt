@@ -8,7 +8,8 @@
 <h1>Search</h1>
 <form class="searchbar" @onsubmit="Submit" role="search">
     <Icon Name="search" Size="18" />
-    <input type="search" @ref="box" @bind="input" placeholder="@(Session.Me is null ? "Movies, shows and people" : "Movies, shows, people and members")" aria-label="Search" enterkeyhint="search" />
+    <input type="search" @ref="box" @bind="input" @bind:event="oninput" placeholder="@(Session.Me is null ? "Movies, shows and people" : "Movies, shows, people and members")" aria-label="Search" enterkeyhint="search" />
+    @if (input.Length > 0) { <button type="button" class="search-clear" @onclick="Clear" aria-label="Clear search"><Icon Name="x" Size="16" /></button> }
     <button class="btn btn-primary" type="submit">Search</button>
 </form>
 <div class="chips">
@@ -24,6 +25,24 @@
 <p class="muted small search-hint">Also takes an IMDb or TMDB id or link, like tt0133093 or themoviedb.org/tv/1400.</p>
 
 <ErrorBox Message="@error" />
+@if (string.IsNullOrWhiteSpace(Q) && recent.Count > 0)
+{
+    <section class="recent-searches">
+        <div class="section-head">
+            <h2>Recent searches</h2>
+            <button class="btn btn-sm btn-ghost" @onclick="ClearRecent">Clear</button>
+        </div>
+        <ul>
+            @foreach (var r in recent)
+            {
+                <li @key="r">
+                    <a href="@($"search?q={Uri.EscapeDataString(r)}")"><Icon Name="clock" Size="16" /> <span>@r</span></a>
+                    <button class="icon-btn" @onclick="() => RemoveRecent(r)" aria-label="@($"Remove {r}")"><Icon Name="x" Size="14" /></button>
+                </li>
+            }
+        </ul>
+    </section>
+}
 @if (loading) { <Spinner /> }
 else if (!string.IsNullOrWhiteSpace(Q))
 {
@@ -128,6 +147,7 @@ else if (!string.IsNullOrWhiteSpace(Q))
     private List<UserCard>? members;
     private bool loading, more;
     private string? error;
+    private List<string> recent = [];
 
     // "autofocus" only works on a full page load, not when Blazor swaps pages, so focus it here.
     // Skipped when coming back to results, so the keyboard doesn't cover them.
@@ -146,9 +166,10 @@ else if (!string.IsNullOrWhiteSpace(Q))
         members = null;
         lookup = null;
         error = null;
-        if (string.IsNullOrWhiteSpace(Q)) return;
+        if (string.IsNullOrWhiteSpace(Q)) { recent = await RecentSearches.GetAsync(Js); return; }
         loading = true;
         var q = Q.Trim();
+        await RecentSearches.AddAsync(Js, q);
         // An IMDb/TMDB id or link: open it straight away when it's one thing, or list what it matches.
         try { lookup = await Api.LookupAsync(q); } catch { lookup = null; }
         if (lookup?.Go is { } go) { Nav.NavigateTo(go, replace: true); return; }
@@ -198,6 +219,20 @@ else if (!string.IsNullOrWhiteSpace(Q))
         if (members is null) return;
         var i = members.FindIndex(m => m.UserName == u.UserName);
         if (i >= 0) members[i] = u;
+    }
+
+    private async Task Clear()
+    {
+        input = "";   // results stay until a new search, like other search boxes
+        try { await Js.InvokeVoidAsync("seenit.focusInput", box); } catch (JSException) { }
+    }
+
+    private async Task RemoveRecent(string q) => recent = await RecentSearches.RemoveAsync(Js, q);
+
+    private async Task ClearRecent()
+    {
+        await RecentSearches.ClearAsync(Js);
+        recent = [];
     }
 
     private void Submit() => Go(input, Type, Exact);
