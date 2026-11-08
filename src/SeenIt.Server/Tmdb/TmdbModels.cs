@@ -20,7 +20,10 @@ public record TmdbListItem(
     double? VoteAverage,
     string? Overview,
     string? OriginalTitle = null,
-    string? OriginalName = null);
+    string? OriginalName = null,
+    double? Popularity = null,
+    string? ProfilePath = null,          // people, in search/multi
+    string? KnownForDepartment = null);
 
 public record TmdbSearchPerson(int Id, string Name, string? ProfilePath, string? KnownForDepartment, List<TmdbListItem>? KnownFor);
 
@@ -197,3 +200,7 @@ public record TmdbRegionProviders(string? Link, List<TmdbProvider>? Flatrate, Li
 public record TmdbProvider(int ProviderId, string ProviderName, string? LogoPath, int DisplayPriority);
 public record TmdbRegions(List<TmdbRegionEntry>? Results);
 public record TmdbRegionEntry([property: JsonPropertyName("iso_3166_1")] string Iso31661, string EnglishName);
+
+/// <summary>Just enough of a movie, show or person to show as a search suggestion (no appended credits).</summary>
+public record TmdbBasic(int Id, string? Title, string? Name, string? ReleaseDate, string? FirstAirDate, string? PosterPath,
+    string? ProfilePath, string? KnownForDepartment, double? Popularity);

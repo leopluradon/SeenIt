@@ -49,6 +49,13 @@ public static class ApiEndpoints
 
         g.MapGet("/genres", (SmartListService s, CancellationToken ct) => s.GenresAsync(ct));
 
+        // Search-as-you-type. Short-lived browser caching makes backspacing free.
+        g.MapGet("/suggest", async (string? q, HttpContext http, SuggestService s, CancellationToken ct) =>
+        {
+            http.Response.Headers.CacheControl = "public, max-age=300";
+            return string.IsNullOrWhiteSpace(q) || q.Length > 100 ? new List<Suggestion>() : await s.SuggestAsync(q, ct);
+        });
+
         g.MapGet("/search/people", (string q, int? page, CatalogService c, CancellationToken ct) =>
             string.IsNullOrWhiteSpace(q)
                 ? Task.FromResult(new PagedResult<PersonHit>([], 1, 0, 0))

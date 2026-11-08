@@ -111,6 +111,9 @@ builder.Services.AddResponseCompression(o =>
 });
 builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
 builder.Services.AddHostedService<CheckInWorker>();
+builder.Services.AddSingleton<SuggestIndex>();
+builder.Services.AddHostedService<SuggestIndexWorker>();
+builder.Services.AddScoped<SuggestService>();
 builder.Services.Configure<SmtpOptions>(config.GetSection("Smtp"));
 builder.Services.AddSingleton<EmailService>();
 builder.Services.AddHostedService<EmailWorker>();

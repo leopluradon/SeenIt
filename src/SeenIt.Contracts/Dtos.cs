@@ -272,6 +272,9 @@ public record ExternalScore(string Source, string Name, double Value, double Max
 public record LookupResult(string Label, IReadOnlyList<MediaSummary> Titles, IReadOnlyList<PersonHit> People, string? Go);
 
 /// <summary>A person from search, with what they're best known for.</summary>
+/// <summary>A search-as-you-type suggestion. Kind is "movie", "show" or "person"; Image is a poster or profile path.</summary>
+public record Suggestion(string Kind, int Id, string Title, int? Year, string? Image, string? Sub);
+
 public record PersonHit(int Id, string Name, string? ProfilePath, string? Department, IReadOnlyList<string> KnownFor);
 
 public record CastMember(int Id, string Name, string? Character, string? ProfilePath, int? EpisodeCount = null);

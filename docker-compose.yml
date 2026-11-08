@@ -28,6 +28,8 @@ services:
       SeenIt__StatusDir: /status
       # The Android app, put there by scripts/publish-apk.sh, served at /download/SeenIt.apk.
       SeenIt__DownloadsDir: /downloads
+      # Rebuildable data kept across restarts (the search-suggestion index).
+      SeenIt__CacheDir: /cache
       # Optional: leave SMTP_HOST empty to turn off email (password reset).
       # Optional: a free mdblist.com API key adds Rotten Tomatoes, Metacritic, Letterboxd and Trakt scores.
       MdbList__ApiKey: "${MDBLIST_API_KEY:-}"
@@ -43,6 +45,7 @@ services:
       - seenit-keys:/keys
       - seenit-status:/status:ro
       - ./downloads:/downloads:ro
+      - seenit-cache:/cache
 
   seenit-db:
     image: postgres:17-alpine
@@ -89,6 +92,7 @@ services:
 volumes:
   seenit-status:
   seenit-keys:
+  seenit-cache:
   seenit-db:
   seenit-backups:
     driver: local

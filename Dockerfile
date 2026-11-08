@@ -35,7 +35,7 @@ ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
     SeenIt__KeyRing=/keys
 
 # The key ring signs everyone's login tokens; keep it on a volume so redeploys don't sign people out.
-RUN mkdir -p /keys && chown $APP_UID /keys
+RUN mkdir -p /keys /cache && chown $APP_UID /keys /cache
 
 EXPOSE 8080
 USER $APP_UID
