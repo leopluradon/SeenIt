@@ -19,7 +19,7 @@ public class SuggestIndex(IHttpClientFactory http, IConfiguration config, ILogge
     public readonly record struct Entry(Kind Kind, int Id, string Name, float Popularity);
 
     // What's worth suggesting: popularity at or above these (TMDB's scale; ~1 is a title few people look up).
-    private const float MinMovie = 1f, MinShow = 1f, MinPerson = 1.5f;
+    public const float MinMovie = 1f, MinShow = 1f, MinPerson = 1.5f;
 
     private sealed record Data(Entry[] Entries, string[] Norm, long[] Keys, DateTime BuiltAt);
     private volatile Data? data;

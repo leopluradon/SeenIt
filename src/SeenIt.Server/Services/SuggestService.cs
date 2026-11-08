@@ -46,6 +46,8 @@ public class SuggestService(SuggestIndex index, TmdbClient tmdb, IMemoryCache ca
         {
             var kind = r.MediaType switch { "movie" => "movie", "tv" => "show", "person" => "person", _ => null };
             if (kind is null) continue;
+            // TMDB's people results include companies and one-off credits; hold them to the index's bar.
+            if (kind == "person" && (r.Popularity ?? 0) < SuggestIndex.MinPerson) continue;
             var name = (kind == "movie" ? r.Title : r.Name) ?? r.Title ?? r.Name ?? "";
             var norm = SuggestIndex.Normalize(name);
             // TMDB's result as a suggestion, scored like an index match would be (word match + popularity).
