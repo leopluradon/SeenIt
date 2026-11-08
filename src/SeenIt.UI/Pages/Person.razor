@@ -1,5 +1,7 @@
 @page "/person/{Id:int}"
 @inject ApiClient Api
+@inject SessionState Session
+@inject Toasts Toasts
 <PageTitle>@(p?.Name ?? "Person") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" />
@@ -12,7 +14,17 @@ else if (p is not null)
             else { <div class="cast-fallback">@p.Name[..1]</div> }
         </div>
         <div class="person-info">
-            <h1>@p.Name</h1>
+            <div class="person-title">
+                <h1>@p.Name</h1>
+                @if (Session.Me is not null)
+                {
+                    <button class="btn btn-sm @(p.Following ? "btn-on" : "btn-primary")" disabled="@following" @onclick="ToggleFollow" aria-pressed="@p.Following"
+                            title="@(p.Following ? "Stop following" : "Their new movies and shows go on your calendar and release alerts")">
+                        <Icon Name="@(p.Following ? "check" : "user-plus")" Size="16" /> @(p.Following ? "Following" : "Follow")
+                    </button>
+                }
+            </div>
+            @if (p.Watched is not null && SeenLine(p) is { } seen) { <p class="person-seen">@seen</p> }
             <DetailStats Items="@([
                 ("Known for", p.KnownFor),
                 ("Born", p.Birthday is { } b ? $"{(b).ToString(Fmt.DateFull)}" + (p.Deathday is null ? $" (age {Age(b, DateOnly.FromDateTime(DateTime.Today))})" : "") : null),
@@ -72,6 +84,23 @@ else if (p is not null)
                     }
                 </div>
             }
+        </section>
+    }
+
+    @if (Upcoming.Count > 0)
+    {
+        <section class="row-section">
+            <div class="section-head">
+                <h2>Coming up</h2>
+                @if (p.Following) { <a class="section-more" href="calendar">On your calendar <Icon Name="chevron-right" Size="16" /></a> }
+            </div>
+            <div class="poster-scroller">
+                @foreach (var c in Upcoming)
+                {
+                    <PosterCard Media="@(new MediaSummary(c.Type, c.TmdbId, c.Title, c.Date?.Year, c.PosterPath, null, null, null))"
+                                Badge="@(c.Date is { } due ? due.ToString(Fmt.DateLong) : "Announced")" ShowScore="false" Sub="@c.Role" @key="(c.Type, c.TmdbId)" />
+                }
+            </div>
         </section>
     }
 
@@ -146,13 +175,51 @@ else if (p is not null)
     [Parameter] public int Id { get; set; }
     private PersonDetail? p;
     private string? error;
-    private bool bioOpen, seenOnly;
+    private bool bioOpen, seenOnly, following;
     private string tab = "all";
 
     /// <summary>Their most popular work on TMDB (not talk-show appearances).</summary>
     private List<PersonCreditDto> KnownFor => p?.Cast.Where(c => !c.Appearance && c.PosterPath is not null)
         .Concat(p.Crew.Where(c => c.PosterPath is not null))
         .DistinctBy(c => (c.Type, c.TmdbId)).OrderByDescending(c => c.VoteCount).Take(12).ToList() ?? [];
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>Their work that hasn't come out yet, soonest first (announced-only at the end).</summary>
+    private List<PersonCreditDto> Upcoming => p?.Cast.Where(c => !c.Appearance).Concat(p.Crew)
+        .Where(c => c.Date is null ? c.PosterPath is not null : c.Date > Today)
+        .DistinctBy(c => (c.Type, c.TmdbId)).OrderBy(c => c.Date is null).ThenBy(c => c.Date).Take(20).ToList() ?? [];
+
+    /// <summary>"Seen 14 of 32 movies and 3 of 10 shows · your average 7.8 (12 rated)": released work they acted in or made.</summary>
+    private static string? SeenLine(PersonDetail p)
+    {
+        var released = p.Cast.Where(c => !c.Appearance).Concat(p.Crew).Where(c => c.Date is { } d && d <= Today)
+            .DistinctBy(c => (c.Type, c.TmdbId)).ToList();
+        var parts = new List<string>();
+        foreach (var (type, word) in new[] { (MediaType.Movie, "movie"), (MediaType.Show, "show") })
+        {
+            var all = released.Where(c => c.Type == type).ToList();
+            if (all.Count > 0) parts.Add($"{all.Count(c => c.Watched):N0} of {all.Count:N0} {word}{(all.Count == 1 ? "" : "s")}");
+        }
+        if (parts.Count == 0) return null;
+        var line = "Seen " + string.Join(" and ", parts);
+        if (p.AvgRating is { } avg) line += $" · your average {Fmt.Avg(avg)} ({p.Rated:N0} rated)";
+        return line;
+    }
+
+    private async Task ToggleFollow()
+    {
+        if (p is null) return;
+        following = true;
+        try
+        {
+            await Api.FollowPersonAsync(p.Id, !p.Following);
+            p = p with { Following = !p.Following };
+            Toasts.Show(p.Following ? $"Following {p.Name}. Their new work goes on your calendar." : $"Stopped following {p.Name}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { following = false; }
+    }
 
     protected override async Task OnParametersSetAsync()
     {

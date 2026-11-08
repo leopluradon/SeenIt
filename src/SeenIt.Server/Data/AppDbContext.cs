@@ -37,6 +37,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<UserAvatar> Avatars => Set<UserAvatar>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotInterested> NotInterested => Set<NotInterested>();
+    public DbSet<Recommendation> Recommendations => Set<Recommendation>();
+    public DbSet<PersonFollow> PersonFollows => Set<PersonFollow>();
+    public DbSet<PersonUpcoming> PersonUpcoming => Set<PersonUpcoming>();
     public DbSet<ListLike> ListLikes => Set<ListLike>();
     public DbSet<LibraryItem> Library => Set<LibraryItem>();
     public DbSet<TitleNote> Notes => Set<TitleNote>();
@@ -156,6 +159,29 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
         b.Entity<ExternalScoreCache>(e => e.HasKey(x => new { x.Type, x.TmdbId }));
         b.Entity<NotInterested>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
+        b.Entity<Recommendation>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ToId, x.CreatedAt });
+            e.HasIndex(x => new { x.FromId, x.CreatedAt });
+            e.Property(x => x.Note).HasMaxLength(500);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.FromId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ToId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<Notification>(e => e.HasOne<Recommendation>().WithMany().HasForeignKey(x => x.RecommendationId).OnDelete(DeleteBehavior.Cascade));
+        b.Entity<PersonFollow>(e =>
+        {
+            e.HasKey(x => new { x.UserId, x.PersonId });
+            e.HasIndex(x => x.PersonId);
+            e.Property(x => x.Name).HasMaxLength(300);
+        });
+        b.Entity<PersonUpcoming>(e =>
+        {
+            e.HasKey(x => new { x.PersonId, x.Type, x.TmdbId });
+            e.HasIndex(x => x.Date);
+            e.Property(x => x.Title).HasMaxLength(300);
+            e.Property(x => x.Role).HasMaxLength(300);
+        });
         b.Entity<LibraryItem>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
         b.Entity<TitleNote>(e =>
         {
@@ -215,7 +241,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested), typeof(ListLike), typeof(LibraryItem), typeof(TitleNote) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested), typeof(ListLike), typeof(LibraryItem), typeof(TitleNote), typeof(PersonFollow) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -236,6 +236,23 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     public Task<NotificationsDto> NotificationsAsync() => GetAsync<NotificationsDto>("api/notifications");
     public async Task<int> UnreadNotificationsAsync() => (await GetAsync<UnreadResult>("api/notifications/unread")).Unread;
+
+    // ---------- Recommending to friends ----------
+
+    public Task<RecommendationsDto> FriendRecsAsync() => GetAsync<RecommendationsDto>("api/friend-recs");
+    public Task<List<UserCard>> RecommendRecipientsAsync() => GetAsync<List<UserCard>>("api/friend-recs/recipients");
+    public Task<List<RecommendationDto>> RecommendedToMeAsync(MediaType type, int id) => GetAsync<List<RecommendationDto>>($"api/friend-recs/{type}/{id}");
+    public async Task<RecommendResult> RecommendAsync(RecommendRequest r) => (await SendAsync<RecommendResult>(HttpMethod.Post, "api/friend-recs", r))!;
+    public Task DismissRecAsync(Guid id, bool undo = false) => SendAsync(HttpMethod.Post, $"api/friend-recs/{id}/dismiss{(undo ? "?undo=true" : "")}", null);
+    public Task UnsendRecAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/friend-recs/{id}");
+
+    // ---------- People you follow ----------
+
+    public Task<List<FollowedPerson>> FollowedPeopleAsync() => GetAsync<List<FollowedPerson>>("api/people/following");
+    public Task FollowPersonAsync(int id, bool follow) => SendAsync(HttpMethod.Put, $"api/people/{id}/follow", new PersonFollowRequest(follow));
+
+    /// <summary>"Previously on": null unless you're coming back to this show after a long break.</summary>
+    public Task<RecapDto?> RecapAsync(int showId) => SendAsync<RecapDto>(HttpMethod.Get, $"api/shows/{showId}/recap");
     public Task MarkNotificationsReadAsync() => SendAsync(HttpMethod.Post, "api/notifications/read");
     public Task<AlertSettingsDto> AlertSettingsAsync() => GetAsync<AlertSettingsDto>("api/alerts");
     public async Task<AlertSettingsDto> SetAlertSettingsAsync(AlertSettingsRequest r) => (await SendAsync<AlertSettingsDto>(HttpMethod.Put, "api/alerts", r))!;

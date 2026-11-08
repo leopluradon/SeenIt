@@ -1,5 +1,6 @@
 @page "/movie/{Id:int}"
 @inject ApiClient Api
+@inject SessionState Session
 @inject Toasts Toasts
 @inject NavigationManager Nav
 <PageTitle>@(m?.Title ?? "Movie") · SeenIt</PageTitle>
@@ -30,6 +31,7 @@ else if (m is not null)
                     <Icon Name="heart" Size="18" Class="@(u.IsFavorite ? "filled" : null)" /> Favorite
                 </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
+                <button class="btn" @onclick="() => recommendOpen = true" title="Send it to friends"><Icon Name="send" Size="18" /> Recommend</button>
                 <button class="btn @(u.Owned is not null ? "btn-on" : "")" @onclick="() => ownOpen = true" title="Your library: what you own">
                     <Icon Name="download" Size="18" /> @(u.Owned is { } own ? OwnedFormats.Label(own) : "Own it")
                 </button>
@@ -44,6 +46,7 @@ else if (m is not null)
             }
         </Actions>
     </MediaHero>
+    @if (Session.Me is not null) { <RecommendedBy Type="MediaType.Movie" TmdbId="Id" /> }
 
     <div class="detail-body detail-wide">
         <div class="detail-cols">
@@ -157,6 +160,7 @@ else if (m is not null)
         <EditPlayDialog @bind-Play="editing" What="@m.Title" ReleaseDate="m.ReleaseDate" OnSaved="Reload" />
         <RatePrompt @bind-Open="ratePrompt" Title="@m.Title" OnRate="Rate" />
         <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" Current="m.User?.Owned" OnChanged="Reload" />
+        <RecommendDialog @bind-Open="recommendOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Title="@m.Title" />
     }
@@ -166,7 +170,7 @@ else if (m is not null)
     [Parameter] public int Id { get; set; }
     private MovieDetail? m;
     private string? error;
-    private bool busy, watchOpen, listOpen, fixOpen, ownOpen, ratePrompt, askWhen;
+    private bool busy, watchOpen, listOpen, fixOpen, ownOpen, recommendOpen, ratePrompt, askWhen;
     private PlayDto? editing;
 
     private async Task Reload() { m = await Api.MovieAsync(Id); StateHasChanged(); }

@@ -59,6 +59,9 @@ public static class Fmt
     public static string UserHref(string userName) => $"u/{Uri.EscapeDataString(userName)}";
     public static string CompareHref(string a, string b) => $"compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}";
     public static string EpisodeHref(int showId, int? season, int? episode) => $"show/{showId}/season/{season}/episode/{episode}";
+    public static string CalHref(CalendarEntry c) => c.Type == MediaType.Episode ? EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber) : Href(c.Type, c.TmdbId);
+    /// <summary>The line under a movie or new series on the calendar: "Movie release · Christopher Nolan".</summary>
+    public static string CalKind(CalendarEntry c) => (c.Type == MediaType.Show ? "New series" : "Movie release") + (c.Via is { } v ? " · " + v : "");
 
     /// <summary>Request body for a single play from a dialog choice.</summary>
     public static WatchRequest Watch(MediaType type, int id, WatchChoice c, int? season = null, int? episode = null) =>

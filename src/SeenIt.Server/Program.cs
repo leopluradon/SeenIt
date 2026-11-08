@@ -142,6 +142,7 @@ builder.Services.AddSingleton<TraktScores>();
 builder.Services.AddScoped<AvatarService>();
 builder.Services.AddScoped<ReleaseAlertService>();
 builder.Services.AddScoped<RecommendationService>();
+builder.Services.AddScoped<FriendRecommendationService>();
 builder.Services.AddScoped<SmartListService>();
 builder.Services.AddScoped<FeedService>();
 builder.Services.AddScoped<LibraryService>();
@@ -155,6 +156,7 @@ builder.Services.AddScoped<TvmazeService>();
 builder.Services.AddHostedService<TvmazeWorker>();
 builder.Services.AddHostedService<MonthlyBackupWorker>();
 builder.Services.AddHostedService<ReleaseAlertWorker>();
+builder.Services.AddHostedService<PersonFollowWorker>();
 builder.Services.AddHostedService<ImdbRatingsWorker>();
 
 var app = builder.Build();

@@ -101,8 +101,12 @@ else if (items is not null)
     }
     else
     {
+        @foreach (var (heading, hint, group) in Groups(shown))
+        {
+        @if (heading is not null) { <h2 class="progress-group">@heading <span class="muted small">@group.Count</span></h2> }
+        @if (hint is not null) { <p class="muted small progress-hint">@hint</p> }
         <div class="progress-list">
-            @foreach (var p in shown)
+            @foreach (var p in group)
             {
                 <div class="progress-item" @key="p.ShowTmdbId">
                     <a href="@($"show/{p.ShowTmdbId}")"><img src="@Img.Poster(p.PosterPath, "w154")" alt="" loading="lazy" /></a>
@@ -117,7 +121,7 @@ else if (items is not null)
                         {
                             <div class="small">Next: <a href="@Fmt.EpisodeHref(p.ShowTmdbId, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> <Spoiler>@n.Name</Spoiler></a></div>
                         }
-                        else if (p.Completed) { <div class="small ok">All caught up</div> }
+                        else if (p.Completed || p.ShowStatus is not null) { <div class="small @(p.Returning is not null ? "ok" : p.ShowStatus is "Ended" or "Canceled" ? "muted" : "ok")">@WaitLine(p)</div> }
                         @if (p.LastWatchedAt is { } lw) { <div class="muted small">Last watched <RelTime At="lw" />@(p.Status != ShowTrackStatus.Watching ? $" · {p.Status}" : "")</div> }
                         @if (menuFor == p.ShowTmdbId)
                         {
@@ -139,6 +143,7 @@ else if (items is not null)
                 </div>
             }
         </div>
+        }
     }
 }
 @if (pending is var (ps, pe))
@@ -200,6 +205,39 @@ else if (items is not null)
     private string? error;
     private string tab = "watching";
     private int? menuFor;
+
+    private static bool Ongoing(string? status) => status is "Returning Series" or "In Production" or "Planned" or "Pilot";
+
+    /// <summary>Caught up: coming back (soonest first), returning with no date yet, then ended or canceled. Other tabs: one plain list.</summary>
+    private IEnumerable<(string? Heading, string? Hint, List<ShowProgressDto> Shows)> Groups(List<ShowProgressDto> shown)
+    {
+        if (tab != "waiting") { yield return (null, null, shown); yield break; }
+        var dated = shown.Where(p => p.Returning is not null).OrderBy(p => p.Returning!.AirDate).ToList();
+        var undated = shown.Where(p => p.Returning is null && (Ongoing(p.ShowStatus) || p.ShowStatus is null)).ToList();
+        var over = shown.Where(p => p.Returning is null && !Ongoing(p.ShowStatus) && p.ShowStatus is not null).ToList();
+        if (dated.Count > 0) yield return ("Coming back", null, dated);
+        if (undated.Count > 0) yield return ("Waiting for news", "Still running on TMDB, with no date for new episodes yet.", undated);
+        if (over.Count > 0) yield return ("Ended or canceled", null, over);
+    }
+
+    /// <summary>"Season 3 premieres Mar 4, 2027 · in 4 months", "Returns Jan 8 with S02E07", "Ended".</summary>
+    private static string WaitLine(ShowProgressDto p)
+    {
+        if (p.Returning is { AirDate: { } day } r)
+        {
+            var when = day.ToString(Fmt.DateLong) + (Fmt.Countdown(day) is { } left ? $" · {left}" : "");
+            return r.EpisodeNumber == 1 ? $"Season {r.SeasonNumber} premieres {when}" : $"Returns {when} with {Fmt.Ep(r.SeasonNumber, r.EpisodeNumber)}";
+        }
+        return p.ShowStatus switch
+        {
+            "Ended" => "All caught up · ended",
+            "Canceled" => "All caught up · canceled",
+            "In Production" => "All caught up · new season in production",
+            "Planned" => "All caught up · new season planned",
+            "Returning Series" or "Pilot" => "All caught up · no date for new episodes yet",
+            _ => "All caught up",
+        };
+    }
 
     private string Count(ShowTrackStatus st) => items?.Count(p => p.Status == st) is > 0 and var n ? $" {n}" : "";
 

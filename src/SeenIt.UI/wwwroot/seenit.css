@@ -346,7 +346,9 @@ a.cast { color: var(--text); }
 .person-head { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; margin-bottom: 8px; }
 .person-photo img, .person-photo .cast-fallback { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: var(--radius); box-shadow: var(--shadow); }
 .person-photo .cast-fallback { height: auto; font-size: 4rem; }
-.person-info h1 { margin-bottom: 12px; }
+.person-info h1 { margin: 0; }
+.person-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+.person-seen { font-weight: 600; margin: 0 0 12px; }
 .bio { color: var(--text-2); max-height: 9.5em; overflow: hidden; position: relative; max-width: 75ch; }
 .bio::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3em; background: linear-gradient(transparent, var(--bg)); }
 .bio.open { max-height: none; }
@@ -372,7 +374,9 @@ a.cast { color: var(--text); }
     /* Photo beside the name; facts and bio run full width underneath. */
     .person-head { grid-template-columns: 96px 1fr; gap: 0 16px; align-items: center; }
     .person-info { display: contents; }
-    .person-info > *:not(h1) { grid-column: 1 / -1; justify-self: start; }
+    .person-info > *:not(.person-title) { grid-column: 1 / -1; justify-self: start; }
+    .person-title { flex-direction: column; align-items: flex-start; gap: 8px; margin: 0; }
+    .person-title h1 { font-size: 1.5rem; }
     .person-info > .bio, .person-info > .detail-stats { justify-self: stretch; }
     .person-info h1 { margin: 0; font-size: 1.5rem; }
     .person-info .detail-stats { margin-top: 16px; }
@@ -1309,3 +1313,59 @@ html.compact .overview { line-height: 1.5; }
 .list-row .list-note { margin: 2px 0 0; -webkit-line-clamp: 2; }
 .list-rank { font-weight: 800; color: var(--muted); min-width: 1.6em; text-align: right; }
 .hidden-guests { margin-top: 2px; }
+
+/* ---------- People you follow ---------- */
+.people-list { display: flex; flex-direction: column; gap: 8px; }
+.people-row { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-width: 0; }
+.people-photo { flex-shrink: 0; width: 56px; height: 56px; border-radius: 50%; overflow: hidden; background: var(--surface-2); display: grid; place-items: center; }
+.people-photo img { width: 100%; height: 100%; object-fit: cover; }
+.people-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* ---------- "Previously on" ---------- */
+.recap { margin: 16px 0; }
+.recap-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.recap-head h2 { font-size: 1.1rem; margin: 0 0 2px; }
+.recap-episodes { list-style: none; margin: 14px 0 10px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.recap-episodes li { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: start; min-width: 0; }
+.recap-episodes p { margin: 4px 0 0; color: var(--text-2); }
+.recap-still { display: block; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); }
+.recap-still img { width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 640px) {
+    .recap-episodes { grid-template-columns: 1fr; }
+    .recap-episodes li { grid-template-columns: 104px 1fr; }
+}
+
+/* ---------- Progress: caught up ---------- */
+.progress-group { font-size: 1.05rem; margin: 20px 0 8px; }
+.progress-group:first-of-type { margin-top: 4px; }
+.progress-hint { margin: -4px 0 10px; }
+
+/* ---------- Pick: time budget ---------- */
+.pick-time { align-items: center; }
+.pick-fit { display: flex; align-items: center; gap: 6px; font-size: .9rem; font-weight: 600; color: var(--accent-text); margin-top: 4px; }
+
+/* ---------- Recommending to friends ---------- */
+.recipient-list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
+.recipient { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; }
+.recipient.on { border-color: var(--accent); background: var(--accent-soft); }
+.recipient span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stack-tight { display: flex; flex-direction: column; gap: 4px; }
+.stack-tight textarea { width: 100%; resize: vertical; }
+
+.recommended-by { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 0; }
+.rec-row { display: flex; align-items: center; gap: 10px; background: var(--accent-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; }
+.rec-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: .9rem; }
+.rec-text q, .rec-note { font-style: italic; color: var(--text-2); }
+
+.rec-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.rec-item { display: flex; gap: 14px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-width: 0; }
+.rec-item.dismissed { opacity: .6; }
+.rec-item img { width: 64px; height: 96px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-2); }
+.rec-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rec-who { display: flex; align-items: center; gap: 6px; }
+.rec-status:empty { display: none; }
+.rec-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; flex-shrink: 0; }
+@media (max-width: 640px) {
+    .rec-item { flex-wrap: wrap; }
+    .rec-actions { flex-direction: row; width: 100%; justify-content: flex-end; }
+}

@@ -964,6 +964,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("RecommendationId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("SeasonNumber")
                         .HasColumnType("integer");
 
@@ -983,6 +986,8 @@ namespace SeenIt.Server.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("RecommendationId");
+
                     b.HasIndex("UserId", "CreatedAt");
 
                     b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber")
@@ -991,6 +996,71 @@ namespace SeenIt.Server.Data.Migrations
                     NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber"), false);
 
                     b.ToTable("Notifications");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PersonFollow", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Department")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("ProfilePath")
+                        .HasColumnType("text");
+
+                    b.HasKey("UserId", "PersonId");
+
+                    b.HasIndex("PersonId");
+
+                    b.ToTable("PersonFollows");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PersonUpcoming", b =>
+                {
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("PosterPath")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.HasKey("PersonId", "Type", "TmdbId");
+
+                    b.HasIndex("Date");
+
+                    b.ToTable("PersonUpcoming");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.Rating", b =>
@@ -1031,6 +1101,43 @@ namespace SeenIt.Server.Data.Migrations
                     NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber"), false);
 
                     b.ToTable("Ratings");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Recommendation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DismissedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FromId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ToId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromId", "CreatedAt");
+
+                    b.HasIndex("ToId", "CreatedAt");
+
+                    b.ToTable("Recommendations");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.ServerState", b =>
@@ -1653,6 +1760,20 @@ namespace SeenIt.Server.Data.Migrations
 
             modelBuilder.Entity("SeenIt.Server.Data.Notification", b =>
                 {
+                    b.HasOne("SeenIt.Server.Data.Recommendation", null)
+                        .WithMany()
+                        .HasForeignKey("RecommendationId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PersonFollow", b =>
+                {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -1665,6 +1786,21 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Recommendation", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("FromId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("ToId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

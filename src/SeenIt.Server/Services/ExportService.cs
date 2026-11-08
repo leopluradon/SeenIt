@@ -66,6 +66,16 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
         var library = await db.Library.AsNoTracking().Where(l => l.UserId == userId)
             .Select(l => new { Type = l.Type.ToString().ToLowerInvariant(), l.TmdbId, Format = l.Format.ToString(), l.AddedAt }).ToListAsync(ct);
         var following = await db.Follows.Where(f => f.FollowerId == userId).Join(db.Users, f => f.FolloweeId, u => u.Id, (f, u) => u.UserName).ToListAsync(ct);
+        var people = await db.PersonFollows.AsNoTracking().Where(f => f.UserId == userId).OrderBy(f => f.Name)
+            .Select(f => new { TmdbPersonId = f.PersonId, f.Name, f.Department, Since = f.CreatedAt }).ToListAsync(ct);
+        var recRows = await db.Recommendations.AsNoTracking().Where(r => r.FromId == userId || r.ToId == userId).OrderBy(r => r.CreatedAt).ToListAsync(ct);
+        var recNames = await db.Users.Where(u => recRows.Select(r => r.FromId).Concat(recRows.Select(r => r.ToId)).Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.UserName!, ct);
+        var recommendations = recRows.Select(r => new
+        {
+            Direction = r.FromId == userId ? "sent" : "received", Person = recNames.GetValueOrDefault(r.FromId == userId ? r.ToId : r.FromId),
+            Type = r.Type.ToString().ToLowerInvariant(), r.TmdbId, r.Note, r.CreatedAt,
+        }).ToList();
 
         using var ms = new MemoryStream();
         using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
@@ -89,6 +99,8 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
                 lists        your lists and their items
                 show-status  shows you've paused or dropped
                 rewatches, favorites, notes, library
+                people       actors, directors and writers you follow (TMDB person ids)
+                recommendations  titles you sent friends, and ones they sent you
                 profile      account details, settings and who you follow
 
                 IDs are TMDB ids (https://www.themoviedb.org). For episodes, tmdb_id is the show's id.
@@ -116,6 +128,12 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
             AddJson("favorites.json", favorites);
             AddJson("notes.json", notes);
             AddJson("library.json", library);
+            AddJson("people.json", people);
+            AddJson("recommendations.json", recommendations);
+            AddCsv("people.csv", ["tmdb_person_id", "name", "department", "since"],
+                people.Select(x => new object?[] { x.TmdbPersonId, x.Name, x.Department, x.Since.ToString("O") }));
+            AddCsv("recommendations.csv", ["direction", "person", "type", "tmdb_id", "note", "created_at"],
+                recommendations.Select(x => new object?[] { x.Direction, x.Person, x.Type, x.TmdbId, x.Note, x.CreatedAt.ToString("O") }));
             AddCsv("watchlist.csv", ["type", "tmdb_id", "title", "year", "added_at"],
                 watchlist.Select(w => new object?[] { w.Media.Type.ToString().ToLowerInvariant(), w.Media.TmdbId, w.Media.Title, w.Media.Year, w.AddedAt.ToString("O") }));
             AddCsv("lists.csv", ["list", "public", "type", "tmdb_id", "title", "year", "added_at"],

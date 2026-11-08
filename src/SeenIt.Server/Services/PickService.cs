@@ -81,8 +81,49 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
                     .OrderBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber)
                     .Select(e => new EpisodeRef(e.SeasonNumber, e.EpisodeNumber, e.Name, e.AirDate, false)).FirstOrDefaultAsync(ct);
             }
-            return new PickDto(c.Media, c.Reason, c.Minutes, next, streaming, total);
+            var pick = new PickDto(c.Media, c.Reason, c.Minutes, next, streaming, total, FitMinutes: c.Type == MediaType.Movie ? c.Minutes : null);
+            if (c.Type == MediaType.Show && next is not null && maxMinutes is { } budget)
+                pick = await FitAsync(userId, pick, budget, c.Minutes, ct);
+            return pick;
         }
         return null;
+    }
+
+    /// <summary>With a time budget: how many unwatched episodes, from the next one on, fit in it.</summary>
+    private async Task<PickDto> FitAsync(Guid userId, PickDto pick, int budget, int? typical, CancellationToken ct)
+    {
+        var showId = pick.Media.TmdbId;
+        var next = pick.NextEpisode!;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var watched = (await db.WatchEvents.Where(w => w.UserId == userId && w.Type == MediaType.Episode && w.TmdbId == showId)
+                .Select(w => new { w.SeasonNumber, w.EpisodeNumber }).ToListAsync(ct))
+            .Select(w => (w.SeasonNumber ?? -1, w.EpisodeNumber ?? -1)).ToHashSet();
+        var episodes = await db.Episodes.AsNoTracking()
+            .Where(e => e.ShowTmdbId == showId && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today
+                        && (e.SeasonNumber > next.SeasonNumber || (e.SeasonNumber == next.SeasonNumber && e.EpisodeNumber >= next.EpisodeNumber)))
+            .OrderBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber)
+            .Select(e => new { e.SeasonNumber, e.EpisodeNumber, e.Name, e.AirDate, e.Runtime }).Take(200).ToListAsync(ct);
+        var (count, minutes) = Fit(episodes.Where(e => !watched.Contains((e.SeasonNumber, e.EpisodeNumber)))
+            .Select(e => e.Runtime is > 0 ? e.Runtime.Value : typical ?? 0).ToList(), budget);
+        if (count == 0) return pick;
+        var lastEp = episodes.Where(e => !watched.Contains((e.SeasonNumber, e.EpisodeNumber))).ElementAt(count - 1);
+        return pick with
+        {
+            FitEpisodes = count, FitMinutes = minutes,
+            FitThrough = new EpisodeRef(lastEp.SeasonNumber, lastEp.EpisodeNumber, lastEp.Name, lastEp.AirDate),
+        };
+    }
+
+    /// <summary>Episodes are watched in order, so it's how many from the start fit, not the best combination.</summary>
+    public static (int Count, int Minutes) Fit(IReadOnlyList<int> runtimes, int budget)
+    {
+        int count = 0, total = 0;
+        foreach (var r in runtimes)
+        {
+            if (r <= 0 || total + r > budget) break;
+            total += r;
+            count++;
+        }
+        return (count, total);
     }
 }

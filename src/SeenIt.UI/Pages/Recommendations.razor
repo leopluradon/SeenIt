@@ -1,0 +1,155 @@
+@page "/recommendations"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+<PageTitle>Recommendations · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Recommendations</h1>
+    <div class="segmented">
+        <button class="@(Sent ? "" : "on")" @onclick='() => Nav.NavigateTo("recommendations")'>To you@(NewCount is > 0 and var n ? $" {n}" : "")</button>
+        <button class="@(Sent ? "on" : "")" @onclick='() => Nav.NavigateTo("recommendations?tab=sent")'>Sent</button>
+    </div>
+</div>
+<p class="muted small">
+    @if (Sent) { <span>What you've recommended, and whether they've watched it. Recommend something from any movie or show page.</span> }
+    else { <span>Movies and shows friends sent you. Recommend something yourself from any movie or show page.</span> }
+</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (data is null && error is null) { <Spinner /> }
+else if (data is not null)
+{
+    var rows = Sent ? data.Sent : data.Received.Where(r => showCleared || !r.Dismissed).ToList();
+    @if (rows.Count == 0)
+    {
+        <Empty Title="@(Sent ? "You haven't recommended anything yet." : "Nothing here yet.")">
+            @if (Sent) { <span>Open a movie or show and tap <b>Recommend</b> to send it to people who follow you.</span> }
+            else { <span>When someone you know recommends something, it shows up here and under the bell.</span> }
+        </Empty>
+    }
+    <div class="rec-list">
+        @foreach (var r in rows)
+        {
+            var m = r.Media;
+            <div class="rec-item @(r.Dismissed ? "dismissed" : "")" @key="r.Id">
+                <a href="@Fmt.Href(m.Type, m.TmdbId)"><img src="@Img.Poster(m.PosterPath, "w154")" alt="" loading="lazy" /></a>
+                <div class="rec-body">
+                    <a class="mini-title" href="@Fmt.Href(m.Type, m.TmdbId)">@m.Title</a>
+                    <div class="muted small">@(m.Year?.ToString() ?? "")<span class="dot-sep">@(m.Type == MediaType.Movie ? "Movie" : "TV")</span></div>
+                    <div class="rec-who small">
+                        <Avatar Name="@r.Who.Name" Url="@r.Who.Avatar" Class="avatar-sm" />
+                        <span>@(Sent ? "To " : "From ")<a href="@Fmt.UserHref(r.Who.UserName)"><b>@r.Who.Name</b></a> · <RelTime At="r.At" /></span>
+                    </div>
+                    @if (r.Note is { } note) { <q class="rec-note">@note</q> }
+                    <div class="small rec-status">@Status(r)</div>
+                </div>
+                <div class="rec-actions">
+                    @if (Sent)
+                    {
+                        <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Unsend(r)">Take back</button>
+                    }
+                    else
+                    {
+                        @if (r.Watched != true)
+                        {
+                            <button class="btn btn-sm @(r.OnWatchlist ? "btn-on" : "")" disabled="@(busy || r.OnWatchlist)" @onclick="() => AddToWatchlist(r)">
+                                <Icon Name="bookmark" Size="14" /> @(r.OnWatchlist ? "On watchlist" : "Watchlist")
+                            </button>
+                        }
+                        @if (r.Dismissed) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Dismiss(r, false)">Restore</button> }
+                        else { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Dismiss(r, true)">Clear</button> }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+    @if (!Sent && data.Received.Any(r => r.Dismissed))
+    {
+        <label class="check small"><input type="checkbox" @bind="showCleared" /> Show cleared ones too</label>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+    private bool Sent => Tab == "sent";
+    private RecommendationsDto? data;
+    private string? error;
+    private bool busy, showCleared;
+
+    private int NewCount => data?.Received.Count(r => !r.Dismissed && r.Watched != true) ?? 0;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { data = await Api.FriendRecsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private string Status(RecommendationDto r)
+    {
+        var rating = r.Rating is { } v ? $" · rated {Fmt.RatingBadge(v)}" : "";
+        if (Sent)
+            return r.Watched switch
+            {
+                true => (r.WatchedAt is { } at ? $"Watched {at.ToLocalTime().ToString(Fmt.DateLong)}" : "Watched") + rating,
+                false => "Not watched yet" + rating,
+                null => r.Rating is not null ? rating.TrimStart(' ', '·', ' ') : "Their history is private",
+            };
+        return r.Watched == true
+            ? (r.WatchedAt is { } w ? $"You watched it {w.ToLocalTime().ToString(Fmt.DateLong)}" : "You've watched it") + rating
+            : r.OnWatchlist ? "On your watchlist" : "";
+    }
+
+    private async Task AddToWatchlist(RecommendationDto r)
+    {
+        busy = true;
+        try
+        {
+            await Api.AddToWatchlistAsync(r.Media.Type, r.Media.TmdbId);
+            Replace(r, r with { OnWatchlist = true });
+            Toasts.Show($"Added {r.Media.Title} to your watchlist");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Dismiss(RecommendationDto r, bool dismiss)
+    {
+        busy = true;
+        try
+        {
+            await Api.DismissRecAsync(r.Id, undo: !dismiss);
+            Replace(r, r with { Dismissed = dismiss });
+            if (dismiss) Toasts.Offer($"Cleared {r.Media.Title}", "Undo", () => Dismiss(r with { Dismissed = true }, false));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Unsend(RecommendationDto r)
+    {
+        busy = true;
+        try
+        {
+            await Api.UnsendRecAsync(r.Id);
+            data = data! with { Sent = data.Sent.Where(x => x.Id != r.Id).ToList() };
+            Toasts.Show($"Took back {r.Media.Title} from {r.Who.Name}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private void Replace(RecommendationDto old, RecommendationDto updated)
+    {
+        if (data is null) return;
+        data = data with
+        {
+            Received = data.Received.Select(x => x.Id == old.Id ? updated : x).ToList(),
+            Sent = data.Sent.Select(x => x.Id == old.Id ? updated : x).ToList(),
+        };
+    }
+}

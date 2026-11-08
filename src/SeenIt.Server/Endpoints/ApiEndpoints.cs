@@ -373,6 +373,26 @@ public static class ApiEndpoints
             await a.MarkAllReadAsync(p.UserId(), ct);
             return Results.NoContent();
         });
+
+        // Recommending titles to friends.
+        g.MapGet("/friend-recs", (ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) => r.ListAsync(p.UserId(), ct));
+        g.MapGet("/friend-recs/recipients", (ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) => r.RecipientsAsync(p.UserId(), ct));
+        g.MapGet("/friend-recs/{type}/{id:int}", (MediaType type, int id, ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) =>
+            r.ForTitleAsync(p.UserId(), type, id, ct));
+        g.MapPost("/friend-recs", (RecommendRequest req, ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) => r.SendAsync(p.UserId(), req, ct));
+        g.MapPost("/friend-recs/{id:guid}/dismiss", async (Guid id, bool? undo, ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) =>
+            await r.DismissAsync(p.UserId(), id, undo != true, ct) ? Results.NoContent() : Results.NotFound());
+        g.MapDelete("/friend-recs/{id:guid}", async (Guid id, ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) =>
+            await r.UnsendAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
+
+        // Following actors, directors and writers.
+        g.MapGet("/people/following", (ClaimsPrincipal p, PersonService people, CancellationToken ct) => people.FollowedAsync(p.UserId(), ct));
+        g.MapPut("/people/{id:int}/follow", async (int id, PersonFollowRequest req, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
+            await people.FollowAsync(p.UserId(), id, req.Follow, ct) ? Results.NoContent() : Results.NotFound());
+
+        // "Previously on": a recap when you come back to a show after a while (204 when there's nothing to recap).
+        g.MapGet("/shows/{id:int}/recap", async (int id, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+            await t.RecapAsync(p.UserId(), id, ct) is { } recap ? Results.Ok(recap) : Results.NoContent());
         static AlertSettingsDto Alerts(AppUser u, ReleaseAlertService a, EmailService email) => new(u.ReleaseEmails, email.Enabled,
             $"{a.BaseUrl()}cal/{u.CalendarToken}.ics", u.MonthlyBackup,
             $"{a.BaseUrl()}feeds/{u.CalendarToken}/watchlist.rss", $"{a.BaseUrl()}feeds/{u.CalendarToken}/history.rss");

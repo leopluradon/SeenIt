@@ -1,0 +1,50 @@
+@* On a movie or show page: friends who recommended it to you, with their notes. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+@if (recs is { Count: > 0 })
+{
+    <section class="recommended-by" aria-label="Recommended to you">
+        @foreach (var r in recs)
+        {
+            <div class="rec-row" @key="r.Id">
+                <Avatar Name="@r.Who.Name" Url="@r.Who.Avatar" Class="avatar-sm" />
+                <div class="rec-text">
+                    <span><a href="@Fmt.UserHref(r.Who.UserName)"><b>@r.Who.Name</b></a> recommended this to you <RelTime At="r.At" /></span>
+                    @if (r.Note is { } note) { <q>@note</q> }
+                </div>
+                <button class="icon-btn" title="Clear from your recommendations" aria-label="Clear @r.Who.Name's recommendation" @onclick="() => Dismiss(r)"><Icon Name="x" Size="16" /></button>
+            </div>
+        }
+    </section>
+}
+@code {
+    [Parameter, EditorRequired] public MediaType Type { get; set; }
+    [Parameter, EditorRequired] public int TmdbId { get; set; }
+    private List<RecommendationDto>? recs;
+    private (MediaType, int)? loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded == (Type, TmdbId)) return;
+        loaded = (Type, TmdbId);
+        recs = null;
+        try { recs = await Api.RecommendedToMeAsync(Type, TmdbId); }
+        catch { recs = null; }   // a nice-to-have: never block the page
+    }
+
+    private async Task Dismiss(RecommendationDto r)
+    {
+        try
+        {
+            await Api.DismissRecAsync(r.Id);
+            recs?.Remove(r);
+            Toasts.Offer("Cleared from your recommendations", "Undo", async () =>
+            {
+                await Api.DismissRecAsync(r.Id, undo: true);
+                recs?.Insert(0, r);
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

@@ -1,0 +1,80 @@
+@* "Recommend to a friend": pick people who follow you and add a note. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+<Modal Open="Open" OpenChanged="OpenChanged" Title="@($"Recommend {Title}")">
+    <div class="stack">
+        @if (people is null) { <Spinner /> }
+        else if (people.Count == 0)
+        {
+            <p class="muted">You can recommend things to people who follow you. Nobody follows you yet. Share your profile link, or find friends on the <a href="friends?tab=find">Friends</a> page.</p>
+        }
+        else
+        {
+            <p class="muted small">Goes to their alerts and their Recommendations page. You'll see when they watch it and what they rate it, if their history and ratings are visible to you.</p>
+            <div class="recipient-list" role="group" aria-label="Who to send it to">
+                @foreach (var u in people)
+                {
+                    <label class="recipient @(chosen.Contains(u.UserName) ? "on" : "")" @key="u.UserName">
+                        <input type="checkbox" checked="@chosen.Contains(u.UserName)" @onchange="e => Toggle(u.UserName, e.Value is true)" />
+                        <Avatar Name="@u.Name" Url="@u.Avatar" Class="avatar-sm" />
+                        <span>@u.Name</span>
+                        @if (u.Following) { <span class="muted tiny">friend</span> }
+                    </label>
+                }
+            </div>
+            <label class="stack-tight">
+                <span class="small">Note <span class="muted">(optional)</span></span>
+                <textarea rows="3" maxlength="500" placeholder="Why they'd like it" @bind="note" @bind:event="oninput"></textarea>
+            </label>
+            <div class="inline">
+                <button class="btn btn-primary" disabled="@(busy || chosen.Count == 0)" @onclick="Send"><Icon Name="send" Size="16" /> Send@(chosen.Count > 1 ? $" to {chosen.Count}" : "")</button>
+                <button class="btn btn-ghost" @onclick="() => OpenChanged.InvokeAsync(false)">Cancel</button>
+            </div>
+        }
+    </div>
+</Modal>
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter, EditorRequired] public MediaType Type { get; set; }
+    [Parameter, EditorRequired] public int TmdbId { get; set; }
+    [Parameter] public string Title { get; set; } = "this";
+    private List<UserCard>? people;
+    private readonly HashSet<string> chosen = [];
+    private string? note;
+    private bool busy, wasOpen;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Open && !wasOpen)
+        {
+            chosen.Clear();
+            note = null;
+            try { people = await Api.RecommendRecipientsAsync(); }
+            catch (Exception ex) { people = []; Toasts.Error(ex); }
+        }
+        wasOpen = Open;
+    }
+
+    private void Toggle(string name, bool on) { if (on) chosen.Add(name); else chosen.Remove(name); }
+
+    private async Task Send()
+    {
+        busy = true;
+        try
+        {
+            var r = await Api.RecommendAsync(new RecommendRequest(Type, TmdbId, chosen.ToList(), note));
+            var names = people!.Where(p => chosen.Contains(p.UserName) && !r.Skipped.Contains(p.UserName)).Select(p => p.Name).ToList();
+            Toasts.Show(names.Count switch
+            {
+                0 => "Nothing sent",
+                1 => $"Recommended to {names[0]}",
+                2 => $"Recommended to {names[0]} and {names[1]}",
+                _ => $"Recommended to {names[0]} and {names.Count - 1} others",
+            });
+            await OpenChanged.InvokeAsync(false);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

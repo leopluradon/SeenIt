@@ -7,6 +7,8 @@
 <nav class="more-list">
     @if (Session.Me is { } me) { <a href="@Fmt.UserHref(me.UserName)"><Icon Name="users" /> My profile</a> }
     <a href="friends"><Icon Name="users" /> Friends</a>
+    <a href="recommendations"><Icon Name="send" /> Recommendations</a>
+    <a href="people"><Icon Name="user-plus" /> People you follow</a>
     <a href="watchlist"><Icon Name="bookmark" /> Watchlist</a>
     <a href="favorites"><Icon Name="heart" /> Favorites</a>
     <a href="library"><Icon Name="download" /> My library</a>

@@ -725,6 +725,44 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     public Task<List<ShowProgressDto>> GetProgressAsync(Guid userId, CancellationToken ct) =>
         new ProgressCalculator(db).ForUserAsync(userId, null, ct);
 
+    /// <summary>How long away from a show before its page offers a "previously on" recap.</summary>
+    public static readonly TimeSpan RecapAfter = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Coming back to a show after a long break: when you last watched, and the last two episodes you saw before
+    /// the next one up (their summaries can't spoil anything). Null when you're mid-binge, caught up or never started.
+    /// </summary>
+    public async Task<RecapDto?> RecapAsync(Guid userId, int showId, CancellationToken ct)
+    {
+        var plays = await db.WatchEvents.AsNoTracking()
+            .Where(w => w.UserId == userId && w.Type == MediaType.Episode && w.TmdbId == showId && w.SeasonNumber != null && w.EpisodeNumber != null)
+            .Select(w => new { S = w.SeasonNumber!.Value, E = w.EpisodeNumber!.Value, w.WatchedAt }).ToListAsync(ct);
+        var dated = plays.Where(p => !WatchDates.IsUnknown(p.WatchedAt)).ToList();
+        if (dated.Count == 0) return null;
+        var last = dated.Max(p => p.WatchedAt);
+        if (DateTimeOffset.UtcNow - last < RecapAfter) return null;
+
+        var progress = (await new ProgressCalculator(db).ForUserAsync(userId, [showId], ct)).FirstOrDefault();
+        if (progress is not { NextEpisode: { } next } || progress.Status == ShowTrackStatus.Dropped) return null;
+
+        // The last two episodes you've seen that come before the next one (in this order of seasons).
+        var before = plays.GroupBy(p => (p.S, p.E))
+            .Select(g => (g.Key.S, g.Key.E, At: g.Max(p => p.WatchedAt)))
+            .Where(p => p.S > 0 || next.SeasonNumber == 0)
+            .Where(p => (p.S, p.E).CompareTo((next.SeasonNumber, next.EpisodeNumber)) < 0)
+            .OrderByDescending(p => p.S).ThenByDescending(p => p.E).Take(2).ToList();
+        if (before.Count == 0) return null;
+        var seasons = before.Select(b => b.S).Distinct().ToList();
+        var meta = (await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == showId && seasons.Contains(e.SeasonNumber)).ToListAsync(ct))
+            .ToDictionary(e => (e.SeasonNumber, e.EpisodeNumber));
+        var episodes = before.OrderBy(b => b.S).ThenBy(b => b.E).Select(b =>
+        {
+            var m = meta.GetValueOrDefault((b.S, b.E));
+            return new RecapEpisode(b.S, b.E, m?.Name, m?.Overview, m?.StillPath, b.At);
+        }).ToList();
+        return new RecapDto(last, episodes, next);
+    }
+
     public async Task<List<CalendarEntry>> GetCalendarAsync(Guid userId, DateOnly from, int days, CancellationToken ct)
     {
         days = Math.Clamp(days, 1, 92);
@@ -759,6 +797,26 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             .Where(m => m.ReleaseDate >= from && m.ReleaseDate < to)
             .ToListAsync(ct);
         entries.AddRange(watchlistMovies.Select(m => new CalendarEntry(m.ReleaseDate!.Value, MediaType.Movie, m.TmdbId, m.Title, null, null, null, m.PosterPath, false)));
+
+        // New movies and shows from people you follow (ones not already here through your watchlist or shows).
+        var people = await db.PersonFollows.Where(f => f.UserId == userId).ToDictionaryAsync(f => f.PersonId, f => f.Name, ct);
+        if (people.Count > 0)
+        {
+            var ids = people.Keys.ToList();
+            var work = await db.PersonUpcoming.AsNoTracking().Where(u => ids.Contains(u.PersonId) && u.Date >= from && u.Date < to).ToListAsync(ct);
+            var have = entries.Select(e => (e.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, e.TmdbId)).ToHashSet();
+            var workMovies = work.Where(w => w.Type == MediaType.Movie).Select(w => w.TmdbId).Distinct().ToList();
+            var seenMovies = (await db.WatchEvents.Where(w => w.UserId == userId && w.Type == MediaType.Movie && workMovies.Contains(w.TmdbId))
+                .Select(w => w.TmdbId).Distinct().ToListAsync(ct)).ToHashSet();
+            foreach (var g in work.GroupBy(w => (w.Type, w.TmdbId)))
+            {
+                if (have.Contains(g.Key) || (g.Key.Type == MediaType.Show && showIds.Contains(g.Key.TmdbId))) continue;
+                var w = g.First();
+                var via = string.Join(", ", g.Select(x => people[x.PersonId]).Distinct().Order());
+                entries.Add(new CalendarEntry(w.Date!.Value, w.Type, w.TmdbId, w.Title, null, null, null, w.PosterPath,
+                    w.Type == MediaType.Movie && seenMovies.Contains(w.TmdbId), Via: via));
+            }
+        }
 
         return entries.OrderBy(e => e.Date).ThenBy(e => e.Title).ThenBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).ToList();
     }

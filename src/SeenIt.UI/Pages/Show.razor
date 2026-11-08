@@ -1,5 +1,6 @@
 @page "/show/{Id:int}"
 @inject ApiClient Api
+@inject SessionState Session
 @inject Toasts Toasts
 <PageTitle>@(s?.Name ?? "Show") · SeenIt</PageTitle>
 
@@ -26,6 +27,7 @@ else if (s is not null)
                     <Icon Name="heart" Size="18" Class="@(u.IsFavorite ? "filled" : null)" /> Favorite
                 </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
+                <button class="btn" @onclick="() => recommendOpen = true" title="Send it to friends"><Icon Name="send" Size="18" /> Recommend</button>
                 <button class="btn @(u.Owned is not null ? "btn-on" : "")" @onclick="() => ownOpen = true" title="Your library: what you own">
                     <Icon Name="download" Size="18" /> @(u.Owned is { } own ? OwnedFormats.Label(own) : "Own it")
                 </button>
@@ -36,6 +38,38 @@ else if (s is not null)
             }
         </Actions>
     </MediaHero>
+    @if (Session.Me is not null) { <RecommendedBy Type="MediaType.Show" TmdbId="Id" /> }
+
+    @if (recap is { } rc && !RecapHidden.Contains(Id) && !(s.Progress?.LastWatchedAt > rc.LastWatchedAt))
+    {
+        <section class="panel recap" aria-label="Previously on @s.Name">
+            <div class="recap-head">
+                <div>
+                    <h2>Previously on @s.Name</h2>
+                    <p class="muted small">You last watched <RelTime At="rc.LastWatchedAt" /> (@rc.LastWatchedAt.ToLocalTime().ToString(Fmt.DateLong)). Here's where you stopped.</p>
+                </div>
+                <button class="icon-btn" @onclick="() => RecapHidden.Add(Id)" aria-label="Hide the recap"><Icon Name="x" Size="18" /></button>
+            </div>
+            <ol class="recap-episodes">
+                @foreach (var e in rc.Episodes)
+                {
+                    <li @key="(e.SeasonNumber, e.EpisodeNumber)">
+                        <a class="recap-still" href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)">
+                            @if (Img.Still(e.StillPath) is { } still) { <img src="@still" alt="" loading="lazy" /> }
+                        </a>
+                        <div>
+                            <a href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)"><b>@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)</b>@(e.Name is { Length: > 0 } n ? $" · {n}" : "")</a>
+                            @if (e.Overview is { Length: > 0 } o) { <p class="small">@o</p> }
+                            else { <p class="muted small">No summary on TMDB.</p> }
+                        </div>
+                    </li>
+                }
+            </ol>
+            <div class="recap-next small">
+                Up next: <a href="@Fmt.EpisodeHref(Id, rc.Next.SeasonNumber, rc.Next.EpisodeNumber)"><b>@Fmt.Ep(rc.Next.SeasonNumber, rc.Next.EpisodeNumber)</b> <Spoiler>@rc.Next.Name</Spoiler></a>
+            </div>
+        </section>
+    }
 
     <div class="detail-body detail-wide">
             <DetailStats Items="@([
@@ -188,6 +222,7 @@ else if (s is not null)
         <WatchDialog Open="pendingSeason is not null" OpenChanged="o => { if (!o) pendingSeason = null; }" What="@(pendingSeason?.Name ?? "")" Bulk="true" OnPick="WatchSeason"
                      Through="seasonThrough" ThroughNote=" in the earlier seasons" />
         <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Show" TmdbId="Id" Title="@s.Name" Current="s.User?.Owned" OnChanged="Reload" />
+        <RecommendDialog @bind-Open="recommendOpen" Type="MediaType.Show" TmdbId="Id" Title="@s.Name" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Title="@s.Name" />
     }
@@ -249,22 +284,30 @@ else if (s is not null)
     [Parameter] public int Id { get; set; }
     private ShowDetail? s;
     private string? error;
-    private bool busy, watchAllOpen, listOpen, fixOpen, ownOpen, askWhen;
+    private bool busy, watchAllOpen, listOpen, fixOpen, ownOpen, recommendOpen, askWhen;
     private async Task Reload() { s = await Api.ShowAsync(Id); StateHasChanged(); }
     private EpisodeRef? pendingEpisode;
     private SeasonSummary? pendingSeason;
     private bool seasonThrough;
     private WatchOrdersDto? orders;
     private WatchOrderDto? order;
+    private RecapDto? recap;
+    /// <summary>Recaps closed this session (it goes for good once you watch something).</summary>
+    private static readonly HashSet<int> RecapHidden = [];
 
     protected override Task OnParametersSetAsync() => Load();
 
     private async Task Load()
     {
         error = null;
-        if (s?.TmdbId != Id) { s = null; orders = null; order = null; }
+        if (s?.TmdbId != Id) { s = null; orders = null; order = null; recap = null; }
         try { s = await Api.ShowAsync(Id); }
         catch (Exception ex) { error = ex.Message; }
+        if (s?.User is not null)
+        {
+            try { recap = await Api.RecapAsync(Id); }
+            catch { recap = null; }   // a nice-to-have: never block the page
+        }
         await LoadOrder();
     }
 

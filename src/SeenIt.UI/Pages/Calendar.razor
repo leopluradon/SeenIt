@@ -85,12 +85,12 @@ else if (items is not null)
 
     private RenderFragment Entry(CalendarEntry c) => __builder =>
     {
-        <a class="mini-item @(c.Watched ? "watched" : "")" href="@(c.Type == MediaType.Movie ? $"movie/{c.TmdbId}" : Fmt.EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber))" @key="(c.Type, c.TmdbId, c.SeasonNumber, c.EpisodeNumber)">
+        <a class="mini-item @(c.Watched ? "watched" : "")" href="@Fmt.CalHref(c)" @key="(c.Type, c.TmdbId, c.SeasonNumber, c.EpisodeNumber)">
             <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
             <div>
                 <div class="mini-title">@c.Title</div>
                 <div class="muted small">
-                    @if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }
+                    @if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>@Fmt.CalKind(c)</span> }
                 </div>
                 @if (Fmt.AirTime(c.AirsAt, c.Network) is { } when)
                 {
@@ -102,7 +102,7 @@ else if (items is not null)
     };
 
     private bool Keep(CalendarEntry c) =>
-        (kind is null || c.Type == kind)
+        (kind is null || c.Type == kind || (kind == MediaType.Episode && c.Type == MediaType.Show))
         && (!hideWatched || !c.Watched)
         && (!hidePremieres || c.Type != MediaType.Episode || c.Started || c.EpisodeNumber != 1);
 

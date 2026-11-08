@@ -20,7 +20,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
             .OrderByDescending(n => n.Day).ThenByDescending(n => n.CreatedAt).Take(60).ToListAsync(ct);
         var unread = await db.Notifications.CountAsync(n => n.UserId == userId && n.ReadAt == null, ct);
         return new NotificationsDto(rows.Select(n => new NotificationDto(n.Id, n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber,
-            n.Title, n.Detail, n.PosterPath, n.Day, n.ReadAt is not null)).ToList(), unread);
+            n.Title, n.Detail, n.PosterPath, n.Day, n.ReadAt is not null, n.RecommendationId is not null)).ToList(), unread);
     }
 
     public Task<int> UnreadAsync(Guid userId, CancellationToken ct) =>
@@ -38,7 +38,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
         var today = DateOnly.FromDateTime(now.DateTime);
 
         var releases = (await tracking.GetCalendarAsync(user.Id, today, 1, ct)).Where(e => !e.Watched).ToList();
-        var existing = (await db.Notifications.Where(n => n.UserId == user.Id && n.Day >= today.AddDays(-1))
+        var existing = (await db.Notifications.Where(n => n.UserId == user.Id && n.RecommendationId == null && n.Day >= today.AddDays(-1))
                 .Select(n => new { n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber }).ToListAsync(ct))
             .Select(n => (n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber)).ToHashSet();
         var added = 0;
@@ -46,13 +46,14 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
         {
             if (!existing.Add((r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber))) continue;
             // An episode that already had an alert on an earlier day (date moved) keeps that one.
-            if (await db.Notifications.AnyAsync(n => n.UserId == user.Id && n.Type == r.Type && n.TmdbId == r.TmdbId
+            if (await db.Notifications.AnyAsync(n => n.UserId == user.Id && n.RecommendationId == null && n.Type == r.Type && n.TmdbId == r.TmdbId
                                                      && n.SeasonNumber == r.SeasonNumber && n.EpisodeNumber == r.EpisodeNumber, ct)) continue;
             db.Notifications.Add(new Notification
             {
                 UserId = user.Id, Type = r.Type, TmdbId = r.TmdbId, SeasonNumber = r.SeasonNumber, EpisodeNumber = r.EpisodeNumber,
                 Title = Trim(r.Title, 300), PosterPath = r.PosterPath, Day = r.Date,
-                Detail = r.Type == MediaType.Episode ? Trim($"{Code(r.SeasonNumber, r.EpisodeNumber)}{(r.EpisodeTitle is { Length: > 0 } t ? " · " + t : "")}", 400) : "Out today",
+                Detail = r.Type == MediaType.Episode ? Trim($"{Code(r.SeasonNumber, r.EpisodeNumber)}{(r.EpisodeTitle is { Length: > 0 } t ? " · " + t : "")}", 400)
+                    : Trim((r.Type == MediaType.Show ? "New series out today" : "Out today") + (r.Via is { } via ? " · " + via : ""), 400),
             });
             added++;
         }
@@ -64,7 +65,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
 
         if (user.ReleaseEmails && email.Enabled && now.Hour >= EmailHour && user.LastReleaseEmail != today && user.Email is { Length: > 0 } to)
         {
-            var todays = await db.Notifications.AsNoTracking().Where(n => n.UserId == user.Id && n.Day == today)
+            var todays = await db.Notifications.AsNoTracking().Where(n => n.UserId == user.Id && n.RecommendationId == null && n.Day == today)
                 .OrderBy(n => n.Title).ThenBy(n => n.SeasonNumber).ThenBy(n => n.EpisodeNumber).ToListAsync(ct);
             if (todays.Count > 0)
             {
@@ -87,7 +88,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
             var link = site + Href(n);
             text.Append($"• {n.Title}{(n.Detail is { } d && n.Type == MediaType.Episode ? " — " + d : "")}\n  {link}\n");
             html.Append($"<li><a href=\"{WebUtility.HtmlEncode(link)}\"><b>{WebUtility.HtmlEncode(n.Title)}</b></a>")
-                .Append(n.Type == MediaType.Episode && n.Detail is { } dd ? $" — {WebUtility.HtmlEncode(dd)}" : " (movie)").Append("</li>");
+                .Append(n.Type == MediaType.Episode && n.Detail is { } dd ? $" — {WebUtility.HtmlEncode(dd)}" : n.Type == MediaType.Show ? " (new series)" : " (movie)").Append("</li>");
         }
         var settings = site + "settings#alerts";
         text.Append($"\nTurn these emails off in Settings → Alerts: {settings}\n");
@@ -145,8 +146,18 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
         Line("X-PUBLISHED-TTL:PT6H");
         foreach (var e in entries.DistinctBy(e => (e.Type, e.TmdbId, e.SeasonNumber, e.EpisodeNumber)))
         {
-            var summary = e.Type == MediaType.Episode ? $"{e.Title} {Code(e.SeasonNumber, e.EpisodeNumber)}" : $"{e.Title} (movie)";
-            var href = e.Type == MediaType.Movie ? $"movie/{e.TmdbId}" : $"show/{e.TmdbId}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}";
+            var summary = e.Type switch
+            {
+                MediaType.Episode => $"{e.Title} {Code(e.SeasonNumber, e.EpisodeNumber)}",
+                MediaType.Show => $"{e.Title} (new series)",
+                _ => $"{e.Title} (movie)",
+            };
+            var href = e.Type switch
+            {
+                MediaType.Movie => $"movie/{e.TmdbId}",
+                MediaType.Show => $"show/{e.TmdbId}",
+                _ => $"show/{e.TmdbId}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}",
+            };
             Line("BEGIN:VEVENT");
             Line($"UID:seenit-{e.Type.ToString().ToLowerInvariant()}-{e.TmdbId}-{e.SeasonNumber}-{e.EpisodeNumber}@seenit");
             Line($"DTSTAMP:{stamp}");
@@ -164,6 +175,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
             if (e.Network is { Length: > 0 } net) Line($"LOCATION:{Esc(net)}");
             Line($"SUMMARY:{Esc(summary)}");
             if (e.Type == MediaType.Episode && !string.IsNullOrWhiteSpace(e.EpisodeTitle)) Line($"DESCRIPTION:{Esc(e.EpisodeTitle!)}");
+            else if (e.Via is { } via) Line($"DESCRIPTION:{Esc(via)}");
             Line($"URL:{site}{href}");
             Line("TRANSP:TRANSPARENT");
             Line("END:VEVENT");
@@ -175,7 +187,12 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
     public string BaseUrl() => config["SeenIt:PublicUrl"] is { Length: > 0 } url ? url.TrimEnd('/') + "/" : "https://seenit.vohiyo.com/";
 
     private static string Code(int? s, int? e) => s == 0 ? $"Special {e}" : $"S{s:00}E{e:00}";
-    private static string Href(Notification n) => n.Type == MediaType.Movie ? $"movie/{n.TmdbId}" : $"show/{n.TmdbId}/season/{n.SeasonNumber}/episode/{n.EpisodeNumber}";
+    private static string Href(Notification n) => n.Type switch
+    {
+        MediaType.Movie => $"movie/{n.TmdbId}",
+        MediaType.Show => $"show/{n.TmdbId}",
+        _ => $"show/{n.TmdbId}/season/{n.SeasonNumber}/episode/{n.EpisodeNumber}",
+    };
     private static string Trim(string s, int max) => s.Length > max ? s[..max] : s;
 }
 

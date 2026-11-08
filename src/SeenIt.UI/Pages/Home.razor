@@ -110,11 +110,11 @@
                                 <div class="mini-list">
                                     @foreach (var c in dash.Upcoming)
                                     {
-                                        <a class="mini-item" href="@(c.Type == MediaType.Episode ? Fmt.EpisodeHref(c.TmdbId, c.SeasonNumber, c.EpisodeNumber) : Fmt.Href(c.Type, c.TmdbId))">
+                                        <a class="mini-item" href="@Fmt.CalHref(c)">
                                             <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
                                             <div>
                                                 <div class="mini-title">@c.Title</div>
-                                                <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>Movie release</span> }</div>
+                                                <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> } else { <span>@Fmt.CalKind(c)</span> }</div>
                                             </div>
                                             <span class="mini-date">@Fmt.Day(c.Date)@if (c.AirsAt is { } cat) { <span> · @cat.ToLocalTime().ToString(Fmt.TimeOnly)</span> }@if (Soon(c) is { } cd) { <span class="countdown"> · @cd</span> }</span>
                                         </a>

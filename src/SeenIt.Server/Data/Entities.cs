@@ -497,6 +497,47 @@ public class Notification
     public DateOnly Day { get; set; }            // release day
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ReadAt { get; set; }
+    /// <summary>Set when a friend recommended this title (not a release): kept apart from release alerts.</summary>
+    public Guid? RecommendationId { get; set; }
+}
+
+/// <summary>A friend sent you a title to watch, with an optional note.</summary>
+public class Recommendation
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FromId { get; set; }
+    public Guid ToId { get; set; }
+    public MediaType Type { get; set; }   // Movie or Show
+    public int TmdbId { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The recipient cleared it from their inbox. The sender still sees it.</summary>
+    public DateTimeOffset? DismissedAt { get; set; }
+}
+
+/// <summary>You follow an actor, director or writer: their new work goes on your calendar and alerts.</summary>
+public class PersonFollow
+{
+    public Guid UserId { get; set; }
+    public int PersonId { get; set; }
+    public string Name { get; set; } = "";
+    public string? ProfilePath { get; set; }
+    public string? Department { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>A followed person's upcoming movie or new show, from TMDB. Replaced each time the person is checked.</summary>
+public class PersonUpcoming
+{
+    public int PersonId { get; set; }
+    public MediaType Type { get; set; }   // Movie or Show
+    public int TmdbId { get; set; }
+    public string Title { get; set; } = "";
+    public string? PosterPath { get; set; }
+    /// <summary>Release (or premiere) day; null when announced without a date.</summary>
+    public DateOnly? Date { get; set; }
+    public string? Role { get; set; }
+    public DateTimeOffset CheckedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 /// <summary>"Not interested": kept out of Discover, trending, "you might also like" and recommendations.</summary>

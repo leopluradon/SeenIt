@@ -114,6 +114,28 @@ public class ProgressCalculator(AppDbContext db)
             for (var i = 0; i < result.Count; i++)
                 if (latest.TryGetValue(result[i].ShowTmdbId, out var d)) result[i] = result[i] with { LatestAired = d };
         }
+        // Caught-up shows: whether they're coming back, and the next date TMDB has.
+        var caughtUp = result.Where(r => r.NextEpisode is null).Select(r => r.ShowTmdbId).ToList();
+        if (caughtUp.Count > 0)
+        {
+            var status = await db.Shows.AsNoTracking().Where(s => caughtUp.Contains(s.TmdbId))
+                .Select(s => new { s.TmdbId, s.Status }).ToDictionaryAsync(s => s.TmdbId, s => s.Status, ct);
+            var comingRows = await db.Episodes.AsNoTracking()
+                .Where(e => caughtUp.Contains(e.ShowTmdbId) && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate > today)
+                .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Name, e.AirDate, e.AirStamp }).ToListAsync(ct);
+            var coming = comingRows.GroupBy(e => e.ShowTmdbId)
+                .ToDictionary(g => g.Key, g => g.OrderBy(e => e.AirDate).ThenBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).First());
+            for (var i = 0; i < result.Count; i++)
+            {
+                if (result[i].NextEpisode is not null) continue;
+                var id = result[i].ShowTmdbId;
+                result[i] = result[i] with
+                {
+                    ShowStatus = status.GetValueOrDefault(id),
+                    Returning = coming.TryGetValue(id, out var e) ? new EpisodeRef(e.SeasonNumber, e.EpisodeNumber, e.Name, e.AirDate, false, e.AirStamp) : null,
+                };
+            }
+        }
         return result.OrderByDescending(p => p.LastWatchedAt).ToList();
     }
 }

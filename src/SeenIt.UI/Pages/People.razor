@@ -1,0 +1,100 @@
+@page "/people"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>People you follow · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>People you follow</h1>
+</div>
+<p class="muted small">Actors, directors and writers you follow. Their new movies and shows go on your <a href="calendar">calendar</a> and, on release day, your <a href="notifications">alerts</a>.</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (people is null && error is null) { <Spinner /> }
+else if (people is { Count: 0 })
+{
+    <Empty Title="You're not following anyone yet.">
+        <span>Open someone's page from a movie's or show's cast and tap <b>Follow</b>.</span>
+    </Empty>
+}
+else if (people is not null)
+{
+    var soon = people.SelectMany(p => p.Upcoming.Where(u => u.Date is not null).Select(u => (Person: p, Work: u)))
+        .GroupBy(x => (x.Work.Type, x.Work.TmdbId)).Select(g => (g.First().Work, Who: string.Join(", ", g.Select(x => x.Person.Name).Distinct())))
+        .OrderBy(x => x.Work.Date).Take(30).ToList();
+    @if (soon.Count > 0)
+    {
+        <section class="row-section">
+            <div class="section-head"><h2>Coming up</h2></div>
+            <div class="poster-scroller">
+                @foreach (var (w, who) in soon)
+                {
+                    <PosterCard Media="@(new MediaSummary(w.Type, w.TmdbId, w.Title, w.Date?.Year, w.PosterPath, null, null, null))"
+                                Badge="@w.Date!.Value.ToString(Fmt.DateLong)" ShowScore="false" Sub="@who" @key="(w.Type, w.TmdbId)" />
+                }
+            </div>
+        </section>
+    }
+
+    <section class="row-section">
+        <div class="section-head"><h2>Following <span class="muted small">@people.Count</span></h2></div>
+        <div class="people-list">
+            @foreach (var p in people)
+            {
+                <div class="people-row" @key="p.Id">
+                    <a href="@($"person/{p.Id}")" class="people-photo">
+                        @if (Img.Profile(p.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                        else { <span class="cast-fallback">@p.Name[..1]</span> }
+                    </a>
+                    <div class="people-body">
+                        <a href="@($"person/{p.Id}")" class="mini-title">@p.Name</a>
+                        <div class="muted small">@(p.Department ?? "")@(p.Department is null ? "" : " · ")Following since @p.Since.ToLocalTime().ToString(Fmt.DateLong)</div>
+                        <div class="small">
+                            @if (p.Upcoming.FirstOrDefault(u => u.Date is not null) is { } next)
+                            {
+                                <span>Next: <a href="@Fmt.Href(next.Type, next.TmdbId)"><b>@next.Title</b></a> · @next.Date!.Value.ToString(Fmt.DateLong)</span>
+                                @if (p.Upcoming.Count > 1) { <span class="muted"> · @(p.Upcoming.Count - 1) more coming</span> }
+                            }
+                            else if (p.Upcoming.Count > 0) { <span class="muted">@p.Upcoming.Count announced, no dates yet</span> }
+                            else { <span class="muted">Nothing announced</span> }
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Unfollow(p)">Unfollow</button>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private List<FollowedPerson>? people;
+    private string? error;
+    private bool busy;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { people = await Api.FollowedPeopleAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Unfollow(FollowedPerson p)
+    {
+        busy = true;
+        try
+        {
+            await Api.FollowPersonAsync(p.Id, false);
+            people?.Remove(p);
+            Toasts.Offer($"Stopped following {p.Name}", "Undo", async () =>
+            {
+                await Api.FollowPersonAsync(p.Id, true);
+                await Load();
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

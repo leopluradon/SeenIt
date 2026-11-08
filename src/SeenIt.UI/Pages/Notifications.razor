@@ -1,13 +1,13 @@
 @page "/notifications"
 @attribute [Authorize]
 @inject ApiClient Api
-<PageTitle>Release alerts · SeenIt</PageTitle>
+<PageTitle>Alerts · SeenIt</PageTitle>
 
 <div class="page-head">
-    <h1>Release alerts</h1>
+    <h1>Alerts</h1>
     <a class="btn btn-sm btn-ghost" href="settings#alerts"><Icon Name="settings" Size="16" /> Alert settings</a>
 </div>
-<p class="muted small">New episodes of shows you watch or have on your watchlist, and watchlist movies, on the day they come out.</p>
+<p class="muted small">New episodes of shows you watch or have on your watchlist, watchlist movies and new work from <a href="people">people you follow</a>, on the day they come out. Also titles friends <a href="recommendations">recommend to you</a>.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (data is null && error is null) { <Spinner /> }
@@ -26,11 +26,11 @@ else if (data is not null)
             <div class="mini-list">
                 @foreach (var n in day)
                 {
-                    <a class="mini-item @(n.Read ? "" : "unread")" href="@(n.Type == MediaType.Movie ? $"movie/{n.TmdbId}" : Fmt.EpisodeHref(n.TmdbId, n.SeasonNumber, n.EpisodeNumber))" @key="n.Id">
+                    <a class="mini-item @(n.Read ? "" : "unread")" href="@(n.Recommendation ? "recommendations" : n.Type == MediaType.Episode ? Fmt.EpisodeHref(n.TmdbId, n.SeasonNumber, n.EpisodeNumber) : Fmt.Href(n.Type, n.TmdbId))" @key="n.Id">
                         <img src="@Img.Poster(n.PosterPath, "w92")" alt="" loading="lazy" />
                         <div>
                             <div class="mini-title">@n.Title</div>
-                            <div class="muted small">@if (n.Type == MediaType.Movie) { <span>Movie release</span> } else { <Spoiler>@n.Detail</Spoiler> }</div>
+                            <div class="muted small">@if (n.Recommendation) { <span>@(n.Detail is { } note ? $"“{note}”" : "Recommended to you")</span> } else if (n.Type == MediaType.Episode) { <Spoiler>@n.Detail</Spoiler> } else { <span>@(n.Detail is { Length: > 0 } d && d != "Out today" ? d : "Movie release")</span> }</div>
                         </div>
                         @if (!n.Read) { <span class="pill pill-sm">New</span> }
                     </a>

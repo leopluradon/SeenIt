@@ -13,7 +13,8 @@
         <button class="@(kind == PickKind.Movie ? "on" : "")" @onclick="() => Set(() => kind = PickKind.Movie)">Movie</button>
         <button class="@(kind == PickKind.Show ? "on" : "")" @onclick="() => Set(() => kind = PickKind.Show)">Show</button>
     </div>
-    <div class="chips">
+    <div class="chips pick-time" role="group" aria-label="How much time you have">
+        <span class="muted small">I have</span>
         @foreach (var (mins, label) in Lengths)
         {
             <button class="chip @(maxMinutes == mins ? "on" : "")" @onclick="() => Set(() => maxMinutes = mins)" @key="label">@label</button>
@@ -55,6 +56,7 @@ else if (pick is { } p)
                 {
                     <div class="small">Up next: <a href="@Fmt.EpisodeHref(m.TmdbId, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> <Spoiler>@n.Name</Spoiler></a></div>
                 }
+                @if (FitLine(p) is { } fit) { <div class="pick-fit"><Icon Name="clock" Size="16" /> @fit</div> }
                 @if (!string.IsNullOrWhiteSpace(m.Overview)) { <p class="pick-overview">@m.Overview</p> }
                 @if (p.Streaming.Count > 0)
                 {
@@ -83,7 +85,19 @@ else if (pick is { } p)
 
 @code {
     private static readonly (int? Minutes, string Label)[] Lengths =
-        [(null, "Any length"), (30, "Under 30 min"), (60, "Under 1 hour"), (100, "Under 1h 40"), (130, "Under 2h 10")];
+        [(null, "Any amount of time"), (30, "30 min"), (60, "1 hour"), (90, "1½ hours"), (120, "2 hours"), (150, "2½ hours"), (180, "3 hours"), (240, "4 hours")];
+
+    /// <summary>"3 episodes (S01E04–S01E06) · 2h 10m · done by 11:40 PM", or for a movie "2h 10m · done by 11:40 PM".</summary>
+    private static string? FitLine(PickDto p)
+    {
+        if (p.FitMinutes is not { } mins || mins <= 0) return null;
+        var done = $"done by {DateTime.Now.AddMinutes(mins).ToString(Fmt.TimeOnly)} if you start now";
+        if (p.Media.Type == MediaType.Movie) return $"{Fmt.Runtime(mins)} · {done}";
+        if (p.FitEpisodes is not { } count || p.NextEpisode is not { } first) return null;
+        var range = count == 1 || p.FitThrough is not { } last ? Fmt.Ep(first.SeasonNumber, first.EpisodeNumber)
+            : $"{Fmt.Ep(first.SeasonNumber, first.EpisodeNumber)}–{Fmt.Ep(last.SeasonNumber, last.EpisodeNumber)}";
+        return $"Time for {count} episode{(count == 1 ? "" : "s")} ({range}) · {Fmt.Runtime(mins)} · {done}";
+    }
 
     private PickKind kind = PickKind.Any;
     private PickSource source = PickSource.Both;

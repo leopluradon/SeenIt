@@ -482,7 +482,34 @@ public record PersonDetail(
     int WatchedMovies,
     int WatchedEpisodes,
     int WatchedShows,
-    long WatchedMinutes);
+    long WatchedMinutes,
+    bool Following = false,      // you follow this person (their new work goes on your calendar)
+    double? AvgRating = null,    // your average rating of their movies and shows
+    int Rated = 0);
+
+/// <summary>Someone you follow on the People page, with what they have coming.</summary>
+public record FollowedPerson(int Id, string Name, string? ProfilePath, string? Department, DateTimeOffset Since, IReadOnlyList<UpcomingWork> Upcoming);
+/// <summary>Date is null when it's announced without one.</summary>
+public record UpcomingWork(MediaType Type, int TmdbId, string Title, string? PosterPath, DateOnly? Date, string? Role);
+public record PersonFollowRequest(bool Follow);
+
+// ---------- Recap ("previously on") ----------
+
+/// <summary>Coming back to a show after a long break: where you stopped, and the last episodes you saw.</summary>
+public record RecapDto(DateTimeOffset LastWatchedAt, IReadOnlyList<RecapEpisode> Episodes, EpisodeRef Next);
+public record RecapEpisode(int SeasonNumber, int EpisodeNumber, string? Name, string? Overview, string? StillPath, DateTimeOffset WatchedAt);
+
+// ---------- Recommendations between friends ----------
+
+/// <summary>
+/// Received: Who sent it, and Watched/Rating are yours. Sent: Who got it, and Watched/Rating are theirs
+/// (null when their history or ratings aren't visible to you).
+/// </summary>
+public record RecommendationDto(Guid Id, MediaSummary Media, UserCard Who, string? Note, DateTimeOffset At, bool Dismissed,
+    bool? Watched, DateTimeOffset? WatchedAt, double? Rating, bool OnWatchlist);
+public record RecommendationsDto(IReadOnlyList<RecommendationDto> Received, IReadOnlyList<RecommendationDto> Sent);
+public record RecommendRequest(MediaType Type, int TmdbId, IReadOnlyList<string> To, string? Note);
+public record RecommendResult(int Sent, IReadOnlyList<string> Skipped);   // Skipped: names you can't send to
 
 public record HistoryEntry(
     Guid Id,
@@ -540,7 +567,9 @@ public record ShowProgressDto(
     int? Rewatch = null,       // rewatch in progress: Watched/NextEpisode count only plays since it started
     int RewatchesCompleted = 0,
     string? WatchOrder = null,  // name of the alternative order being followed ("Chronological"), if any
-    DateOnly? LatestAired = null);   // newest episode that has aired (for "newest episode" sorting)
+    DateOnly? LatestAired = null,    // newest episode that has aired (for "newest episode" sorting)
+    string? ShowStatus = null,       // TMDB's status (Returning Series, Ended, Canceled…), filled in for caught-up shows
+    EpisodeRef? Returning = null);   // caught up: the next episode TMDB has a date for, if any
 
 /// <summary>How Up Next and Progress are ordered.</summary>
 public enum UpNextSort { LastWatched, NewestEpisode, FewestLeft }
@@ -582,7 +611,7 @@ public record ForYouGroup(MediaSummary Seed, IReadOnlyList<MediaSummary> Items);
 public record ForYouDto(IReadOnlyList<ForYouItem> Top, IReadOnlyList<ForYouGroup> Groups);
 
 public record NotificationDto(Guid Id, MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, string Title, string? Detail,
-    string? PosterPath, DateOnly Day, bool Read);
+    string? PosterPath, DateOnly Day, bool Read, bool Recommendation = false);   // Recommendation: Title is "Sam recommends Heat", Detail their note
 public record NotificationsDto(IReadOnlyList<NotificationDto> Items, int Unread);
 /// <summary>Release alerts and the private calendar feed. CalendarUrl is secret: anyone with it sees your calendar.</summary>
 public record AlertSettingsDto(bool Emails, bool EmailAvailable, string CalendarUrl, bool MonthlyBackup = false, string? WatchlistFeed = null, string? HistoryFeed = null);
@@ -602,7 +631,8 @@ public record CalendarEntry(
     bool Watched,
     bool Started = true,             // you've watched some of this show (false: only on your watchlist)
     DateTimeOffset? AirsAt = null,   // exact air time, from TVmaze, when known
-    string? Network = null);
+    string? Network = null,
+    string? Via = null);             // a person you follow made it ("Christopher Nolan"); Type is Movie or Show
 
 public record StatsDto(
     int MoviesWatched,
@@ -880,7 +910,10 @@ public record PickDto(
     int? Minutes,                          // movie runtime or episode length
     EpisodeRef? NextEpisode,
     IReadOnlyList<ProviderDto> Streaming,  // flatrate/free/ads in the user's region
-    int Candidates);                       // how many titles matched the filters
+    int Candidates,                        // how many titles matched the filters
+    int? FitEpisodes = null,               // with a time budget: how many episodes fit, starting at NextEpisode
+    int? FitMinutes = null,                // how long that (or the movie) takes
+    EpisodeRef? FitThrough = null);        // the last episode that fits
 
 // ---------- On this day ----------
 
