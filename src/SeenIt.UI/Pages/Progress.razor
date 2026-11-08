@@ -208,17 +208,24 @@ else if (items is not null)
 
     private static bool Ongoing(string? status) => status is "Returning Series" or "In Production" or "Planned" or "Pilot";
 
-    /// <summary>Caught up: coming back (soonest first), returning with no date yet, then ended or canceled. Other tabs: one plain list.</summary>
+    /// <summary>Caught up: airing now and coming back (soonest first), returning with no date yet, then ended or canceled. Other tabs: one plain list.</summary>
     private IEnumerable<(string? Heading, string? Hint, List<ShowProgressDto> Shows)> Groups(List<ShowProgressDto> shown)
     {
         if (tab != "waiting") { yield return (null, null, shown); yield break; }
-        var dated = shown.Where(p => p.Returning is not null).OrderBy(p => p.Returning!.AirDate).ToList();
+        var airing = shown.Where(Airing).OrderBy(p => p.Returning!.AirDate).ToList();
+        var dated = shown.Where(p => p.Returning is not null && !Airing(p)).OrderBy(p => p.Returning!.AirDate).ToList();
         var undated = shown.Where(p => p.Returning is null && (Ongoing(p.ShowStatus) || p.ShowStatus is null)).ToList();
         var over = shown.Where(p => p.Returning is null && !Ongoing(p.ShowStatus) && p.ShowStatus is not null).ToList();
+        if (airing.Count > 0) yield return ("Airing now", "Mid-season: you've seen every episode out so far.", airing);
         if (dated.Count > 0) yield return ("Coming back", null, dated);
         if (undated.Count > 0) yield return ("Waiting for news", "Still running on TMDB, with no date for new episodes yet.", undated);
         if (over.Count > 0) yield return ("Ended or canceled", null, over);
     }
+
+    /// <summary>Mid-season with episodes still coming regularly: the next one isn't a premiere and comes
+    /// within three weeks of the last one (longer gaps are a mid-season break, which counts as coming back).</summary>
+    private static bool Airing(ShowProgressDto p) =>
+        p.Returning is { EpisodeNumber: > 1, AirDate: { } next } && p.LatestAired is { } last && next.DayNumber - last.DayNumber <= 21;
 
     /// <summary>"Season 3 premieres Mar 4, 2027 · in 4 months", "Returns Jan 8 with S02E07", "Ended".</summary>
     private static string WaitLine(ShowProgressDto p)
@@ -226,6 +233,7 @@ else if (items is not null)
         if (p.Returning is { AirDate: { } day } r)
         {
             var when = day.ToString(Fmt.DateLong) + (Fmt.Countdown(day) is { } left ? $" · {left}" : "");
+            if (Airing(p)) return $"{Fmt.Ep(r.SeasonNumber, r.EpisodeNumber)} airs {when}";
             return r.EpisodeNumber == 1 ? $"Season {r.SeasonNumber} premieres {when}" : $"Returns {when} with {Fmt.Ep(r.SeasonNumber, r.EpisodeNumber)}";
         }
         return p.ShowStatus switch
