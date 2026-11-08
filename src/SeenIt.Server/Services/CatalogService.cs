@@ -446,9 +446,42 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
                 .ToList());
     }
 
+    // ---------- Shows TMDB has since deleted ----------
+    // TMDB sometimes removes or merges an entry (e.g. a collection of classic shorts). Plays and
+    // ratings still point at it, so its pages are rebuilt from the copy kept here instead of 404ing.
+
+    public const string RemovedStatus = "Removed from TMDB";
+
+    private async Task<TmdbShow?> RemovedShowAsync(int id, CancellationToken ct)
+    {
+        if (await db.Shows.AsNoTracking().FirstOrDefaultAsync(x => x.TmdbId == id, ct) is not { } m) return null;
+        var eps = await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == id).ToListAsync(ct);
+        var seasons = eps.GroupBy(e => e.SeasonNumber).OrderBy(g => g.Key)
+            .Select(g => new TmdbSeasonSummary(g.Key, g.Key == 0 ? "Specials" : $"Season {g.Key}", g.Count(), g.Min(e => e.AirDate)?.ToString("yyyy-MM-dd"), null)).ToList();
+        var last = eps.Max(e => e.AirDate);
+        log.LogInformation("Show {Id} is gone from TMDB; serving the saved copy", id);
+        return new TmdbShow(id, m.Name, null, m.Overview, m.FirstAirDate?.ToString("yyyy-MM-dd"), last?.ToString("yyyy-MM-dd"), RemovedStatus,
+            m.Networks.Select((n, i) => new TmdbNetwork(i, n)).ToList(), m.Genres.Select((g, i) => new TmdbGenre(i, g)).ToList(),
+            m.EpisodeRuntime is { } rt ? [rt] : [], m.PosterPath, m.BackdropPath, m.VoteAverage, null,
+            seasons.Count(x => x.SeasonNumber > 0), eps.Count(e => e.SeasonNumber > 0), seasons, null, null, null, null, null, null, m.OriginalLanguage, m.Countries);
+    }
+
+    private async Task<TmdbSeason?> RemovedSeasonAsync(int showId, int season, CancellationToken ct)
+    {
+        var eps = await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == showId && e.SeasonNumber == season).OrderBy(e => e.EpisodeNumber).ToListAsync(ct);
+        if (eps.Count == 0) return null;
+        return new TmdbSeason(0, season, season == 0 ? "Specials" : $"Season {season}", null, null, eps.Min(e => e.AirDate)?.ToString("yyyy-MM-dd"),
+            eps.Select(e => new TmdbEpisode(e.TmdbId ?? 0, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Overview, e.AirDate?.ToString("yyyy-MM-dd"), e.Runtime, e.StillPath, e.VoteAverage)).ToList());
+    }
+
+    private async Task<TmdbEpisodeDetail?> RemovedEpisodeAsync(int showId, int season, int episode, CancellationToken ct) =>
+        await db.Episodes.AsNoTracking().FirstOrDefaultAsync(e => e.ShowTmdbId == showId && e.SeasonNumber == season && e.EpisodeNumber == episode, ct) is { } e
+            ? new TmdbEpisodeDetail(e.TmdbId ?? 0, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Overview, e.AirDate?.ToString("yyyy-MM-dd"), e.Runtime, e.StillPath, e.VoteAverage, null, null, null)
+            : null;
+
     public async Task<ShowDetail?> GetShowAsync(int id, Guid? userId, CancellationToken ct)
     {
-        var s = await tmdb.GetShowAsync(id, full: true, ct);
+        var s = await tmdb.GetShowAsync(id, full: true, ct) ?? await RemovedShowAsync(id, ct);
         if (s is null) return null;
 
         // The page shows per-season progress, which needs the episode list cached.
@@ -540,7 +573,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
         var show = await EnsureShowAsync(showId, ct);
         var seasonTask = tmdb.GetSeasonAsync(showId, seasonNumber, ct);
         var creditsTask = tmdb.GetSeasonCreditsAsync(showId, seasonNumber, ct);
-        var season = await seasonTask;
+        var season = await seasonTask ?? await RemovedSeasonAsync(showId, seasonNumber, ct);
         if (show is null || season is null) return null;
         var numbers = await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == showId).Select(e => e.SeasonNumber).Distinct().ToListAsync(ct);
         var regular = numbers.Where(n => n > 0).Order().ToList();
@@ -605,7 +638,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
     public async Task<EpisodeDetail?> GetEpisodeAsync(int showId, int seasonNumber, int episodeNumber, Guid? userId, CancellationToken ct)
     {
         var show = await EnsureShowAsync(showId, ct);
-        var e = await tmdb.GetEpisodeAsync(showId, seasonNumber, episodeNumber, ct);
+        var e = await tmdb.GetEpisodeAsync(showId, seasonNumber, episodeNumber, ct) ?? await RemovedEpisodeAsync(showId, seasonNumber, episodeNumber, ct);
         if (show is null || e is null) return null;
 
         // Previous/next across season boundaries, from the cached episode list (specials stay within season 0).
