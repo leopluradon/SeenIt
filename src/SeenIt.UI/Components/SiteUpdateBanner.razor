@@ -8,7 +8,7 @@
 {
     <div class="site-update" role="status">
         <Icon Name="refresh" Size="16" />
-        <span>SeenIt has been updated. Reload to get the latest version.</span>
+        <span>SeenIt has been updated<span class="only-desktop">. Reload to get the latest version</span>.</span>
         <button class="btn btn-sm btn-primary" @onclick="Reload">Reload</button>
         <button class="icon-btn" @onclick="() => dismissed = true" aria-label="Not now"><Icon Name="x" Size="16" /></button>
     </div>

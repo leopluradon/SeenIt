@@ -1378,6 +1378,6 @@ html.compact .overview { line-height: 1.5; }
 /* ---------- "SeenIt has been updated" (website only) ---------- */
 .site-update {
     position: sticky; top: var(--topbar-h); z-index: 30; display: flex; align-items: center; justify-content: center; gap: 10px;
-    padding: 8px 16px; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface-2); border-bottom: 1px solid var(--accent); font-size: .88rem; flex-wrap: wrap;
+    padding: 8px 16px; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface-2); border-bottom: 1px solid var(--accent); font-size: .88rem;
 }
 .site-update .icon-btn { width: 28px; height: 28px; }
