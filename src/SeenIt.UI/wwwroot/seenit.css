@@ -1348,7 +1348,7 @@ html.compact .overview { line-height: 1.5; }
 .recipient-list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
 .recipient { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; }
 .recipient.on { border-color: var(--accent); background: var(--accent-soft); }
-.recipient span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recipient-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stack-tight { display: flex; flex-direction: column; gap: 4px; }
 .stack-tight textarea { width: 100%; resize: vertical; }
 

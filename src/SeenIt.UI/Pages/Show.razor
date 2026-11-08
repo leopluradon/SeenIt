@@ -46,7 +46,7 @@ else if (s is not null)
             <div class="recap-head">
                 <div>
                     <h2>Previously on @s.Name</h2>
-                    <p class="muted small">You last watched <RelTime At="rc.LastWatchedAt" /> (@rc.LastWatchedAt.ToLocalTime().ToString(Fmt.DateLong)). Here's where you stopped.</p>
+                    <p class="muted small">You last watched it on @rc.LastWatchedAt.ToLocalTime().ToString(Fmt.DateLong). Here's where you stopped.</p>
                 </div>
                 <button class="icon-btn" @onclick="() => RecapHidden.Add(Id)" aria-label="Hide the recap"><Icon Name="x" Size="18" /></button>
             </div>

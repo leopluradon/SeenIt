@@ -39,7 +39,8 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
             var type = c.MediaType == "movie" ? MediaType.Movie : MediaType.Show;
             var roles = string.Join(" / ", g.Select(x => x.Character).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct());
             var appearance = (c.GenreIds ?? []).Any(AppearanceGenres.Contains)
-                             || g.All(x => x.Character is { } ch && (ch.Contains("Self", StringComparison.OrdinalIgnoreCase) || ch is "Himself" or "Herself"));
+                             || g.All(x => x.Character is { } ch && (ch.Contains("Self", StringComparison.OrdinalIgnoreCase) || ch is "Himself" or "Herself"))
+                             || ((c.GenreIds ?? []).Contains(Documentary) && g.All(x => string.IsNullOrWhiteSpace(x.Character)));
             return new PersonCreditDto(type, c.Id, (type == MediaType.Movie ? c.Title : c.Name) ?? "",
                 TmdbDates.Parse(type == MediaType.Movie ? c.ReleaseDate : c.FirstAirDate),
                 string.IsNullOrEmpty(roles) ? null : roles,

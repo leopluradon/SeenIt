@@ -17,8 +17,8 @@
                     <label class="recipient @(chosen.Contains(u.UserName) ? "on" : "")" @key="u.UserName">
                         <input type="checkbox" checked="@chosen.Contains(u.UserName)" @onchange="e => Toggle(u.UserName, e.Value is true)" />
                         <Avatar Name="@u.Name" Url="@u.Avatar" Class="avatar-sm" />
-                        <span>@u.Name</span>
-                        @if (u.Following) { <span class="muted tiny">friend</span> }
+                        <span class="recipient-name">@u.Name</span>
+                        @if (u.Following) { <span class="muted tiny" title="You follow each other">friend</span> }
                     </label>
                 }
             </div>
