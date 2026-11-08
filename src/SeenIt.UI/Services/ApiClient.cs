@@ -40,6 +40,10 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         return t;
     }
 
+    /// <summary>The version the server is running now (not the cached <see cref="FeaturesAsync"/> answer).</summary>
+    public async Task<string?> ServerVersionAsync() =>
+        (await SendAsync<ServerFeatures>(HttpMethod.Get, "api/auth/features", null, auth: false))?.Version;
+
     public Task<InviteCheck?> CheckInviteAsync(string code) => SendAsync<InviteCheck>(HttpMethod.Get, $"api/auth/invite/{Uri.EscapeDataString(code)}", null, auth: false);
     public Task<List<InviteDto>?> InvitesAsync() => SendAsync<List<InviteDto>>(HttpMethod.Get, "api/auth/invites");
     public Task<InviteDto?> CreateInviteAsync() => SendAsync<InviteDto>(HttpMethod.Post, "api/auth/invites");

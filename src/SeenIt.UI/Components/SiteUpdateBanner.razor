@@ -1,0 +1,64 @@
+@* On the website: an open tab keeps running the code it loaded, so after a deploy say there's a newer version
+   and offer a reload. Checks every few minutes, and on page changes at most once a minute. *@
+@implements IDisposable
+@inject ApiClient Api
+@inject IPlatform Platform
+@inject NavigationManager Nav
+@if (newer is { } v && !dismissed)
+{
+    <div class="site-update" role="status">
+        <Icon Name="refresh" Size="16" />
+        <span>SeenIt has been updated. Reload to get the latest version.</span>
+        <button class="btn btn-sm btn-primary" @onclick="Reload">Reload</button>
+        <button class="icon-btn" @onclick="() => dismissed = true" aria-label="Not now"><Icon Name="x" Size="16" /></button>
+    </div>
+}
+@code {
+    private static readonly TimeSpan Every = TimeSpan.FromMinutes(5), OnNavigateAfter = TimeSpan.FromMinutes(1);
+    private string? loaded, newer;
+    private bool dismissed, checking;
+    private DateTime lastCheck;
+    private Timer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Platform.AppVersion is not null) return; // the Android app has its own banner for new APKs
+        // The version running when this tab loaded is the version of the code it's running.
+        try { loaded = (await Api.FeaturesAsync())?.Version; } catch { }
+        if (loaded is null or "dev") return;
+        lastCheck = DateTime.UtcNow;
+        timer = new Timer(_ => _ = InvokeAsync(Check), null, Every, Every);
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (DateTime.UtcNow - lastCheck >= OnNavigateAfter) _ = InvokeAsync(Check);
+    }
+
+    private async Task Check()
+    {
+        if (checking || newer is not null) return;
+        checking = true;
+        lastCheck = DateTime.UtcNow;
+        try
+        {
+            if (await Api.ServerVersionAsync() is { } now && now != loaded && now != "dev")
+            {
+                newer = now;
+                timer?.Dispose();
+                StateHasChanged();
+            }
+        }
+        catch { /* offline or mid-restart; try again later */ }
+        finally { checking = false; }
+    }
+
+    private void Reload() => Nav.NavigateTo(Nav.Uri, forceLoad: true);
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}
