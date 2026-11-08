@@ -72,12 +72,18 @@ public class SuggestService(SuggestIndex index, TmdbClient tmdb, IMemoryCache ca
             c.Value.Ready ?? await Bounded(DetailsAsync(c.Key.Kind, c.Key.Id), null)));
         // The index matches TMDB's original titles; when the title we'd show doesn't match what was typed
         // (a foreign film under its English name), it's a less likely pick.
-        var result = chosen.Zip(filled, (c, f) => (c.Value.Score, Item: f))
+        var scored = chosen.Zip(filled, (c, f) => (c.Value.Score, Item: f))
             .Where(x => x.Item is not null)
-            .Select(x => (Score: ShownMatches(x.Item!.Title, q) ? x.Score : x.Score * 0.5, x.Item))
-            .OrderBy(x => x.Item!.Kind == "person")
+            .Select(x => (Score: ShownMatches(x.Item!.Title, q) ? x.Score : x.Score * 0.5, Item: x.Item!))
+            .ToList();
+        // Titles first, unless a person is clearly what's being typed ("pedro p" → Pedro Pascal).
+        var bestPerson = scored.Where(x => x.Item.Kind == "person").Select(x => x.Score).DefaultIfEmpty(0).Max();
+        var bestTitle = scored.Where(x => x.Item.Kind != "person").Select(x => x.Score).DefaultIfEmpty(0).Max();
+        var peopleFirst = bestPerson > bestTitle;
+        var result = scored
+            .OrderBy(x => (x.Item.Kind == "person") != peopleFirst)
             .ThenByDescending(x => x.Score)
-            .Select(x => x.Item!)
+            .Select(x => x.Item)
             .ToList();
 
         // Keep a complete answer for a while; a partial one (TMDB was slow) only briefly.

@@ -37,7 +37,10 @@
                     {
                         var s = shown[i];
                         var index = i;
-                        @if (i > 0 && s.Kind == "person" && shown[i - 1].Kind != "person") { <li class="suggest-sep" role="presentation">People</li> }
+                        @if (i > 0 && (s.Kind == "person") != (shown[i - 1].Kind == "person"))
+                        {
+                            <li class="suggest-sep" role="presentation">@(s.Kind == "person" ? "People" : "Movies & TV")</li>
+                        }
                         <li id="@($"{listId}-{i}")" role="option" aria-selected="@(active == i ? "true" : "false")" @key="(s.Kind, s.Id)">
                             <a href="@Href(s)" class="suggest-item @(active == i ? "on" : "")" @onclick="() => Picked(s)" @onclick:preventDefault @onmouseenter="() => active = index">
                                 <span class="suggest-img @(s.Kind == "person" ? "round" : "")">
