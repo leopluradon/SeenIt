@@ -307,7 +307,8 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
         var ids = people.Select(u => u.Id).ToList();
 
         var monthStartLocal = new DateTime(c.Today.Year, c.Today.Month, 1);
-        var monthStart = new DateTimeOffset(monthStartLocal, c.Tz.GetUtcOffset(monthStartLocal));
+        // Postgres only takes UTC offsets, so convert the local midnight before it goes into a query.
+        var monthStart = new DateTimeOffset(monthStartLocal, c.Tz.GetUtcOffset(monthStartLocal)).ToUniversalTime();
         var weekAgo = DateTimeOffset.UtcNow.AddDays(-7);
         var recent = await db.WatchEvents.AsNoTracking()
             .Where(w => ids.Contains(w.UserId) && w.WatchedAt >= (monthStart < weekAgo ? monthStart : weekAgo))
