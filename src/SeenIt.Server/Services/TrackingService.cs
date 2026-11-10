@@ -60,6 +60,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var episodes = await db.Episodes
             .Where(e => e.ShowTmdbId == req.ShowTmdbId && e.AirDate != null && e.AirDate <= today)
             .Where(e => req.SeasonNumber == null ? e.SeasonNumber > 0 : e.SeasonNumber == req.SeasonNumber)
+            .OrderBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber) // recorded in this order, which breaks History's ties
             .Select(e => new { e.SeasonNumber, e.EpisodeNumber, e.AirDate })
             .ToListAsync(ct);
 
@@ -389,8 +390,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
         var total = await q.CountAsync(ct);
         var ordered = f.Oldest
-            ? q.OrderBy(w => w.WatchedAt).ThenBy(w => w.CreatedAt)
-            : q.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt);
+            ? q.OldestFirst()
+            : q.NewestFirst();
         var rows = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
 
         var minutes = total > 0 ? await MinutesAsync(q, ct) : 0;
@@ -851,7 +852,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var upcoming = (await GetCalendarAsync(userId, today, prefs.ComingUpDays, ct)).Take(prefs.Count("upcoming")).ToList();
         var recent = await db.WatchEvents.Where(w => w.UserId == userId)
-            .OrderByDescending(w => w.WatchedAt).Take(prefs.Count("recent")).ToListAsync(ct);
+            .NewestFirst().Take(prefs.Count("recent")).ToListAsync(ct);
         return new DashboardDto(upNext, upcoming, await ToHistoryAsync(recent, ct));
     }
 

@@ -69,7 +69,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         // Each part has its own audience (Settings → Privacy); what this viewer may not see is left out.
         var recent = See(ProfilePart.History)
             ? await tracking.ToHistoryAsync(await db.WatchEvents.AsNoTracking().Where(w => w.UserId == owner.Id && w.WatchedAt > WatchDates.Unknown)
-                .OrderByDescending(w => w.WatchedAt).Take(24).ToListAsync(ct), ct)
+                .NewestFirst().Take(24).ToListAsync(ct), ct)
             : [];
         var topRated = See(ProfilePart.Ratings) ? await tracking.TopRatedAsync(owner.Id, 18, ct) : [];
 
@@ -265,7 +265,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
 
         var rows = await db.WatchEvents.AsNoTracking()
             .Where(w => historyIds.Contains(w.UserId) && w.WatchedAt > WatchDates.Unknown && w.WatchedAt <= DateTimeOffset.UtcNow.AddDays(1))
-            .OrderByDescending(w => w.WatchedAt).Take(Math.Clamp(take, 1, 100)).ToListAsync(ct);
+            .NewestFirst().Take(Math.Clamp(take, 1, 100)).ToListAsync(ct);
         var entries = await tracking.ToHistoryAsync(rows, ct);
         return new FeedDto(watching, rows.Zip(entries, (w, e) => new ActivityItem(byId[w.UserId], e)).ToList());
     }
