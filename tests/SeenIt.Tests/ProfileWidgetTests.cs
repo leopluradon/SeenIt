@@ -13,7 +13,7 @@ public class ProfileWidgetTests
     {
         var clean = ProfileWidgets.Clean(
         [
-            new("a", "genres", 9, 0),
+            new("a", "genres", 20, 0),
             new("b", "genres", 1, 1),             // only one of these
             new("c", "nonsense", 1, 1),
             new("d", "bio", 3, 1, new string('x', 2000)),
@@ -22,7 +22,7 @@ public class ProfileWidgetTests
         ]);
 
         Assert.Equal(["genres", "bio", "bio", "spotlight"], clean.Select(w => w.Type));
-        Assert.Equal((3, 1), (clean[0].W, clean[0].H));
+        Assert.Equal((12, 1), (clean[0].W, clean[0].H));
         Assert.Equal(ProfileWidgets.MaxText, clean[1].Text!.Length);
         Assert.Null(clean[2].Text);
         Assert.Null(clean[3].Media);
@@ -54,4 +54,15 @@ public class ProfileWidgetTests
         var owner = new AppUser { UserName = "x" };
         Assert.Equal(ProfileWidgets.Default.Select(w => w.Type), ProfileWidgetService.Layout(owner).Select(w => w.Type));
     }
+}
+
+public class ProfileWidgetWidthTests
+{
+    [Theory]
+    [InlineData(6, 6)]    // half
+    [InlineData(5, 4)]    // between a third and half: nearest
+    [InlineData(1, 3)]    // narrowest is a quarter
+    [InlineData(11, 12)]
+    public void Widths_snap_to_quarters_thirds_and_halves(int w, int snapped) =>
+        Assert.Equal(snapped, ProfileWidgets.Clean([new("a", "genres", w, 2)])[0].W);
 }

@@ -56,18 +56,21 @@ window.seenit = {
                     handle.addEventListener('pointercancel', up);
                 } else {
                     const c = cells(), r = box.getBoundingClientRect();
-                    const w0 = +(box.className.match(/\bw(\d)\b/)?.[1] || 1), h0 = +getComputedStyle(box).getPropertyValue('--h') || 1;
+                    const w0 = +(box.className.match(/\bw(\d+)\b/)?.[1] || 12), h0 = +getComputedStyle(box).getPropertyValue('--h') || 1;
+                    const widths = [3, 4, 6, 8, 9, 12], names = { 3: '¼', 4: '⅓', 6: '½', 8: '⅔', 9: '¾', 12: 'Full' };
                     let w = w0, h = h0;
                     box.classList.add('pw-resizing');
                     const move = ev => {
-                        let cw = Math.max(1, Math.min(c.cols, Math.round((ev.clientX - r.left + c.gap) / (c.colW + c.gap))));
-                        // On narrower screens a full-width widget stays "full width" rather than shrinking to fit.
-                        if (c.cols < 3 && cw === c.cols && w0 >= c.cols) cw = w0;
-                        w = cw;
+                        // Width: the share of the row the pointer has reached, snapped to ¼ ⅓ ½ ⅔ ¾ or full.
+                        // (Phones show one column, so only the height changes there.)
+                        if (c.cols >= 12) {
+                            const share = (ev.clientX - r.left + c.gap) / (grid.clientWidth + c.gap) * 12;
+                            w = widths.reduce((best, x) => Math.abs(x - share) < Math.abs(best - share) ? x : best);
+                        }
                         h = Math.max(1, Math.min(4, Math.round((ev.clientY - r.top + c.rowGap) / (c.rowH + c.rowGap))));
-                        box.style.gridColumn = `span ${Math.min(w, c.cols)}`;
+                        if (c.cols >= 12) box.style.gridColumn = `span ${w}`;
                         box.style.gridRow = `span ${h}`;
-                        box.dataset.size = `${w}×${h}`;
+                        box.dataset.size = `${names[w]} × ${h}`;
                         edgeScroll(ev.clientY);
                     };
                     const up = () => {

@@ -699,7 +699,7 @@ public static class ApiEndpoints
         });
         g.MapGet("/requests", (ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.RequestsAsync(p.UserId(), ct));
         // Your profile's widgets: save a layout, or go back to the default one.
-        g.MapPut("/profile-layout", (ProfileLayoutRequest r, ClaimsPrincipal p, ProfileWidgetService w, CancellationToken ct) => w.SaveAsync(p.UserId(), r.Widgets, ct));
+        g.MapPut("/profile-layout", (ProfileLayoutRequest r, ClaimsPrincipal p, ProfileWidgetService w, CancellationToken ct) => w.SaveAsync(p.UserId(), r.Widgets, ct, r.Columns));
         g.MapDelete("/profile-layout", (ClaimsPrincipal p, ProfileWidgetService w, CancellationToken ct) => w.SaveAsync(p.UserId(), null, ct));
         g.MapPost("/requests/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.AnswerRequestAsync(p.UserId(), name, true, ct) ? Results.NoContent() : Results.NotFound());

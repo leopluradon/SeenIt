@@ -82,7 +82,7 @@ else if (p is not null)
                             <button type="button" class="icon-btn pw-grip only-desktop" aria-label="Drag to move" title="Drag to move"><Icon Name="grip" Size="16" /></button>
                             <button type="button" class="icon-btn" @onclick="() => Shift(index, -1)" disabled="@(index == 0)" aria-label="Move earlier"><Icon Name="arrow-up" Size="14" /></button>
                             <button type="button" class="icon-btn" @onclick="() => Shift(index, 1)" disabled="@(index == shown.Count - 1)" aria-label="Move later"><Icon Name="arrow-down" Size="14" /></button>
-                            <span class="pw-size muted small">@w.W×@w.H</span>
+                            <span class="pw-size muted small">@ProfileWidgets.WidthName(w.W) × @w.H</span>
                             @if (w.Type is "bio" or "spotlight" or "pinned-list") { <button type="button" class="btn btn-sm" @onclick="() => Configure(w)">Edit</button> }
                             <button type="button" class="icon-btn" @onclick="() => Remove(w)" aria-label="@($"Remove {ProfileWidgetView.Title(w)}")"><Icon Name="x" Size="14" /></button>
                         </div>
@@ -106,7 +106,7 @@ else if (p is not null)
                     <button type="button" class="pw-cat-item" disabled="@used" @onclick="() => Add(k)">
                         <b>@k.Name</b>
                         <span class="muted small">@k.Description</span>
-                        <span class="muted small">@(used ? "On your profile" : k.Part is { } part ? $"{k.W}×{k.H} · {PartName(part)} privacy" : $"{k.W}×{k.H}")</span>
+                        <span class="muted small">@(used ? "On your profile" : k.Part is { } part ? $"{ProfileWidgets.WidthName(k.W)} × {k.H} · {PartName(part)} privacy" : $"{ProfileWidgets.WidthName(k.W)} × {k.H}")</span>
                     </button>
                 }
             </div>
@@ -319,7 +319,7 @@ else if (p is not null)
     public void Resize(string id, int w, int h)
     {
         if (draft is null || draft.FindIndex(x => x.Id == id) is not (>= 0 and var i)) return;
-        draft[i] = draft[i] with { W = Math.Clamp(w, 1, ProfileWidgets.Columns), H = Math.Clamp(h, 1, ProfileWidgets.MaxRows) };
+        draft[i] = draft[i] with { W = ProfileWidgets.SnapWidth(w), H = Math.Clamp(h, 1, ProfileWidgets.MaxRows) };
         StateHasChanged();
     }
 

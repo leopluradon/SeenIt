@@ -1447,15 +1447,19 @@ html.compact .overview { line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { .to-top { transition: none; } }
 
 /* ----- Customizable profile: a grid of widgets ----- */
-.pw-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 168px; grid-auto-flow: row dense; gap: 16px; margin-bottom: 20px; }
+.pw-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 168px; grid-auto-flow: row dense; gap: 16px; margin-bottom: 20px; }
 .pw {
     position: relative; grid-row: span var(--h, 1); min-width: 0; min-height: 0;
     display: flex; flex-direction: column; overflow: hidden;
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px;
 }
-.pw.w1 { grid-column: span 1; }
-.pw.w2 { grid-column: span 2; }
+/* Widths are twelfths of the row. */
 .pw.w3 { grid-column: span 3; }
+.pw.w4 { grid-column: span 4; }
+.pw.w6 { grid-column: span 6; }
+.pw.w8 { grid-column: span 8; }
+.pw.w9 { grid-column: span 9; }
+.pw.w12 { grid-column: span 12; }
 .pw-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .pw-head h2 { margin: 0; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pw-body { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
@@ -1493,8 +1497,8 @@ html.compact .overview { line-height: 1.5; }
 
 .pw-spotlight { display: flex; flex-direction: column; gap: 8px; height: 100%; color: inherit; text-decoration: none; }
 .pw-spotlight img { flex: 1; min-height: 0; width: 100%; object-fit: contain; object-position: left top; border-radius: var(--radius-sm); }
-.pw.w2 .pw-spotlight, .pw.w3 .pw-spotlight { flex-direction: row; align-items: flex-start; }
-.pw.w2 .pw-spotlight img, .pw.w3 .pw-spotlight img { flex: none; width: auto; height: 100%; max-width: 50%; }
+.pw:is(.w6, .w8, .w9, .w12) .pw-spotlight { flex-direction: row; align-items: flex-start; }
+.pw:is(.w6, .w8, .w9, .w12) .pw-spotlight img { flex: none; width: auto; height: 100%; max-width: 50%; }
 
 /* Editing */
 .pw-editbar {
@@ -1523,8 +1527,8 @@ html.compact .overview { line-height: 1.5; }
 }
 .pw-drop-before { box-shadow: inset 4px 0 0 var(--accent); }
 .pw-drop-after { box-shadow: inset -4px 0 0 var(--accent); }
-.pw.w3.pw-drop-before { box-shadow: inset 0 4px 0 var(--accent); }
-.pw.w3.pw-drop-after { box-shadow: inset 0 -4px 0 var(--accent); }
+.pw.w12.pw-drop-before { box-shadow: inset 0 4px 0 var(--accent); }
+.pw.w12.pw-drop-after { box-shadow: inset 0 -4px 0 var(--accent); }
 
 .pw-cat-head { margin: 14px 0 8px; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .pw-cat-head:first-child { margin-top: 0; }
@@ -1539,13 +1543,14 @@ html.compact .overview { line-height: 1.5; }
 .pw-picks .suggest-item { background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; width: 100%; }
 
 @media (max-width: 1000px) {
-    .pw-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .pw.w3 { grid-column: span 2; }
+    /* Tablets: quarters and thirds become halves; anything wider than half is full width. */
+    .pw.w3, .pw.w4 { grid-column: span 6; }
+    .pw.w8, .pw.w9 { grid-column: span 12; }
 }
 @media (max-width: 760px) {
     /* Phones: one column, each widget as tall as what's in it. */
     .pw-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; gap: 12px; }
-    .pw.w1, .pw.w2, .pw.w3 { grid-column: auto; }
+    .pw.w3, .pw.w4, .pw.w6, .pw.w8, .pw.w9, .pw.w12 { grid-column: auto; }
     .pw { grid-row: auto; }
     .pw-body { overflow: visible; }
     .pw-grid.editing .pw { min-height: calc(var(--h, 1) * 120px); }

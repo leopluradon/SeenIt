@@ -29,8 +29,10 @@ public class ProfileWidgetService(AppDbContext db, SocialService social, Trackin
         ProfileWidgets.Kind(type) is { } k && (k.Type == "lists"
             || (k.Part is { } part ? SocialService.CanSee(owner, viewer, mutual, part) : SocialService.CanView(owner, viewer, mutual)));
 
-    public async Task<List<ProfileWidget>> SaveAsync(Guid userId, IReadOnlyList<ProfileWidget>? widgets, CancellationToken ct)
+    /// <param name="columns">The units the widths are in: 12, or 3 from apps older than 1.159.</param>
+    public async Task<List<ProfileWidget>> SaveAsync(Guid userId, IReadOnlyList<ProfileWidget>? widgets, CancellationToken ct, int columns = ProfileWidgets.Columns)
     {
+        if (widgets is not null && columns == 3) widgets = widgets.Select(w => w with { W = w.W * 4 }).ToList();
         var user = await db.Users.FirstAsync(u => u.Id == userId, ct);
         if (widgets is null) { user.ProfileLayoutJson = null; await db.SaveChangesAsync(ct); return [.. ProfileWidgets.Default]; }
         var clean = ProfileWidgets.Clean(widgets);
