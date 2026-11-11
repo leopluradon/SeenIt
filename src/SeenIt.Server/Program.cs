@@ -94,6 +94,7 @@ builder.Services.AddScoped<InviteService>();
 builder.Services.AddScoped<PickService>();
 builder.Services.AddScoped<OnThisDayService>();
 builder.Services.AddScoped<MoreStatsService>();
+builder.Services.AddScoped<ProfileWidgetService>();
 builder.Services.AddScoped<ActivityService>();
 builder.Services.AddSingleton<AdminService>();
 builder.Services.AddSingleton<EndpointTimings>();

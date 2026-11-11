@@ -299,6 +299,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<string>("PrefsJson")
                         .HasColumnType("text");
 
+                    b.Property<string>("ProfileLayoutJson")
+                        .HasColumnType("text");
+
                     b.Property<int>("RatingScale")
                         .HasColumnType("integer");
 

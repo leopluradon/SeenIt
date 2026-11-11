@@ -228,6 +228,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     // ---------- Social ----------
 
     public Task<ProfileDto> ProfileAsync(string userName) => GetAsync<ProfileDto>($"api/users/{Uri.EscapeDataString(userName)}");
+    public Task<ProfileWidgetData> ProfileWidgetsAsync(string userName, IEnumerable<string>? preview = null) =>
+        GetAsync<ProfileWidgetData>($"api/users/{Uri.EscapeDataString(userName)}/widgets" + (preview is null ? "" : "?preview=" + Uri.EscapeDataString(string.Join(',', preview))));
+    public async Task<List<ProfileWidget>> SaveProfileLayoutAsync(IReadOnlyList<ProfileWidget> widgets) =>
+        await SendAsync<List<ProfileWidget>>(HttpMethod.Put, "api/social/profile-layout", new ProfileLayoutRequest(widgets)) ?? [];
+    public async Task<List<ProfileWidget>> ResetProfileLayoutAsync() =>
+        await SendAsync<List<ProfileWidget>>(HttpMethod.Delete, "api/social/profile-layout", null) ?? [];
     public Task<FeedDto> FeedAsync(int take = 40) => GetAsync<FeedDto>($"api/social/feed?take={take}");
     public Task<List<NotInterestedEntry>> NotInterestedAsync() => GetAsync<List<NotInterestedEntry>>("api/not-interested");
     public Task MarkNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Post, "api/not-interested", new FavoriteRequest(type, id));

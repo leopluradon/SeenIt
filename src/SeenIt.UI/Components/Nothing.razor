@@ -1,0 +1,5 @@
+@* A quiet "nothing here" line inside a widget or panel; renders nothing when there's no text. *@
+@if (!string.IsNullOrEmpty(Text)) { <p class="muted small nothing">@Text</p> }
+@code {
+    [Parameter] public string? Text { get; set; }
+}

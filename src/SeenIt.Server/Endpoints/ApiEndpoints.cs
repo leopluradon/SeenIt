@@ -638,6 +638,10 @@ public static class ApiEndpoints
         app.MapGet("/api/users/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.GetProfileAsync(name, p.OptionalUserId(), ct) is { } profile ? Results.Ok(profile) : Results.NotFound());
 
+        // What a profile's widgets show (only the ones this viewer may see).
+        app.MapGet("/api/users/{name}/widgets", async (string name, string? preview, ClaimsPrincipal p, ProfileWidgetService w, CancellationToken ct) =>
+            await w.DataAsync(name, p.OptionalUserId(), preview?.Split(',', StringSplitOptions.RemoveEmptyEntries), ct) is { } data ? Results.Ok(data) : Results.NotFound());
+
         // RSS / JSON Feed: lists (public ones need no key) and, with your private key, watchlist and history.
         static IResult FeedResult(FeedService.Feed? f, string format, HttpContext http) => f is null ? Results.NotFound()
             : format == "json" ? Results.Text(FeedService.JsonFeed(f, $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}{http.Request.QueryString}"), "application/feed+json; charset=utf-8")
@@ -694,6 +698,9 @@ public static class ApiEndpoints
             return Results.Ok(result);
         });
         g.MapGet("/requests", (ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.RequestsAsync(p.UserId(), ct));
+        // Your profile's widgets: save a layout, or go back to the default one.
+        g.MapPut("/profile-layout", (ProfileLayoutRequest r, ClaimsPrincipal p, ProfileWidgetService w, CancellationToken ct) => w.SaveAsync(p.UserId(), r.Widgets, ct));
+        g.MapDelete("/profile-layout", (ClaimsPrincipal p, ProfileWidgetService w, CancellationToken ct) => w.SaveAsync(p.UserId(), null, ct));
         g.MapPost("/requests/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.AnswerRequestAsync(p.UserId(), name, true, ct) ? Results.NoContent() : Results.NotFound());
         g.MapDelete("/requests/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>

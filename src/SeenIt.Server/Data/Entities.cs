@@ -42,6 +42,8 @@ public class AppUser : IdentityUser<Guid>
     public UpNextSort UpNextSort { get; set; }
     /// <summary>UserPrefs as JSON; null = all defaults.</summary>
     public string? PrefsJson { get; set; }
+    /// <summary>The profile's widgets (ProfileWidget[]) as JSON; null = the default profile.</summary>
+    public string? ProfileLayoutJson { get; set; }
     /// <summary>"48d 7h" or "1,159h" for long stretches of time.</summary>
     public TimeFormat TimeFormat { get; set; }
     /// <summary>Bottom tab bar choice (keys from UiPrefs.Tabs); empty means the default.</summary>

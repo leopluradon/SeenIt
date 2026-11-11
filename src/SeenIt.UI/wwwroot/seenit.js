@@ -1,5 +1,95 @@
 // Small browser helpers for the shared SeenIt UI.
 window.seenit = {
+    // Customizing a profile: drag a widget's grip to move it, drag its corner to resize it (snaps to the grid).
+    profileGrid: {
+        attach(grid, dotnet) {
+            if (!grid || grid._pwAttached) return;
+            grid._pwAttached = true;
+            const cells = () => {
+                const cs = getComputedStyle(grid);
+                const cols = cs.gridTemplateColumns.split(' ').filter(Boolean).length;
+                const gap = parseFloat(cs.columnGap) || 0, rowGap = parseFloat(cs.rowGap) || 0;
+                return { cols, gap, rowGap, colW: (grid.clientWidth - gap * (cols - 1)) / cols, rowH: parseFloat(cs.gridAutoRows) || 168 };
+            };
+            const edgeScroll = y => { if (y < 70) window.scrollBy(0, -14); else if (y > innerHeight - 70) window.scrollBy(0, 14); };
+
+            grid.addEventListener('pointerdown', e => {
+                const grip = e.target.closest('.pw-grip'), corner = e.target.closest('.pw-resize');
+                if ((!grip && !corner) || e.button !== 0) return;
+                const box = e.target.closest('.pw');
+                if (!box) return;
+                e.preventDefault();
+                (grip || corner).setPointerCapture(e.pointerId);
+                const handle = grip || corner, id = box.dataset.id;
+
+                if (grip) {
+                    const x0 = e.clientX, y0 = e.clientY + scrollY;
+                    let target = null, before = false;
+                    box.classList.add('pw-dragging');
+                    const clear = () => grid.querySelectorAll('.pw-drop-before, .pw-drop-after').forEach(el => el.classList.remove('pw-drop-before', 'pw-drop-after'));
+                    const move = ev => {
+                        box.style.transform = `translate(${ev.clientX - x0}px, ${ev.clientY + scrollY - y0}px)`;
+                        box.style.pointerEvents = 'none';
+                        const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.pw');
+                        box.style.pointerEvents = '';
+                        clear();
+                        target = under && under !== box && grid.contains(under) ? under : null;
+                        if (target) {
+                            const r = target.getBoundingClientRect();
+                            // Wide widgets: top half goes before; others: left half goes before.
+                            before = r.width > grid.clientWidth * .9 ? ev.clientY < r.top + r.height / 2 : ev.clientX < r.left + r.width / 2;
+                            target.classList.add(before ? 'pw-drop-before' : 'pw-drop-after');
+                        }
+                        edgeScroll(ev.clientY);
+                    };
+                    const up = () => {
+                        handle.removeEventListener('pointermove', move);
+                        handle.removeEventListener('pointerup', up);
+                        handle.removeEventListener('pointercancel', up);
+                        box.classList.remove('pw-dragging');
+                        box.style.transform = '';
+                        clear();
+                        if (target) dotnet.invokeMethodAsync('Move', id, target.dataset.id, before);
+                    };
+                    handle.addEventListener('pointermove', move);
+                    handle.addEventListener('pointerup', up);
+                    handle.addEventListener('pointercancel', up);
+                } else {
+                    const c = cells(), r = box.getBoundingClientRect();
+                    const w0 = +(box.className.match(/\bw(\d)\b/)?.[1] || 1), h0 = +getComputedStyle(box).getPropertyValue('--h') || 1;
+                    let w = w0, h = h0;
+                    box.classList.add('pw-resizing');
+                    const move = ev => {
+                        let cw = Math.max(1, Math.min(c.cols, Math.round((ev.clientX - r.left + c.gap) / (c.colW + c.gap))));
+                        // On narrower screens a full-width widget stays "full width" rather than shrinking to fit.
+                        if (c.cols < 3 && cw === c.cols && w0 >= c.cols) cw = w0;
+                        w = cw;
+                        h = Math.max(1, Math.min(4, Math.round((ev.clientY - r.top + c.rowGap) / (c.rowH + c.rowGap))));
+                        box.style.gridColumn = `span ${Math.min(w, c.cols)}`;
+                        box.style.gridRow = `span ${h}`;
+                        box.dataset.size = `${w}×${h}`;
+                        edgeScroll(ev.clientY);
+                    };
+                    const up = () => {
+                        handle.removeEventListener('pointermove', move);
+                        handle.removeEventListener('pointerup', up);
+                        handle.removeEventListener('pointercancel', up);
+                        box.classList.remove('pw-resizing');
+                        box.style.gridColumn = box.style.gridRow = '';
+                        delete box.dataset.size;
+                        if (w !== w0 || h !== h0) dotnet.invokeMethodAsync('Resize', id, w, h);
+                    };
+                    handle.addEventListener('pointermove', move);
+                    handle.addEventListener('pointerup', up);
+                    handle.addEventListener('pointercancel', up);
+                }
+            });
+        },
+        reveal(grid, id) {
+            const el = grid?.querySelector(`.pw[data-id="${id}"]`);
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
+    },
     // Escape closes the dialog on top. Each open dialog registers here; the newest one wins.
     _dialogs: [],
     dialogOpened(id, dotnet) {

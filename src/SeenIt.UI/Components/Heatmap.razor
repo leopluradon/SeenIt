@@ -1,0 +1,26 @@
+@* A year of watching, one square per day (Stats page and the profile widget). *@
+<div class="heatmap-wrap">
+    <div class="heatmap" style="--weeks:@Weeks">
+        @for (var pad = 0; pad < (int)(Days.FirstOrDefault()?.Date.DayOfWeek ?? 0); pad++) { <span class="hm-cell hm-pad"></span> }
+        @foreach (var d in Days)
+        {
+            <span class="hm-cell hm-@Level(d.Minutes)" title="@($"{(d.Date).ToString(Fmt.DayLongYear)}: {(d.Plays == 0 ? "nothing" : $"{Fmt.Duration(d.Minutes)}{(Fmt.HoursTip(d.Minutes) is { } ht ? $" ({ht})" : "")}, {d.Plays} play{(d.Plays == 1 ? "" : "s")}")}")"></span>
+        }
+    </div>
+</div>
+<div class="hm-legend muted small">Less <span class="hm-cell hm-0"></span><span class="hm-cell hm-1"></span><span class="hm-cell hm-2"></span><span class="hm-cell hm-3"></span><span class="hm-cell hm-4"></span> More</div>
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<HeatmapDay> Days { get; set; } = [];
+    private int max = 1;
+
+    protected override void OnParametersSet() => max = Math.Max(1, Days.Count == 0 ? 1 : Days.Max(d => d.Minutes));
+
+    private int Weeks => Days.Count == 0 ? 1 : (int)Math.Ceiling((Days.Count + (int)Days[0].Date.DayOfWeek) / 7.0);
+
+    private int Level(int minutes)
+    {
+        if (minutes <= 0) return 0;
+        var r = (double)minutes / max;
+        return r < .25 ? 1 : r < .5 ? 2 : r < .75 ? 3 : 4;
+    }
+}

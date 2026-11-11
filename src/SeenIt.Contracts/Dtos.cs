@@ -872,7 +872,8 @@ public record ProfileDto(
     int Followers, int Following,
     NowWatchingDto? NowWatching, ProfileStats? Stats,
     IReadOnlyList<HistoryEntry> Recent, IReadOnlyList<RatingEntry> TopRated, IReadOnlyList<ListSummary> Lists,
-    IReadOnlyList<FavoriteEntry>? Favorites = null);
+    IReadOnlyList<FavoriteEntry>? Favorites = null,
+    IReadOnlyList<ProfileWidget>? Layout = null);   // the widgets this viewer may see, in order
 
 /// <summary>A movie or show the user marked as a favorite, in their order.</summary>
 public record FavoriteEntry(MediaSummary Media, DateTimeOffset AddedAt);

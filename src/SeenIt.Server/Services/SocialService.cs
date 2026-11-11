@@ -22,7 +22,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         return who == ProfileVisibility.Public || (who == ProfileVisibility.Friends && mutual);
     }
 
-    private async Task<(bool Following, bool FollowsYou)> RelationAsync(Guid? viewer, Guid them, CancellationToken ct)
+    public async Task<(bool Following, bool FollowsYou)> RelationAsync(Guid? viewer, Guid them, CancellationToken ct)
     {
         if (viewer is not { } me || me == them) return (false, false);
         var rows = await db.Follows.Where(f => (f.FollowerId == me && f.FolloweeId == them) || (f.FollowerId == them && f.FolloweeId == me))
@@ -63,8 +63,9 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
 
         // Public lists are shareable by link anyway, so they show even on a private profile.
         var publicLists = (await lists.GetMineAsync(owner.Id, ct)).Where(l => isMe || l.IsPublic).ToList();
+        var layout = ProfileWidgetService.Visible(owner, viewer, mutual);
         if (!canView)
-            return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, false, followers, followingCount, null, null, [], [], publicLists);
+            return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, false, followers, followingCount, null, null, [], [], publicLists, Layout: layout);
 
         // Each part has its own audience (Settings → Privacy); what this viewer may not see is left out.
         var recent = See(ProfilePart.History)
@@ -77,7 +78,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             See(ProfilePart.WatchingNow) ? await checkIns.GetAsync(owner.Id, ct) : null,
             See(ProfilePart.Stats) ? await StatsAsync(owner.Id, ct) : null,
             recent, topRated, publicLists,
-            See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null);
+            See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null, layout);
     }
 
     /// <summary>

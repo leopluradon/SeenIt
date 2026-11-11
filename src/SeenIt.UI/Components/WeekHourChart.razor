@@ -1,0 +1,24 @@
+@* Plays by weekday and hour of day (Stats page and the profile widget). *@
+<div class="weekhour">
+    <span></span>
+    @for (var h = 0; h < 24; h++) { <span class="wh-hour">@(h % 3 == 0 ? HourLabel(h) : "")</span> }
+    @for (var d = 0; d < 7; d++)
+    {
+        var day = d;
+        <span class="wh-day">@(((DayOfWeek)day).ToString()[..3])</span>
+        @for (var h = 0; h < 24; h++)
+        {
+            var n = Grid[day][h];
+            <span class="wh-cell" style="--a:@Alpha(n)" title="@($"{(DayOfWeek)day}s, {HourLabel(h)}: {n} play{(n == 1 ? "" : "s")}")"></span>
+        }
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<IReadOnlyList<int>> Grid { get; set; } = [];
+    private int max = 1;
+
+    protected override void OnParametersSet() => max = Math.Max(1, Grid.SelectMany(r => r).DefaultIfEmpty(0).Max());
+
+    private string Alpha(int n) => (n == 0 ? 0 : .12 + .88 * n / max).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    private static string HourLabel(int h) => new DateTime(2000, 1, 1, h, 0, 0).ToString("h tt").ToLowerInvariant();
+}

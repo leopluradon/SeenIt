@@ -167,6 +167,9 @@ public static class Fmt
     public static string Exact(DateTimeOffset when) =>
         WatchDates.IsUnknown(when) ? "Date unknown" : when.ToLocalTime().ToString($"{DayLongYear}, {TimeOnly}");
 
+    /// <summary>A wait in days, said naturally: "same day", "3 days", "4 months", "2 years".</summary>
+    public static string WaitDays(int d) => d switch { 0 => "same day", 1 => "1 day", < 60 => $"{d} days", < 730 => $"{Math.Round(d / 30.4)} months", _ => $"{Math.Round(d / 365.25)} years" };
+
     public static string Relative(DateTimeOffset when)
     {
         if (WatchDates.IsUnknown(when)) return "date unknown";

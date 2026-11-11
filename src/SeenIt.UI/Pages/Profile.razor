@@ -1,8 +1,10 @@
 @page "/u/{Name}"
+@implements IAsyncDisposable
 @inject ApiClient Api
 @inject IPlatform Platform
 @inject Toasts Toasts
 @inject SessionState Session
+@inject IJSRuntime Js
 <PageTitle>@(p?.User.Name ?? Name) · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" />
@@ -31,12 +33,30 @@ else if (p is not null)
                         <FollowButton User="p.User" UserChanged="u => p = p with { User = u }" />
                         @if (p.CanView && Session.Me is { } viewer) { <a class="btn btn-sm" href="@Fmt.CompareHref(viewer.UserName, p.User.UserName)">Compare</a> }
                     }
-                    else { <a class="btn btn-sm" href="settings#privacy">Privacy</a> }
+                    else if (draft is null)
+                    {
+                        <button class="btn btn-sm" @onclick="StartEditing"><Icon Name="edit" Size="14" /> Customize</button>
+                        <a class="btn btn-sm" href="settings#privacy">Privacy</a>
+                    }
                 </Authorized>
             </AuthorizeView>
             <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="14" /> Share</button>
         </div>
     </div>
+
+    @if (draft is not null)
+    {
+        <div class="pw-editbar">
+            <span class="muted small only-desktop">Drag <Icon Name="grip" Size="12" /> to move, and the corner to resize.</span>
+            <span class="muted small only-mobile">Use the arrows to move, and the corner to resize.</span>
+            <div class="inline">
+                <button class="btn btn-sm btn-primary" @onclick="() => adding = true"><Icon Name="plus" Size="14" /> Add widget</button>
+                <button class="btn btn-sm" @onclick="ResetDraft">Reset</button>
+                <button class="btn btn-sm" @onclick="CancelEditing">Cancel</button>
+                <button class="btn btn-sm btn-primary" @onclick="Save" disabled="@saving">@(saving ? "Saving…" : "Done")</button>
+            </div>
+        </div>
+    }
 
     @if (!p.CanView)
     {
@@ -45,95 +65,130 @@ else if (p is not null)
             @if (p.Visibility == ProfileVisibility.Friends) { <p class="muted small">Follow each other to see what they watch.</p> }
         </div>
     }
-    else
+    else if (p.IsMe && draft is null) { <p class="muted small">Visible to @Friends.VisibilityText(p.Visibility).</p> }
+
+    var shown = Shown();
+    @if (shown.Count > 0 || draft is not null)
     {
-        @if (p.IsMe) { <p class="muted small">Visible to @Friends.VisibilityText(p.Visibility).</p> }
-        @if (p.NowWatching is { } nw) { <NowWatchingCard Item="nw" Who="@(p.IsMe ? null : p.User.Name)" /> }
-        @if (p.Stats is { } st)
-        {
-            <section class="stat-tiles profile-tiles">
-                <div class="stat"><span class="stat-value"><Dur Minutes="st.Minutes" /></span><span class="stat-label">watched</span></div>
-                <div class="stat"><span class="stat-value">@st.Movies.ToString("N0")</span><span class="stat-label">movies</span></div>
-                <div class="stat"><span class="stat-value">@st.Episodes.ToString("N0")</span><span class="stat-label">episodes of @st.Shows.ToString("N0") shows</span></div>
-                <div class="stat"><span class="stat-value">@st.Ratings.ToString("N0")</span><span class="stat-label">ratings</span></div>
-            </section>
-        }
-        @if (p.Recent.Count > 0)
-        {
-            <section class="row-section">
-                <div class="section-head">
-                    <h2>Recently watched</h2>
-                    <a href="@(p.IsMe ? "history" : $"{Fmt.UserHref(p.User.UserName)}/history")" class="section-more">All history <Icon Name="chevron-right" Size="16" /></a>
-                </div>
-                <div class="poster-scroller">
-                    @foreach (var h in p.Recent)
-                    {
-                        <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
-                                    Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
-                                    Sub="@((h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))" SubTitle="@Fmt.Exact(h.WatchedAt)"
-                                    ShowScore="false" @key="h.Id" />
-                    }
-                </div>
-            </section>
-        }
-        @foreach (var (type, label) in new[] { (MediaType.Movie, "Favorite movies"), (MediaType.Show, "Favorite shows") })
-        {
-            var favs = (p.Favorites ?? []).Where(f => f.Media.Type == type).Take(FavoriteLimits.PerType).ToList();
-            @if (favs.Count > 0)
+        <div class="pw-grid @(draft is not null ? "editing" : "")" @ref="grid">
+            @for (var i = 0; i < shown.Count; i++)
             {
-                <section class="row-section">
-                    <div class="section-head">
-                        <h2>@label</h2>
-                        @if (p.IsMe) { <a href="favorites" class="section-more">Edit <Icon Name="chevron-right" Size="16" /></a> }
-                    </div>
-                    <div class="fav-four">
-                        @foreach (var f in favs) { <PosterCard Media="f.Media" ShowScore="false" @key="(f.Media.Type, f.Media.TmdbId)" /> }
-                    </div>
+                var w = shown[i];
+                var index = i;
+                <section class="pw w@(w.W)" style="--h:@w.H" data-id="@w.Id" @key="w.Id">
+                    @if (draft is not null)
+                    {
+                        <div class="pw-tools">
+                            <button type="button" class="icon-btn pw-grip only-desktop" aria-label="Drag to move" title="Drag to move"><Icon Name="grip" Size="16" /></button>
+                            <button type="button" class="icon-btn" @onclick="() => Shift(index, -1)" disabled="@(index == 0)" aria-label="Move earlier"><Icon Name="arrow-up" Size="14" /></button>
+                            <button type="button" class="icon-btn" @onclick="() => Shift(index, 1)" disabled="@(index == shown.Count - 1)" aria-label="Move later"><Icon Name="arrow-down" Size="14" /></button>
+                            <span class="pw-size muted small">@w.W×@w.H</span>
+                            @if (w.Type is "bio" or "spotlight" or "pinned-list") { <button type="button" class="btn btn-sm" @onclick="() => Configure(w)">Edit</button> }
+                            <button type="button" class="icon-btn" @onclick="() => Remove(w)" aria-label="@($"Remove {ProfileWidgetView.Title(w)}")"><Icon Name="x" Size="14" /></button>
+                        </div>
+                        <span class="pw-resize" aria-hidden="true"></span>
+                    }
+                    <ProfileWidgetView Widget="w" P="p" D="data" Editing="draft is not null" />
                 </section>
             }
-        }
-        @if (p.TopRated.Count > 0)
-        {
-            <section class="row-section">
-                <div class="section-head"><h2>Top rated</h2></div>
-                <div class="poster-scroller">
-                    @foreach (var r in p.TopRated)
-                    {
-                        <PosterCard Media="@(new MediaSummary(r.Type, r.TmdbId, r.Title, null, r.PosterPath, null, null, null))" Badge="@Fmt.RatingBadge(r.Rating)" ShowScore="false" @key="(r.Type, r.TmdbId)" />
-                    }
-                </div>
-            </section>
-        }
+        </div>
+        @if (draft is { Count: 0 }) { <p class="muted">No widgets. Add some with <b>Add widget</b>.</p> }
     }
 
-    @if (p.Lists.Count > 0)
-    {
-        <section class="row-section">
-            <div class="section-head"><h2>@(p.IsMe ? "Your lists" : "Lists")</h2></div>
-            <div class="list-grid">
-                @foreach (var l in p.Lists)
+    <Modal Open="adding" OpenChanged="v => adding = v" Title="Add a widget">
+        @foreach (var group in ProfileWidgets.Kinds.GroupBy(k => k.Group))
+        {
+            <h4 class="pw-cat-head">@group.Key</h4>
+            <div class="pw-catalog">
+                @foreach (var k in group)
                 {
-                    <a class="list-card" href="@($"lists/{l.Id}")" @key="l.Id">
-                        <div class="list-posters">@foreach (var poster in l.Posters) { <img src="@Img.Poster(poster, "w154")" alt="" loading="lazy" /> }</div>
-                        <div class="list-meta">
-                            <b>@l.Name</b>
-                            <span class="muted small">@l.ItemCount item@(l.ItemCount == 1 ? "" : "s")@(l.IsPublic ? "" : " · private")</span>
-                        </div>
-                    </a>
+                    var used = !k.Multiple && draft?.Any(w => w.Type == k.Type) == true;
+                    <button type="button" class="pw-cat-item" disabled="@used" @onclick="() => Add(k)">
+                        <b>@k.Name</b>
+                        <span class="muted small">@k.Description</span>
+                        <span class="muted small">@(used ? "On your profile" : k.Part is { } part ? $"{k.W}×{k.H} · {PartName(part)} privacy" : $"{k.W}×{k.H}")</span>
+                    </button>
                 }
             </div>
-        </section>
-    }
+        }
+    </Modal>
+
+    <Modal Open="editingWidget is not null" OpenChanged="v => { if (!v) editingWidget = null; }" Title="@(editingWidget is { } ew ? ProfileWidgets.Kind(ew.Type)?.Name ?? "" : "")">
+        @if (editingWidget is { } ew)
+        {
+            <div class="form-stack">
+                @switch (ew.Type)
+                {
+                    case "bio":
+                        <label>About you
+                            <textarea rows="5" maxlength="@ProfileWidgets.MaxText" @bind="configText" @bind:event="oninput" placeholder="What you like to watch, what you're into lately…"></textarea>
+                        </label>
+                        <span class="muted small">@((configText ?? "").Length) / @ProfileWidgets.MaxText</span>
+                        break;
+
+                    case "spotlight":
+                        <label>Heading
+                            <input @bind="configText" maxlength="60" placeholder="Spotlight (e.g. Currently obsessed with)" />
+                        </label>
+                        <label>Movie or show
+                            <input type="search" value="@pickQuery" @oninput="PickSearch" placeholder="Search titles" autocomplete="off" />
+                        </label>
+                        @if (configMedia is not null && pickedTitle is not null) { <p class="small">Picked: <b>@pickedTitle</b></p> }
+                        <div class="pw-picks">
+                            @foreach (var s in picks)
+                            {
+                                <button type="button" class="suggest-item @(configMedia is { } cm && cm.TmdbId == s.Id && (cm.Type == MediaType.Movie) == (s.Kind == "movie") ? "on" : "")" @onclick="() => Pick(s)" @key="(s.Kind, s.Id)">
+                                    <span class="suggest-img">@if (s.Image is not null) { <img src="@Img.Poster(s.Image, "w92")" alt="" /> }</span>
+                                    <span class="suggest-text"><span class="suggest-title">@s.Title</span><span class="suggest-sub">@s.Year · @(s.Kind == "movie" ? "Movie" : "TV")</span></span>
+                                </button>
+                            }
+                        </div>
+                        break;
+
+                    case "pinned-list":
+                        <label>Heading
+                            <input @bind="configText" maxlength="60" placeholder="The list's name" />
+                        </label>
+                        <label>List
+                            <select @bind="configList">
+                                <option value="">Pick a list</option>
+                                @foreach (var l in p.Lists) { <option value="@l.Id">@l.Name@(l.IsPublic ? "" : " (private)")</option> }
+                            </select>
+                        </label>
+                        @if (p.Lists.FirstOrDefault(l => l.Id.ToString() == configList) is { IsPublic: false }) { <p class="muted small">Private lists only show to you. Make it public on the list's page to share it.</p> }
+                        break;
+                }
+                <div class="inline">
+                    <button class="btn btn-primary" @onclick="ApplyConfig">Apply</button>
+                    <button class="btn" @onclick="() => editingWidget = null">Cancel</button>
+                </div>
+            </div>
+        }
+    </Modal>
 }
 
 @code {
     [Parameter] public string Name { get; set; } = "";
     private ProfileDto? p;
+    private ProfileWidgetData? data;
     private string? error;
+
+    // Editing: a working copy of the layout, saved with Done.
+    private List<ProfileWidget>? draft;
+    private bool adding, saving;
+    private ElementReference grid;
+    private DotNetObjectReference<Profile>? self;
+    private bool gridAttached;
+
+    private ProfileWidget? editingWidget;
+    private string? configText, configList, pickQuery, pickedTitle;
+    private MediaRef? configMedia;
+    private List<Suggestion> picks = [];
+    private CancellationTokenSource? pickCts;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (p is not null && !string.Equals(p.User.UserName, Name, StringComparison.OrdinalIgnoreCase)) p = null;
+        if (p is not null && !string.Equals(p.User.UserName, Name, StringComparison.OrdinalIgnoreCase)) { p = null; data = null; draft = null; }
         await Load();
     }
 
@@ -141,8 +196,214 @@ else if (p is not null)
     {
         error = null;
         try { p = await Api.ProfileAsync(Name); }
-        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no one with that username."; }
-        catch (Exception ex) { error = ex.Message; }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no one with that username."; return; }
+        catch (Exception ex) { error = ex.Message; return; }
+        await LoadData();
+    }
+
+    private static readonly HashSet<string> Basic = ["now", "tiles", "recent", "fav-movies", "fav-shows", "top-rated", "lists", "bio"];
+
+    private async Task LoadData()
+    {
+        var layout = draft ?? p?.Layout?.ToList() ?? [];
+        if (layout.All(w => Basic.Contains(w.Type))) { data = new ProfileWidgetData(); return; }
+        StateHasChanged();
+        try
+        {
+            var fresh = await Api.ProfileWidgetsAsync(Name, draft?.Select(w => w.Type).Distinct());
+            // Keep spotlights and lists picked while editing (they're only in the draft).
+            data = data is null ? fresh : fresh with
+            {
+                Spotlights = Merge(fresh.Spotlights, data.Spotlights),
+                Lists = Merge(fresh.Lists, data.Lists),
+            };
+        }
+        catch { data ??= new ProfileWidgetData(); }
+    }
+
+    private static IReadOnlyDictionary<TK, TV>? Merge<TK, TV>(IReadOnlyDictionary<TK, TV>? a, IReadOnlyDictionary<TK, TV>? b) where TK : notnull
+    {
+        if (b is null) return a;
+        var d = new Dictionary<TK, TV>(b);
+        foreach (var kv in a ?? new Dictionary<TK, TV>()) d[kv.Key] = kv.Value;
+        return d;
+    }
+
+    private bool HasData(string type) => data is { } d && type switch
+    {
+        "genres" or "months" or "weekdays" or "rating-chart" => d.Stats is not null,
+        "release-gap" => d.ReleaseGap is not null,
+        "heatmap" => d.Heatmap is not null,
+        "weekhour" => d.WeekHour is not null,
+        "milestones" => d.Milestones is not null,
+        "watching" => d.Watching is not null,
+        "finished" => d.Finished is not null,
+        "year-records" or "top-people" => d.Records is not null,
+        _ => true,
+    };
+
+    /// <summary>What's on the grid: the draft while editing; otherwise the widgets with something to show.</summary>
+    private List<ProfileWidget> Shown() => draft
+        ?? (p?.Layout ?? []).Where(w => ProfileWidgetView.HasContent(w, p!, data)).ToList();
+
+    private static string PartName(ProfilePart part) => part switch
+    {
+        ProfilePart.WatchingNow => "Watching now",
+        _ => part.ToString(),
+    };
+
+    // ----- Editing -----
+
+    private void StartEditing() => draft = [.. p!.Layout ?? ProfileWidgets.Default];
+
+    private void CancelEditing()
+    {
+        draft = null;
+        gridAttached = false;
+    }
+
+    private void ResetDraft() => draft = [.. ProfileWidgets.Default];
+
+    private async Task Save()
+    {
+        if (draft is null || p is null) return;
+        saving = true;
+        try
+        {
+            var saved = await Api.SaveProfileLayoutAsync(draft);
+            p = p with { Layout = saved };
+            draft = null;
+            gridAttached = false;
+            Toasts.Show("Profile saved");
+            await LoadData();
+        }
+        catch (Exception ex) { Toasts.Show($"Couldn't save: {ex.Message}", error: true); }
+        finally { saving = false; }
+    }
+
+    private async Task Add(WidgetKind k)
+    {
+        if (draft is null) return;
+        var w = new ProfileWidget(Guid.NewGuid().ToString("N")[..10], k.Type, k.W, k.H);
+        draft.Add(w);
+        adding = false;
+        if (k.Type is "bio" or "spotlight" or "pinned-list") Configure(w);   // these need setting up first
+        StateHasChanged();
+        try { await Js.InvokeVoidAsync("seenit.profileGrid.reveal", grid, w.Id); } catch (JSException) { }
+        if (!Basic.Contains(k.Type) && !HasData(k.Type)) { await LoadData(); StateHasChanged(); }
+    }
+
+    private void Remove(ProfileWidget w) => draft?.Remove(w);
+
+    private void Shift(int index, int by)
+    {
+        if (draft is null || index + by < 0 || index + by >= draft.Count) return;
+        (draft[index], draft[index + by]) = (draft[index + by], draft[index]);
+    }
+
+    /// <summary>From seenit.js: a widget was dragged onto another one.</summary>
+    [JSInvokable]
+    public void Move(string id, string targetId, bool before)
+    {
+        if (draft is null || id == targetId || draft.FindIndex(w => w.Id == id) is not (>= 0 and var from)) return;
+        var w = draft[from];
+        draft.RemoveAt(from);
+        var to = draft.FindIndex(x => x.Id == targetId);
+        if (to < 0) { draft.Insert(from, w); return; }
+        draft.Insert(before ? to : to + 1, w);
+        StateHasChanged();
+    }
+
+    /// <summary>From seenit.js: a widget's corner was dragged to a new size.</summary>
+    [JSInvokable]
+    public void Resize(string id, int w, int h)
+    {
+        if (draft is null || draft.FindIndex(x => x.Id == id) is not (>= 0 and var i)) return;
+        draft[i] = draft[i] with { W = Math.Clamp(w, 1, ProfileWidgets.Columns), H = Math.Clamp(h, 1, ProfileWidgets.MaxRows) };
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (draft is not null && !gridAttached && grid.Context is not null)
+        {
+            gridAttached = true;
+            self ??= DotNetObjectReference.Create(this);
+            try { await Js.InvokeVoidAsync("seenit.profileGrid.attach", grid, self); } catch (JSException) { }
+        }
+    }
+
+    // ----- Widget settings -----
+
+    private void Configure(ProfileWidget w)
+    {
+        editingWidget = w;
+        configText = w.Text;
+        configMedia = w.Media;
+        configList = w.ListId?.ToString() ?? "";
+        pickQuery = "";
+        pickedTitle = w.Media is { } m && data?.Spotlights?.GetValueOrDefault($"{(m.Type == MediaType.Movie ? "movie" : "show")}:{m.TmdbId}") is { } s ? s.Title : null;
+        picks = [];
+    }
+
+    private async Task PickSearch(ChangeEventArgs e)
+    {
+        pickQuery = e.Value as string ?? "";
+        pickCts?.Cancel();
+        var cts = pickCts = new CancellationTokenSource();
+        if (pickQuery.Trim().Length == 0) { picks = []; return; }
+        try
+        {
+            await Task.Delay(120, cts.Token);
+            var found = await Api.SuggestAsync(pickQuery.Trim(), cts.Token);
+            if (!cts.IsCancellationRequested) picks = found.Where(s => s.Kind is "movie" or "show").ToList();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { }
+    }
+
+    private void Pick(Suggestion s)
+    {
+        configMedia = new MediaRef(s.Kind == "movie" ? MediaType.Movie : MediaType.Show, s.Id);
+        pickedTitle = s.Year is { } y ? $"{s.Title} ({y})" : s.Title;
+        if (data is not null)
+        {
+            // Show it right away, before saving.
+            var spot = new Dictionary<string, MediaSummary>(data.Spotlights ?? new Dictionary<string, MediaSummary>())
+            {
+                [$"{s.Kind}:{s.Id}"] = new MediaSummary(configMedia.Type, s.Id, s.Title, s.Year, s.Image, null, null, null),
+            };
+            data = data with { Spotlights = spot };
+        }
+    }
+
+    private void ApplyConfig()
+    {
+        if (draft is null || editingWidget is not { } w || draft.IndexOf(w) is not (>= 0 and var i)) { editingWidget = null; return; }
+        var text = string.IsNullOrWhiteSpace(configText) ? null : configText.Trim();
+        draft[i] = w.Type switch
+        {
+            "spotlight" => w with { Text = text, Media = configMedia },
+            "pinned-list" => w with { Text = text, ListId = Guid.TryParse(configList, out var id) ? id : null },
+            _ => w with { Text = text },
+        };
+        if (w.Type == "pinned-list" && draft[i].ListId is { } lid && data is not null && data.Lists?.ContainsKey(lid) != true)
+            _ = PreviewListAsync(lid);
+        editingWidget = null;
+    }
+
+    /// <summary>A newly pinned list, shown before saving.</summary>
+    private async Task PreviewListAsync(Guid id)
+    {
+        try
+        {
+            var l = await Api.ListAsync(id);
+            if (l is null || data is null) return;
+            var lists = new Dictionary<Guid, ListDetail>(data.Lists ?? new Dictionary<Guid, ListDetail>()) { [id] = l with { Items = l.Items.Take(12).ToList() } };
+            data = data with { Lists = lists };
+            StateHasChanged();
+        }
+        catch { }
     }
 
     private async Task Share()
@@ -151,5 +412,12 @@ else if (p is not null)
         var result = await Platform.ShareLinkAsync($"{p.User.Name} on SeenIt", Platform.PublicUrl(Fmt.UserHref(p.User.UserName)));
         if (result == "copied") Toasts.Show("Profile link copied");
         else if (result == "failed") Toasts.Show("Couldn't share the link.", error: true);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        pickCts?.Cancel();
+        self?.Dispose();
+        return ValueTask.CompletedTask;
     }
 }

@@ -1,0 +1,298 @@
+@* The inside of one profile widget: its heading and what it shows. The Profile page places it on the grid. *@
+@{ var kind = ProfileWidgets.Kind(Widget.Type); }
+@if (Widget.Type != "bio")
+{
+    <div class="pw-head">
+        <h2>@Title(Widget)</h2>
+        @if (More is { } more) { <a href="@more.Href" class="section-more">@more.Label <Icon Name="chevron-right" Size="16" /></a> }
+    </div>
+}
+<div class="pw-body">
+    @switch (Widget.Type)
+    {
+        case "now":
+            @if (P.NowWatching is { } nw) { <NowWatchingCard Item="nw" Who="@(P.IsMe ? null : P.User.Name)" /> }
+            else { <Nothing Text="Nothing playing right now. This shows up when something is." /> }
+            break;
+
+        case "tiles":
+            @if (P.Stats is { } st)
+            {
+                <div class="stat-tiles profile-tiles">
+                    <div class="stat"><span class="stat-value"><Dur Minutes="st.Minutes" /></span><span class="stat-label">watched</span></div>
+                    <div class="stat"><span class="stat-value">@st.Movies.ToString("N0")</span><span class="stat-label">movies</span></div>
+                    <div class="stat"><span class="stat-value">@st.Episodes.ToString("N0")</span><span class="stat-label">episodes of @st.Shows.ToString("N0") shows</span></div>
+                    <div class="stat"><span class="stat-value">@st.Ratings.ToString("N0")</span><span class="stat-label">ratings</span></div>
+                </div>
+            }
+            break;
+
+        case "recent":
+            @if (P.Recent.Count == 0) { <Nothing Text="Nothing watched yet." /> }
+            <div class="poster-scroller">
+                @foreach (var h in P.Recent)
+                {
+                    <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
+                                Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)"
+                                Sub="@((h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))" SubTitle="@Fmt.Exact(h.WatchedAt)"
+                                ShowScore="false" @key="h.Id" />
+                }
+            </div>
+            break;
+
+        case "fav-movies" or "fav-shows":
+            var favs = (P.Favorites ?? []).Where(f => f.Media.Type == (Widget.Type == "fav-movies" ? MediaType.Movie : MediaType.Show)).Take(FavoriteLimits.PerType).ToList();
+            @if (favs.Count == 0) { <Nothing Text="@(P.IsMe ? "Pick favorites from a movie or show page, or under Favorites." : "No favorites picked yet.")" /> }
+            <div class="fav-four">
+                @foreach (var f in favs) { <PosterCard Media="f.Media" ShowScore="false" @key="(f.Media.Type, f.Media.TmdbId)" /> }
+            </div>
+            break;
+
+        case "top-rated":
+            @if (P.TopRated.Count == 0) { <Nothing Text="No ratings yet." /> }
+            <div class="poster-scroller">
+                @foreach (var r in P.TopRated)
+                {
+                    <PosterCard Media="@(new MediaSummary(r.Type, r.TmdbId, r.Title, null, r.PosterPath, null, null, null))" Badge="@Fmt.RatingBadge(r.Rating)" ShowScore="false" @key="(r.Type, r.TmdbId)" />
+                }
+            </div>
+            break;
+
+        case "lists":
+            @if (P.Lists.Count == 0) { <Nothing Text="@(P.IsMe ? "No lists yet." : "No public lists.")" /> }
+            <div class="list-grid">
+                @foreach (var l in P.Lists) { <ListCard List="l" @key="l.Id" /> }
+            </div>
+            break;
+
+        case "genres" when Need(D?.Stats) is { } s:
+            @if (s.Genres.Count == 0) { <Nothing Text="Nothing watched yet." /> }
+            <BarChart Data="s.Genres.Take(8).ToList()" Label="Plays by genre" />
+            break;
+
+        case "months" when Need(D?.Stats) is { } s:
+            <BarChart Data="s.PlaysByMonth" Vertical="true" Label="Plays per month, last 12 months" LabelEvery="2" />
+            break;
+
+        case "rating-chart" when Need(D?.Stats) is { } s:
+            @if (s.Ratings == 0) { <Nothing Text="No ratings yet." /> }
+            else
+            {
+                @if (s.AverageRating is { } avg) { <p class="muted small pw-note">@s.Ratings.ToString("N0") ratings · average @Fmt.Avg(avg)</p> }
+                <BarChart Data="Fmt.RatingBuckets(s.RatingDistribution)" Vertical="true" Label="Number of ratings at each score" />
+            }
+            break;
+
+        case "weekdays" when Need(D?.Stats) is { } s:
+            <BarChart Data="Fmt.WeekOrder(s.PlaysByWeekday)" Vertical="true" Label="Plays by day of week" />
+            break;
+
+        case "release-gap" when Need(D?.ReleaseGap) is { } g:
+            @if (g.Count == 0) { <Nothing Text="Nothing yet." /> }
+            else
+            {
+                <div class="mini-facts">
+                    <div><b>@(g.MedianDays is { } md ? Fmt.WaitDays(md) : "–")</b><span>typical wait</span></div>
+                    <div><b>@g.DayOnePercent%</b><span>on release day</span></div>
+                    <div><b>@g.NewReleasePercent%</b><span>within a month</span></div>
+                </div>
+                <BarChart Data="g.Buckets" Label="First watches by time since release" />
+            }
+            break;
+
+        case "heatmap" when Need(D?.Heatmap) is { } days:
+            <Heatmap Days="days" />
+            break;
+
+        case "weekhour" when Need(D?.WeekHour) is { } grid:
+            <WeekHourChart Grid="grid" />
+            break;
+
+        case "watching" when Need(D?.Watching) is { } shows:
+            @if (shows.Count == 0) { <Nothing Text="No shows in progress." /> }
+            <div class="pw-rows">
+                @foreach (var s in shows)
+                {
+                    <a class="pw-row" href="@($"show/{s.ShowTmdbId}")" @key="s.ShowTmdbId">
+                        <span class="pw-thumb">@if (s.PosterPath is not null) { <img src="@Img.Poster(s.PosterPath, "w92")" alt="" loading="lazy" /> }</span>
+                        <span class="pw-row-text">
+                            <b>@s.Name</b>
+                            <ProgressBar Value="s.Watched" Max="s.Aired" />
+                            <span class="muted small">@s.Watched of @s.Aired@(s.NextEpisode is { } n ? $" · next {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}" : "")</span>
+                        </span>
+                    </a>
+                }
+            </div>
+            break;
+
+        case "finished" when Need(D?.Finished) is { } shows:
+            @if (shows.Count == 0) { <Nothing Text="No finished shows yet." /> }
+            <div class="pw-rows">
+                @foreach (var s in shows)
+                {
+                    <a class="pw-row" href="@($"show/{s.ShowTmdbId}")" @key="s.ShowTmdbId">
+                        <span class="pw-thumb">@if (s.PosterPath is not null) { <img src="@Img.Poster(s.PosterPath, "w92")" alt="" loading="lazy" /> }</span>
+                        <span class="pw-row-text">
+                            <b>@s.Name</b>
+                            <span class="muted small">@s.Aired episodes@(s.LastWatchedAt is { } lw ? $" · {Fmt.Relative(lw)}" : "")</span>
+                        </span>
+                    </a>
+                }
+            </div>
+            break;
+
+        case "milestones" when Need(D?.Milestones) is { } ms:
+            @if (ms.Count == 0) { <Nothing Text="The first milestone is the 1st movie or episode." /> }
+            <div class="milestones">
+                @foreach (var m in ms)
+                {
+                    <div class="milestone">
+                        <b>@m.Label</b>
+                        @if (m.Item is { } it) { <a href="@Fmt.Href(it.Type, it.TmdbId)" class="small">@it.Title</a> }
+                        <span class="muted small">@(m.At is { } at ? at.ToLocalTime().ToString(Fmt.DateLong) : "")</span>
+                    </div>
+                }
+            </div>
+            break;
+
+        case "year-records" when Need(D?.Records) is { } r:
+            @if (r.Plays == 0) { <Nothing Text="@($"Nothing watched in {r.Year} yet.")" /> }
+            else
+            {
+                <div class="pw-facts">
+                    <div><b>@r.Plays.ToString("N0")</b><span>plays · <Dur Minutes="r.Minutes" /></span></div>
+                    @if (r.LongestStreak.Days > 1)
+                    {
+                        <div><b>@r.LongestStreak.Days days</b><span>longest streak@(r.LongestStreak.Start is { } a && r.LongestStreak.End is { } b ? $" ({a.ToString(Fmt.DayShort)} – {b.ToString(Fmt.DayShort)})" : "")</span></div>
+                    }
+                    @if (r.BusiestDay is { } bd)
+                    {
+                        <div><b>@bd.Plays plays</b><span>busiest day, @bd.Date.ToString(Fmt.DayShort) · <Dur Minutes="bd.Minutes" /></span></div>
+                    }
+                    @if (r.MostRewatched is { } mr)
+                    {
+                        <div>
+                            <b><a href="@(mr.Type == MediaType.Movie ? $"movie/{mr.TmdbId}" : $"show/{mr.TmdbId}")">@mr.Title@(mr.Detail is { } det ? $" {det}" : "")</a></b>
+                            <span>most rewatched, @mr.Plays times</span>
+                        </div>
+                    }
+                </div>
+            }
+            break;
+
+        case "top-people" when Need(D?.Records) is { } r:
+            @if (r.TopActors.Count == 0 && r.TopDirectors.Count == 0) { <Nothing Text="@($"Nothing watched in {r.Year} yet.")" /> }
+            <div class="pw-people">
+                @foreach (var (label, people) in new[] { ("Actors", r.TopActors), ("Directors & creators", r.TopDirectors) })
+                {
+                    @if (people.Count > 0)
+                    {
+                        <div>
+                            <h3 class="muted small">@label</h3>
+                            @foreach (var person in people)
+                            {
+                                <a class="pw-person" href="@($"person/{person.Id}")" @key="person.Id">
+                                    <span class="pw-face">@if (person.ProfilePath is not null) { <img src="@Img.Profile(person.ProfilePath)" alt="" loading="lazy" /> } else { <Icon Name="users" Size="14" /> }</span>
+                                    <span><b>@person.Name</b> <span class="muted small">@person.Titles title@(person.Titles == 1 ? "" : "s")</span></span>
+                                </a>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            break;
+
+        case "bio":
+            @if (Widget.Text is { } text) { <p class="pw-bio">@text</p> }
+            else { <Nothing Text="@(Editing ? "Write something about yourself (Edit)." : "")" /> }
+            break;
+
+        case "spotlight":
+            @if (Widget.Media is { } mref && D?.Spotlights?.GetValueOrDefault(ProfileWidgetKey(mref)) is { } media)
+            {
+                <a class="pw-spotlight" href="@Fmt.Href(media.Type, media.TmdbId)">
+                    @if (media.PosterPath is not null) { <img src="@Img.Poster(media.PosterPath, "w342")" alt="" loading="lazy" /> }
+                    <span><b>@media.Title</b> <span class="muted small">@media.Year</span></span>
+                </a>
+            }
+            else if (Widget.Media is null) { <Nothing Text="@(Editing ? "Pick a movie or show (Edit)." : "")" /> }
+            else if (D is null) { <Spinner /> }
+            break;
+
+        case "pinned-list":
+            @if (Widget.ListId is { } lid && D?.Lists?.GetValueOrDefault(lid) is { } list)
+            {
+                @if (list.Description is { Length: > 0 } desc) { <p class="muted small pw-note">@desc</p> }
+                <div class="poster-scroller">
+                    @foreach (var it in list.Items) { <PosterCard Media="it.Media" ShowScore="false" @key="it.Id" /> }
+                </div>
+            }
+            else if (Widget.ListId is null) { <Nothing Text="@(Editing ? "Pick one of your lists (Edit)." : "")" /> }
+            else if (D is null) { <Spinner /> }
+            else if (Editing) { <Nothing Text="This list is private or was deleted, so nobody else sees it." /> }
+            break;
+
+        default:
+            @if (D is null && kind is not null) { <Spinner /> }
+            break;
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProfileWidget Widget { get; set; } = default!;
+    [Parameter, EditorRequired] public ProfileDto P { get; set; } = default!;
+    /// <summary>Data for the widgets that need more than the profile; null while it loads.</summary>
+    [Parameter] public ProfileWidgetData? D { get; set; }
+    [Parameter] public bool Editing { get; set; }
+
+    private static T? Need<T>(T? value) where T : class => value;
+
+    private static string ProfileWidgetKey(MediaRef r) => $"{(r.Type == MediaType.Movie ? "movie" : "show")}:{r.TmdbId}";
+
+    public static string Title(ProfileWidget w) => w.Type switch
+    {
+        "spotlight" => w.Text ?? "Spotlight",
+        "pinned-list" => w.Text ?? "Pinned list",
+        _ => ProfileWidgets.Kind(w.Type)?.Name ?? w.Type,
+    };
+
+    private (string Href, string Label)? More => Widget.Type switch
+    {
+        "recent" => (P.IsMe ? "history" : $"{Fmt.UserHref(P.User.UserName)}/history", "All history"),
+        "fav-movies" or "fav-shows" when P.IsMe => ("favorites", "Edit"),
+        "pinned-list" when Widget.ListId is { } id => ($"lists/{id}", "Open"),
+        "watching" when P.IsMe => ("progress", "Progress"),
+        "genres" or "months" or "weekdays" or "heatmap" or "weekhour" or "release-gap" or "milestones" when P.IsMe => ("stats", "Stats"),
+        "year-records" or "top-people" when P.IsMe && D?.Records is { } r => ($"review/{r.Year}", "Year in review"),
+        _ => null,
+    };
+
+    /// <summary>
+    /// Whether a widget has anything to show a visitor. Empty ones are left off the grid (but not while editing,
+    /// or while their data is still loading).
+    /// </summary>
+    public static bool HasContent(ProfileWidget w, ProfileDto p, ProfileWidgetData? d) => w.Type switch
+    {
+        "now" => p.NowWatching is not null,
+        "tiles" => p.Stats is not null,
+        "recent" => p.Recent.Count > 0,
+        "fav-movies" => p.Favorites?.Any(f => f.Media.Type == MediaType.Movie) == true,
+        "fav-shows" => p.Favorites?.Any(f => f.Media.Type == MediaType.Show) == true,
+        "top-rated" => p.TopRated.Count > 0,
+        "lists" => p.Lists.Count > 0,
+        "bio" => w.Text is not null,
+        "spotlight" => w.Media is not null && (d is null || d.Spotlights?.ContainsKey(ProfileWidgetKey(w.Media)) == true),
+        "pinned-list" => w.ListId is { } id && (d is null || d.Lists?.ContainsKey(id) == true),
+        "genres" or "months" or "weekdays" => d is null || d.Stats is { MoviePlays: > 0 } or { EpisodePlays: > 0 },
+        "rating-chart" => d is null || d.Stats is { Ratings: > 0 },
+        "release-gap" => d is null || d.ReleaseGap is { Count: > 0 },
+        "heatmap" => d is null || d.Heatmap is { Count: > 0 },
+        "weekhour" => d is null || d.WeekHour is not null,
+        "watching" => d is null || d.Watching is { Count: > 0 },
+        "finished" => d is null || d.Finished is { Count: > 0 },
+        "milestones" => d is null || d.Milestones is { Count: > 0 },
+        "year-records" => d is null || d.Records is { Plays: > 0 },
+        "top-people" => d is null || d.Records is { TopActors.Count: > 0 } or { TopDirectors.Count: > 0 },
+        _ => false,
+    };
+}
