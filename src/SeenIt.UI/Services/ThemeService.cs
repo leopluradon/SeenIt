@@ -24,6 +24,17 @@ public class ThemeService(IJSRuntime js, IPlatform platform)
         platform.SetChromeColor(theme.Bg);
     }
 
+    private string? _accent = "";   // "" = not applied yet
+
+    /// <summary>An accent color over the theme's own (Settings → Appearance); null = the theme's.</summary>
+    public async Task ApplyAccentAsync(string? key)
+    {
+        if (_accent == key) return;
+        _accent = key;
+        try { await js.InvokeVoidAsync("seenit.applyAccent", UiPrefs.AccentStyle(key)); }
+        catch (JSException) { }
+    }
+
     /// <summary>On start-up, before the profile has loaded: match the system bars to this device's theme.</summary>
     public async Task ApplyDeviceThemeAsync()
     {

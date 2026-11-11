@@ -9,7 +9,7 @@
     <base href="/" />
     <link rel="preconnect" href="https://image.tmdb.org" />
     <!-- The saved color theme, before anything paints. -->
-    <script>try { var t = localStorage.getItem('seenit.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { }</script>
+    <script>try { var t = localStorage.getItem('seenit.theme'); if (t) document.documentElement.dataset.theme = t; var a = localStorage.getItem('seenit.accent'); if (a) document.documentElement.style.cssText += a; } catch (e) { }</script>
     <link rel="stylesheet" href="_content/SeenIt.UI/seenit.css" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
     <link rel="apple-touch-icon" href="icon-192.png" />

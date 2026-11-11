@@ -5,16 +5,20 @@
 @inject Toasts Toasts
 @inject SessionState Session
 @inject IJSRuntime Js
+@inject ThemeService Theme
 <PageTitle>@(p?.User.Name ?? Name) · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (p is null && error is null) { <Spinner /> }
 else if (p is not null)
 {
-    <div class="profile-head">
+    @* The owner's accent color, for everyone who visits. *@
+    <div class="profile-page" style="@UiPrefs.AccentStyle(p.Accent)">
+    <div class="profile-head @(p.Banner is not null ? "has-banner" : "")">
+        @if (p.Banner is { } banner) { <div class="profile-banner" style="background-image: url('@Img.Backdrop(banner, "w1280")')" aria-hidden="true"></div> }
         <Avatar Name="@p.User.Name" Url="@p.User.Avatar" Class="avatar-lg" />
         <div class="profile-info">
-            <h1>@p.User.Name</h1>
+            <h1>@p.User.Name @if (p.Badge is { } badge) { <span class="profile-badge" title="Milestone"><Icon Name="star" Size="12" /> @badge</span> }</h1>
             <div class="muted small">
                 @@@p.User.UserName · joined @p.JoinedAt.ToLocalTime().ToString("MMMM yyyy")
                 @if (p.User.FollowsYou) { <span> · follows you</span> }
@@ -51,6 +55,7 @@ else if (p is not null)
             <span class="muted small only-mobile">Use the arrows to move, and the corner to resize.</span>
             <div class="inline">
                 <button class="btn btn-sm btn-primary" @onclick="() => adding = true"><Icon Name="plus" Size="14" /> Add widget</button>
+                <button class="btn btn-sm" @onclick="OpenStyle">Banner & color</button>
                 <button class="btn btn-sm" @onclick="ResetDraft">Reset</button>
                 <button class="btn btn-sm" @onclick="CancelEditing">Cancel</button>
                 <button class="btn btn-sm btn-primary" @onclick="Save" disabled="@saving">@(saving ? "Saving…" : "Done")</button>
@@ -67,7 +72,7 @@ else if (p is not null)
     }
     else if (p.IsMe && draft is null) { <p class="muted small">Visible to @Friends.VisibilityText(p.Visibility).</p> }
 
-    var shown = Shown();
+    @{ var shown = Shown(); }
     @if (shown.Count > 0 || draft is not null)
     {
         <div class="pw-grid @(draft is not null ? "editing" : "")" @ref="grid">
@@ -83,7 +88,7 @@ else if (p is not null)
                             <button type="button" class="icon-btn" @onclick="() => Shift(index, -1)" disabled="@(index == 0)" aria-label="Move earlier"><Icon Name="arrow-up" Size="14" /></button>
                             <button type="button" class="icon-btn" @onclick="() => Shift(index, 1)" disabled="@(index == shown.Count - 1)" aria-label="Move later"><Icon Name="arrow-down" Size="14" /></button>
                             <span class="pw-size muted small">@ProfileWidgets.WidthName(w.W) × @w.H</span>
-                            @if (w.Type is "bio" or "spotlight" or "pinned-list") { <button type="button" class="btn btn-sm" @onclick="() => Configure(w)">Edit</button> }
+                            <button type="button" class="btn btn-sm" @onclick="() => Configure(w)">Edit</button>
                             <button type="button" class="icon-btn" @onclick="() => Remove(w)" aria-label="@($"Remove {ProfileWidgetView.Title(w)}")"><Icon Name="x" Size="14" /></button>
                         </div>
                         <span class="pw-resize" aria-hidden="true"></span>
@@ -116,7 +121,19 @@ else if (p is not null)
     <Modal Open="editingWidget is not null" OpenChanged="v => { if (!v) editingWidget = null; }" Title="@(editingWidget is { } ew ? ProfileWidgets.Kind(ew.Type)?.Name ?? "" : "")">
         @if (editingWidget is { } ew)
         {
+            var ek = ProfileWidgets.Kind(ew.Type);
             <div class="form-stack">
+                <label>Heading
+                    <input @bind="configTitle" maxlength="60" placeholder="@(ew.Type == "bio" ? "None" : ek?.Name)" />
+                </label>
+                @if (ek?.Ranges is { } ranges)
+                {
+                    <label>Covers
+                        <select @bind="configRange">
+                            @foreach (var r in ranges) { <option value="@r">@(r switch { "all" => "All time", "year" => "This year", "month" => "This month", _ => "Last year" })</option> }
+                        </select>
+                    </label>
+                }
                 @switch (ew.Type)
                 {
                     case "bio":
@@ -127,28 +144,11 @@ else if (p is not null)
                         break;
 
                     case "spotlight":
-                        <label>Heading
-                            <input @bind="configText" maxlength="60" placeholder="Spotlight (e.g. Currently obsessed with)" />
-                        </label>
-                        <label>Movie or show
-                            <input type="search" value="@pickQuery" @oninput="PickSearch" placeholder="Search titles" autocomplete="off" />
-                        </label>
-                        @if (configMedia is not null && pickedTitle is not null) { <p class="small">Picked: <b>@pickedTitle</b></p> }
-                        <div class="pw-picks">
-                            @foreach (var s in picks)
-                            {
-                                <button type="button" class="suggest-item @(configMedia is { } cm && cm.TmdbId == s.Id && (cm.Type == MediaType.Movie) == (s.Kind == "movie") ? "on" : "")" @onclick="() => Pick(s)" @key="(s.Kind, s.Id)">
-                                    <span class="suggest-img">@if (s.Image is not null) { <img src="@Img.Poster(s.Image, "w92")" alt="" /> }</span>
-                                    <span class="suggest-text"><span class="suggest-title">@s.Title</span><span class="suggest-sub">@s.Year · @(s.Kind == "movie" ? "Movie" : "TV")</span></span>
-                                </button>
-                            }
-                        </div>
+                        <span class="small">Movie or show @if (configMedia is not null && pickedTitle is not null) { <span>: <b>@pickedTitle</b></span> }</span>
+                        <TitlePicker Selected="configMedia" OnPick="Pick" />
                         break;
 
                     case "pinned-list":
-                        <label>Heading
-                            <input @bind="configText" maxlength="60" placeholder="The list's name" />
-                        </label>
                         <label>List
                             <select @bind="configList">
                                 <option value="">Pick a list</option>
@@ -165,6 +165,43 @@ else if (p is not null)
             </div>
         }
     </Modal>
+
+    <Modal Open="styleOpen" OpenChanged="v => styleOpen = v" Title="Banner & color">
+        <div class="form-stack">
+            <h4 class="pw-cat-head">Banner</h4>
+            <p class="muted small">A movie or show whose backdrop sits behind your name.@if (styleBannerTitle is not null) { <span> Now: <b>@styleBannerTitle</b>.</span> }</p>
+            <TitlePicker Selected="styleBanner" OnPick="PickBanner" />
+            @if (styleBanner is not null) { <button type="button" class="btn btn-sm btn-ghost" @onclick="() => { styleBanner = null; styleBannerTitle = null; }">No banner</button> }
+
+            <h4 class="pw-cat-head">Accent color</h4>
+            <p class="muted small">Used across SeenIt for you, and on your profile for everyone who visits.</p>
+            <div class="accent-grid" role="radiogroup" aria-label="Accent color">
+                <button type="button" role="radio" aria-checked="@(styleAccent is null)" class="accent-option @(styleAccent is null ? "on" : "")"
+                        style="--sw:@UiPrefs.Theme(Theme.Current).Accent" @onclick="() => styleAccent = null"><span class="accent-dot"></span><span>Theme's</span></button>
+                @foreach (var a in UiPrefs.Accents)
+                {
+                    <button type="button" role="radio" aria-checked="@(styleAccent == a.Key)" class="accent-option @(styleAccent == a.Key ? "on" : "")" @key="a.Key"
+                            style="--sw:@a.Hex" @onclick="() => styleAccent = a.Key"><span class="accent-dot"></span><span>@a.Name</span></button>
+                }
+            </div>
+
+            <h4 class="pw-cat-head">Badge</h4>
+            <p class="muted small">A milestone shown next to your name (to people who can see your stats).</p>
+            @if (milestones is null) { <Spinner /> }
+            else
+            {
+                <select @bind="styleBadge" aria-label="Badge">
+                    <option value="">None</option>
+                    @foreach (var m in milestones) { <option value="@m">@m</option> }
+                </select>
+            }
+            <div class="inline">
+                <button class="btn btn-primary" @onclick="SaveStyle" disabled="@saving">Save</button>
+                <button class="btn" @onclick="() => styleOpen = false">Cancel</button>
+            </div>
+        </div>
+    </Modal>
+    </div>
 }
 
 @code {
@@ -181,10 +218,14 @@ else if (p is not null)
     private bool gridAttached;
 
     private ProfileWidget? editingWidget;
-    private string? configText, configList, pickQuery, pickedTitle;
+    private string? configText, configList, configTitle, configRange, pickedTitle;
     private MediaRef? configMedia;
-    private List<Suggestion> picks = [];
-    private CancellationTokenSource? pickCts;
+
+    // Banner, accent and badge (saved with your settings, not the layout).
+    private bool styleOpen;
+    private MediaRef? styleBanner;
+    private string? styleBannerTitle, styleAccent, styleBadge;
+    private List<string>? milestones;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -210,12 +251,13 @@ else if (p is not null)
         StateHasChanged();
         try
         {
-            var fresh = await Api.ProfileWidgetsAsync(Name, draft?.Select(w => w.Type).Distinct());
+            var fresh = await Api.ProfileWidgetsAsync(Name, draft?.Select(w => w.Range is { } r ? $"{w.Type}@{r}" : w.Type).Distinct());
             // Keep spotlights and lists picked while editing (they're only in the draft).
             data = data is null ? fresh : fresh with
             {
                 Spotlights = Merge(fresh.Spotlights, data.Spotlights),
                 Lists = Merge(fresh.Lists, data.Lists),
+                Periods = Merge(fresh.Periods, data.Periods),
             };
         }
         catch { data ??= new ProfileWidgetData(); }
@@ -229,7 +271,9 @@ else if (p is not null)
         return d;
     }
 
-    private bool HasData(string type) => data is { } d && type switch
+    private bool HasData(string type) => data is { } d && (ProfileWidgets.Kind(type)?.DefaultRange is { } r and not "all"
+        ? d.Periods?.ContainsKey(r) == true
+        : type switch
     {
         "genres" or "months" or "weekdays" or "rating-chart" => d.Stats is not null,
         "release-gap" => d.ReleaseGap is not null,
@@ -238,9 +282,8 @@ else if (p is not null)
         "milestones" => d.Milestones is not null,
         "watching" => d.Watching is not null,
         "finished" => d.Finished is not null,
-        "year-records" or "top-people" => d.Records is not null,
         _ => true,
-    };
+    });
 
     /// <summary>What's on the grid: the draft while editing; otherwise the widgets with something to show.</summary>
     private List<ProfileWidget> Shown() => draft
@@ -284,7 +327,7 @@ else if (p is not null)
     private async Task Add(WidgetKind k)
     {
         if (draft is null) return;
-        var w = new ProfileWidget(Guid.NewGuid().ToString("N")[..10], k.Type, k.W, k.H);
+        var w = new ProfileWidget(Guid.NewGuid().ToString("N")[..10], k.Type, k.W, k.H, Range: k.DefaultRange);
         draft.Add(w);
         adding = false;
         if (k.Type is "bio" or "spotlight" or "pinned-list") Configure(w);   // these need setting up first
@@ -341,25 +384,9 @@ else if (p is not null)
         configText = w.Text;
         configMedia = w.Media;
         configList = w.ListId?.ToString() ?? "";
-        pickQuery = "";
+        configTitle = w.Title;
+        configRange = w.Range ?? ProfileWidgets.Kind(w.Type)?.DefaultRange;
         pickedTitle = w.Media is { } m && data?.Spotlights?.GetValueOrDefault($"{(m.Type == MediaType.Movie ? "movie" : "show")}:{m.TmdbId}") is { } s ? s.Title : null;
-        picks = [];
-    }
-
-    private async Task PickSearch(ChangeEventArgs e)
-    {
-        pickQuery = e.Value as string ?? "";
-        pickCts?.Cancel();
-        var cts = pickCts = new CancellationTokenSource();
-        if (pickQuery.Trim().Length == 0) { picks = []; return; }
-        try
-        {
-            await Task.Delay(120, cts.Token);
-            var found = await Api.SuggestAsync(pickQuery.Trim(), cts.Token);
-            if (!cts.IsCancellationRequested) picks = found.Where(s => s.Kind is "movie" or "show").ToList();
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception) { }
     }
 
     private void Pick(Suggestion s)
@@ -377,19 +404,63 @@ else if (p is not null)
         }
     }
 
-    private void ApplyConfig()
+    private async Task ApplyConfig()
     {
         if (draft is null || editingWidget is not { } w || draft.IndexOf(w) is not (>= 0 and var i)) { editingWidget = null; return; }
         var text = string.IsNullOrWhiteSpace(configText) ? null : configText.Trim();
-        draft[i] = w.Type switch
+        var title = string.IsNullOrWhiteSpace(configTitle) ? null : configTitle.Trim();
+        var range = ProfileWidgets.Kind(w.Type)?.Ranges?.Contains(configRange) == true ? configRange : null;
+        draft[i] = (w.Type switch
         {
-            "spotlight" => w with { Text = text, Media = configMedia },
-            "pinned-list" => w with { Text = text, ListId = Guid.TryParse(configList, out var id) ? id : null },
-            _ => w with { Text = text },
-        };
+            "bio" => w with { Text = text },
+            "spotlight" => w with { Media = configMedia },
+            "pinned-list" => w with { ListId = Guid.TryParse(configList, out var id) ? id : null },
+            _ => w,
+        }) with { Title = title, Range = range };
+        editingWidget = null;
         if (w.Type == "pinned-list" && draft[i].ListId is { } lid && data is not null && data.Lists?.ContainsKey(lid) != true)
             _ = PreviewListAsync(lid);
-        editingWidget = null;
+        // A different period: fetch its numbers.
+        if (range is not null and not "all" && data?.Periods?.ContainsKey(range) != true) { StateHasChanged(); await LoadData(); }
+    }
+
+    // ----- Banner, accent and badge -----
+
+    private async Task OpenStyle()
+    {
+        styleOpen = true;
+        styleBanner = Fmt.Prefs.ProfileBanner;
+        styleBannerTitle = styleBanner is null ? null : "your current pick";
+        styleAccent = Fmt.Prefs.Accent;
+        styleBadge = Fmt.Prefs.ProfileBadge ?? "";
+        if (milestones is null)
+        {
+            try { milestones = (await Api.MoreStatsAsync()).Milestones.Select(m => m.Label).Distinct().ToList(); }
+            catch { milestones = []; }
+        }
+    }
+
+    private void PickBanner(Suggestion s)
+    {
+        styleBanner = new MediaRef(s.Kind == "movie" ? MediaType.Movie : MediaType.Show, s.Id);
+        styleBannerTitle = s.Year is { } y ? $"{s.Title} ({y})" : s.Title;
+    }
+
+    private async Task SaveStyle()
+    {
+        saving = true;
+        try
+        {
+            var prefs = (Fmt.Prefs with { ProfileBanner = styleBanner, Accent = styleAccent, ProfileBadge = string.IsNullOrEmpty(styleBadge) ? null : styleBadge }).Clean();
+            await Api.SavePrefsAsync(prefs);
+            Session.Update(me => me with { Prefs = prefs });
+            await Theme.ApplyAccentAsync(prefs.Accent);
+            styleOpen = false;
+            var fresh = await Api.ProfileAsync(Name);
+            p = p is null ? fresh : p with { Banner = fresh.Banner, Accent = fresh.Accent, Badge = fresh.Badge };
+        }
+        catch (Exception ex) { Toasts.Show($"Couldn't save: {ex.Message}", error: true); }
+        finally { saving = false; }
     }
 
     /// <summary>A newly pinned list, shown before saving.</summary>
@@ -416,7 +487,6 @@ else if (p is not null)
 
     public ValueTask DisposeAsync()
     {
-        pickCts?.Cancel();
         self?.Dispose();
         return ValueTask.CompletedTask;
     }

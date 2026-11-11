@@ -66,3 +66,55 @@ public class ProfileWidgetWidthTests
     public void Widths_snap_to_quarters_thirds_and_halves(int w, int snapped) =>
         Assert.Equal(snapped, ProfileWidgets.Clean([new("a", "genres", w, 2)])[0].W);
 }
+
+public class CustomizationTests
+{
+    [Fact]
+    public void Ranges_default_and_only_apply_to_stats_widgets()
+    {
+        var clean = ProfileWidgets.Clean(
+        [
+            new("a", "genres", 4, 2),                      // no range: all time
+            new("b", "top-people", 8, 2, Range: "all"),     // people have no all-time view: back to this year
+            new("c", "recent", 12, 2, Range: "month"),      // not a stats widget
+            new("d", "tiles", 12, 1, Range: "month", Title: "  This month  "),
+        ]);
+        Assert.Equal(["all", "year", null, "month"], clean.Select(w => w.Range));
+        Assert.Equal("This month", clean[3].Title);
+    }
+
+    [Fact]
+    public void Old_spotlight_headings_move_from_text_to_title()
+    {
+        var w = ProfileWidgets.Clean([new("s", "spotlight", 4, 2, Text: "Currently obsessed with", Media: new MediaRef(MediaType.Show, 1))])[0];
+        Assert.Equal(("Currently obsessed with", (string?)null), (w.Title, w.Text));
+    }
+
+    [Fact]
+    public void Prefs_keep_only_known_accents_pages_and_views()
+    {
+        var p = new UserPrefs(Accent: "chartreuse",
+            PageLayouts: new Dictionary<string, ListLayout> { ["watchlist"] = ListLayout.Rows, ["nowhere"] = ListLayout.Rows },
+            PageSorts: new Dictionary<string, string> { ["ratings"] = "high", ["nowhere"] = "x" },
+            SavedViews: [new("history", " Movies ", "?type=Movie"), new("nowhere", "x", ""), new("watchlist", " ", "q=a")],
+            ProfileBanner: new MediaRef(MediaType.Episode, 3)).Clean();
+        Assert.Null(p.Accent);
+        Assert.Equal(ListLayout.Rows, p.LayoutFor("watchlist"));
+        Assert.Equal(ListLayout.Posters, p.LayoutFor("ratings"));
+        Assert.Equal(["watchlist"], p.PageLayouts!.Keys);
+        Assert.Equal("high", p.SortFor("ratings"));
+        Assert.Equal([new SavedView("history", "Movies", "type=Movie")], p.SavedViews);
+        Assert.Null(p.ProfileBanner);
+        Assert.Equal("blue", new UserPrefs(Accent: "blue").Clean().Accent);
+    }
+
+    [Fact]
+    public void Period_ranges_map_to_calendar_periods()
+    {
+        var today = new DateOnly(2026, 11, 11);
+        Assert.Equal((2026, (int?)11), ProfileWidgets.Period("month", today));
+        Assert.Equal((2025, (int?)null), ProfileWidgets.Period("last-year", today));
+        Assert.Null(ProfileWidgets.Period("all", today));
+        Assert.Equal("November", ProfileWidgets.RangeName("month", today));
+    }
+}

@@ -1,6 +1,7 @@
 @page "/watchlist"
 @attribute [Authorize]
 @inject ApiClient Api
+@inject SessionState Session
 <PageTitle>Watchlist · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -12,10 +13,12 @@
         <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => filter = MediaType.Show">Shows</button>
     </div>
 </div>
+<SavedViews Page="watchlist" Current="@ViewQuery" />
 <div class="chips">
-    <button class="chip @(sort == "added" ? "on" : "")" @onclick='() => sort = "added"'>Recently added</button>
-    <button class="chip @(sort == "release" ? "on" : "")" @onclick='() => sort = "release"'>Release date</button>
-    <button class="chip @(sort == "title" ? "on" : "")" @onclick='() => sort = "title"'>Title</button>
+    <button class="chip @(sort == "added" ? "on" : "")" @onclick='() => SetSort("added")'>Recently added</button>
+    <button class="chip @(sort == "release" ? "on" : "")" @onclick='() => SetSort("release")'>Release date</button>
+    <button class="chip @(sort == "title" ? "on" : "")" @onclick='() => SetSort("title")'>Title</button>
+    <LayoutToggle Page="watchlist" Value="layout" ValueChanged="v => layout = v" />
 </div>
 @if (items is { Count: > 8 })
 {
@@ -34,13 +37,34 @@ else if (items is not null)
     else if (shown.Count == 0) { <Empty Title="Your watchlist is empty.">Add movies and shows you want to watch from their pages.</Empty> }
     else
     {
-        <div class="poster-grid">
-            @foreach (var w in shown)
-            {
-                var upcoming = w.ReleaseDate is { } rd && rd > DateOnly.FromDateTime(DateTime.Today);
-                <PosterCard Media="w.Media" Badge="@(upcoming ? Fmt.Countdown(w.ReleaseDate!.Value) is { } wcd ? $"{(w.ReleaseDate!.Value).ToString(Fmt.DateShort)} · {wcd}" : null : null)" @key="(w.Media.Type, w.Media.TmdbId)" />
-            }
-        </div>
+        @if (layout == ListLayout.Rows)
+        {
+            <ol class="list-rows">
+                @foreach (var w in shown)
+                {
+                    var upcoming = w.ReleaseDate is { } rd && rd > DateOnly.FromDateTime(DateTime.Today);
+                    <li class="list-row" @key="(w.Media.Type, w.Media.TmdbId)">
+                        <a href="@Fmt.Href(w.Media.Type, w.Media.TmdbId)" class="list-row-link">
+                            <img src="@Img.Poster(w.Media.PosterPath, "w92")" alt="" loading="lazy" />
+                            <span class="list-row-main">
+                                <b>@w.Media.Title</b>
+                                <span class="muted small">@(w.Media.Year?.ToString() ?? "")<span class="dot-sep">@(w.Media.Type == MediaType.Movie ? "Movie" : "TV")</span>@if (upcoming) { <span class="dot-sep">@(w.ReleaseDate!.Value.ToString(Fmt.DateShort))</span> }<span class="dot-sep">added @Fmt.Relative(w.AddedAt)</span></span>
+                            </span>
+                        </a>
+                    </li>
+                }
+            </ol>
+        }
+        else
+        {
+            <div class="poster-grid">
+                @foreach (var w in shown)
+                {
+                    var upcoming = w.ReleaseDate is { } rd && rd > DateOnly.FromDateTime(DateTime.Today);
+                    <PosterCard Media="w.Media" Badge="@(upcoming ? Fmt.Countdown(w.ReleaseDate!.Value) is { } wcd ? $"{(w.ReleaseDate!.Value).ToString(Fmt.DateShort)} · {wcd}" : null : null)" @key="(w.Media.Type, w.Media.TmdbId)" />
+                }
+            </div>
+        }
     }
 }
 @code {
@@ -49,8 +73,40 @@ else if (items is not null)
     private MediaType? filter;
     private string sort = "added";
     private string find = "";
+    private ListLayout layout = Fmt.Prefs.LayoutFor("watchlist");
+
+    // A saved view (or a link) sets these; otherwise the page opens with the last sort you picked.
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? SortParam { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    private static readonly string[] Sorts = ["added", "release", "title"];
+
+    private (string?, string?, string?)? applied;
+
+    protected override void OnParametersSet()
+    {
+        // Only when the address changes, so a re-render doesn't undo what's been picked on the page.
+        if ((TypeParam, SortParam, QParam) == applied) return;
+        applied = (TypeParam, SortParam, QParam);
+        filter = TypeParam switch { "movie" => MediaType.Movie, "show" => MediaType.Show, _ => null };
+        sort = Sorts.Contains(SortParam) ? SortParam! : Fmt.Prefs.SortFor("watchlist") is { } s && Sorts.Contains(s) ? s : "added";
+        find = QParam ?? "";
+    }
 
     protected override Task OnInitializedAsync() => Load();
+
+    private Task SetSort(string s)
+    {
+        sort = s;
+        return PagePrefs.SetSortAsync(Session, Api, "watchlist", s);
+    }
+
+    private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
+        {
+            ("type", filter switch { MediaType.Movie => "movie", MediaType.Show => "show", _ => null }),
+            ("sort", sort == "added" ? null : sort),
+            ("q", find.Trim()),
+        }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private async Task Load()
     {

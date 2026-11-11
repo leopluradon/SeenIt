@@ -1556,3 +1556,52 @@ html.compact .overview { line-height: 1.5; }
     .pw-grid.editing .pw { min-height: calc(var(--h, 1) * 120px); }
     .pw-editbar { top: 0; }
 }
+
+/* ----- Accent colors (Settings → Appearance, profile "Banner & color") ----- */
+.accent-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.accent-option {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; cursor: pointer; font: inherit; font-size: .88rem;
+    background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); border-radius: 999px;
+}
+.accent-option.on { border-color: var(--sw); color: var(--text); box-shadow: 0 0 0 1px var(--sw); }
+.accent-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--sw); }
+
+/* ----- Profile banner and badge ----- */
+.profile-head.has-banner {
+    position: relative; isolation: isolate; overflow: hidden; border-radius: var(--radius);
+    padding: 56px 20px 18px; margin-top: 0; min-height: 180px; align-items: flex-end;
+}
+.profile-banner {
+    position: absolute; inset: 0; z-index: -1; background-size: cover; background-position: center 25%;
+}
+.profile-banner::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(var(--bg-rgb), .96) 8%, rgba(var(--bg-rgb), .55) 55%, rgba(var(--bg-rgb), .15));
+}
+.profile-head.has-banner .profile-actions { align-self: flex-end; }
+.profile-badge {
+    display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; margin-left: 6px;
+    padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700;
+    background: var(--accent-soft); color: var(--accent-text); border: 1px solid rgba(var(--accent-rgb), .35);
+}
+
+/* Widget heading: the period it covers. */
+.pw-range { margin-left: 8px; color: var(--muted); font-size: .82rem; font-weight: 600; }
+
+/* ----- Saved views and layout toggles ----- */
+.saved-views { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+.saved-view { padding: 0; gap: 0; overflow: hidden; }
+.saved-view a { padding: 6px 4px 6px 13px; color: inherit; text-decoration: none; }
+.saved-view button { display: grid; place-items: center; background: none; border: 0; color: var(--muted); padding: 6px 10px 6px 6px; cursor: pointer; }
+.saved-view button:hover { color: var(--text); }
+.saved-view.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.chip-add { border-style: dashed; background: none; }
+.saved-view-name { display: inline-flex; gap: 6px; align-items: center; }
+.saved-view-name input { height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); width: 170px; }
+.chips .list-layout { margin: 0 0 0 auto; }
+
+/* ----- Stats widgets on Home ----- */
+.home-pw { position: relative; margin-bottom: 22px; overflow: visible; }
+.home-pw .pw-body { overflow: visible; }
+.home-pw-hide { position: absolute; top: 10px; right: 12px; z-index: 1; }
+.home-pw .pw-head { padding-right: 34px; }

@@ -128,6 +128,13 @@ window.seenit = {
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta && bg) meta.setAttribute('content', bg);
     },
+    // Accent color picked over the theme's own: CSS custom properties on <html>, remembered for the next start.
+    applyAccent(css) {
+        const root = document.documentElement;
+        for (const p of ['--accent', '--accent-hover', '--accent-rgb', '--accent-soft', '--accent-text', '--on-accent']) root.style.removeProperty(p);
+        if (css) root.style.cssText += css;
+        try { if (css) localStorage.setItem('seenit.accent', css); else localStorage.removeItem('seenit.accent'); } catch { }
+    },
     // Phones only open the keyboard when focus happens during a tap; by the time the search page
     // has rendered, that tap is over. So the tap focuses this hidden stand-in at once, and the
     // page then moves focus to the real box, which keeps the keyboard up.

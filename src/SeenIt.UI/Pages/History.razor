@@ -29,6 +29,7 @@
         Filters@(ActiveFilters > 0 ? $" · {ActiveFilters}" : "")
     </button>
 </form>
+@if (Mine && !Friends) { <SavedViews Page="history" Current="@ViewQuery" /> }
 
 <div class="history-filters @(filtersOpen ? "open" : "")">
     @if (Friends && data?.People is { Count: > 1 } everyone)
@@ -308,6 +309,13 @@ else if (data is not null)
     }
 
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    /// <summary>The filters in use, as a query string, for saving as a view (no paging).</summary>
+    private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
+        {
+            ("type", TypeParam), ("q", Q), ("source", SourceParam), ("genre", Genre), ("period", Period),
+            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort),
+        }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private void Submit() => Go(q: search.Trim() is { Length: > 0 } t ? t : "");
 

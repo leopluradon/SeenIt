@@ -186,6 +186,13 @@
                 case "trending-shows":
                     <PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-shows"))' OnDismiss="Dismiss" />
                     break;
+                case "w-month" or "w-heatmap" or "w-genres" or "w-records" when Session.Me is not null:
+                    @* The same widgets as on profiles. *@
+                    <section class="pw home-pw" @key="key">
+                        <div class="home-pw-hide"><HideButton OnHide="() => Hide(key)" /></div>
+                        <ProfileWidgetView Widget="HomeWidgets[key]" P="Me" D="widgetData" />
+                    </section>
+                    break;
             }
         }
     </Authorized>
@@ -273,7 +280,9 @@
             var reviewTask = LoadReviewLinks();
             var extrasTask = LoadExtras();
             var forYouTask = LoadForYou();
+            var widgetsTask = LoadWidgets();
             await LoadDashboard();
+            await widgetsTask;
             await forYouTask;
             await reviewTask;
             await extrasTask;
@@ -286,6 +295,33 @@
         error = null;
         try { dash = await Api.DashboardAsync(); }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    // Stats widgets on Home: which profile widget each section is, and the data for the ones shown.
+    private static readonly Dictionary<string, ProfileWidget> HomeWidgets = new()
+    {
+        ["w-month"] = new("w-month", "tiles", 12, 1, Range: "month"),
+        ["w-heatmap"] = new("w-heatmap", "heatmap", 12, 1),
+        ["w-genres"] = new("w-genres", "genres", 12, 2, Range: "year"),
+        ["w-records"] = new("w-records", "year-records", 12, 2, Range: "year"),
+    };
+    private ProfileWidgetData? widgetData;
+
+    /// <summary>A stand-in profile (yours) for the widgets; they only use it for links.</summary>
+    private ProfileDto Me => me ??= new ProfileDto(new UserCard(Session.Me!.UserName, null, false, false), DateTimeOffset.Now, true,
+        ProfileVisibility.Public, true, 0, 0, null, null, [], [], []);
+    private ProfileDto? me;
+
+    private async Task LoadWidgets()
+    {
+        var keys = HomeWidgets.Keys.Where(k => !hidden.Contains(k)).ToList();
+        if (keys.Count == 0 || Session.Me is not { } user) return;
+        try
+        {
+            widgetData = await Api.ProfileWidgetsAsync(user.UserName,
+                keys.Select(k => HomeWidgets[k]).Select(w => w.Range is { } r ? $"{w.Type}@{r}" : w.Type));
+        }
+        catch { widgetData = new ProfileWidgetData(); }
     }
 
     private async Task LoadExtras()
@@ -371,6 +407,7 @@
         if (shown.Contains("foryou") && forYou is null) await LoadForYou();
         if (shown.Contains("review") && reviewLinks.Count == 0) await LoadReviewLinks();
         if (shown.Any(k => k is "now" or "friends" or "onthisday" or "goals")) await LoadExtras();
+        if (shown.Any(k => k.StartsWith("w-"))) await LoadWidgets();
     }
 
     private async Task Toggle(string key, bool visible)
@@ -386,6 +423,7 @@
             if (visible && key == "foryou" && forYou is null) await LoadForYou();
             if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
             if (visible && key is "now" or "friends" or "goals") await LoadExtras();
+            if (visible && key.StartsWith("w-")) await LoadWidgets();
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

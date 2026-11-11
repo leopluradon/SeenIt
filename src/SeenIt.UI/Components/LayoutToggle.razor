@@ -1,0 +1,20 @@
+@* Posters or rows for one page; remembered for that page (Settings → Layout sets the default for the rest). *@
+@inject SessionState Session
+@inject ApiClient Api
+<div class="segmented list-layout" role="radiogroup" aria-label="Show as">
+    <button role="radio" aria-checked="@(Value == ListLayout.Posters)" class="@(Value == ListLayout.Posters ? "on" : "")" @onclick="() => Set(ListLayout.Posters)" title="Posters"><Icon Name="grid" Size="14" /><span class="only-desktop"> Posters</span></button>
+    <button role="radio" aria-checked="@(Value == ListLayout.Rows)" class="@(Value == ListLayout.Rows ? "on" : "")" @onclick="() => Set(ListLayout.Rows)" title="Rows"><Icon Name="list" Size="14" /><span class="only-desktop"> Rows</span></button>
+</div>
+@code {
+    /// <summary>The key it's remembered under (UiPrefs.LayoutPages).</summary>
+    [Parameter, EditorRequired] public string Page { get; set; } = "";
+    [Parameter] public ListLayout Value { get; set; }
+    [Parameter] public EventCallback<ListLayout> ValueChanged { get; set; }
+
+    private async Task Set(ListLayout layout)
+    {
+        if (layout == Value) return;
+        await ValueChanged.InvokeAsync(layout);
+        await PagePrefs.SetLayoutAsync(Session, Api, Page, layout);
+    }
+}

@@ -1,6 +1,7 @@
 @page "/ratings"
 @attribute [Authorize]
 @inject ApiClient Api
+@inject SessionState Session
 <PageTitle>Ratings · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -19,12 +20,39 @@
         <button class="chip @(stars == n ? "on" : "")" @onclick="() => stars = stars == n ? null : n">@(Fmt.FiveStars ? "★ " + Fmt.Stars(n) : n)</button>
     }
 </div>
+<div class="chips">
+    @foreach (var (key, label) in Sorts)
+    {
+        <button class="chip @(sort == key ? "on" : "")" @onclick="() => SetSort(key)">@label</button>
+    }
+    <LayoutToggle Page="ratings" Value="layout" ValueChanged="v => layout = v" />
+</div>
 <ErrorBox Message="@error" />
 @if (items is null && error is null) { <Spinner /> }
 else if (items is not null)
 {
-    var shown = items.Where(r => (filter is null || r.Type == filter) && (stars is null || (Fmt.FiveStars ? (int)Math.Round(r.Rating, MidpointRounding.AwayFromZero) : (int)Math.Floor(r.Rating + 1e-9)) == stars)).ToList();
+    var shown = Sorted(items.Where(r => (filter is null || r.Type == filter) && (stars is null || (Fmt.FiveStars ? (int)Math.Round(r.Rating, MidpointRounding.AwayFromZero) : (int)Math.Floor(r.Rating + 1e-9)) == stars))).ToList();
     @if (shown.Count == 0) { <Empty Title="No ratings here." /> }
+    @if (layout == ListLayout.Rows)
+    {
+        <ol class="list-rows">
+            @foreach (var r in shown)
+            {
+                <li class="list-row" @key="(r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)">
+                    <a href="@(r.Type == MediaType.Episode ? Fmt.EpisodeHref(r.TmdbId, r.SeasonNumber, r.EpisodeNumber) : Fmt.Href(r.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, r.TmdbId))" class="list-row-link">
+                        <img src="@Img.Poster(r.PosterPath, "w92")" alt="" loading="lazy" />
+                        <span class="list-row-main">
+                            <b>@r.Title</b>
+                            <span class="muted small">@(r.Type == MediaType.Episode ? Fmt.Ep(r.SeasonNumber, r.EpisodeNumber) : r.SeasonNumber is { } rs ? (rs == 0 ? "Specials" : $"Season {rs}") : r.Type == MediaType.Movie ? "Movie" : "TV")<span class="dot-sep">rated @r.RatedAt.ToLocalTime().ToString(Fmt.DateLong)</span></span>
+                        </span>
+                    </a>
+                    <span class="pill">@Fmt.RatingBadge(r.Rating)</span>
+                </li>
+            }
+        </ol>
+    }
+    else
+    {
     <div class="poster-grid">
         @foreach (var r in shown)
         {
@@ -34,12 +62,30 @@ else if (items is not null)
                         @key="(r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" />
         }
     </div>
+    }
 }
 @code {
     private List<RatingEntry>? items;
     private string? error;
     private MediaType? filter;
     private int? stars;
+    private ListLayout layout = Fmt.Prefs.LayoutFor("ratings");
+    private static readonly (string Key, string Label)[] Sorts = [("recent", "Recently rated"), ("high", "Highest first"), ("low", "Lowest first"), ("title", "Title")];
+    private string sort = Sorts.Any(x => x.Key == Fmt.Prefs.SortFor("ratings")) ? Fmt.Prefs.SortFor("ratings")! : "recent";
+
+    private IEnumerable<RatingEntry> Sorted(IEnumerable<RatingEntry> q) => sort switch
+    {
+        "high" => q.OrderByDescending(r => r.Rating).ThenByDescending(r => r.RatedAt),
+        "low" => q.OrderBy(r => r.Rating).ThenByDescending(r => r.RatedAt),
+        "title" => q.OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.SeasonNumber).ThenBy(r => r.EpisodeNumber),
+        _ => q.OrderByDescending(r => r.RatedAt),
+    };
+
+    private Task SetSort(string s)
+    {
+        sort = s;
+        return PagePrefs.SetSortAsync(Session, Api, "ratings", s);
+    }
 
     protected override async Task OnInitializedAsync()
     {

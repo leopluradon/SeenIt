@@ -220,6 +220,21 @@ else { <h1>Settings</h1> }
                     </button>
                 }
             </div>
+            <h3>Accent color</h3>
+            <p class="muted small">Buttons, links and highlights. Visitors see it on your profile too.</p>
+            <div class="accent-grid" role="radiogroup" aria-label="Accent color">
+                <button role="radio" aria-checked="@(Fmt.Prefs.Accent is null)" class="accent-option @(Fmt.Prefs.Accent is null ? "on" : "")"
+                        style="--sw:@UiPrefs.Theme(Theme.Current).Accent" @onclick="() => SetAccent(null)">
+                    <span class="accent-dot"></span><span>Theme's</span>
+                </button>
+                @foreach (var a in UiPrefs.Accents)
+                {
+                    <button role="radio" aria-checked="@(Fmt.Prefs.Accent == a.Key)" class="accent-option @(Fmt.Prefs.Accent == a.Key ? "on" : "")" @key="a.Key"
+                            style="--sw:@a.Hex" @onclick="() => SetAccent(a.Key)">
+                        <span class="accent-dot"></span><span>@a.Name</span>
+                    </button>
+                }
+            </div>
         </section>
         <section class="panel" id="layout">
             <h2>Layout</h2>
@@ -232,12 +247,20 @@ else { <h1>Settings</h1> }
                                 @onclick="() => SaveLayout(p => p with { PosterSize = size })">@size</button>
                     }
                 </div>
-                <span>Lists show as</span>
+                <span>Episodes as</span>
+                <div class="segmented" role="radiogroup" aria-label="Episodes as">
+                    @foreach (var (style, sample) in new[] { (EpisodeStyle.Code, "S02E05"), (EpisodeStyle.Cross, "2x05"), (EpisodeStyle.Long, "Season 2, Episode 5") })
+                    {
+                        <button role="radio" aria-checked="@(Fmt.Prefs.EpisodeStyle == style)" class="@(Fmt.Prefs.EpisodeStyle == style ? "on" : "")"
+                                @onclick="() => SavePrefs(p => p with { EpisodeStyle = style })">@sample</button>
+                    }
+                </div>
+                <span>Lists show as <span class="muted small">(Watchlist, Ratings and lists can each switch on their own page)</span></span>
                 <div class="segmented" role="radiogroup" aria-label="Lists show as">
                     <button role="radio" aria-checked="@(Fmt.Prefs.ListLayout == ListLayout.Posters)" class="@(Fmt.Prefs.ListLayout == ListLayout.Posters ? "on" : "")"
-                            @onclick='() => SavePrefs(p => p with { ListLayout = ListLayout.Posters }, "Lists show as posters")'>Posters</button>
+                            @onclick='() => SavePrefs(p => p with { ListLayout = ListLayout.Posters, PageLayouts = null }, "Lists show as posters")'>Posters</button>
                     <button role="radio" aria-checked="@(Fmt.Prefs.ListLayout == ListLayout.Rows)" class="@(Fmt.Prefs.ListLayout == ListLayout.Rows ? "on" : "")"
-                            @onclick='() => SavePrefs(p => p with { ListLayout = ListLayout.Rows }, "Lists show as rows")'>Rows</button>
+                            @onclick='() => SavePrefs(p => p with { ListLayout = ListLayout.Rows, PageLayouts = null }, "Lists show as rows")'>Rows</button>
                 </div>
             </div>
             <label class="check">
@@ -1175,6 +1198,12 @@ else { <h1>Settings</h1> }
     {
         await SavePrefs(change, "Saved");
         try { await Js.InvokeVoidAsync("seenit.setLayout", Fmt.Prefs.Compact, Fmt.Prefs.PosterSize.ToString()); } catch (JSException) { }
+    }
+
+    private async Task SetAccent(string? key)
+    {
+        await SavePrefs(p => p with { Accent = key });
+        await Theme.ApplyAccentAsync(key);
     }
 
     private async Task SavePrefs(Func<UserPrefs, UserPrefs> change, string? done = null)

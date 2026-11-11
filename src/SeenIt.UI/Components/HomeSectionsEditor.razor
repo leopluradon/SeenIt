@@ -60,8 +60,8 @@
     private Task Reset()
     {
         order = UiPrefs.HomeSections.Select(s => s.Key).ToList();
-        hidden.Clear();
-        return Save(new PreferencesRequest(HomeOrder: order, HiddenHomeSections: []), m => m with { HomeOrder = order.ToList(), HiddenHomeSections = [] });
+        hidden = [.. UiPrefs.HiddenByDefault];
+        return Save(new PreferencesRequest(HomeOrder: order, HiddenHomeSections: [.. UiPrefs.HiddenByDefault]), m => m with { HomeOrder = order.ToList(), HiddenHomeSections = [.. UiPrefs.HiddenByDefault] });
     }
 
     private Task SaveOrder()

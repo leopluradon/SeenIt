@@ -102,10 +102,7 @@ else if (list is not null)
     }
     @if (list.Items.Count > 0)
     {
-        <div class="segmented list-layout" role="radiogroup" aria-label="Show as">
-            <button role="radio" aria-checked="@(Layout == ListLayout.Posters)" class="@(Layout == ListLayout.Posters ? "on" : "")" @onclick="() => layout = ListLayout.Posters"><Icon Name="grid" Size="14" /> Posters</button>
-            <button role="radio" aria-checked="@(Layout == ListLayout.Rows)" class="@(Layout == ListLayout.Rows ? "on" : "")" @onclick="() => layout = ListLayout.Rows"><Icon Name="list" Size="14" /> Rows</button>
-        </div>
+        <LayoutToggle Page="list" Value="Layout" ValueChanged="v => layout = v" />
     }
     @if (Layout == ListLayout.Rows)
     {
@@ -154,9 +151,9 @@ else if (list is not null)
     </Modal>
 }
 @code {
-    /// <summary>Posters or rows: the default from Settings → Display, switchable here.</summary>
+    /// <summary>Posters or rows: what you last picked on a list page, else the default from Settings → Layout.</summary>
     private ListLayout? layout;
-    private ListLayout Layout => layout ?? Fmt.Prefs.ListLayout;
+    private ListLayout Layout => layout ?? Fmt.Prefs.LayoutFor("list");
 
     /// <summary>A smart list's rules in words, e.g. "From your watchlist", "Movies", "1980–1989", "Not seen yet".</summary>
     private static IEnumerable<string> RuleText(SmartRules r)

@@ -1,9 +1,9 @@
 @* The inside of one profile widget: its heading and what it shows. The Profile page places it on the grid. *@
 @{ var kind = ProfileWidgets.Kind(Widget.Type); }
-@if (Widget.Type is not ("bio" or "now"))
+@if (Widget.Type is not ("bio" or "now") || Widget.Title is not null)
 {
     <div class="pw-head">
-        <h2>@Title(Widget)</h2>
+        <h2>@Title(Widget)@if (RangeLabel is { } rl) { <span class="pw-range">@rl</span> }</h2>
         @if (More is { } more) { <a href="@more.Href" class="section-more">@more.Label <Icon Name="chevron-right" Size="16" /></a> }
     </div>
 }
@@ -13,6 +13,19 @@
         case "now":
             @if (P.NowWatching is { } nw) { <NowWatchingCard Item="nw" Who="@(P.IsMe ? null : P.User.Name)" /> }
             else { <Nothing Text="Nothing playing right now. This shows up when something is." /> }
+            break;
+
+        case "tiles" when Ranged:
+            @if (Per is { } pt)
+            {
+                <div class="stat-tiles profile-tiles">
+                    <div class="stat"><span class="stat-value"><Dur Minutes="pt.Totals.Minutes" /></span><span class="stat-label">watched</span></div>
+                    <div class="stat"><span class="stat-value">@pt.Totals.Movies.ToString("N0")</span><span class="stat-label">movies</span></div>
+                    <div class="stat"><span class="stat-value">@pt.Totals.Episodes.ToString("N0")</span><span class="stat-label">episodes of @pt.Totals.Shows.ToString("N0") shows</span></div>
+                    <div class="stat"><span class="stat-value">@pt.Ratings.ToString("N0")</span><span class="stat-label">ratings</span></div>
+                </div>
+            }
+            else if (D is null) { <Spinner /> }
             break;
 
         case "tiles":
@@ -65,26 +78,26 @@
             </div>
             break;
 
-        case "genres" when Need(D?.Stats) is { } s:
-            @if (s.Genres.Count == 0) { <Nothing Text="Nothing watched yet." /> }
-            <BarChart Data="s.Genres.Take(8).ToList()" Label="Plays by genre" />
+        case "genres" when Genres is { } genres:
+            @if (genres.Count == 0) { <Nothing Text="Nothing watched yet." /> }
+            <BarChart Data="genres.Take(8).ToList()" Label="Plays by genre" />
             break;
 
         case "months" when Need(D?.Stats) is { } s:
             <BarChart Data="s.PlaysByMonth" Vertical="true" Label="Plays per month, last 12 months" LabelEvery="2" />
             break;
 
-        case "rating-chart" when Need(D?.Stats) is { } s:
-            @if (s.Ratings == 0) { <Nothing Text="No ratings yet." /> }
+        case "rating-chart" when Ratings is { } rs:
+            @if (rs.Count == 0) { <Nothing Text="No ratings yet." /> }
             else
             {
-                @if (s.AverageRating is { } avg) { <p class="muted small pw-note">@s.Ratings.ToString("N0") ratings · average @Fmt.Avg(avg)</p> }
-                <BarChart Data="Fmt.RatingBuckets(s.RatingDistribution)" Vertical="true" Label="Number of ratings at each score" />
+                @if (rs.Average is { } avg) { <p class="muted small pw-note">@rs.Count.ToString("N0") ratings · average @Fmt.Avg(avg)</p> }
+                <BarChart Data="Fmt.RatingBuckets(rs.Spread)" Vertical="true" Label="Number of ratings at each score" />
             }
             break;
 
-        case "weekdays" when Need(D?.Stats) is { } s:
-            <BarChart Data="Fmt.WeekOrder(s.PlaysByWeekday)" Vertical="true" Label="Plays by day of week" />
+        case "weekdays" when Weekdays is { } days:
+            <BarChart Data="Fmt.WeekOrder(days)" Vertical="true" Label="Plays by day of week" />
             break;
 
         case "release-gap" when Need(D?.ReleaseGap) is { } g:
@@ -155,12 +168,12 @@
             </div>
             break;
 
-        case "year-records" when Need(D?.Records) is { } r:
-            @if (r.Plays == 0) { <Nothing Text="@($"Nothing watched in {r.Year} yet.")" /> }
+        case "year-records" when Per is { } r:
+            @if (r.Totals.Plays == 0) { <Nothing Text="@($"Nothing watched in {r.Label} yet.")" /> }
             else
             {
                 <div class="pw-facts">
-                    <div><b>@r.Plays.ToString("N0")</b><span>plays · <Dur Minutes="r.Minutes" /></span></div>
+                    <div><b>@r.Totals.Plays.ToString("N0")</b><span>plays · <Dur Minutes="r.Totals.Minutes" /></span></div>
                     @if (r.LongestStreak.Days > 1)
                     {
                         <div><b>@r.LongestStreak.Days days</b><span>longest streak@(r.LongestStreak.Start is { } a && r.LongestStreak.End is { } b ? $" ({a.ToString(Fmt.DayShort)} – {b.ToString(Fmt.DayShort)})" : "")</span></div>
@@ -180,8 +193,8 @@
             }
             break;
 
-        case "top-people" when Need(D?.Records) is { } r:
-            @if (r.TopActors.Count == 0 && r.TopDirectors.Count == 0) { <Nothing Text="@($"Nothing watched in {r.Year} yet.")" /> }
+        case "top-people" when Per is { } r:
+            @if (r.TopActors.Count == 0 && r.TopDirectors.Count == 0) { <Nothing Text="@($"Nothing watched in {r.Label} yet.")" /> }
             <div class="pw-people">
                 @foreach (var (label, people) in new[] { ("Actors", r.TopActors), ("Directors & creators", r.TopDirectors) })
                 {
@@ -247,14 +260,24 @@
 
     private static T? Need<T>(T? value) where T : class => value;
 
+    // Stats widgets can cover a calendar period instead of all time (ProfileWidget.Range).
+    private bool Ranged => IsRanged(Widget);
+    private ProfilePeriod? Per => PeriodOf(Widget, D);
+    private static bool IsRanged(ProfileWidget w) => ProfileWidgets.Kind(w.Type)?.Ranges is not null && (w.Range ?? ProfileWidgets.Kind(w.Type)!.DefaultRange) is { } r && r != "all";
+    private static ProfilePeriod? PeriodOf(ProfileWidget w, ProfileWidgetData? d) =>
+        IsRanged(w) ? d?.Periods?.GetValueOrDefault(w.Range ?? ProfileWidgets.Kind(w.Type)!.DefaultRange!) : null;
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+    private string? RangeLabel => Ranged ? ProfileWidgets.RangeName(Widget.Range ?? ProfileWidgets.Kind(Widget.Type)?.DefaultRange, Today) : null;
+
+    private IReadOnlyList<CountBucket>? Genres => Ranged ? Per?.Genres : D?.Stats?.Genres;
+    private IReadOnlyList<CountBucket>? Weekdays => Ranged ? Per?.Weekdays : D?.Stats?.PlaysByWeekday;
+    private (int Count, double? Average, IReadOnlyList<CountBucket> Spread)? Ratings =>
+        Ranged ? Per is { } p ? (p.Ratings, p.AverageRating, p.RatingDistribution) : null
+        : D?.Stats is { } s ? (s.Ratings, s.AverageRating, s.RatingDistribution) : null;
+
     private static string ProfileWidgetKey(MediaRef r) => $"{(r.Type == MediaType.Movie ? "movie" : "show")}:{r.TmdbId}";
 
-    public static string Title(ProfileWidget w) => w.Type switch
-    {
-        "spotlight" => w.Text ?? "Spotlight",
-        "pinned-list" => w.Text ?? "Pinned list",
-        _ => ProfileWidgets.Kind(w.Type)?.Name ?? w.Type,
-    };
+    public static string Title(ProfileWidget w) => w.Title ?? ProfileWidgets.Kind(w.Type)?.Name ?? w.Type;
 
     private (string Href, string Label)? More => Widget.Type switch
     {
@@ -263,7 +286,8 @@
         "pinned-list" when Widget.ListId is { } id => ($"lists/{id}", "Open"),
         "watching" when P.IsMe => ("progress", "Progress"),
         "genres" or "months" or "weekdays" or "heatmap" or "weekhour" or "release-gap" or "milestones" when P.IsMe => ("stats", "Stats"),
-        "year-records" or "top-people" when P.IsMe && D?.Records is { } r => ($"review/{r.Year}", "Year in review"),
+        "year-records" or "top-people" when P.IsMe && ProfileWidgets.Period(Widget.Range ?? "year", Today) is { } per =>
+            (per.Month is { } m ? $"review/{per.Year}/{m}" : $"review/{per.Year}", per.Month is null ? "Year in review" : "Month in review"),
         _ => null,
     };
 
@@ -274,6 +298,7 @@
     public static bool HasContent(ProfileWidget w, ProfileDto p, ProfileWidgetData? d) => w.Type switch
     {
         "now" => p.NowWatching is not null,
+        "tiles" when IsRanged(w) => d is null || PeriodOf(w, d) is not null,
         "tiles" => p.Stats is not null,
         "recent" => p.Recent.Count > 0,
         "fav-movies" => p.Favorites?.Any(f => f.Media.Type == MediaType.Movie) == true,
@@ -283,6 +308,8 @@
         "bio" => w.Text is not null,
         "spotlight" => w.Media is not null && (d is null || d.Spotlights?.ContainsKey(ProfileWidgetKey(w.Media)) == true),
         "pinned-list" => w.ListId is { } id && (d is null || d.Lists?.ContainsKey(id) == true),
+        "genres" or "weekdays" when IsRanged(w) => d is null || PeriodOf(w, d) is { Totals.Plays: > 0 },
+        "rating-chart" when IsRanged(w) => d is null || PeriodOf(w, d) is { Ratings: > 0 },
         "genres" or "months" or "weekdays" => d is null || d.Stats is { MoviePlays: > 0 } or { EpisodePlays: > 0 },
         "rating-chart" => d is null || d.Stats is { Ratings: > 0 },
         "release-gap" => d is null || d.ReleaseGap is { Count: > 0 },
@@ -291,8 +318,8 @@
         "watching" => d is null || d.Watching is { Count: > 0 },
         "finished" => d is null || d.Finished is { Count: > 0 },
         "milestones" => d is null || d.Milestones is { Count: > 0 },
-        "year-records" => d is null || d.Records is { Plays: > 0 },
-        "top-people" => d is null || d.Records is { TopActors.Count: > 0 } or { TopDirectors.Count: > 0 },
+        "year-records" => d is null || PeriodOf(w, d) is { Totals.Plays: > 0 },
+        "top-people" => d is null || PeriodOf(w, d) is { TopActors.Count: > 0 } or { TopDirectors.Count: > 0 },
         _ => false,
     };
 }

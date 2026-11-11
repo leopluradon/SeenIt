@@ -6,7 +6,7 @@
     <title>SeenIt</title>
     <base href="/" />
     <!-- The saved color theme, before anything paints. -->
-    <script>try { var t = localStorage.getItem('seenit.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { }</script>
+    <script>try { var t = localStorage.getItem('seenit.theme'); if (t) document.documentElement.dataset.theme = t; var a = localStorage.getItem('seenit.accent'); if (a) document.documentElement.style.cssText += a; } catch (e) { }</script>
     <link rel="stylesheet" href="_content/SeenIt.UI/seenit.css" />
     <style>
         /* No site footer or hover effects needed inside the app. */

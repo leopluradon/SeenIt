@@ -18,7 +18,7 @@ public class AppUser : IdentityUser<Guid>
     public bool BlurSpoilerImages { get; set; } = true;
 
     /// <summary>Home page sections the user has hidden (keys from UiPrefs.HomeSections).</summary>
-    public List<string> HiddenHomeSections { get; set; } = [];
+    public List<string> HiddenHomeSections { get; set; } = [.. UiPrefs.HiddenByDefault];
     /// <summary>Home page section order (keys from UiPrefs.HomeSections); empty means the default.</summary>
     public List<string> HomeOrder { get; set; } = [];
     /// <summary>Color theme key (UiPrefs.Themes); null means the default.</summary>

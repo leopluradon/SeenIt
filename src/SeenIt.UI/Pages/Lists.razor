@@ -1,6 +1,7 @@
 @page "/lists"
 @attribute [Authorize]
 @inject ApiClient Api
+@inject SessionState Session
 @inject Toasts Toasts
 @inject NavigationManager Nav
 <PageTitle>Lists · SeenIt</PageTitle>
@@ -89,7 +90,7 @@ else if (lists is not null)
     private string Tab => TabParam is "saved" or "browse" ? TabParam : "mine";
     private List<ListSummary>? saved, browse;
     private string browseQuery = "";
-    private bool recent;
+    private bool recent = Fmt.Prefs.SortFor("lists-browse") == "recent";
     private CancellationTokenSource? browseDebounce;
 
     protected override async Task OnParametersSetAsync()
@@ -115,7 +116,12 @@ else if (lists is not null)
         catch (Exception ex) { browse = []; error = ex.Message; }
     }
 
-    private Task SetSort(bool r) { recent = r; browse = null; return LoadBrowse(); }
+    private Task SetSort(bool r)
+    {
+        recent = r; browse = null;
+        _ = PagePrefs.SetSortAsync(Session, Api, "lists-browse", r ? "recent" : "saved");
+        return LoadBrowse();
+    }
 
     private async Task BrowseDebounce()
     {

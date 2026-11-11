@@ -78,6 +78,10 @@ public enum ScoreSpoilers { Off, Unwatched, Always }
 /// <summary>What marking something watched does to it being on your watchlist.</summary>
 public enum WatchlistOnWatch { Remove, Ask, Keep }
 public enum ListLayout { Posters, Rows }
+/// <summary>How episodes are labeled: S02E05, 2x05, or Season 2, Episode 5.</summary>
+public enum EpisodeStyle { Code, Cross, Long }
+/// <summary>A filter saved as a quick chip on a page: History, Watchlist or Progress, plus its query string.</summary>
+public record SavedView(string Page, string Name, string Query);
 public enum PosterSize { Small, Medium, Large }
 public enum BackupEvery { Monthly, Weekly }
 /// <summary>Which files a backup holds: JSON and CSV, or just one kind.</summary>
@@ -113,7 +117,14 @@ public record UserPrefs(
     bool DismissButtons = true,                      // the "not interested" × on posters
     bool ApproveFollowers = false,                   // new followers need your OK
     BackupEvery BackupEvery = BackupEvery.Monthly,
-    ExportFormat BackupFormat = ExportFormat.Both)
+    ExportFormat BackupFormat = ExportFormat.Both,
+    string? Accent = null,                           // key from UiPrefs.Accents; null = the theme's own
+    EpisodeStyle EpisodeStyle = EpisodeStyle.Code,
+    IReadOnlyDictionary<string, ListLayout>? PageLayouts = null,   // posters or rows per page (UiPrefs.LayoutPages); missing = ListLayout
+    IReadOnlyDictionary<string, string>? PageSorts = null,         // last sort picked per page (UiPrefs.SortPages)
+    IReadOnlyList<SavedView>? SavedViews = null,     // filters saved as quick chips on History, Watchlist and Progress
+    MediaRef? ProfileBanner = null,                  // a movie or show whose backdrop sits behind your name on your profile
+    string? ProfileBadge = null)                     // a milestone shown next to your name (its label)
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -139,6 +150,8 @@ public record UserPrefs(
     public bool ShowsScore(string source, string kind) =>
         (source is "tmdb" or "friends" || Scores is null || Scores.Contains(source)) && HiddenScores?.Contains($"{source}/{kind}") != true;
     public int Count(string section) => HomeCounts?.TryGetValue(section, out var n) == true ? n : DefaultRowCount;
+    public ListLayout LayoutFor(string page) => PageLayouts?.TryGetValue(page, out var l) == true ? l : ListLayout;
+    public string? SortFor(string page) => PageSorts?.TryGetValue(page, out var s) == true ? s : null;
     /// <summary>Who can see this part: its own setting, or the profile's.</summary>
     public ProfileVisibility For(ProfilePart part, ProfileVisibility profile) =>
         PartVisibility?.TryGetValue(part, out var v) == true ? v : profile;
@@ -156,6 +169,15 @@ public record UserPrefs(
         PosterScoreMovies = PosterScoreChoices(true).Any(c => c.Key == PosterScoreMovies) ? PosterScoreMovies : "tmdb",
         PosterScoreShows = PosterScoreChoices(false).Any(c => c.Key == PosterScoreShows) ? PosterScoreShows : "tmdb",
         PartVisibility = PartVisibility?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
+        Accent = UiPrefs.Accents.Any(a => a.Key == Accent) ? Accent : null,
+        EpisodeStyle = Enum.IsDefined(EpisodeStyle) ? EpisodeStyle : EpisodeStyle.Code,
+        PageLayouts = PageLayouts?.Where(kv => UiPrefs.LayoutPages.Contains(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
+        PageSorts = PageSorts?.Where(kv => UiPrefs.SortPages.Contains(kv.Key) && kv.Value is { Length: > 0 and <= 30 }).ToDictionary(kv => kv.Key, kv => kv.Value),
+        SavedViews = SavedViews?.Where(v => UiPrefs.ViewPages.Contains(v.Page) && !string.IsNullOrWhiteSpace(v.Name) && (v.Query?.Length ?? 0) <= 500)
+            .Select(v => v with { Name = v.Name.Trim()[..Math.Min(v.Name.Trim().Length, 40)], Query = (v.Query ?? "").TrimStart('?') })
+            .Take(UiPrefs.MaxSavedViews).ToList(),
+        ProfileBanner = ProfileBanner is { Type: MediaType.Movie or MediaType.Show } ? ProfileBanner : null,
+        ProfileBadge = ProfileBadge is { Length: > 0 and <= 80 } ? ProfileBadge : null,
     };
 }
 
@@ -178,7 +200,39 @@ public static class UiPrefs
         ("friends", "Friends' activity"),
         ("trending-movies", "Trending movies"),
         ("trending-shows", "Trending shows"),
+        // Stats widgets (the same as on profiles). Off until you turn them on.
+        ("w-month", "Stats: this month so far"),
+        ("w-heatmap", "Stats: every day this year"),
+        ("w-genres", "Stats: top genres this year"),
+        ("w-records", "Stats: this year's records"),
     ];
+
+    /// <summary>Home sections that start switched off (new accounts, and existing ones when they were added).</summary>
+    public static readonly string[] HiddenByDefault = ["w-month", "w-heatmap", "w-genres", "w-records"];
+
+    /// <summary>Pages with their own posters/rows choice, sort memory and saved views.</summary>
+    public static readonly string[] LayoutPages = ["watchlist", "ratings", "list"];
+    public static readonly string[] SortPages = ["watchlist", "ratings", "lists-browse"];
+    public static readonly string[] ViewPages = ["history", "watchlist", "progress"];
+    public const int MaxSavedViews = 24;
+
+    /// <summary>Accent colors that can replace the theme's own. Hover is a lighter shade; OnAccent is text on it.</summary>
+    public static readonly (string Key, string Name, string Hex, string Hover, string Rgb, string Text, string OnAccent)[] Accents =
+    [
+        ("red", "Red", "#ec3f4f", "#f25b69", "236, 63, 79", "#ffb3ba", "#fff"),
+        ("orange", "Orange", "#f27323", "#fb8a45", "242, 115, 35", "#fed7aa", "#fff"),
+        ("gold", "Gold", "#e2b024", "#efc24a", "226, 176, 36", "#fde68a", "#1a1405"),
+        ("green", "Green", "#34b27b", "#46c98f", "52, 178, 123", "#b9f0d4", "#fff"),
+        ("teal", "Teal", "#22b3b0", "#3ccbc7", "34, 179, 176", "#b3f0ee", "#06201f"),
+        ("blue", "Blue", "#4f8cff", "#6ea0ff", "79, 140, 255", "#bcd3ff", "#fff"),
+        ("purple", "Purple", "#a660f5", "#bb85fa", "166, 96, 245", "#e1c8ff", "#fff"),
+        ("pink", "Pink", "#e8559c", "#f074b0", "232, 85, 156", "#fbc6df", "#fff"),
+    ];
+
+    /// <summary>CSS custom properties for an accent (applied to the page, or to a profile for its visitors).</summary>
+    public static string? AccentStyle(string? key) => Accents.FirstOrDefault(a => a.Key == key) is { Key: not null } a
+        ? $"--accent:{a.Hex};--accent-hover:{a.Hover};--accent-rgb:{a.Rgb};--accent-soft:rgba({a.Rgb}, .15);--accent-text:{a.Text};--on-accent:{a.OnAccent};"
+        : null;
 
     public static readonly (string Key, string Label, string Icon, string Href)[] Tabs =
     [
@@ -873,7 +927,10 @@ public record ProfileDto(
     NowWatchingDto? NowWatching, ProfileStats? Stats,
     IReadOnlyList<HistoryEntry> Recent, IReadOnlyList<RatingEntry> TopRated, IReadOnlyList<ListSummary> Lists,
     IReadOnlyList<FavoriteEntry>? Favorites = null,
-    IReadOnlyList<ProfileWidget>? Layout = null);   // the widgets this viewer may see, in order
+    IReadOnlyList<ProfileWidget>? Layout = null,    // the widgets this viewer may see, in order
+    string? Banner = null,                          // backdrop image path behind the name
+    string? Accent = null,                          // the owner's accent color key
+    string? Badge = null);                          // a milestone pinned next to the name
 
 /// <summary>A movie or show the user marked as a favorite, in their order.</summary>
 public record FavoriteEntry(MediaSummary Media, DateTimeOffset AddedAt);

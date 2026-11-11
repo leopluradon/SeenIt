@@ -108,7 +108,13 @@ public static class Fmt
     public static string PlayedAt(DateTimeOffset d) =>
         WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString(Fmt.DateTimeLong);
     public static string Source(WatchSource s) => WatchSources.Name(s);
-    public static string Ep(int? s, int? e) => $"S{s:00}E{e:00}";
+    /// <summary>An episode's label in the user's style: S02E05, 2x05, or Season 2, Episode 5.</summary>
+    public static string Ep(int? s, int? e) => Prefs.EpisodeStyle switch
+    {
+        EpisodeStyle.Cross => $"{s}x{e:00}",
+        EpisodeStyle.Long => s == 0 ? $"Special {e}" : $"Season {s}, Episode {e}",
+        _ => $"S{s:00}E{e:00}",
+    };
     public static string Runtime(int? minutes) => minutes is null or 0 ? "" : minutes < 60 ? $"{minutes}m" : $"{minutes / 60}h {minutes % 60}m";
 
     /// <summary>Display, tracking and privacy choices (set from the signed-in profile).</summary>

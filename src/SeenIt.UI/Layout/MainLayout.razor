@@ -109,7 +109,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // Follow the account's theme once it's known (also after signing in on a new device).
-        if (Session.Me is { } me) await Theme.ApplyAsync(me.Theme);
+        if (Session.Me is { } me) { await Theme.ApplyAsync(me.Theme); await Theme.ApplyAccentAsync(Fmt.Prefs.Accent); }
         else if (firstRender) await Theme.ApplyDeviceThemeAsync();
         var layout = (Fmt.Prefs.Compact, Fmt.Prefs.PosterSize);
         if (layout != appliedLayout)

@@ -44,25 +44,34 @@ public class ProfileWidgetService(AppDbContext db, SocialService social, Trackin
         return clean;
     }
 
-    /// <param name="preview">The owner, while editing: data for these widget types instead of the saved layout's.</param>
+    /// <param name="preview">The owner, while editing (or on Home): data for these widgets instead of the saved layout's,
+    /// each "type" or "type@range" (e.g. "genres@month").</param>
     public async Task<ProfileWidgetData?> DataAsync(string userName, Guid? viewer, IReadOnlyCollection<string>? preview, CancellationToken ct)
     {
         if (await social.FindAsync(userName) is not { } owner) return null;
         var (following, followsYou) = await social.RelationAsync(viewer, owner.Id, ct);
         var mutual = following && followsYou;
-        var types = preview is not null && owner.Id == viewer
-            ? preview.Where(t => ProfileWidgets.Kind(t) is not null).ToHashSet()
-            : Visible(owner, viewer, mutual).Select(w => w.Type).ToHashSet();
+        var wanted = preview is not null && owner.Id == viewer
+            ? preview.Select(p => p.Split('@', 2)).Where(p => ProfileWidgets.Kind(p[0]) is not null)
+                .Select(p => (Type: p[0], Range: p.Length > 1 ? p[1] : ProfileWidgets.Kind(p[0])!.DefaultRange)).ToList()
+            : Visible(owner, viewer, mutual).Select(w => (w.Type, w.Range)).ToList();
+        var types = wanted.Select(w => w.Type).ToHashSet();
+        // Calendar periods some widget is set to (all-time ones use the plain stats).
+        var ranges = wanted.Where(w => ProfileWidgets.Kind(w.Type)?.Ranges is not null && w.Range is not null and not "all")
+            .Select(w => w.Range!).ToHashSet();
         var widgets = Layout(owner);
         bool Has(params string[] t) => t.Any(types.Contains);
         var id = owner.Id;
 
+        bool seeStats = SocialService.CanSee(owner, viewer, mutual, ProfilePart.Stats);
+        bool AllTime(string type) => wanted.Any(w => w.Type == type && (w.Range ?? "all") == "all");
+
         StatsDto? stats = null;
-        if (Has("genres", "months", "weekdays", "rating-chart"))
+        if (Has("months") || new[] { "genres", "weekdays", "rating-chart" }.Any(AllTime))
         {
             stats = await cache.GetAsync(id, "stats:", () => tracking.GetStatsAsync(id, null, ct), ct);
             // Ratings can be shared without the rest of the stats: then only the rating spread goes out.
-            if (!SocialService.CanSee(owner, viewer, mutual, ProfilePart.Stats))
+            if (!seeStats)
                 stats = new StatsDto(0, 0, 0, 0, 0, 0, 0, stats.Ratings, stats.AverageRating, [], [], stats.RatingDistribution, []);
         }
 
@@ -71,8 +80,28 @@ public class ProfileWidgetService(AppDbContext db, SocialService social, Trackin
 
         List<ShowProgressDto>? progress = Has("watching", "finished") ? await tracking.GetProgressAsync(id, ct) : null;
 
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ReviewService.Zone(owner.TimeZone)).DateTime);
+        Dictionary<string, ProfilePeriod>? periods = null;
+        if (ranges.Count > 0)
+        {
+            periods = [];
+            foreach (var range in ranges)
+            {
+                if (ProfileWidgets.Period(range, today) is not { } p) continue;
+                var r = await cache.GetAsync(id, $"review:{p.Year}:{p.Month}:", () => reviews.BuildAsync(id, p.Year, p.Month, null, ct), ct);
+                var period = new ProfilePeriod(ProfileWidgets.RangeName(range, today), r.Totals, r.Totals.Ratings,
+                    r.Genres.Take(10).ToList(), r.Weekdays, r.RatingDistribution, r.AverageRating,
+                    r.LongestStreak, r.BusiestDay, r.MostRewatched, r.TopActors.Take(6).ToList(), r.TopDirectors.Take(6).ToList());
+                // Ratings can be shared without the rest of the stats: then only the rating spread goes out.
+                if (!seeStats)
+                    period = period with { Totals = new PeriodTotals(0, 0, 0, 0, 0, 0, 0, r.Totals.Ratings), Genres = [], Weekdays = [],
+                        LongestStreak = new ReviewStreak(0, null, null), BusiestDay = null, MostRewatched = null, TopActors = [], TopDirectors = [] };
+                periods[range] = period;
+            }
+        }
+
         ProfileRecords? records = null;
-        if (Has("year-records", "top-people"))
+        if (preview is null && Has("year-records", "top-people"))
         {
             var year = DateTime.UtcNow.Year;
             var r = await cache.GetAsync(id, $"review:{year}:", () => reviews.BuildAsync(id, year, null, null, ct), ct);
@@ -114,7 +143,7 @@ public class ProfileWidgetService(AppDbContext db, SocialService social, Trackin
             Has("watching") ? progress?.Where(p => !p.Completed && p.Watched > 0 && p.Status == ShowTrackStatus.Watching)
                 .OrderByDescending(p => p.LastWatchedAt).Take(8).ToList() : null,
             Has("finished") ? progress?.Where(p => p.Completed).OrderByDescending(p => p.LastWatchedAt).Take(8).ToList() : null,
-            records, spotlights, pinned);
+            records, spotlights, pinned, periods);
     }
 
     public static string Key(MediaRef r) => $"{(r.Type == MediaType.Movie ? "movie" : "show")}:{r.TmdbId}";

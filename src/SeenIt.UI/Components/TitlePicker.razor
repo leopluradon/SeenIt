@@ -1,0 +1,38 @@
+@* Search for a movie or show and pick one (Spotlight widget, profile banner). *@
+@implements IDisposable
+@inject ApiClient Api
+<input type="search" value="@query" @oninput="Search" placeholder="Search titles" aria-label="Search for a movie or show" autocomplete="off" />
+<div class="pw-picks">
+    @foreach (var s in results)
+    {
+        <button type="button" class="suggest-item @(Selected is { } cm && cm.TmdbId == s.Id && (cm.Type == MediaType.Movie) == (s.Kind == "movie") ? "on" : "")" @onclick="() => OnPick.InvokeAsync(s)" @key="(s.Kind, s.Id)">
+            <span class="suggest-img">@if (s.Image is not null) { <img src="@Img.Poster(s.Image, "w92")" alt="" /> }</span>
+            <span class="suggest-text"><span class="suggest-title">@s.Title</span><span class="suggest-sub">@s.Year · @(s.Kind == "movie" ? "Movie" : "TV")</span></span>
+        </button>
+    }
+</div>
+@code {
+    [Parameter] public MediaRef? Selected { get; set; }
+    [Parameter] public EventCallback<Suggestion> OnPick { get; set; }
+    private string query = "";
+    private List<Suggestion> results = [];
+    private CancellationTokenSource? cts;
+
+    private async Task Search(ChangeEventArgs e)
+    {
+        query = e.Value as string ?? "";
+        cts?.Cancel();
+        var mine = cts = new CancellationTokenSource();
+        if (query.Trim().Length == 0) { results = []; return; }
+        try
+        {
+            await Task.Delay(120, mine.Token);
+            var found = await Api.SuggestAsync(query.Trim(), mine.Token);
+            if (!mine.IsCancellationRequested) results = found.Where(s => s.Kind is "movie" or "show").ToList();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { }
+    }
+
+    public void Dispose() => cts?.Cancel();
+}

@@ -62,6 +62,7 @@
 else
 {
 <div class="page-head">
+    <SavedViews Page="progress" Current="@ViewQuery" />
     <div class="segmented">
         <button class="@(tab == "watching" ? "on" : "")" @onclick='() => tab = "watching"'>Watching</button>
         <button class="@(tab == "waiting" ? "on" : "")" @onclick='() => tab = "waiting"'>Caught up</button>
@@ -163,10 +164,30 @@ else if (items is not null)
     private MediaSummary? pendingMovie;
     private bool askWhen;
 
+    // A saved view (or a link) picks the tab and, for that visit, the order.
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? SortParam { get; set; }
+    private static readonly string[] Tabs = ["watching", "waiting", "paused", "dropped", "all"];
+    private UpNextSort? sortOverride;
+    private (string?, string?)? applied;
+
     protected override async Task OnParametersSetAsync()
     {
+        // Only when the address changes, so a re-render doesn't undo tabs picked on the page.
+        if ((TabParam, SortParam) != applied)
+        {
+            applied = (TabParam, SortParam);
+            tab = Tabs.Contains(TabParam) ? TabParam! : "watching";
+            sortOverride = Enum.TryParse<UpNextSort>(SortParam, true, out var s) ? s : null;
+        }
         if (Franchises && franchises is null) await LoadFranchises();
     }
+
+    private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
+        {
+            ("tab", tab == "watching" ? null : tab),
+            ("sort", Sort == UpNextSort.LastWatched ? null : Sort.ToString()),
+        }.Where(p => p.Value is not null).Select(p => $"{p.Key}={p.Value}"));
 
     private async Task LoadFranchises()
     {
@@ -188,12 +209,13 @@ else if (items is not null)
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    private UpNextSort Sort => Session.Me?.UpNextSort ?? UpNextSort.LastWatched;
+    private UpNextSort Sort => sortOverride ?? Session.Me?.UpNextSort ?? UpNextSort.LastWatched;
 
     /// <summary>Saved to your account: Home's Up next uses the same order.</summary>
     private async Task SetSort(ChangeEventArgs e)
     {
         if (!Enum.TryParse<UpNextSort>(e.Value?.ToString(), out var s) || s == Sort) return;
+        sortOverride = null;
         Session.Update(me => me with { UpNextSort = s });
         try { await Api.SetPreferencesAsync(new PreferencesRequest(UpNextSort: s)); }
         catch (Exception ex) { Toasts.Error(ex); }

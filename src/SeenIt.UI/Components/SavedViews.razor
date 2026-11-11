@@ -1,0 +1,65 @@
+@* Filters saved as quick chips at the top of a page (History, Watchlist, Progress). Tap one to apply it. *@
+@inject SessionState Session
+@inject ApiClient Api
+@inject Toasts Toasts
+@{ var views = PagePrefs.Views(Page); }
+@if (views.Count > 0 || CanSave)
+{
+    <div class="saved-views" aria-label="Saved views">
+        @foreach (var v in views)
+        {
+            <span class="chip saved-view @(Same(v.Query, Current) ? "on" : "")" @key="v.Name">
+                <a href="@($"{Page}{(v.Query.Length > 0 ? "?" + v.Query : "")}")">@v.Name</a>
+                <button type="button" @onclick="() => Remove(v)" aria-label="@($"Remove saved view {v.Name}")"><Icon Name="x" Size="12" /></button>
+            </span>
+        }
+        @if (naming)
+        {
+            <form class="saved-view-name" @onsubmit="Save">
+                <input @ref="nameBox" @bind="name" @bind:event="oninput" maxlength="40" placeholder="Name this view" aria-label="Name this view" />
+                <button class="btn btn-sm btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(name)">Save</button>
+                <button class="btn btn-sm btn-ghost" type="button" @onclick="() => naming = false">Cancel</button>
+            </form>
+        }
+        else if (CanSave)
+        {
+            <button type="button" class="chip chip-add" @onclick="StartNaming"><Icon Name="plus" Size="12" /> Save view</button>
+        }
+    </div>
+}
+@code {
+    /// <summary>"history", "watchlist" or "progress": also the page's address.</summary>
+    [Parameter, EditorRequired] public string Page { get; set; } = "";
+    /// <summary>The page's current filters as a query string (no "?"); empty when nothing is filtered.</summary>
+    [Parameter] public string Current { get; set; } = "";
+
+    private bool naming;
+    private string name = "";
+    private ElementReference nameBox;
+
+    // Something to save: filters are set and no saved view already has them.
+    private bool CanSave => Current.Length > 0 && !PagePrefs.Views(Page).Any(v => Same(v.Query, Current));
+
+    private static bool Same(string a, string b) => Normalize(a) == Normalize(b);
+    private static string Normalize(string q) => string.Join('&', q.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal));
+
+    private async Task StartNaming()
+    {
+        naming = true;
+        name = "";
+        StateHasChanged();
+        await Task.Yield();
+        try { await nameBox.FocusAsync(); } catch (JSException) { }
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if ((Fmt.Prefs.SavedViews?.Count ?? 0) >= UiPrefs.MaxSavedViews) { Toasts.Show("That's the most saved views you can have. Remove one first.", error: true); return; }
+        naming = false;
+        await PagePrefs.AddViewAsync(Session, Api, new SavedView(Page, name.Trim(), Current));
+        Toasts.Show($"Saved “{name.Trim()}”");
+    }
+
+    private Task Remove(SavedView v) => PagePrefs.RemoveViewAsync(Session, Api, v);
+}

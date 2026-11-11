@@ -5,7 +5,7 @@ using SeenIt.Server.Data;
 namespace SeenIt.Server.Services;
 
 /// <summary>Following, profiles, the friends feed and taste comparisons.</summary>
-public class SocialService(AppDbContext db, TrackingService tracking, ListService lists, CheckInService checkIns, UserDataCache cache)
+public class SocialService(AppDbContext db, TrackingService tracking, ListService lists, CheckInService checkIns, UserDataCache cache, CatalogService catalog)
 {
     public Task<AppUser?> FindAsync(string userName) =>
         db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.NormalizedUserName == userName.Trim().ToUpperInvariant());
@@ -64,8 +64,13 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         // Public lists are shareable by link anyway, so they show even on a private profile.
         var publicLists = (await lists.GetMineAsync(owner.Id, ct)).Where(l => isMe || l.IsPublic).ToList();
         var layout = ProfileWidgetService.Visible(owner, viewer, mutual);
+        // Banner and accent are part of how the profile looks, like the picture; the badge is a stat.
+        var prefs = owner.Prefs();
+        var banner = await BannerAsync(prefs.ProfileBanner, ct);
+        var badge = See(ProfilePart.Stats) ? prefs.ProfileBadge : null;
         if (!canView)
-            return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, false, followers, followingCount, null, null, [], [], publicLists, Layout: layout);
+            return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, false, followers, followingCount, null, null, [], [], publicLists, Layout: layout,
+                Banner: banner, Accent: prefs.Accent);
 
         // Each part has its own audience (Settings → Privacy); what this viewer may not see is left out.
         var recent = See(ProfilePart.History)
@@ -78,7 +83,22 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             See(ProfilePart.WatchingNow) ? await checkIns.GetAsync(owner.Id, ct) : null,
             See(ProfilePart.Stats) ? await StatsAsync(owner.Id, ct) : null,
             recent, topRated, publicLists,
-            See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null, layout);
+            See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null, layout, banner, prefs.Accent, badge);
+    }
+
+    /// <summary>The backdrop of the movie or show picked as a profile banner (fetched from TMDB the first time).</summary>
+    private async Task<string?> BannerAsync(MediaRef? m, CancellationToken ct)
+    {
+        if (m is null) return null;
+        try
+        {
+            return m.Type == MediaType.Movie
+                ? (await db.Movies.AsNoTracking().Where(x => x.TmdbId == m.TmdbId).Select(x => x.BackdropPath).FirstOrDefaultAsync(ct)
+                    ?? (await catalog.EnsureMovieAsync(m.TmdbId, ct))?.BackdropPath)
+                : (await db.Shows.AsNoTracking().Where(x => x.TmdbId == m.TmdbId).Select(x => x.BackdropPath).FirstOrDefaultAsync(ct)
+                    ?? (await catalog.EnsureShowAsync(m.TmdbId, ct))?.BackdropPath);
+        }
+        catch (Exception) { return null; }   // TMDB unreachable: no banner this time
     }
 
     /// <summary>
