@@ -1,6 +1,6 @@
 @* The inside of one profile widget: its heading and what it shows. The Profile page places it on the grid. *@
 @{ var kind = ProfileWidgets.Kind(Widget.Type); }
-@if (Widget.Type != "bio")
+@if (Widget.Type is not ("bio" or "now"))
 {
     <div class="pw-head">
         <h2>@Title(Widget)</h2>

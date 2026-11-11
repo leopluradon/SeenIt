@@ -1468,6 +1468,7 @@ html.compact .overview { line-height: 1.5; }
 .pw .nothing { margin: 0; }
 .pw-bio { margin: 0; white-space: pre-line; line-height: 1.55; }
 .pw:has(.pw-bio) { justify-content: center; }
+.pw:has(.pw-bio) .pw-body { flex: none; }
 
 .pw-rows { display: flex; flex-direction: column; gap: 8px; }
 .pw-row { display: flex; gap: 10px; align-items: center; color: inherit; text-decoration: none; border-radius: var(--radius-sm); padding: 2px; }
@@ -1545,7 +1546,8 @@ html.compact .overview { line-height: 1.5; }
     /* Phones: one column, each widget as tall as what's in it. */
     .pw-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; gap: 12px; }
     .pw.w1, .pw.w2, .pw.w3 { grid-column: auto; }
-    .pw { grid-row: auto; max-height: calc(var(--h, 1) * 190px + 60px); }
+    .pw { grid-row: auto; }
+    .pw-body { overflow: visible; }
     .pw-grid.editing .pw { min-height: calc(var(--h, 1) * 120px); }
     .pw-editbar { top: 0; }
 }
