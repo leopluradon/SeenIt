@@ -119,7 +119,8 @@
         return Task.CompletedTask;
     }
 
-    [JSInvokable] public Task Escape() => InvokeAsync(Close);
+    /// <summary>From seenit.js (Escape key, or dragging the sheet down). Not a Blazor event, so it has to ask for the re-render itself.</summary>
+    [JSInvokable] public Task Escape() => InvokeAsync(() => { Close(); StateHasChanged(); });
 
     private void OnOpened(MenuTarget t, MenuPoint p) => _ = InvokeAsync(() => Show(t, p));
 
