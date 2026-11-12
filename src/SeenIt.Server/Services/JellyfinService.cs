@@ -214,7 +214,8 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
 
         // Progress pings arrive every few seconds; only touch the database when something changed.
         if (p.NotificationType == "PlaybackProgress" && current is not null && current.Source == source && CheckInService.IsLive(current)
-            && (endsAt is null || p.IsPaused == true || Math.Abs((current.EndsAt - endsAt.Value).TotalMinutes) < 2))
+            && (endsAt is null || p.IsPaused == true || Math.Abs((current.EndsAt - endsAt.Value).TotalMinutes) < 2)
+            && (startedAt is null || Math.Abs((current.StartedAt - startedAt.Value).TotalMinutes) < 2))
             return "Still watching";
 
         var req = await ResolveAsync(p, ct);
