@@ -52,7 +52,9 @@ ssh homelab 'curl -fsSL "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x
 ```
 
 Then `./scripts/publish-apk.sh --on-server` ships `git archive HEAD` to `~/apk-build`, builds there
-(~2.5 min), and moves the APK into `~/seenit/downloads`. Takes ~4.5 GB of disk; `~/apk-build` is
+(~2.5 min), moves the APK into `~/seenit/downloads`, and copies it to the NAS with
+`scripts/apk-to-nas.sh` (the homelab has no NAS mount, so it mounts `192.168.1.61:/volume1/data`,
+the share the PC sees as `/mnt/nas`, in a throwaway Docker volume). Takes ~4.5 GB of disk; `~/apk-build` is
 recreated on every run.
 
 To upgrade the SDK or workload later, update the PC first, then repeat the tar copies (the

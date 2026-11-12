@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the Android app and publishes it:
-#   - to the NAS (/mnt/nas/SeenIt.apk), as before;
+#   - to the NAS (/mnt/nas/SeenIt.apk), as before (with --on-server, through scripts/apk-to-nas.sh);
 #   - to the server's downloads folder, where /download/SeenIt.apk serves it and the app shows
 #     "SeenIt x.y is available" to anyone on an older version.
 # The version matches the server's numbering: 1.<number of commits>, with the commit count as
@@ -38,6 +38,9 @@ if [ "$on_server" = 1 ]; then
         mkdir -p ../$DIR/downloads && cp src/SeenIt.Mobile/bin/Release/net10.0-android/publish/app.seenit.mobile-Signed.apk ../$DIR/downloads/.SeenIt.apk.partial && \
         cd ../$DIR/downloads && mv .SeenIt.apk.partial SeenIt.apk && echo $version > version.txt"
     echo "Built on $HOST and published $version to $HOST:$DIR/downloads"
+    # The homelab doesn't mount the NAS, so copy it there the way the backups get there (a failed copy
+    # doesn't undo the publish).
+    ssh "$HOST" "cd apk-build && ./scripts/apk-to-nas.sh" || echo "Couldn't copy the APK to the NAS; run scripts/apk-to-nas.sh on $HOST." >&2
     exit 0
 fi
 
