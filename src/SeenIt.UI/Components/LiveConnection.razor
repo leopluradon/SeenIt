@@ -3,12 +3,22 @@
    page is hidden or the app is in the background, changes are only noted, and the page refreshes once it's back. *@
 @implements IAsyncDisposable
 @inject ApiClient Api
+@inject NavigationManager Nav
+@if (offered)
+{
+    <div class="live-refresh" role="status">
+        <Icon Name="refresh" Size="16" />
+        <span>Updated in another tab or device</span>
+        <button class="btn btn-sm btn-primary" @onclick="RefreshNow">Refresh</button>
+        <button class="icon-btn" @onclick="() => offered = false" aria-label="Not now"><Icon Name="x" Size="16" /></button>
+    </div>
+}
 @inject ContextMenu CtxMenu
 @inject IJSRuntime Js
 @code {
     private CancellationTokenSource? life, connection;
     private DotNetObjectReference<LiveConnection>? self;
-    private bool hidden, stale, reconnectNow;
+    private bool hidden, stale, reconnectNow, offered;
     private int pendingRefresh;
     private TaskCompletionSource wake = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -21,6 +31,7 @@
         life = new CancellationTokenSource();
         AppLifecycle.Resumed += OnResumed;
         AppLifecycle.Stopped += OnStopped;
+        Nav.LocationChanged += OnNavigated;
         self = DotNetObjectReference.Create(this);
         try { await Js.InvokeVoidAsync("seenit.onVisibility", self); } catch (JSException) { } catch (InvalidOperationException) { }
         _ = RunAsync(life.Token);
@@ -97,8 +108,28 @@
             await Task.Delay(400);
             if (mine != pendingRefresh || hidden) return;
             stale = false;
-            await CtxMenu.RaiseChangedAsync();
+            // Settings → Marking watched: reload now (the default), offer a Refresh button, or leave the page alone.
+            switch (Fmt.Prefs.AutoRefresh)
+            {
+                case AutoRefresh.Ask: offered = true; StateHasChanged(); break;
+                case AutoRefresh.Never: break;
+                default: await CtxMenu.RaiseChangedAsync(); break;
+            }
         });
+    }
+
+    private async Task RefreshNow()
+    {
+        offered = false;
+        await CtxMenu.RaiseChangedAsync();
+    }
+
+    // A new page loads fresh, so the offer no longer applies.
+    private void OnNavigated(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (!offered) return;
+        offered = false;
+        _ = InvokeAsync(StateHasChanged);
     }
 
     /// <summary>From seenit.js: the tab or window was hidden or shown.</summary>
@@ -135,6 +166,7 @@
     {
         AppLifecycle.Resumed -= OnResumed;
         AppLifecycle.Stopped -= OnStopped;
+        Nav.LocationChanged -= OnNavigated;
         life?.Cancel();
         try { await Js.InvokeVoidAsync("seenit.onVisibility", null); }
         catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException) { }

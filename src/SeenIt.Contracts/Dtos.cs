@@ -77,6 +77,8 @@ public enum WatchDefault { Ask, Now, ReleaseDate }
 public enum ScoreSpoilers { Off, Unwatched, Always }
 /// <summary>What marking something watched does to it being on your watchlist.</summary>
 public enum WatchlistOnWatch { Remove, Ask, Keep }
+/// <summary>What an open page does when something of yours changes elsewhere (another tab or device, Jellyfin...).</summary>
+public enum AutoRefresh { Always, Ask, Never }
 public enum ListLayout { Posters, Rows }
 /// <summary>How episodes are labeled: S02E05, 2x05, or Season 2, Episode 5.</summary>
 public enum EpisodeStyle { Code, Cross, Long }
@@ -124,7 +126,8 @@ public record UserPrefs(
     IReadOnlyDictionary<string, string>? PageSorts = null,         // last sort picked per page (UiPrefs.SortPages)
     IReadOnlyList<SavedView>? SavedViews = null,     // filters saved as quick chips on History, Watchlist and Progress
     MediaRef? ProfileBanner = null,                  // a movie or show whose backdrop sits behind your name on your profile
-    string? ProfileBadge = null)                     // a milestone shown next to your name (its label)
+    string? ProfileBadge = null,                     // a milestone shown next to your name (its label)
+    AutoRefresh AutoRefresh = AutoRefresh.Always)    // Ask: a "Refresh" bar instead of reloading the page under you
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];

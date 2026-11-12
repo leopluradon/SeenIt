@@ -473,6 +473,15 @@ else { <h1>Settings</h1> }
                 Private notes on movie and show pages
             </label>
             <p class="muted small">Off hides the note box everywhere. Notes you've already written are kept and come back if you turn this on again.</p>
+            <div class="field">
+                <label for="auto-refresh">When something changes in another tab or device</label>
+                <select id="auto-refresh" class="narrow-select" value="@Fmt.Prefs.AutoRefresh" @onchange='e => SavePrefs(p => p with { AutoRefresh = Enum.TryParse<AutoRefresh>(e.Value?.ToString(), out var a) ? a : AutoRefresh.Always }, "Saved")'>
+                    <option value="@AutoRefresh.Always">Refresh the page straight away</option>
+                    <option value="@AutoRefresh.Ask">Show a Refresh button</option>
+                    <option value="@AutoRefresh.Never">Don't refresh</option>
+                </select>
+            </div>
+            <p class="muted small">Covers marking things in another tab, your phone, and Jellyfin plays. With a Refresh button or no refresh, a page you're reading keeps what's on it; pull down or reload to update it.</p>
         </section>
 
         <section class="panel" id="jellyfin">
