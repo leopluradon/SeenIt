@@ -409,9 +409,11 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var tz = ReviewService.Zone(f.TimeZone);
         var plays = await q.Select(w => new { w.Id, w.UserId, w.TmdbId, S = w.SeasonNumber ?? 0, E = w.EpisodeNumber ?? 0, w.WatchedAt, w.CreatedAt }).ToListAsync(ct);
         var groups = plays
-            .GroupBy(p => (Day: WatchDates.IsUnknown(p.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(p.WatchedAt, tz).DateTime), p.TmdbId, p.UserId))
+            .GroupBy(p => (Day: f.PerShow || WatchDates.IsUnknown(p.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(p.WatchedAt, tz).DateTime), p.TmdbId, p.UserId))
             .Select(g => (Key: g.Key, Plays: g.OrderBy(p => p.WatchedAt).ThenBy(p => p.CreatedAt).ToList()))
             .ToList();
+        if (f.PerShow) return await PerShowHistoryAsync(groups.Select(g => (g.Key.TmdbId, g.Key.UserId, g.Plays.Select(p => (p.Id, p.S, p.E, p.WatchedAt, p.CreatedAt)).ToList())).ToList(),
+            q, f, page, pageSize, names, ct);
         // Newest first; "date unknown" goes last (first when oldest-first), like the plain view.
         groups = (f.Oldest
                 ? groups.OrderBy(g => g.Plays[0].WatchedAt).ThenBy(g => g.Plays[0].CreatedAt)
@@ -436,6 +438,65 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
         var minutes = total > 0 ? await MinutesAsync(q, ct) : 0;
         return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct));
+    }
+
+    /// <summary>
+    /// One row per show (per person on friends' history) over everything matched: how many of its aired
+    /// episodes were seen, which seasons, and when it was last watched (first watched when oldest-first).
+    /// Plays with no date only decide the order when a show has nothing dated.
+    /// </summary>
+    private async Task<HistoryPage> PerShowHistoryAsync(List<(int TmdbId, Guid UserId, List<(Guid Id, int S, int E, DateTimeOffset At, DateTimeOffset Created)> Plays)> groups,
+        IQueryable<WatchEvent> q, HistoryQuery f, int page, int pageSize, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
+    {
+        var showIds = groups.Select(g => g.TmdbId).Distinct().ToList();
+        var titles = await db.Shows.AsNoTracking().Where(s => showIds.Contains(s.TmdbId)).Select(s => new { s.TmdbId, s.Name }).ToDictionaryAsync(s => s.TmdbId, s => s.Name, ct);
+        DateTimeOffset Pick(List<(Guid Id, int S, int E, DateTimeOffset At, DateTimeOffset Created)> ps, bool first)
+        {
+            var dated = ps.Where(p => !WatchDates.IsUnknown(p.At)).ToList();
+            return dated.Count == 0 ? WatchDates.Unknown : first ? dated[0].At : dated[^1].At;
+        }
+        var ranked = groups.Select(g => (G: g, At: Pick(g.Plays, f.Oldest), Seen: g.Plays.Select(p => (p.S, p.E)).Distinct().Count(),
+            Title: titles.GetValueOrDefault(g.TmdbId) ?? "")).ToList();
+        // Nothing dated sorts last whichever way round.
+        ranked = (f.ShowSort switch
+        {
+            "title" => ranked.OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase),
+            "episodes" => ranked.OrderByDescending(r => r.Seen).ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase),
+            _ when f.Oldest => ranked.OrderBy(r => WatchDates.IsUnknown(r.At)).ThenBy(r => r.At),
+            _ => ranked.OrderBy(r => WatchDates.IsUnknown(r.At)).ThenByDescending(r => r.At),
+        }).ToList();
+        var total = ranked.Count;
+        var pageRows = ranked.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        var pageShows = pageRows.Select(r => r.G.TmdbId).Distinct().ToList();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var aired = await db.Episodes.Where(e => pageShows.Contains(e.ShowTmdbId) && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today)
+            .GroupBy(e => e.ShowTmdbId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
+        // One play per row to borrow the title and poster from: the one at the row's date.
+        var reps = pageRows.Select(r => r.G.Plays.FirstOrDefault(p => p.At == r.At).Id is var id && id != Guid.Empty ? id : r.G.Plays[^1].Id).ToList();
+        var detailed = (await ToHistoryAsync(await db.WatchEvents.AsNoTracking().Where(w => reps.Contains(w.Id)).ToListAsync(ct), ct)).ToDictionary(e => e.Id);
+        var allIds = pageRows.SelectMany(r => r.G.Plays.Select(p => p.Id)).ToHashSet();
+        var runtimes = (await ToHistoryAsync(await db.WatchEvents.AsNoTracking().Where(w => allIds.Contains(w.Id)).ToListAsync(ct), ct)).ToDictionary(e => e.Id, e => e.Runtime ?? 0);
+
+        var entries = pageRows.Select((r, i) =>
+        {
+            var seasons = r.G.Plays.Where(p => p.S > 0).Select(p => p.S).Distinct().Order().ToList();
+            var range = seasons.Count switch
+            {
+                0 => "Specials",
+                1 => $"Season {seasons[0]}",
+                _ when seasons[^1] - seasons[0] + 1 == seasons.Count => $"Seasons {seasons[0]}–{seasons[^1]}",
+                _ => "Seasons " + string.Join(", ", seasons),
+            };
+            var seenAired = r.G.Plays.Where(p => p.S > 0).Select(p => (p.S, p.E)).Distinct().Count();
+            var minutes = r.G.Plays.Sum(p => runtimes.GetValueOrDefault(p.Id));
+            return detailed[reps[i]] with { Type = MediaType.Show, SeasonNumber = null, EpisodeNumber = null, EpisodeTitle = null, WatchedAt = r.At,
+                Runtime = minutes > 0 ? minutes : null, Episodes = r.Seen, Range = range, Who = names?.GetValueOrDefault(r.G.UserId),
+                EpisodesAired = aired.TryGetValue(r.G.TmdbId, out var n) && n >= seenAired ? n : null, YouWatched = null };
+        }).ToList();
+
+        var totalMinutes = total > 0 ? await MinutesAsync(q, ct) : 0;
+        return new(entries, page, (total + pageSize - 1) / pageSize, total, totalMinutes);
     }
 
     /// <summary>Total running time of everything matched, not just this page.</summary>

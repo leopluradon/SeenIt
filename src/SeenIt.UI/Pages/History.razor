@@ -18,8 +18,15 @@
         <button class="@(Type is null ? "on" : "")" @onclick='() => Go(type: "")'>All</button>
         <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick='() => Go(type: "Movie")'>Movies</button>
         <button class="@(Type == MediaType.Episode ? "on" : "")" @onclick='() => Go(type: "Episode")'>Episodes</button>
-        <button class="@(Type == MediaType.Show ? "on" : "")" @onclick='() => Go(type: "Show")' title="Episodes grouped into one row per show per day">Shows</button>
+        <button class="@(Type == MediaType.Show ? "on" : "")" @onclick='() => Go(type: "Show")' title="Episodes grouped by show">Shows</button>
     </div>
+    @if (Type == MediaType.Show)
+    {
+        <div class="segmented segmented-sm" role="radiogroup" aria-label="Group shows">
+            <button role="radio" aria-checked="@(!PerShow)" class="@(PerShow ? "" : "on")" @onclick='() => Go(group: "", sort: SortFor(false))'>By day</button>
+            <button role="radio" aria-checked="@PerShow" class="@(PerShow ? "on" : "")" @onclick='() => Go(group: "show", sort: SortFor(true))'>One per show</button>
+        </div>
+    }
 </div>
 
 <form class="searchbar" @onsubmit="Submit" role="search">
@@ -87,8 +94,18 @@
     <div class="field">
         <label for="hf-sort">Order</label>
         <select id="hf-sort" value="@(Sort ?? "")" @onchange='e => Go(sort: e.Value?.ToString() ?? "")'>
-            <option value="">Newest first</option>
-            <option value="oldest">Oldest first</option>
+            @if (PerShow)
+            {
+                <option value="">Last watched</option>
+                <option value="oldest">First watched</option>
+                <option value="episodes">Most episodes</option>
+                <option value="title">Title</option>
+            }
+            else
+            {
+                <option value="">Newest first</option>
+                <option value="oldest">Oldest first</option>
+            }
         </select>
     </div>
     @if (ActiveFilters > 0 || !string.IsNullOrEmpty(Q))
@@ -118,17 +135,20 @@ else if (data is not null)
     }
     else
     {
-        <p class="muted small" title="@Fmt.HoursTip(data.TotalMinutes)">@(Type == MediaType.Show ? "Episodes grouped by show and day" : $"{data.TotalResults:N0} play{(data.TotalResults == 1 ? "" : "s")}")@(data.TotalMinutes > 0 ? $" · {Fmt.Duration(data.TotalMinutes)}" : "")@(Summary is { } sm ? $" · {sm}" : "")</p>
+        <p class="muted small" title="@Fmt.HoursTip(data.TotalMinutes)">@(PerShow ? $"{data.TotalResults:N0} show{(data.TotalResults == 1 ? "" : "s")}" : Type == MediaType.Show ? "Episodes grouped by show and day" : $"{data.TotalResults:N0} play{(data.TotalResults == 1 ? "" : "s")}")@(data.TotalMinutes > 0 ? $" · {Fmt.Duration(data.TotalMinutes)}" : "")@(Summary is { } sm ? $" · {sm}" : "")</p>
         <div class="history">
-            @foreach (var day in data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
+            @foreach (var day in PerShow ? data.Items.GroupBy(_ => (DateOnly?)null) : data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
             {
                 var totals = data.Days?.FirstOrDefault(d => d.Date == day.Key)
                              ?? new HistoryDay(day.Key, day.Count(), day.Sum(e => (long)(e.Runtime ?? 0)));
+                @if (!PerShow)
+                {
                 <div class="day-divider">
                     <h3>@(day.Key is { } dk ? Fmt.Day(dk) : "Date unknown")</h3>
                     <span class="day-line" aria-hidden="true"></span>
                     <span class="day-total" title="@Fmt.HoursTip(totals.Minutes)">@totals.Plays play@(totals.Plays == 1 ? "" : "s")@(totals.Minutes > 0 ? " · " + Fmt.Duration(totals.Minutes) : "")</span>
                 </div>
+                }
                 @foreach (var h in day)
                 {
                     <div class="history-item @(selecting && selected.Contains(h.Id) ? "picked" : "")" @key="h.Id" data-ctx="@(selecting ? null : Menu.Play(h, Mine && !Friends && h.Type != MediaType.Show))">
@@ -148,11 +168,21 @@ else if (data is not null)
                                 }
                                 <div class="mini-title">@h.Title</div>
                                 @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · <Spoiler Watched="h.YouWatched ?? true">@h.EpisodeTitle</Spoiler></div> }
+                                @if (PerShow)
+                                {
+                                    <div class="small">@(h.EpisodesAired is { } aired ? (h.Episodes >= aired ? $"All {aired} episodes" : $"{h.Episodes} of {aired} episodes") : h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div>
+                                    <div class="muted small">
+                                        @(WatchDates.IsUnknown(h.WatchedAt) ? "Date unknown" : (Sort == "oldest" ? "First watched " : "Last watched ") + Fmt.Day(DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))@(h.Runtime is > 0 ? " · " + Fmt.Duration(h.Runtime.Value) : "")
+                                    </div>
+                                }
+                                else
+                                {
                                 @if (h.Type == MediaType.Show) { <div class="small">@(h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div> }
                                 <div class="muted small">
                                     @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString(Fmt.TimeOnly))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
                                     @if (h.Source != WatchSource.Manual) { <span class="pill pill-sm">@SourceLabel(h.Source)</span> }
                                 </div>
+                                }
                             </div>
                         </a>
                         @if (!selecting && Mine && h.Type != MediaType.Show)
@@ -211,6 +241,13 @@ else if (data is not null)
     [SupplyParameterFromQuery(Name = "to")] public string? ToParam { get; set; }
     [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
     [SupplyParameterFromQuery(Name = "page")] public int? PageParam { get; set; }
+    [SupplyParameterFromQuery(Name = "group")] public string? GroupParam { get; set; }
+
+    /// <summary>Shows tab, one row per show over the whole period instead of one per show per day.</summary>
+    private bool PerShow => Type == MediaType.Show && GroupParam == "show";
+
+    /// <summary>Keeps the order when switching grouping if it means something in both ("oldest"); title / most episodes only exist per show.</summary>
+    private string SortFor(bool perShow) => Sort == "oldest" ? "oldest" : perShow && Sort is "title" or "episodes" ? Sort : "";
 
     private MediaType? Type => Enum.TryParse<MediaType>(TypeParam, out var t) ? t : null;
     private WatchSource? Source => Enum.TryParse<WatchSource>(SourceParam, out var s) ? s : null;
@@ -256,7 +293,7 @@ else if (data is not null)
     {
         error = null;
         var (from, to) = Range();
-        try { data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", PageParam ?? 1), Other, Friends, UserParam); }
+        try { data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", PageParam ?? 1, PerShow: PerShow, ShowSort: PerShow ? Sort : null), Other, Friends, UserParam); }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s history is private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
@@ -289,7 +326,7 @@ else if (data is not null)
 
     /// <summary>Updates one or more filters in the URL; any change goes back to page 1.</summary>
     private void Go(string? type = null, string? q = null, string? source = null, string? genre = null,
-        string? period = null, string? from = null, string? to = null, string? sort = null, int? page = null, string? user = null)
+        string? period = null, string? from = null, string? to = null, string? sort = null, int? page = null, string? user = null, string? group = null)
     {
         var p = new Dictionary<string, object?>
         {
@@ -304,7 +341,10 @@ else if (data is not null)
             ["to"] = Blank(to ?? ToParam),
             ["sort"] = Blank(sort ?? Sort),
             ["page"] = page is > 1 ? page : null,
+            ["group"] = (type ?? TypeParam) == "Show" ? Blank(group ?? GroupParam) : null,
         };
+        // Title and most-episodes orders only exist one-per-show.
+        if (p["group"] is null && p["sort"] is "title" or "episodes") p["sort"] = null;
         if (p["period"] as string != "custom") { p["from"] = null; p["to"] = null; }
         Nav.NavigateTo(Nav.GetUriWithQueryParameters(Nav.ToAbsoluteUri(BasePath).ToString(), p));
     }
@@ -315,7 +355,7 @@ else if (data is not null)
     private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
         {
             ("type", TypeParam), ("q", Q), ("source", SourceParam), ("genre", Genre), ("period", Period),
-            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort),
+            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort), ("group", PerShow ? "show" : null),
         }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private void Submit() => Go(q: search.Trim() is { Length: > 0 } t ? t : "");

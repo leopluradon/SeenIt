@@ -157,6 +157,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         if (f.From is { } from) qs.Add($"from={Uri.EscapeDataString(from.ToString("O"))}");
         if (f.To is { } to) qs.Add($"to={Uri.EscapeDataString(to.ToString("O"))}");
         if (f.Oldest) qs.Add("sort=oldest");
+        else if (f.ShowSort is { Length: > 0 } ss) qs.Add($"sort={ss}");
+        if (f.PerShow) qs.Add("group=show");
         if (friends && !string.IsNullOrWhiteSpace(user)) qs.Add($"user={Uri.EscapeDataString(user)}");
         if (friends) return GetAsync<HistoryPage>("api/social/history?" + string.Join('&', qs));
         return GetAsync<HistoryPage>((userName is null ? "api/history?" : $"api/users/{Uri.EscapeDataString(userName)}/history?") + string.Join('&', qs));

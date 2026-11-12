@@ -587,7 +587,8 @@ public record HistoryEntry(
     int? Episodes = null,      // Shows view: episodes watched that day (one row per show per day)
     string? Range = null,      // Shows view: "S04E01–S04E05", or one episode's number
     string? Who = null,        // Friends' history: whose play this is (a UserName from HistoryPage.People)
-    bool? YouWatched = null);  // Someone else's play: whether the viewer has seen this episode too (null on your own)
+    bool? YouWatched = null,   // Someone else's play: whether the viewer has seen this episode too (null on your own)
+    int? EpisodesAired = null);  // One-per-show view: episodes out so far (Episodes is then how many of them were seen)
 
 /// <summary>History filters. Type = Show groups episodes into one row per show per day. From is inclusive, To exclusive; both are absolute instants computed by the client in its own time zone.</summary>
 public record HistoryQuery(
@@ -600,7 +601,9 @@ public record HistoryQuery(
     bool Oldest = false,
     int Page = 1,
     int PageSize = 50,
-    string? TimeZone = null);   // IANA id; decides where one day ends and the next begins
+    string? TimeZone = null,    // IANA id; decides where one day ends and the next begins
+    bool PerShow = false,       // with Type = Show: one row per show for the whole matched period, not per day
+    string? ShowSort = null);   // one-per-show order: null (last watched), "title" or "episodes"; Oldest = first watched
 
 /// <summary>Totals for one day (null = unknown date) across every matching play, not just the visible page.</summary>
 public record HistoryDay(DateOnly? Date, int Plays, long Minutes);

@@ -125,10 +125,12 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
     private static CompletionStats Completion(Ctx c, List<ShowProgressDto> progress)
     {
         var staleBefore = DateTimeOffset.UtcNow.AddDays(-180);
+        // Dropped comes first: a show you dropped after seeing everything out so far isn't "caught up"
+        // (the Progress page's Caught up list leaves it out too).
         string State(ShowProgressDto p) =>
-            p.Completed ? (c.Shows.GetValueOrDefault(p.ShowTmdbId)?.IsOngoing == true ? "caught" : "finished")
+            p.Status == ShowTrackStatus.Dropped ? "dropped"
+            : p.Completed ? (c.Shows.GetValueOrDefault(p.ShowTmdbId)?.IsOngoing == true ? "caught" : "finished")
             : p.Status == ShowTrackStatus.Paused ? "paused"
-            : p.Status == ShowTrackStatus.Dropped ? "dropped"
             : p.LastWatchedAt is { } lw && lw < staleBefore ? "stalled"
             : "watching";
         var states = progress.Where(p => p.Watched > 0).Select(p => (P: p, S: State(p))).ToList();
