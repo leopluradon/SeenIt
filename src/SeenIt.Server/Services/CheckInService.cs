@@ -19,8 +19,10 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
     public static bool IsLive(CheckIn c) =>
         c.Source == WatchSource.Manual ? c.EndsAt > DateTimeOffset.UtcNow : c.EndsAt + StaleGrace > DateTimeOffset.UtcNow;
 
-    /// <summary>Starts (or replaces) the user's check-in. endsAt defaults to start + runtime.</summary>
-    public async Task<NowWatchingDto> StartAsync(Guid userId, CheckInRequest req, WatchSource source, DateTimeOffset? endsAt, CancellationToken ct)
+    /// <summary>Starts (or replaces) the user's check-in. endsAt defaults to start + runtime. A player passes startedAt
+    /// (now minus its playback position) so the progress bar matches where it is, even when resumed partway through.</summary>
+    public async Task<NowWatchingDto> StartAsync(Guid userId, CheckInRequest req, WatchSource source, DateTimeOffset? endsAt, CancellationToken ct,
+        DateTimeOffset? startedAt = null)
     {
         int runtime;
         switch (req.Type)
@@ -47,7 +49,8 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
         row.TmdbId = req.TmdbId;
         row.SeasonNumber = req.Type == MediaType.Episode ? req.SeasonNumber : null;
         row.EpisodeNumber = req.Type == MediaType.Episode ? req.EpisodeNumber : null;
-        if (!same) row.StartedAt = now;
+        if (startedAt is { } at) row.StartedAt = at;
+        else if (!same) row.StartedAt = now;
         row.EndsAt = endsAt ?? now.AddMinutes(runtime);
         row.Source = source;
         await db.SaveChangesAsync(ct);

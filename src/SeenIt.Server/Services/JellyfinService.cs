@@ -207,6 +207,10 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         DateTimeOffset? endsAt = p.RunTimeTicks is { } run and > 0
             ? DateTimeOffset.UtcNow + TimeSpan.FromTicks(Math.Max(0, run - (p.PositionTicks ?? 0)))
             : null;
+        // Where playback really began, as if watched straight through: now minus the position.
+        DateTimeOffset? startedAt = p.RunTimeTicks is > 0 && p.PositionTicks is { } pos
+            ? DateTimeOffset.UtcNow - TimeSpan.FromTicks(Math.Max(0, pos))
+            : null;
 
         // Progress pings arrive every few seconds; only touch the database when something changed.
         if (p.NotificationType == "PlaybackProgress" && current is not null && current.Source == source && CheckInService.IsLive(current)
@@ -217,7 +221,7 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         if (req is null) return "Now playing, but couldn't match it on TMDB";
         try
         {
-            await checkIns.StartAsync(user.Id, new CheckInRequest(req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber), source, endsAt, ct);
+            await checkIns.StartAsync(user.Id, new CheckInRequest(req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber), source, endsAt, ct, startedAt);
         }
         catch (TrackingException ex) { return ex.Message; }
         return "Now watching";
