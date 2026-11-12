@@ -4,6 +4,7 @@
 @inject ApiClient Api
 @inject IJSRuntime Js
 @inject NavigationManager Nav
+@inject SessionState Session
 <form class="@Class" @onsubmit="Submit" role="search" autocomplete="off">
     <Icon Name="search" Size="@IconSize" />
     <input type="search" @ref="box" value="@text" @oninput="OnInput" @onfocus="Focused" @onblur="Blurred" @onkeydown="Key"
@@ -37,14 +38,15 @@
                     {
                         var s = shown[i];
                         var index = i;
-                        @if (i > 0 && (s.Kind == "person") != (shown[i - 1].Kind == "person"))
+                        @if (i > 0 ? Section(s) != Section(shown[i - 1]) : Section(s) == "Members")
                         {
-                            <li class="suggest-sep" role="presentation">@(s.Kind == "person" ? "People" : "Movies & TV")</li>
+                            <li class="suggest-sep" role="presentation">@Section(s)</li>
                         }
-                        <li id="@($"{listId}-{i}")" role="option" aria-selected="@(active == i ? "true" : "false")" @key="(s.Kind, s.Id)">
+                        <li id="@($"{listId}-{i}")" role="option" aria-selected="@(active == i ? "true" : "false")" @key="(s.Kind, s.Id, s.Sub)">
                             <a href="@Href(s)" class="suggest-item @(active == i ? "on" : "")" @onclick="() => Picked(s)" @onclick:preventDefault @onmouseenter="() => active = index">
-                                <span class="suggest-img @(s.Kind == "person" ? "round" : "")">
-                                    @if (s.Image is not null) { <img src="@Img.Poster(s.Image, "w92")" alt="" loading="lazy" /> }
+                                <span class="suggest-img @(s.Kind is "person" or "user" ? "round" : "")">
+                                    @if (s.Kind == "user") { <Avatar Name="@s.Title" Url="@s.Image" Class="avatar-sm" /> }
+                                    else if (s.Image is not null) { <img src="@Img.Poster(s.Image, "w92")" alt="" loading="lazy" /> }
                                     else { <Icon Name="@(s.Kind == "person" ? "users" : s.Kind == "show" ? "tv" : "film")" Size="14" /> }
                                 </span>
                                 <span class="suggest-text">
@@ -136,14 +138,20 @@
         if (Fetched.TryGetValue(q, out var known)) { shown = known; shownFor = q; return; }
         // Until the server answers, narrow what's already shown to what still matches, so the list reacts at once.
         if (shownFor.Length > 0 && q.StartsWith(shownFor, StringComparison.Ordinal))
-            shown = shown.Where(s => Matches(s.Title, q)).ToList();
+            shown = shown.Where(s => Matches(s.Title, q) || s.Kind == "user" && Matches(s.Sub ?? "", q)).ToList();
 
         var cts = pending = new CancellationTokenSource();
         try
         {
             await Task.Delay(DebounceMs, cts.Token);
-            var result = await Api.SuggestAsync(q, cts.Token);
+            // Members come from the signed-in search (who you can see depends on you); titles from the shared one.
+            var usersTask = Session.Me is not null && q.Length >= 2 ? MembersAsync(q) : Task.FromResult(new List<Suggestion>());
+            var titles = await Api.SuggestAsync(q, cts.Token);
+            var members = await usersTask;
             if (cts.IsCancellationRequested) return;
+            // A member whose name starts with what's typed leads; looser matches go last.
+            var lead = members.Where(m => Matches(m.Title, q) || (m.Sub ?? "").StartsWith(q, StringComparison.OrdinalIgnoreCase)).ToList();
+            var result = lead.Concat(titles).Concat(members.Except(lead)).ToList();
             if (Fetched.Count > 500) Fetched.Clear();
             Fetched[q] = result;
             if (Norm(text) != q) return; // the box has moved on
@@ -154,6 +162,18 @@
         catch (OperationCanceledException) { }
         catch (Exception) { /* offline or a hiccup: keep what's shown */ }
     }
+
+    private async Task<List<Suggestion>> MembersAsync(string q)
+    {
+        try
+        {
+            return (await Api.SearchUsersAsync(q)).Take(3)
+                .Select(u => new Suggestion("user", 0, u.Name, null, u.Avatar, u.UserName)).ToList();
+        }
+        catch (Exception) { return []; }
+    }
+
+    private static string Section(Suggestion s) => s.Kind switch { "person" => "People", "user" => "Members", _ => "Movies & TV" };
 
     private void Key(KeyboardEventArgs e)
     {
@@ -225,12 +245,14 @@
     {
         "movie" => $"movie/{s.Id}",
         "show" => $"show/{s.Id}",
+        "user" => Fmt.UserHref(s.Sub ?? ""),
         _ => $"person/{s.Id}",
     };
 
     private static string SearchHref(string q) => "search?q=" + Uri.EscapeDataString(q.Trim());
 
-    private static string Sub(Suggestion s) => s.Kind == "person"
+    private static string Sub(Suggestion s) => s.Kind == "user" ? "@" + s.Sub + " · Member"
+        : s.Kind == "person"
         ? s.Sub ?? "Person"
         : string.Join(" · ", new[] { s.Year?.ToString(), s.Kind == "movie" ? "Movie" : "TV" }.Where(x => x is not null));
 
