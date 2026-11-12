@@ -42,18 +42,33 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
         }
 
         var now = DateTimeOffset.UtcNow;
+        void Apply(CheckIn row)
+        {
+            var same = row.Type == req.Type && row.TmdbId == req.TmdbId && row.SeasonNumber == req.SeasonNumber && row.EpisodeNumber == req.EpisodeNumber && IsLive(row);
+            row.Type = req.Type;
+            row.TmdbId = req.TmdbId;
+            row.SeasonNumber = req.Type == MediaType.Episode ? req.SeasonNumber : null;
+            row.EpisodeNumber = req.Type == MediaType.Episode ? req.EpisodeNumber : null;
+            if (startedAt is { } at) row.StartedAt = at;
+            else if (!same) row.StartedAt = now;
+            row.EndsAt = endsAt ?? now.AddMinutes(runtime);
+            row.Source = source;
+        }
+
         var row = await db.CheckIns.FirstOrDefaultAsync(x => x.UserId == userId, ct);
+        var adding = row is null;
         if (row is null) db.CheckIns.Add(row = new CheckIn { UserId = userId });
-        var same = row.Type == req.Type && row.TmdbId == req.TmdbId && row.SeasonNumber == req.SeasonNumber && row.EpisodeNumber == req.EpisodeNumber && IsLive(row);
-        row.Type = req.Type;
-        row.TmdbId = req.TmdbId;
-        row.SeasonNumber = req.Type == MediaType.Episode ? req.SeasonNumber : null;
-        row.EpisodeNumber = req.Type == MediaType.Episode ? req.EpisodeNumber : null;
-        if (startedAt is { } at) row.StartedAt = at;
-        else if (!same) row.StartedAt = now;
-        row.EndsAt = endsAt ?? now.AddMinutes(runtime);
-        row.Source = source;
-        await db.SaveChangesAsync(ct);
+        Apply(row);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException ex) when (adding && ex.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+        {
+            // Jellyfin sends playback start and the first progress report a few ms apart: both found no check-in
+            // and both added one. The other request's row is there now, so update that one instead.
+            db.Entry(row).State = EntityState.Detached;
+            row = await db.CheckIns.FirstAsync(x => x.UserId == userId, ct);
+            Apply(row);
+            await db.SaveChangesAsync(ct);
+        }
         await live.NotifyWithFollowersAsync(db, userId, ct);
         return (await ToDtosAsync([row], ct))[0];
     }
