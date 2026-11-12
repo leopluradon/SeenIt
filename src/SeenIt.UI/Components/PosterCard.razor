@@ -19,6 +19,7 @@
         }
     </div>
     <div class="poster-title">@Media.Title</div>
+    @if (!string.IsNullOrWhiteSpace(Detail)) { <div class="poster-detail" title="@Detail">@Detail</div> }
     <div class="poster-sub" title="@SubTitle">
         @if (Sub is not null) { @Sub }
         else { @(Media.Year?.ToString() ?? "")<span class="dot-sep">@(Media.Type == MediaType.Movie ? "Movie" : "TV")</span> }
@@ -44,6 +45,8 @@
     [Parameter, EditorRequired] public MediaSummary Media { get; set; } = default!;
     [Parameter] public string? Badge { get; set; }
     [Parameter] public string? Sub { get; set; }
+    /// <summary>An extra line under the title, cut to one line (e.g. the episode's name).</summary>
+    [Parameter] public string? Detail { get; set; }
     /// <summary>Hover text for the line under the title (e.g. the exact date behind "3d ago").</summary>
     [Parameter] public string? SubTitle { get; set; }
     [Parameter] public bool ShowScore { get; set; } = true;
