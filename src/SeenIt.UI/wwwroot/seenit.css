@@ -1648,3 +1648,7 @@ html.compact .overview { line-height: 1.5; }
 .ctx-friend { display: flex; align-items: center; gap: 8px; color: var(--text); text-decoration: none; padding: 3px 0; }
 .ctx-friend > span:nth-child(2) { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctx-sheet .ctx-item { padding: 11px 12px; font-size: 1rem; }
+.ctx-menu:focus { outline: none; }
+.ctx-rate .rating-picker.compact .pip { width: 15px; height: 15px; }
+.ctx-sheet .ctx-rate .rating-picker.compact .pip { width: 22px; height: 22px; border-radius: 5px; }
+.ctx-sheet .ctx-rate .rating-picker { gap: 5px; }

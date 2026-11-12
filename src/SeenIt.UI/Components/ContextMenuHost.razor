@@ -12,7 +12,7 @@
 @if (target is { } t)
 {
     <div class="ctx-backdrop @(sheet ? "dim" : "")" @onclick="Close" @oncontextmenu="Close" @oncontextmenu:preventDefault></div>
-    <div class="ctx-menu @(sheet ? "ctx-sheet" : "")" style="@position" role="menu" aria-label="@($"Actions for {Heading(t)}")">
+    <div class="ctx-menu @(sheet ? "ctx-sheet" : "")" style="@position" role="menu" tabindex="-1" aria-label="@($"Actions for {Heading(t)}")">
         <div class="ctx-head">
             @if (t.Kind == MenuKind.User)
             {
@@ -107,7 +107,7 @@
         if (focusPending)
         {
             focusPending = false;
-            try { await Js.InvokeVoidAsync("seenit.focusFirst", ".ctx-menu .ctx-item, .ctx-menu button"); } catch (JSException) { }
+            try { await Js.InvokeVoidAsync("seenit.focusFirst", ".ctx-menu"); } catch (JSException) { }
         }
     }
 
