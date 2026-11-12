@@ -41,12 +41,17 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var start = new DateTime(year, month ?? 1, 1);
         var end = month is null ? start.AddYears(1) : start.AddMonths(1);
         var prevStart = month is null ? start.AddYears(-1) : start.AddMonths(-1);
+        // The period still in progress is compared at the same pace: the previous one only up to this moment's
+        // equivalent (Nov 11, 8 PM → Oct 11, 8 PM; a year → the same date and time a year ago).
+        var nowLocal = Local(DateTimeOffset.UtcNow, tz);
+        var current = nowLocal >= start && nowLocal < end;
+        var prevEnd = current ? Min(month is null ? nowLocal.AddYears(-1) : nowLocal.AddMonths(-1), start) : start;
 
         var since = await tracking.TrackingSinceAsync(userId, ct);
         bool Tracked(DateTime local) => since is null || DateOnly.FromDateTime(local) >= since;
         var all = await LoadPlaysAsync(userId, tz, since, ct);
         var inPeriod = all.Where(p => p.Local >= start && p.Local < end).OrderBy(p => p.Local).ToList();
-        var previous = all.Where(p => p.Local >= prevStart && p.Local < start).ToList();
+        var previous = all.Where(p => p.Local >= prevStart && p.Local < prevEnd).ToList();
 
         // Full metadata (cast, crew, countries) only for what was watched in this period; the
         // previous period just needs runtimes for its totals.
@@ -71,7 +76,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             ps.Sum(p => minutes(p)),
             ratingCount);
 
-        var prevRatings = ratings.Count(r => Local(r.RatedAt, tz) is var l && l >= prevStart && l < start && Tracked(l));
+        var prevRatings = ratings.Count(r => Local(r.RatedAt, tz) is var l && l >= prevStart && l < prevEnd && Tracked(l));
 
         // ----- Days, streaks, habits -----
         var habit = inPeriod;
@@ -220,7 +225,9 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var bookendEntries = await tracking.ToHistoryAsync(bookends, ct);
 
         var label = month is null ? year.ToString() : start.ToString("MMMM yyyy", En);
-        var prevLabel = month is null ? (year - 1).ToString() : prevStart.ToString("MMMM yyyy", En);
+        var prevLabel = !current ? (month is null ? (year - 1).ToString() : prevStart.ToString("MMMM yyyy", En))
+            : month is null ? $"{year - 1} through {prevEnd.ToString("MMM d", En)}"
+            : $"{prevStart.ToString("MMMM", En)} 1–{prevEnd.Day}, {prevStart.Year}";
         var ratingValues = ratingsInPeriod.Select(r => r.Value).ToList();
 
         return new ReviewDto(
@@ -297,6 +304,8 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         }
         return new ReviewStreak(best, bestStart, bestEnd);
     }
+
+    private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
 
     internal static DateTime Local(DateTimeOffset at, TimeZoneInfo tz) => TimeZoneInfo.ConvertTime(at, tz).DateTime;
 
