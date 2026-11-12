@@ -2,6 +2,7 @@
 @inject SessionState Session
 @inject NavigationManager Nav
 @inject ApiClient Api
+@inject IJSRuntime JS
 <PageTitle>Sign in · SeenIt</PageTitle>
 
 <div class="auth-card">
@@ -51,6 +52,13 @@
         error = null;
         try
         {
+            // An autofilled box may never have reported its value, so trust what's on screen.
+            try
+            {
+                if (await JS.InvokeAsync<string?>("seenit.fieldValue", "login-user") is { Length: > 0 } u) model.User = u;
+                if (await JS.InvokeAsync<string?>("seenit.fieldValue", "login-pass") is { Length: > 0 } pw) model.Password = pw;
+            }
+            catch (JSException) { /* older cached script: use the bound values */ }
             await Session.LoginAsync(model.User.Trim(), model.Password);
             Nav.NavigateTo(SafeReturn(ReturnUrl));
         }

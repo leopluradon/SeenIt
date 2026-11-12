@@ -61,11 +61,17 @@ public static partial class AuthEndpoints
         }).RequireRateLimiting("auth");
 
         g.MapPost("/login", async Task<Results<SignInHttpResult, BadRequest<ProblemInfo>>> (
-            LoginRequest req, UserManager<AppUser> users, SignInManager<AppUser> signIn) =>
+            LoginRequest req, UserManager<AppUser> users, SignInManager<AppUser> signIn, ILoggerFactory logs) =>
         {
-            var key = req.UserNameOrEmail?.Trim() ?? "";
+            var key = LoginKey(req.UserNameOrEmail);
             var user = key.Contains('@') ? await users.FindByEmailAsync(key) : await users.FindByNameAsync(key);
-            if (user is null) return Bad("Wrong username or password.");
+            if (user is null)
+            {
+                // Never the address itself: just enough to tell an empty box from a different email.
+                logs.CreateLogger("SeenIt.Auth").LogInformation("Sign-in matched no account ({Shape})",
+                    key.Length == 0 ? "empty" : key.Contains('@') ? $"email, {key.Length} chars, @{key[(key.IndexOf('@') + 1)..]}" : $"username, {key.Length} chars");
+                return Bad("Wrong username or password.");
+            }
 
             var check = await signIn.CheckPasswordSignInAsync(user, req.Password ?? "", lockoutOnFailure: true);
             if (check.IsLockedOut) return Bad("Too many failed attempts. Try again in a few minutes.");
@@ -290,6 +296,11 @@ public static partial class AuthEndpoints
     /// <summary>Where links in emails point: SeenIt:PublicUrl if set, otherwise the address this request came in on.</summary>
     internal static string PublicBase(HttpContext http, IConfiguration config) =>
         config["SeenIt:PublicUrl"] is { Length: > 0 } url ? url.TrimEnd('/') + "/" : $"{http.Request.Scheme}://{http.Request.Host}{http.Request.PathBase}/";
+
+    /// <summary>What was typed or autofilled, without spaces or invisible characters (zero-width joiners, BOMs) that password managers and keyboards can slip in.</summary>
+    internal static string LoginKey(string? s) =>
+        new string((s ?? "").Normalize(System.Text.NormalizationForm.FormKC)
+            .Where(c => !char.IsWhiteSpace(c) && char.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format).ToArray());
 
     private static BadRequest<ProblemInfo> Bad(string message) => TypedResults.BadRequest(new ProblemInfo(message));
 }
