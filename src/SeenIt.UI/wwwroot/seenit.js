@@ -152,6 +152,43 @@ window.seenit = {
         }, { passive: false });
         document.addEventListener('touchcancel', cancel, { passive: true });
         document.addEventListener('scroll', cancel, { passive: true, capture: true });
+
+        // Drag the bottom sheet down to close it, from its handle or anywhere once its list is scrolled to the top.
+        const drag = { sheet: null, y0: 0, t0: 0, dy: 0, on: false };
+        document.addEventListener('touchstart', e => {
+            const sheet = e.target.closest && e.target.closest('.ctx-sheet');
+            drag.sheet = sheet && e.touches.length === 1 && sheet.scrollTop <= 0 ? sheet : null;
+            drag.on = false; drag.dy = 0;
+            if (drag.sheet) { drag.y0 = e.touches[0].clientY; drag.t0 = Date.now(); }
+        }, { passive: true });
+        document.addEventListener('touchmove', e => {
+            if (!drag.sheet) return;
+            const dy = e.touches[0].clientY - drag.y0;
+            if (!drag.on) {
+                if (Math.abs(dy) < 8) return;
+                if (dy < 0 || drag.sheet.scrollTop > 0) { drag.sheet = null; return; }   // scrolling the list up
+                drag.on = true;
+                drag.sheet.style.transition = 'none';
+            }
+            if (e.cancelable) e.preventDefault();
+            drag.dy = Math.max(0, dy);
+            drag.sheet.style.transform = `translateY(${drag.dy}px)`;
+        }, { passive: false });
+        const release = () => {
+            const sheet = drag.sheet;
+            drag.sheet = null;
+            if (!sheet || !drag.on) return;
+            const fast = drag.dy / Math.max(1, Date.now() - drag.t0) > 0.6;
+            sheet.style.transition = 'transform .18s ease-out';
+            if (drag.dy > Math.min(120, sheet.offsetHeight * 0.3) || (fast && drag.dy > 30)) {
+                sheet.style.transform = 'translateY(100%)';
+                setTimeout(() => st.dotnet.invokeMethodAsync('Escape'), 160);
+            } else {
+                sheet.style.transform = '';
+            }
+        };
+        document.addEventListener('touchend', release, { passive: true });
+        document.addEventListener('touchcancel', release, { passive: true });
         // Belt and braces: swallow the click that some browsers still send after a long press.
         document.addEventListener('click', e => {
             if (Date.now() - st.opened < 700 && find(e.target)) { e.preventDefault(); e.stopPropagation(); }
@@ -290,7 +327,7 @@ window.seenit = {
 
         // Somewhere the gesture shouldn't start: an open menu or dialog, or inside something already scrolled.
         const blocked = target => {
-            if (document.querySelector('.modal-backdrop, .menu-backdrop')) return true;
+            if (document.querySelector('.modal-backdrop, .menu-backdrop, .ctx-backdrop')) return true;
             for (let n = target; n && n !== document.body; n = n.parentElement)
                 if (n.scrollTop > 0) return true;
             return false;
@@ -307,6 +344,8 @@ window.seenit = {
         // at the very top, so the listener is only attached while the page is scrolled to the top.
         const onMove = e => {
             if (!state.active) return;
+            // A long press opened a menu during this same touch: the drag belongs to the menu now.
+            if (document.querySelector('.modal-backdrop, .menu-backdrop, .ctx-backdrop')) { state.active = false; reset(); return; }
             const dx = e.touches[0].clientX - state.startX, dy = e.touches[0].clientY - state.startY;
             if (!state.decided) {
                 if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
