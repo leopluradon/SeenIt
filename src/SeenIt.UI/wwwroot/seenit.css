@@ -30,8 +30,8 @@
     --shadow: 0 8px 30px rgba(0, 0, 0, .45);
     --topbar-h: 60px;
     --tabbar-h: 62px;
-    --gutter: 24px;
-    --max: 1320px;
+    --gutter: clamp(24px, 2.5vw, 48px);   /* a bit more breathing room on big screens */
+    --max: 1840px;                        /* wide screens get most of their width; text blocks keep their own limits */
     color-scheme: dark;
 }
 
