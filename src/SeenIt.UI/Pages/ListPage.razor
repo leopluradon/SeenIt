@@ -109,7 +109,7 @@ else if (list is not null)
         <ol class="list-rows">
             @foreach (var (i, rank) in list.Items.Select((x, n) => (x, n + 1)).Where(x => TextMatch.Contains(x.x.Media.Title, find)))
             {
-                <li class="list-row" @key="i.Id">
+                <li class="list-row" @key="i.Id" data-ctx="@Menu.Title(i.Media)">
                     @if (list.Ranked) { <span class="list-rank">@rank</span> }
                     <a href="@Fmt.Href(i.Media.Type, i.Media.TmdbId)" class="list-row-link">
                         <img src="@Img.Poster(i.Media.PosterPath, "w92")" alt="" loading="lazy" />
@@ -150,6 +150,7 @@ else if (list is not null)
         <ListForm Name="@list.Name" Description="@list.Description" IsPublic="list.IsPublic" Ranked="list.Ranked" Rules="list.Rules" OnSave="Save" />
     </Modal>
 }
+<ReloadOnMenu OnChange="Load" />
 @code {
     /// <summary>Posters or rows: what you last picked on a list page, else the default from Settings → Layout.</summary>
     private ListLayout? layout;

@@ -26,7 +26,7 @@
                 var current = e.SeasonNumber == CurrentSeason && e.EpisodeNumber == CurrentEpisode;
                 var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
                 var actions = CanWatch && e.Plays == 0 && aired;
-                <li @key="(e.SeasonNumber, e.EpisodeNumber)" class="ep-item">
+                <li @key="(e.SeasonNumber, e.EpisodeNumber)" class="ep-item" data-ctx="@Menu.Episode(ShowId, e.SeasonNumber, e.EpisodeNumber, ShowName, e.Name, ShowPoster)">
                     <a class="ep-row @(current ? "current" : "") @(e.Plays > 0 ? "watched" : "") @(aired ? "" : "unaired") @(actions ? (Fmt.CanThrough(e.SeasonNumber, e.EpisodeNumber) ? "has-actions" : "has-action") : "")"
                        href="@Fmt.EpisodeHref(ShowId, e.SeasonNumber, e.EpisodeNumber)" aria-current="@(current ? "page" : null)">
                         <span class="ep-num">@e.EpisodeNumber</span>
@@ -58,6 +58,9 @@
              ScopeSeason="@(pending is { SeasonNumber: > 1, EpisodeNumber: > 1 } ps ? ps.SeasonNumber : null)"  AskWhen="askWhen" />
 @code {
     [Parameter, EditorRequired] public int ShowId { get; set; }
+    /// <summary>For the right-click menu's header.</summary>
+    [Parameter] public string? ShowName { get; set; }
+    [Parameter] public string? ShowPoster { get; set; }
     [Parameter] public int CurrentSeason { get; set; }
     [Parameter] public int CurrentEpisode { get; set; }
     [Parameter] public IReadOnlyList<SeasonSummary> Seasons { get; set; } = [];

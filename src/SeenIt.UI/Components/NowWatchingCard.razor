@@ -1,6 +1,6 @@
 @* A live "watching now" item with how far through it is. *@
 @implements IDisposable
-<div class="now-card">
+<div class="now-card" data-ctx="@(Item.Type == MediaType.Episode && Item.SeasonNumber is { } cs && Item.EpisodeNumber is { } ce ? Menu.Episode(Item.TmdbId, cs, ce, Item.Title, Item.EpisodeTitle, Item.PosterPath) : Menu.Title(MediaType.Movie, Item.TmdbId, Item.Title, Item.PosterPath))">
     <a href="@Href"><img src="@Img.Poster(Item.PosterPath, "w154")" alt="" /></a>
     <div class="now-body">
         <span class="now-kicker"><Icon Name="radio" Size="14" /> @(Who is null ? "Watching now" : $"{Who} is watching")@(WatchSources.IsScrobbler(Item.Source) ? $" on {WatchSources.Name(Item.Source)}" : "")</span>

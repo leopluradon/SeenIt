@@ -180,6 +180,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task UnrateAsync(MediaType type, int id, int? season = null, int? episode = null) =>
         SendAsync(HttpMethod.Delete, $"api/ratings?type={type}&tmdbId={id}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"));
 
+    public Task<ItemStatus> ItemStatusAsync(MediaType type, int id, int? season = null, int? episode = null) =>
+        GetAsync<ItemStatus>($"api/status/{type}/{id}" + (season is { } s && episode is { } e ? $"?season={s}&episode={e}" : ""));
     public Task<List<ShowProgressDto>> ProgressAsync() => GetAsync<List<ShowProgressDto>>("api/progress");
     public Task<List<CalendarEntry>> CalendarAsync(DateOnly from, int days) => GetAsync<List<CalendarEntry>>($"api/calendar?from={from:yyyy-MM-dd}&days={days}");
     public Task<DashboardDto> DashboardAsync() => GetAsync<DashboardDto>("api/dashboard");

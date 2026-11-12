@@ -109,7 +109,7 @@ else if (items is not null)
         <div class="progress-list">
             @foreach (var p in group)
             {
-                <div class="progress-item" @key="p.ShowTmdbId">
+                <div class="progress-item" @key="p.ShowTmdbId" data-ctx="@Menu.Title(MediaType.Show, p.ShowTmdbId, p.Name, p.PosterPath)">
                     <a href="@($"show/{p.ShowTmdbId}")"><img src="@Img.Poster(p.PosterPath, "w154")" alt="" loading="lazy" /></a>
                     <div class="progress-body">
                         <a href="@($"show/{p.ShowTmdbId}")" class="mini-title">@p.Name</a>
@@ -153,6 +153,7 @@ else if (items is not null)
                  ReleaseDate="pe.AirDate" OnPick="Watch"  AskWhen="askWhen" />
 }
 }
+<ReloadOnMenu OnChange="Load" />
 @code {
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }

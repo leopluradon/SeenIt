@@ -43,7 +43,7 @@ else if (items is not null)
                 @foreach (var w in shown)
                 {
                     var upcoming = w.ReleaseDate is { } rd && rd > DateOnly.FromDateTime(DateTime.Today);
-                    <li class="list-row" @key="(w.Media.Type, w.Media.TmdbId)">
+                    <li class="list-row" @key="(w.Media.Type, w.Media.TmdbId)" data-ctx="@Menu.Title(w.Media)">
                         <a href="@Fmt.Href(w.Media.Type, w.Media.TmdbId)" class="list-row-link">
                             <img src="@Img.Poster(w.Media.PosterPath, "w92")" alt="" loading="lazy" />
                             <span class="list-row-main">
@@ -67,6 +67,7 @@ else if (items is not null)
         }
     }
 }
+<ReloadOnMenu OnChange="Load" />
 @code {
     private List<WatchlistEntry>? items;
     private string? error;

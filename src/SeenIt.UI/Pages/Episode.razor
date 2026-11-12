@@ -123,7 +123,7 @@ else if (e is not null)
         }
     </nav>
 
-    <SeasonEpisodes ShowId="Id" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" OnChanged="Reload" CanWatch="e.Plays is not null" />
+    <SeasonEpisodes ShowId="Id" ShowName="@e.ShowName" ShowPoster="@e.ShowPosterPath" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" OnChanged="Reload" CanWatch="e.Plays is not null" />
 
     <CastRow Cast="@(e.Cast ?? [])" Title="Cast" />
     @if (Fmt.Prefs.HideGuestStars && !Seen && !showGuests && e.GuestStars.Count > 0)
@@ -141,6 +141,7 @@ else if (e is not null)
     <EditPlayDialog @bind-Play="editing" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnSaved="Reload" />
 }
 
+<ReloadOnMenu OnChange="Reload" />
 @code {
     [Parameter] public int Id { get; set; }
     [Parameter] public int Season { get; set; }

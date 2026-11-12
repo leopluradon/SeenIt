@@ -1,0 +1,10 @@
+@* Put on a page to reload it after something is changed from the right-click / long-press menu. *@
+@implements IDisposable
+@inject ContextMenu CtxMenu
+@code {
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    protected override void OnInitialized() => CtxMenu.Changed += Fire;
+    private Task Fire() => InvokeAsync(() => OnChange.InvokeAsync());
+    public void Dispose() => CtxMenu.Changed -= Fire;
+}

@@ -864,6 +864,49 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Your rating, plays, lists and progress for one title or episode (the context menu's header and toggles).</summary>
+    public async Task<ItemStatus> ItemStatusAsync(Guid userId, MediaType type, int tmdbId, int? season, int? episode, CancellationToken ct)
+    {
+        var isEpisode = type == MediaType.Episode || season is not null && episode is not null;
+        var baseType = type == MediaType.Movie ? MediaType.Movie : MediaType.Show;
+        var plays = db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId && w.TmdbId == tmdbId);
+        plays = baseType == MediaType.Movie ? plays.Where(w => w.Type == MediaType.Movie)
+            : isEpisode ? plays.Where(w => w.Type == MediaType.Episode && w.SeasonNumber == season && w.EpisodeNumber == episode)
+            : plays.Where(w => w.Type == MediaType.Episode);
+        var count = await plays.CountAsync(ct);
+        var last = count > 0 ? await plays.Where(w => w.WatchedAt > WatchDates.Unknown).MaxAsync(w => (DateTimeOffset?)w.WatchedAt, ct) : null;
+
+        var ratings = db.Ratings.AsNoTracking().Where(r => r.UserId == userId && r.TmdbId == tmdbId);
+        var rating = await (isEpisode
+                ? ratings.Where(r => r.Type == MediaType.Episode && r.SeasonNumber == season && r.EpisodeNumber == episode)
+                : ratings.Where(r => r.Type == baseType && r.SeasonNumber == null))
+            .Select(r => (double?)r.Value).FirstOrDefaultAsync(ct);
+        var onWatchlist = await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == baseType && w.TmdbId == tmdbId, ct);
+        var favorite = await db.Favorites.AnyAsync(f => f.UserId == userId && f.Type == baseType && f.TmdbId == tmdbId, ct);
+        var notInterested = await db.NotInterested.AnyAsync(n => n.UserId == userId && n.Type == baseType && n.TmdbId == tmdbId, ct);
+        var lists = await db.ListItems.Where(i => i.Type == baseType && i.TmdbId == tmdbId)
+            .Join(db.Lists.Where(l => l.UserId == userId && l.DeletedAt == null), i => i.ListId, l => l.Id, (i, l) => l.Id)
+            .Distinct().ToListAsync(ct);
+
+        DateOnly? released = baseType == MediaType.Movie
+            ? await db.Movies.Where(m => m.TmdbId == tmdbId).Select(m => m.ReleaseDate).FirstOrDefaultAsync(ct)
+            : isEpisode
+                ? await db.Episodes.Where(e => e.ShowTmdbId == tmdbId && e.SeasonNumber == season && e.EpisodeNumber == episode).Select(e => e.AirDate).FirstOrDefaultAsync(ct)
+                : await db.Shows.Where(s => s.TmdbId == tmdbId).Select(s => s.FirstAirDate).FirstOrDefaultAsync(ct);
+
+        var status = new ItemStatus(count, last, rating, onWatchlist, favorite, notInterested, lists, released);
+        if (baseType != MediaType.Show || isEpisode) return status;
+
+        if ((await new ProgressCalculator(db).ForUserAsync(userId, [tmdbId], ct)).FirstOrDefault() is { } p)
+            return status with { Watched = p.Watched, Aired = p.Aired, NextEpisode = p.NextEpisode, ShowStatus = p.Status, Rewatch = p.Rewatch, Completed = p.Completed };
+        // Not started: the first aired episode is next.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var first = await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == tmdbId && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today)
+            .OrderBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).FirstOrDefaultAsync(ct);
+        var aired = await db.Episodes.CountAsync(e => e.ShowTmdbId == tmdbId && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today, ct);
+        return status with { Aired = aired, NextEpisode = first is null ? null : new EpisodeRef(first.SeasonNumber, first.EpisodeNumber, first.Name, first.AirDate) };
+    }
+
     public async Task<ShowTrackStatus> GetShowStatusAsync(Guid userId, int showId, CancellationToken ct) =>
         await db.ShowStates.Where(x => x.UserId == userId && x.ShowTmdbId == showId).Select(x => (ShowTrackStatus?)x.Status).FirstOrDefaultAsync(ct)
         ?? ShowTrackStatus.Watching;

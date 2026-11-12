@@ -19,6 +19,7 @@ public static class UiServices
         services.AddScoped<Toasts>();
         services.AddScoped<BadgeScores>();
         services.AddScoped<WatchlistNudge>();
+        services.AddScoped<ContextMenu>();
         services.AddScoped<ThemeService>();
         services.AddScoped<ConnectivityState>();
         if (services.All(s => s.ServiceType != typeof(IOfflineStore)))

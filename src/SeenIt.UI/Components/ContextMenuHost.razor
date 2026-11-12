@@ -1,0 +1,639 @@
+@* The right-click / long-press menu for anything with a data-ctx attribute (posters, history rows, episodes, people).
+   One copy lives in the layout; seenit.js finds the element and calls Open. Phones (or a long press) get a bottom sheet. *@
+@implements IAsyncDisposable
+@inject ContextMenu CtxMenu
+@inject ApiClient Api
+@inject SessionState Session
+@inject Toasts Toasts
+@inject IJSRuntime Js
+@inject IPlatform Platform
+@inject NavigationManager Nav
+
+@if (target is { } t)
+{
+    <div class="ctx-backdrop @(sheet ? "dim" : "")" @onclick="Close" @oncontextmenu="Close" @oncontextmenu:preventDefault></div>
+    <div class="ctx-menu @(sheet ? "ctx-sheet" : "")" style="@position" role="menu" aria-label="@($"Actions for {Heading(t)}")">
+        <div class="ctx-head">
+            @if (t.Kind == MenuKind.User)
+            {
+                <Avatar Name="@(t.Name ?? t.User ?? "")" Url="@t.Avatar" Class="avatar-sm" />
+            }
+            else if (Img.Poster(t.Poster, "w92") is { } img)
+            {
+                <img src="@img" alt="" />
+            }
+            <div class="ctx-head-text">
+                <b>@Heading(t)</b>
+                @if (t.Kind == MenuKind.Episode)
+                {
+                    <span class="small">@Fmt.Ep(t.S, t.E)@if (!string.IsNullOrEmpty(t.EpTitle)) { <span class="dot-sep"></span><Spoiler Watched="status is { Plays: > 0 }">@t.EpTitle</Spoiler> }</span>
+                }
+                @if (t.Kind == MenuKind.User) { <span class="muted small">@@@t.User</span> }
+                else if (signedIn) { <span class="muted small">@StatusLine(t)</span> }
+                @if (t.Play is not null && t.At is { } at) { <span class="muted small">This play: @Fmt.PlayedAt(at)</span> }
+            </div>
+        </div>
+        <div class="ctx-body">
+            @if (t.Kind == MenuKind.User) { @UserItems(t) }
+            else
+            {
+                @if (signedIn) { @TitleItems(t) }
+                <div class="ctx-sep"></div>
+                @LinkItems(t)
+            }
+        </div>
+    </div>
+}
+
+@* Dialogs a menu item hands off to. They stay open after the menu itself closes. *@
+<WatchDialog Open="pickDate" OpenChanged="o => pickDate = o" AskWhen="true" Bulk="dialogBulk" What="@dialogWhat" ReleaseDate="dialogRelease" OnPick="Watch" />
+<WatchDialog Open="pickThrough" OpenChanged="o => pickThrough = o" Through="true" What="@dialogWhat" ReleaseDate="dialogRelease"
+             ScopeSeason="@(acted is { S: > 1, E: > 1 } a ? a.S : null)" ThroughNote="@(acted?.S == 0 ? " (specials only)" : ", in season order")" OnPick="WatchThrough" />
+<EditPlayDialog Play="editPlay" PlayChanged="p => editPlay = p" What="@dialogWhat" ReleaseDate="dialogRelease" OnSaved="CtxMenu.RaiseChangedAsync" />
+@if (acted is { Kind: MenuKind.Title } d)
+{
+    <AddToListDialog Open="listOpen" OpenChanged="ListClosed" Type="d.Type" TmdbId="d.Id" Selected="listSelected" />
+    <RecommendDialog Open="recOpen" OpenChanged="o => recOpen = o" Type="d.Type" TmdbId="d.Id" Title="@(d.Title ?? "this")" />
+}
+
+@code {
+    private MenuTarget? target;
+    /// <summary>The item a dialog is acting on (the menu itself is closed by then).</summary>
+    private MenuTarget? acted;
+    private ItemStatus? status, actedStatus;
+    private bool sheet, busy, showAll, pickDate, pickThrough, listOpen, recOpen, dialogBulk;
+    private string position = "";
+    private string? expanded;   // "watch" or "friends"
+    private List<FriendSeen>? friends;
+    private List<Guid> listSelected = [];
+    private PlayDto? editPlay;
+    private string dialogWhat = "this";
+    private DateOnly? dialogRelease;
+    private DotNetObjectReference<ContextMenuHost>? self;
+    private readonly string dialogId = "ctx-" + Guid.NewGuid().ToString("N");
+    private bool registered, focusPending;
+    private int generation;
+
+    private bool signedIn => Session.Me is not null;
+    private bool isWeb => Platform.AppVersion is null;
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    protected override void OnInitialized()
+    {
+        CtxMenu.Opened += OnOpened;
+        Nav.LocationChanged += OnNavigated;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            self = DotNetObjectReference.Create(this);
+            try { await Js.InvokeVoidAsync("seenit.contextMenu", self); }
+            catch (JSException) { }
+            catch (InvalidOperationException) { }
+        }
+        var open = target is not null;
+        if (open != registered)
+        {
+            registered = open;
+            try
+            {
+                if (open) await Js.InvokeVoidAsync("seenit.dialogOpened", dialogId, self);
+                else await Js.InvokeVoidAsync("seenit.dialogClosed", dialogId);
+            }
+            catch (JSException) { }
+        }
+        if (focusPending)
+        {
+            focusPending = false;
+            try { await Js.InvokeVoidAsync("seenit.focusFirst", ".ctx-menu .ctx-item, .ctx-menu button"); } catch (JSException) { }
+        }
+    }
+
+    /// <summary>From seenit.js: an element's data-ctx, where it was clicked, the window size, and whether by touch.</summary>
+    [JSInvokable]
+    public Task Open(string json, double x, double y, double width, double height, bool touch)
+    {
+        if (Menu.Parse(json) is { } t) CtxMenu.Open(t, new MenuPoint(x, y, width, height, touch));
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable] public Task Escape() => InvokeAsync(Close);
+
+    private void OnOpened(MenuTarget t, MenuPoint p) => _ = InvokeAsync(() => Show(t, p));
+
+    private async Task Show(MenuTarget t, MenuPoint p)
+    {
+        target = t;
+        status = null;
+        friends = null;
+        expanded = null;
+        showAll = false;
+        sheet = p.Touch || p.Width < 640;
+        const double w = 290;
+        var left = Math.Clamp(p.X, 8, Math.Max(8, p.Width - w - 8));
+        position = sheet ? ""
+            : p.Y > p.Height * 0.55
+                ? $"left:{left:0}px;bottom:{p.Height - p.Y:0}px;max-height:{p.Y - 8:0}px"
+                : $"left:{left:0}px;top:{p.Y:0}px;max-height:{p.Height - p.Y - 8:0}px";
+        focusPending = true;
+        StateHasChanged();
+
+        var mine = ++generation;
+        if (t.Kind == MenuKind.User || !signedIn) return;
+        try
+        {
+            var st = await Api.ItemStatusAsync(t.Type, t.Id, t.S, t.E);
+            if (mine == generation && target == t) { status = st; StateHasChanged(); }
+        }
+        catch (Exception) { /* the menu still works; toggles just don't know their state */ }
+    }
+
+    private void Close()
+    {
+        target = null;
+        generation++;
+    }
+
+    private void OnNavigated(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (target is null) return;
+        _ = InvokeAsync(() => { Close(); StateHasChanged(); });
+    }
+
+    private static string Heading(MenuTarget t) => t.Kind == MenuKind.User ? t.Name ?? t.User ?? "" : t.Title ?? "";
+
+    private string StatusLine(MenuTarget t)
+    {
+        if (status is not { } s) return "…";
+        if (t.Type == MediaType.Show && t.Kind == MenuKind.Title)
+        {
+            if (s.Watched == 0) return s.Aired > 0 ? $"Not started · {s.Aired} episodes" : "Not started";
+            var state = s.ShowStatus switch { ShowTrackStatus.Paused => " · paused", ShowTrackStatus.Dropped => " · dropped", _ => s.Completed ? " · caught up" : "" };
+            return $"{s.Watched}/{s.Aired} episodes{state}";
+        }
+        if (s.Plays == 0) return "Not watched yet";
+        var times = s.Plays > 1 ? $" {s.Plays}×" : "";
+        return s.LastWatched is { } last ? $"Watched{times} · {Fmt.Relative(last)}" : $"Watched{times}";
+    }
+
+    private static string Href(MenuTarget t) => t.Kind switch
+    {
+        MenuKind.Episode => Fmt.EpisodeHref(t.Id, t.S, t.E),
+        MenuKind.User => Fmt.UserHref(t.User ?? ""),
+        _ => Fmt.Href(t.Type, t.Id),
+    };
+
+    // ---------- Items ----------
+
+    private RenderFragment TitleItems(MenuTarget t) => __builder =>
+    {
+        var s = status;
+        var isShow = t.Kind == MenuKind.Title && t.Type == MediaType.Show;
+        var isEpisode = t.Kind == MenuKind.Episode;
+        <div class="ctx-rate">
+            <span class="small muted">Rate</span>
+            <RatingPicker Compact="true" Value="s?.Rating" ValueChanged="v => Rate(t, v)" />
+        </div>
+
+        <button type="button" class="ctx-item @(expanded == "watch" ? "open" : "")" role="menuitem" aria-expanded="@(expanded == "watch")" @onclick='() => Toggle("watch")'>
+            <Icon Name="check" Size="16" /> <span>@(isShow ? "Mark watched…" : s is { Plays: > 0 } ? "Watch again…" : "Mark watched…")</span>
+            <Icon Name="@(expanded == "watch" ? "chevron-up" : "chevron-down")" Size="14" Class="ctx-caret" />
+        </button>
+        @if (expanded == "watch")
+        {
+            <div class="ctx-sub">
+                @if (isShow)
+                {
+                    <div class="segmented ctx-seg" role="radiogroup" aria-label="What to mark">
+                        @if (s?.NextEpisode is { } n)
+                        {
+                            <button type="button" role="radio" aria-checked="@(!showAll)" class="@(showAll ? "" : "on")" @onclick="() => showAll = false">Next: @Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</button>
+                        }
+                        <button type="button" role="radio" aria-checked="@(showAll || s?.NextEpisode is null)" class="@(showAll || s?.NextEpisode is null ? "on" : "")" @onclick="() => showAll = true">Whole show</button>
+                    </div>
+                }
+                @{
+                    var bulk = isShow && (showAll || s?.NextEpisode is null);
+                    var release = isShow ? (bulk ? null : s?.NextEpisode?.AirDate) : s?.ReleaseDate;
+                }
+                <div class="ctx-when">
+                    <button type="button" class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => WatchFromMenu(t, new WatchChoice(WatchTime.Now))">Now</button>
+                    <button type="button" class="btn btn-sm" disabled="@busy" @onclick="() => WatchFromMenu(t, new WatchChoice(WatchTime.Custom, DateTimeOffset.Now.AddDays(-1)))">Yesterday</button>
+                    @if (bulk) { <button type="button" class="btn btn-sm" disabled="@busy" @onclick="() => WatchFromMenu(t, new WatchChoice(WatchTime.ReleaseDate))">Air dates</button> }
+                    else if (release is { } rd && rd <= Today) { <button type="button" class="btn btn-sm" disabled="@busy" @onclick="() => WatchFromMenu(t, new WatchChoice(WatchTime.ReleaseDate))" title="@rd.ToString(Fmt.DateLong)">@(isShow || isEpisode ? "Air date" : "Release date")</button> }
+                    <button type="button" class="btn btn-sm" disabled="@busy" @onclick="() => PickDate(t, bulk, release)">Pick date…</button>
+                </div>
+            </div>
+        }
+        @if (isEpisode && t.S is { } es && t.E is { } ee && Fmt.CanThrough(es, ee))
+        {
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => Through(t)"><Icon Name="history" Size="16" /> <span>Mark everything up to here…</span></button>
+        }
+        @if (!isShow && s is { Plays: > 0 })
+        {
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => Unwatch(t)"><Icon Name="x" Size="16" /> <span>Mark unwatched</span><span class="ctx-hint">@(s.Plays > 1 ? $"all {s.Plays} plays" : "")</span></button>
+        }
+
+        @if (t.Play is { } playId)
+        {
+            <div class="ctx-sep"></div>
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => ChangeDate(t, playId)"><Icon Name="edit" Size="16" /> <span>Change this play's date…</span></button>
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => DeletePlay(t, playId)"><Icon Name="trash" Size="16" /> <span>Delete this play</span></button>
+        }
+
+        @if (!isShow || s?.NextEpisode is not null)
+        {
+            var label = isShow && s?.NextEpisode is { } cn ? $"Check in to {Fmt.Ep(cn.SeasonNumber, cn.EpisodeNumber)}" : "Check in";
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => CheckIn(t)"><Icon Name="radio" Size="16" /> <span>@label</span><span class="ctx-hint">watching now</span></button>
+        }
+
+        @if (t.Kind == MenuKind.Title)
+        {
+            <div class="ctx-sep"></div>
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => Watchlist(t)">
+                <Icon Name="bookmark" Size="16" /> <span>@(s?.OnWatchlist == true ? "Remove from watchlist" : "Add to watchlist")</span>
+            </button>
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => AddToList(t)">
+                <Icon Name="list" Size="16" /> <span>Add to list…</span><span class="ctx-hint">@(s is { Lists.Count: > 0 } ? $"in {s.Lists.Count}" : "")</span>
+            </button>
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => Favorite(t)">
+                <Icon Name="heart" Size="16" /> <span>@(s?.Favorite == true ? "Remove from favorites" : "Add to favorites")</span>
+            </button>
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => Recommend(t)"><Icon Name="send" Size="16" /> <span>Recommend to a friend…</span></button>
+        }
+
+        <button type="button" class="ctx-item @(expanded == "friends" ? "open" : "")" role="menuitem" aria-expanded="@(expanded == "friends")" @onclick="() => Friends(t)">
+            <Icon Name="users" Size="16" /> <span>Who's seen it</span>
+            <Icon Name="@(expanded == "friends" ? "chevron-up" : "chevron-down")" Size="14" Class="ctx-caret" />
+        </button>
+        @if (expanded == "friends")
+        {
+            <div class="ctx-sub ctx-friends">
+                @if (friends is null) { <Spinner /> }
+                else if (friends.Count == 0) { <span class="muted small">None of your friends yet.</span> }
+                else
+                {
+                    @foreach (var f in friends.Take(8))
+                    {
+                        <a href="@Fmt.UserHref(f.User.UserName)" class="ctx-friend" @key="f.User.UserName">
+                            <Avatar Name="@f.User.Name" Url="@f.User.Avatar" Class="avatar-xs" />
+                            <span>@f.User.Name</span>
+                            <span class="muted small">@(f.Plays > 1 ? $"{f.Plays}×" : f.Plays == 1 ? "watched" : "")</span>
+                            @if (f.Rating is { } r) { <ScoreSpoiler Watched="status is { Plays: > 0 } || status is { Watched: > 0 }"><span class="pill pill-sm">@Fmt.RatingBadge(r)</span></ScoreSpoiler> }
+                        </a>
+                    }
+                    @if (friends.Count > 8) { <span class="muted small">and @(friends.Count - 8) more</span> }
+                }
+            </div>
+        }
+
+        @if (isShow && s is { Watched: > 0 })
+        {
+            <div class="ctx-sep"></div>
+            @if (s.ShowStatus is ShowTrackStatus.Paused or ShowTrackStatus.Dropped)
+            {
+                <button type="button" class="ctx-item" role="menuitem" @onclick="() => SetStatus(t, ShowTrackStatus.Watching)"><Icon Name="play" Size="16" /> <span>Resume watching</span></button>
+            }
+            else
+            {
+                <button type="button" class="ctx-item" role="menuitem" @onclick="() => SetStatus(t, ShowTrackStatus.Paused)"><Icon Name="pause" Size="16" /> <span>Pause</span><span class="ctx-hint">hide from Up next</span></button>
+            }
+            @if (s.ShowStatus != ShowTrackStatus.Dropped)
+            {
+                <button type="button" class="ctx-item" role="menuitem" @onclick="() => SetStatus(t, ShowTrackStatus.Dropped)"><Icon Name="stop" Size="16" /> <span>Drop show</span></button>
+            }
+            @if (s.Rewatch is not null)
+            {
+                <button type="button" class="ctx-item" role="menuitem" @onclick="() => Rewatch(t, false)"><Icon Name="repeat" Size="16" /> <span>Stop rewatching</span></button>
+            }
+            else if (s.Completed)
+            {
+                <button type="button" class="ctx-item" role="menuitem" @onclick="() => Rewatch(t, true)"><Icon Name="repeat" Size="16" /> <span>Start a rewatch</span></button>
+            }
+        }
+
+        @if (isEpisode)
+        {
+            <div class="ctx-sep"></div>
+            <a class="ctx-item" role="menuitem" href="@($"show/{t.Id}")"><Icon Name="tv" Size="16" /> <span>Go to show</span></a>
+            <a class="ctx-item" role="menuitem" href="@($"show/{t.Id}/season/{t.S}")"><Icon Name="list" Size="16" /> <span>Go to season @t.S</span></a>
+        }
+
+        @if (t.Kind == MenuKind.Title)
+        {
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => NotInterested(t)">
+                <Icon Name="eye-off" Size="16" /> <span>@(s?.NotInterested == true ? "Undo not interested" : "Not interested")</span>
+            </button>
+        }
+    };
+
+    private RenderFragment LinkItems(MenuTarget t) => __builder =>
+    {
+        @if (isWeb)
+        {
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => NewTab(t)"><Icon Name="external" Size="16" /> <span>Open in new tab</span></button>
+        }
+        <button type="button" class="ctx-item" role="menuitem" @onclick="() => CopyLink(t)"><Icon Name="link" Size="16" /> <span>Copy link</span></button>
+        <button type="button" class="ctx-item" role="menuitem" @onclick="() => Share(t)"><Icon Name="share" Size="16" /> <span>Share…</span></button>
+    };
+
+    private RenderFragment UserItems(MenuTarget t) => __builder =>
+    {
+        var me = Session.Me?.UserName;
+        var isSelf = me is not null && string.Equals(me, t.User, StringComparison.OrdinalIgnoreCase);
+        <a class="ctx-item" role="menuitem" href="@Fmt.UserHref(t.User ?? "")"><Icon Name="user" Size="16" /> <span>View profile</span></a>
+        @if (me is not null && !isSelf)
+        {
+            <a class="ctx-item" role="menuitem" href="@Fmt.CompareHref(me, t.User ?? "")"><Icon Name="users" Size="16" /> <span>Compare with me</span></a>
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => Follow(t)">
+                <Icon Name="@(t.Following ? "x" : "user-plus")" Size="16" /> <span>@(t.Following ? "Unfollow" : "Follow")</span>
+            </button>
+        }
+        <div class="ctx-sep"></div>
+        @LinkItems(t)
+    };
+
+    // ---------- Actions ----------
+
+    private void Toggle(string what) => expanded = expanded == what ? null : what;
+
+    /// <summary>Runs an action with the menu closed: a toast on success (with Undo when given), then pages reload.</summary>
+    private async Task Do(Func<Task<(string Message, Func<Task>? Undo)>> action)
+    {
+        busy = true;
+        Close();
+        try
+        {
+            var (message, undo) = await action();
+            Toasts.Show(message, undo: undo is null ? null : async () => { await undo(); await CtxMenu.RaiseChangedAsync(); });
+            await CtxMenu.RaiseChangedAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+
+    private Task Rate(MenuTarget t, double? v) => Do(async () =>
+    {
+        var type = t.Kind == MenuKind.Episode ? MediaType.Episode : t.Type;
+        if (v is { } r)
+        {
+            await Api.RateAsync(new RatingRequest(type, t.Id, r, t.S, t.E));
+            return ($"Rated {Name(t)} {Fmt.Rating(r)}", null);
+        }
+        await Api.UnrateAsync(type, t.Id, t.S, t.E);
+        return ($"Cleared your rating of {Name(t)}", null);
+    });
+
+    private static string Name(MenuTarget t) => t.Kind == MenuKind.Episode ? $"{t.Title} {Fmt.Ep(t.S, t.E)}" : t.Title ?? "it";
+
+    private Task WatchFromMenu(MenuTarget t, WatchChoice c)
+    {
+        acted = t;
+        actedStatus = status;
+        dialogBulk = t.Kind == MenuKind.Title && t.Type == MediaType.Show && (showAll || status?.NextEpisode is null);
+        return Watch(c);
+    }
+
+    private void PickDate(MenuTarget t, bool bulk, DateOnly? release)
+    {
+        acted = t;
+        actedStatus = status;
+        dialogBulk = bulk;
+        dialogRelease = release;
+        dialogWhat = t.Type == MediaType.Show && t.Kind == MenuKind.Title
+            ? (bulk ? t.Title ?? "it" : $"{t.Title} {Fmt.Ep(status?.NextEpisode?.SeasonNumber, status?.NextEpisode?.EpisodeNumber)}")
+            : Name(t);
+        Close();
+        pickDate = true;
+    }
+
+    private Task Watch(WatchChoice c)
+    {
+        if (acted is not { } t) return Task.CompletedTask;
+        var st = actedStatus;
+        return Do(async () =>
+        {
+            switch (t.Kind)
+            {
+                case MenuKind.Episode:
+                    await Api.WatchAsync(Fmt.Watch(MediaType.Episode, t.Id, c, t.S, t.E));
+                    return ($"Watched {Name(t)}{Fmt.When(c)}", null);
+                case MenuKind.Title when t.Type == MediaType.Movie:
+                    await Api.WatchAsync(Fmt.Watch(MediaType.Movie, t.Id, c));
+                    return ($"Watched {t.Title}{Fmt.When(c)}", null);
+                default:
+                    if (!dialogBulk && st?.NextEpisode is { } n)
+                    {
+                        await Api.WatchAsync(Fmt.Watch(MediaType.Episode, t.Id, c, n.SeasonNumber, n.EpisodeNumber));
+                        return ($"Watched {t.Title} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}", null);
+                    }
+                    await Api.BulkWatchAsync(new BulkWatchRequest(t.Id, null, c.At, When: c.When));
+                    return ($"Marked all aired episodes of {t.Title} watched{Fmt.When(c)}", null);
+            }
+        });
+    }
+
+    private void Through(MenuTarget t)
+    {
+        acted = t;
+        dialogWhat = Fmt.Ep(t.S, t.E);
+        dialogRelease = status?.ReleaseDate;
+        Close();
+        pickThrough = true;
+    }
+
+    private Task WatchThrough(WatchChoice c)
+    {
+        if (acted is not { S: { } s, E: { } e } t) return Task.CompletedTask;
+        return Do(async () =>
+        {
+            var added = await Api.WatchThroughAsync(t.Id, new WatchThroughRequest(s, e, c.When, c.At, SeasonOnly: c.SeasonOnly));
+            return (Fmt.Through(added, c), null);
+        });
+    }
+
+    private Task Unwatch(MenuTarget t) => Do(async () =>
+    {
+        var removed = await Api.UnwatchAsync(t.Kind == MenuKind.Episode ? MediaType.Episode : t.Type, t.Id, t.S, t.E);
+        return ($"Removed {removed.Removed} play{(removed.Removed == 1 ? "" : "s")} of {Name(t)}", () => Api.RestorePlaysAsync(removed.Plays));
+    });
+
+    private void ChangeDate(MenuTarget t, Guid playId)
+    {
+        acted = t;
+        dialogWhat = Name(t);
+        dialogRelease = status?.ReleaseDate;
+        Close();
+        editPlay = new PlayDto(playId, t.At ?? DateTimeOffset.Now, WatchSource.Manual);
+    }
+
+    private Task DeletePlay(MenuTarget t, Guid playId) => Do(async () =>
+    {
+        var removed = await Api.DeleteHistoryAsync(playId);
+        return ($"Removed a play of {Name(t)}", () => Api.RestorePlaysAsync(removed.Plays));
+    });
+
+    private Task CheckIn(MenuTarget t)
+    {
+        var st = status;
+        return Do(async () =>
+        {
+            var req = t.Kind switch
+            {
+                MenuKind.Episode => new CheckInRequest(MediaType.Episode, t.Id, t.S, t.E),
+                _ when t.Type == MediaType.Show && st?.NextEpisode is { } n => new CheckInRequest(MediaType.Episode, t.Id, n.SeasonNumber, n.EpisodeNumber),
+                _ => new CheckInRequest(MediaType.Movie, t.Id),
+            };
+            var now = await Api.StartCheckInAsync(req);
+            return (now is null ? "Checked in" : $"Checked in · added to history at {now.EndsAt.ToLocalTime().ToString(Fmt.TimeOnly)}",
+                async () => await Api.CancelCheckInAsync());
+        });
+    }
+
+    private Task Watchlist(MenuTarget t)
+    {
+        var on = status?.OnWatchlist == true;
+        return Do(async () =>
+        {
+            if (on)
+            {
+                await Api.RemoveFromWatchlistAsync(t.Type, t.Id);
+                return ($"Removed {t.Title} from your watchlist", () => Api.AddToWatchlistAsync(t.Type, t.Id));
+            }
+            await Api.AddToWatchlistAsync(t.Type, t.Id);
+            return ($"Added {t.Title} to your watchlist", () => Api.RemoveFromWatchlistAsync(t.Type, t.Id));
+        });
+    }
+
+    private Task Favorite(MenuTarget t)
+    {
+        var on = status?.Favorite == true;
+        return Do(async () =>
+        {
+            if (on)
+            {
+                await Api.RemoveFavoriteAsync(t.Type, t.Id);
+                return ($"Removed {t.Title} from favorites", () => Api.AddFavoriteAsync(t.Type, t.Id));
+            }
+            await Api.AddFavoriteAsync(t.Type, t.Id);
+            return ($"Added {t.Title} to favorites", () => Api.RemoveFavoriteAsync(t.Type, t.Id));
+        });
+    }
+
+    private Task NotInterested(MenuTarget t)
+    {
+        var on = status?.NotInterested == true;
+        return Do(async () =>
+        {
+            if (on)
+            {
+                await Api.UndoNotInterestedAsync(t.Type, t.Id);
+                return ($"{t.Title} can be suggested again", null);
+            }
+            await Api.MarkNotInterestedAsync(t.Type, t.Id);
+            return ($"Won't suggest {t.Title} again", () => Api.UndoNotInterestedAsync(t.Type, t.Id));
+        });
+    }
+
+    private void AddToList(MenuTarget t)
+    {
+        acted = t;
+        listSelected = status?.Lists.ToList() ?? [];
+        Close();
+        listOpen = true;
+    }
+
+    private async Task ListClosed(bool open)
+    {
+        listOpen = open;
+        if (!open) await CtxMenu.RaiseChangedAsync();
+    }
+
+    private void Recommend(MenuTarget t)
+    {
+        acted = t;
+        Close();
+        recOpen = true;
+    }
+
+    private async Task Friends(MenuTarget t)
+    {
+        Toggle("friends");
+        if (expanded != "friends" || friends is not null) return;
+        try
+        {
+            var type = t.Kind == MenuKind.Episode ? MediaType.Episode : t.Type;
+            var list = await Api.SeenByAsync(type, t.Id, t.S, t.E);
+            if (target == t) friends = list;
+        }
+        catch (Exception) { friends = []; }
+    }
+
+    private Task SetStatus(MenuTarget t, ShowTrackStatus st)
+    {
+        var before = status?.ShowStatus ?? ShowTrackStatus.Watching;
+        return Do(async () =>
+        {
+            await Api.SetShowStatusAsync(t.Id, st);
+            var msg = st switch { ShowTrackStatus.Paused => $"Paused {t.Title}", ShowTrackStatus.Dropped => $"Dropped {t.Title}", _ => $"Watching {t.Title} again" };
+            return (msg, () => Api.SetShowStatusAsync(t.Id, before));
+        });
+    }
+
+    private Task Rewatch(MenuTarget t, bool start) => Do(async () =>
+    {
+        if (start)
+        {
+            await Api.StartRewatchAsync(t.Id);
+            return ($"Rewatching {t.Title}. Up next starts from the first episode.", null);
+        }
+        await Api.StopRewatchAsync(t.Id);
+        return ("Rewatch stopped. Its plays stay in your history.", null);
+    });
+
+    private Task Follow(MenuTarget t)
+    {
+        var following = t.Following;
+        return Do(async () =>
+        {
+            var r = await Api.FollowAsync(t.User!, !following);
+            return (following ? $"Unfollowed {t.Name}" : r.Requested ? $"Asked to follow {t.Name}" : $"Following {t.Name}", null);
+        });
+    }
+
+    private async Task NewTab(MenuTarget t)
+    {
+        Close();
+        await Platform.OpenExternalAsync(Platform.PublicUrl(Href(t)));
+    }
+
+    private async Task CopyLink(MenuTarget t)
+    {
+        Close();
+        var ok = false;
+        try { ok = await Js.InvokeAsync<bool>("seenit.copyText", Platform.PublicUrl(Href(t))); } catch (JSException) { }
+        Toasts.Show(ok ? "Link copied" : "Couldn't copy the link", error: !ok);
+    }
+
+    private async Task Share(MenuTarget t)
+    {
+        Close();
+        var result = await Platform.ShareLinkAsync(Heading(t), Platform.PublicUrl(Href(t)));
+        if (result == "copied") Toasts.Show("Link copied");
+        else if (result == "failed") Toasts.Show("Couldn't share the link", error: true);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        CtxMenu.Opened -= OnOpened;
+        Nav.LocationChanged -= OnNavigated;
+        if (registered)
+        {
+            try { await Js.InvokeVoidAsync("seenit.dialogClosed", dialogId); }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException) { }
+        }
+        self?.Dispose();
+    }
+}

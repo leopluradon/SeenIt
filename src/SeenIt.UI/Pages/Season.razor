@@ -83,7 +83,7 @@ else if (season is not null)
         @foreach (var e in season.Episodes)
         {
             var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
-            <article class="episode @(Done(e) ? "watched" : "")" @key="e.EpisodeNumber">
+            <article class="episode @(Done(e) ? "watched" : "")" @key="e.EpisodeNumber" data-ctx="@Menu.Episode(Id, e.SeasonNumber, e.EpisodeNumber, season.ShowName, e.Name, season.PosterPath)">
                 <a class="episode-still" href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)">
                     @if (Img.Still(e.StillPath) is { } src) { <Spoiler Watched="e.Plays > 0" Image="true"><img src="@src" alt="" loading="lazy" /></Spoiler> }
                     <span class="episode-num">@e.EpisodeNumber</span>
@@ -149,6 +149,7 @@ else if (season is not null)
                  Through="pendingThrough" ThroughNote="@(Number == 0 ? " (specials only)" : ", in season order")" ScopeSeason="@ScopeFor(pending)"  AskWhen="askWhen" />
 }
 
+<ReloadOnMenu OnChange="Load" />
 @code {
     [Parameter] public int Id { get; set; }
     [Parameter] public int Number { get; set; }

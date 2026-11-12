@@ -644,6 +644,26 @@ public static class UpNextSorts
 
 /// <summary>Paused and dropped shows are kept out of Up Next and the widget until you resume them.</summary>
 public enum ShowTrackStatus { Watching, Paused, Dropped }
+
+/// <summary>
+/// Where you stand with one movie, show or episode, for the right-click / long-press menu. Plays and Rating are the
+/// episode's own when one is asked for; the show fields (Watched/Aired/NextEpisode/ShowStatus/Rewatch) are for shows.
+/// </summary>
+public record ItemStatus(
+    int Plays,
+    DateTimeOffset? LastWatched,
+    double? Rating,
+    bool OnWatchlist,
+    bool Favorite,
+    bool NotInterested,
+    IReadOnlyList<Guid> Lists,
+    DateOnly? ReleaseDate,
+    int Watched = 0,
+    int Aired = 0,
+    EpisodeRef? NextEpisode = null,
+    ShowTrackStatus? ShowStatus = null,
+    int? Rewatch = null,
+    bool Completed = false);
 public record ShowStatusRequest(ShowTrackStatus Status);
 
 public record NotInterestedEntry(MediaSummary Media, DateTimeOffset AddedAt);

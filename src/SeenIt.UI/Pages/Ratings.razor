@@ -38,7 +38,7 @@ else if (items is not null)
         <ol class="list-rows">
             @foreach (var r in shown)
             {
-                <li class="list-row" @key="(r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)">
+                <li class="list-row" @key="(r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" data-ctx="@(r.Type == MediaType.Episode && r.SeasonNumber is { } cs && r.EpisodeNumber is { } ce ? Menu.Episode(r.TmdbId, cs, ce, r.Title, null, r.PosterPath) : Menu.Title(r.Type, r.TmdbId, r.Title, r.PosterPath))">
                     <a href="@(r.Type == MediaType.Episode ? Fmt.EpisodeHref(r.TmdbId, r.SeasonNumber, r.EpisodeNumber) : Fmt.Href(r.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, r.TmdbId))" class="list-row-link">
                         <img src="@Img.Poster(r.PosterPath, "w92")" alt="" loading="lazy" />
                         <span class="list-row-main">
@@ -64,6 +64,7 @@ else if (items is not null)
     </div>
     }
 }
+<ReloadOnMenu OnChange="Load" />
 @code {
     private List<RatingEntry>? items;
     private string? error;
@@ -87,7 +88,9 @@ else if (items is not null)
         return PagePrefs.SetSortAsync(Session, Api, "ratings", s);
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
     {
         try { items = await Api.RatingsAsync(); }
         catch (Exception ex) { error = ex.Message; }

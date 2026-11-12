@@ -131,7 +131,7 @@ else if (data is not null)
                 </div>
                 @foreach (var h in day)
                 {
-                    <div class="history-item @(selecting && selected.Contains(h.Id) ? "picked" : "")" @key="h.Id">
+                    <div class="history-item @(selecting && selected.Contains(h.Id) ? "picked" : "")" @key="h.Id" data-ctx="@(selecting ? null : Menu.Play(h, Mine && !Friends && h.Type != MediaType.Show))">
                         @if (selecting)
                         {
                             <label class="pick-box" aria-label="Select this play">
@@ -190,6 +190,7 @@ else if (data is not null)
                 What="@(editing is null ? "this" : editing.Type == MediaType.Episode ? $"{editing.Title} {Fmt.Ep(editing.SeasonNumber, editing.EpisodeNumber)}" : editing.Title)"
                 OnSaved="async () => { editing = null; await Load(); StateHasChanged(); }" />
 
+<ReloadOnMenu OnChange="Load" />
 @code {
     private HistoryEntry? editing;
     /// <summary>Viewing someone else's history (read-only).</summary>

@@ -204,6 +204,7 @@ else if (p is not null)
     </div>
 }
 
+<ReloadOnMenu OnChange="Load" />
 @code {
     [Parameter] public string Name { get; set; } = "";
     private ProfileDto? p;

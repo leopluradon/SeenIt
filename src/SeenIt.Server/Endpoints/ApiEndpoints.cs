@@ -244,6 +244,8 @@ public static class ApiEndpoints
         });
 
         g.MapGet("/progress", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetProgressAsync(p.UserId(), ct));
+        g.MapGet("/status/{type}/{id:int}", (MediaType type, int id, int? season, int? episode, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
+            t.ItemStatusAsync(p.UserId(), type, id, season, episode, ct));
         g.MapGet("/pick", async (PickKind? kind, PickSource? source, int? maxMinutes, bool? streaming, string? region, string? exclude,
             ClaimsPrincipal p, AppDbContext db, PickService picks, CancellationToken ct) =>
         {

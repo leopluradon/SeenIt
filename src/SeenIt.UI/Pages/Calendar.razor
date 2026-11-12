@@ -72,6 +72,7 @@ else if (items is not null)
         }
     }
 }
+<ReloadOnMenu OnChange="Load" />
 @code {
     private const int Days = 28;
     private static IEnumerable<string> WeekDays => Enumerable.Range(0, 7).Select(i => ((DayOfWeek)(((int)Fmt.WeekStart + i) % 7)).ToString()[..3]);
@@ -85,7 +86,7 @@ else if (items is not null)
 
     private RenderFragment Entry(CalendarEntry c) => __builder =>
     {
-        <a class="mini-item @(c.Watched ? "watched" : "")" href="@Fmt.CalHref(c)" @key="(c.Type, c.TmdbId, c.SeasonNumber, c.EpisodeNumber)">
+        <a class="mini-item @(c.Watched ? "watched" : "")" href="@Fmt.CalHref(c)" data-ctx="@Menu.Cal(c)" @key="(c.Type, c.TmdbId, c.SeasonNumber, c.EpisodeNumber)">
             <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
             <div>
                 <div class="mini-title">@c.Title</div>

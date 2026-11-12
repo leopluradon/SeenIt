@@ -228,6 +228,7 @@ else if (s is not null)
     }
 }
 
+<ReloadOnMenu OnChange="Reload" />
 @code {
     private static readonly (ShowTrackStatus, string)[] StatusLabels =
         [(ShowTrackStatus.Watching, "Watching"), (ShowTrackStatus.Paused, "Paused"), (ShowTrackStatus.Dropped, "Dropped")];

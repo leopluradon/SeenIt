@@ -1,5 +1,5 @@
 @inject BadgeScores Badges
-<a class="poster-card" href="@(Href ?? Fmt.Href(Media.Type, Media.TmdbId))" title="@Media.Title">
+<a class="poster-card" href="@(Href ?? Fmt.Href(Media.Type, Media.TmdbId))" title="@Media.Title" data-ctx="@(Ctx ?? Menu.Title(Media))">
     <div class="poster">
         @if (Img.Poster(Media.PosterPath) is { } src)
         {
@@ -56,6 +56,8 @@
     [Parameter] public string? SubTitle { get; set; }
     [Parameter] public bool ShowScore { get; set; } = true;
     [Parameter] public string? Href { get; set; }
+    /// <summary>The right-click / long-press menu's target (Menu.*); defaults to this movie or show.</summary>
+    [Parameter] public string? Ctx { get; set; }
     /// <summary>Shows a small × for "not interested".</summary>
     [Parameter] public EventCallback<MediaSummary> OnDismiss { get; set; }
 }

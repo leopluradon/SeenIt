@@ -108,6 +108,68 @@ window.seenit = {
         }
     },
     dialogClosed(id) { this._dialogs = this._dialogs.filter(d => d.id !== id); },
+
+    /**
+     * Right-click (or long-press on touch) anything with a data-ctx attribute to open SeenIt's menu for it.
+     * Shift+right-click still gives the browser's own menu. The menu key / Shift+F10 opens it for the focused element.
+     */
+    contextMenu(dotnet) {
+        if (window.seenitCtx) { window.seenitCtx.dotnet = dotnet; return; }
+        const st = window.seenitCtx = { dotnet, timer: null, x: 0, y: 0, opened: 0 };
+        const find = t => t && t.closest ? t.closest('[data-ctx]') : null;
+        const open = (el, x, y, touch) =>
+            st.dotnet.invokeMethodAsync('Open', el.getAttribute('data-ctx'), x, y, window.innerWidth, window.innerHeight, touch);
+        const cancel = () => { if (st.timer) { clearTimeout(st.timer); st.timer = null; } };
+
+        document.addEventListener('contextmenu', e => {
+            if (e.shiftKey) return;
+            const el = find(e.target);
+            if (!el) return;
+            e.preventDefault();
+            if (Date.now() - st.opened < 1500) return;   // the long press already opened it
+            open(el, e.clientX, e.clientY, false);
+        });
+        document.addEventListener('touchstart', e => {
+            cancel();
+            const el = find(e.target);
+            if (!el || e.touches.length !== 1) return;
+            st.x = e.touches[0].clientX; st.y = e.touches[0].clientY;
+            st.timer = setTimeout(() => {
+                st.timer = null;
+                st.opened = Date.now();
+                try { navigator.vibrate && navigator.vibrate(12); } catch { }
+                open(el, st.x, st.y, true);
+            }, 450);
+        }, { passive: true });
+        document.addEventListener('touchmove', e => {
+            if (st.timer && Math.hypot(e.touches[0].clientX - st.x, e.touches[0].clientY - st.y) > 10) cancel();
+        }, { passive: true });
+        document.addEventListener('touchend', e => {
+            if (st.timer) cancel();
+            else if (Date.now() - st.opened < 1500 && e.cancelable) e.preventDefault();   // no click after a long press
+        }, { passive: false });
+        document.addEventListener('touchcancel', cancel, { passive: true });
+        document.addEventListener('scroll', cancel, { passive: true, capture: true });
+        // Belt and braces: swallow the click that some browsers still send after a long press.
+        document.addEventListener('click', e => {
+            if (Date.now() - st.opened < 700 && find(e.target)) { e.preventDefault(); e.stopPropagation(); }
+        }, true);
+        document.addEventListener('keydown', e => {
+            if (!(e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) return;
+            const el = find(document.activeElement);
+            if (!el) return;
+            e.preventDefault();
+            const r = el.getBoundingClientRect();
+            open(el, r.left + Math.min(r.width / 2, 40), r.top + Math.min(r.height / 2, 40), false);
+        });
+    },
+    copyText(text) {
+        return navigator.clipboard.writeText(text).then(() => true, () => false);
+    },
+    focusFirst(selector) {
+        const el = document.querySelector(selector);
+        if (el) el.focus({ preventScroll: true });
+    },
     // Settings → Display: compact spacing and poster size, as classes on <html>.
     setLayout(compact, posters) {
         const c = document.documentElement.classList;
