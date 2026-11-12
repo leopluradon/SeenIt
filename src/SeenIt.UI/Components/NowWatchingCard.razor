@@ -7,7 +7,7 @@
         <a href="@Href" class="mini-title">@Item.Title</a>
         @if (Item.Type == MediaType.Episode)
         {
-            <div class="small">@Fmt.Ep(Item.SeasonNumber, Item.EpisodeNumber)@if (Item.EpisodeTitle is not null) { <span class="dot-sep"></span><Spoiler>@Item.EpisodeTitle</Spoiler> }</div>
+            <div class="small">@Fmt.Ep(Item.SeasonNumber, Item.EpisodeNumber)@if (Item.EpisodeTitle is not null) { <span class="dot-sep"></span><Spoiler Watched="Item.YouWatched ?? false">@Item.EpisodeTitle</Spoiler> }</div>
         }
         <div class="inline">
             <ProgressBar Value="@((int)Elapsed.TotalMinutes)" Max="@((int)Math.Max(1, (Item.EndsAt - Item.StartedAt).TotalMinutes))" />

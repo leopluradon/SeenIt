@@ -582,7 +582,8 @@ public record HistoryEntry(
     int? Runtime = null,
     int? Episodes = null,      // Shows view: episodes watched that day (one row per show per day)
     string? Range = null,      // Shows view: "S04E01–S04E05", or one episode's number
-    string? Who = null);       // Friends' history: whose play this is (a UserName from HistoryPage.People)
+    string? Who = null,        // Friends' history: whose play this is (a UserName from HistoryPage.People)
+    bool? YouWatched = null);  // Someone else's play: whether the viewer has seen this episode too (null on your own)
 
 /// <summary>History filters. Type = Show groups episodes into one row per show per day. From is inclusive, To exclusive; both are absolute instants computed by the client in its own time zone.</summary>
 public record HistoryQuery(
@@ -903,7 +904,8 @@ public record CheckInRequest(MediaType Type, int TmdbId, int? SeasonNumber = nul
 /// <summary>Type is Movie or Episode. Manual check-ins are recorded as a play when EndsAt passes; Jellyfin ones on stop.</summary>
 public record NowWatchingDto(
     MediaType Type, int TmdbId, string Title, int? SeasonNumber, int? EpisodeNumber, string? EpisodeTitle,
-    string? PosterPath, string? BackdropPath, DateTimeOffset StartedAt, DateTimeOffset EndsAt, WatchSource Source);
+    string? PosterPath, string? BackdropPath, DateTimeOffset StartedAt, DateTimeOffset EndsAt, WatchSource Source,
+    bool? YouWatched = null);  // Someone else's check-in: whether the viewer has seen this episode (null on your own)
 
 // ---------- Social ----------
 

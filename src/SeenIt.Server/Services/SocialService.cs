@@ -77,10 +77,13 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             ? await tracking.ToHistoryAsync(await db.WatchEvents.AsNoTracking().Where(w => w.UserId == owner.Id && w.WatchedAt > WatchDates.Unknown)
                 .NewestFirst().Take(24).ToListAsync(ct), ct)
             : [];
+        if (!isMe) recent = await tracking.MarkSeenByAsync(viewer, recent, ct);
+        var watchingNow = See(ProfilePart.WatchingNow) ? await checkIns.GetAsync(owner.Id, ct) : null;
+        if (!isMe && watchingNow is not null) watchingNow = (await tracking.MarkSeenByAsync(viewer, [watchingNow], ct))[0];
         var topRated = See(ProfilePart.Ratings) ? await tracking.TopRatedAsync(owner.Id, 18, ct) : [];
 
         return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, true, followers, followingCount,
-            See(ProfilePart.WatchingNow) ? await checkIns.GetAsync(owner.Id, ct) : null,
+            watchingNow,
             See(ProfilePart.Stats) ? await StatsAsync(owner.Id, ct) : null,
             recent, topRated, publicLists,
             See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null, layout, banner, prefs.Accent, badge);
@@ -281,13 +284,13 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var watchingIds = people.Where(u => CanSee(u, me, mutualIds.Contains(u.Id), ProfilePart.WatchingNow)).Select(u => u.Id).ToList();
         var historyIds = people.Where(u => CanSee(u, me, mutualIds.Contains(u.Id), ProfilePart.History)).Select(u => u.Id).ToList();
         var live = (await db.CheckIns.AsNoTracking().Where(c => watchingIds.Contains(c.UserId)).ToListAsync(ct)).Where(CheckInService.IsLive).ToList();
-        var liveDtos = await checkIns.ToDtosAsync(live, ct);
+        var liveDtos = await tracking.MarkSeenByAsync(me, await checkIns.ToDtosAsync(live, ct), ct);
         var watching = live.Zip(liveDtos, (c, d) => new FriendWatching(byId[c.UserId], d)).ToList();
 
         var rows = await db.WatchEvents.AsNoTracking()
             .Where(w => historyIds.Contains(w.UserId) && w.WatchedAt > WatchDates.Unknown && w.WatchedAt <= DateTimeOffset.UtcNow.AddDays(1))
             .NewestFirst().Take(Math.Clamp(take, 1, 100)).ToListAsync(ct);
-        var entries = await tracking.ToHistoryAsync(rows, ct);
+        var entries = await tracking.MarkSeenByAsync(me, await tracking.ToHistoryAsync(rows, ct), ct);
         return new FeedDto(watching, rows.Zip(entries, (w, e) => new ActivityItem(byId[w.UserId], e)).ToList());
     }
 
@@ -311,7 +314,8 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var names = people.ToDictionary(u => u.Id, u => u.UserName!);
         var ids = people.Where(u => string.IsNullOrEmpty(user) || string.Equals(u.UserName, user, StringComparison.OrdinalIgnoreCase)).Select(u => u.Id).ToList();
         if (ids.Count == 0) return new HistoryPage([], 1, 0, 0, 0, [], cards);
-        return await tracking.GetHistoryAsync(ids, f, names, ct) with { People = cards };
+        var page = await tracking.GetHistoryAsync(ids, f, names, ct);
+        return page with { Items = await tracking.MarkSeenByAsync(me, page.Items, ct), People = cards };
     }
 
     public async Task<List<string>> FriendsHistoryGenresAsync(Guid me, CancellationToken ct)

@@ -147,7 +147,7 @@ else if (data is not null)
                                     <div class="history-who small"><Avatar Name="@person.Name" Url="@person.Avatar" Class="avatar-xs" /> <b>@person.Name</b></div>
                                 }
                                 <div class="mini-title">@h.Title</div>
-                                @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · @h.EpisodeTitle</div> }
+                                @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · <Spoiler Watched="h.YouWatched ?? true">@h.EpisodeTitle</Spoiler></div> }
                                 @if (h.Type == MediaType.Show) { <div class="small">@(h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div> }
                                 <div class="muted small">
                                     @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString(Fmt.TimeOnly))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")

@@ -674,9 +674,11 @@ public static class ApiEndpoints
         // Someone's full history, read-only: visible to whoever can see their profile.
         app.MapGet("/api/users/{name}/history", async (string name, MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
                 string? sort, int? page, int? pageSize, string? tz, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
-            await s.ViewableAsync(name, p.OptionalUserId(), ct) is { } owner
-                ? Results.Ok(await t.GetHistoryAsync(owner.Id, new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 100), tz), ct))
-                : Results.NotFound());
+        {
+            if (await s.ViewableAsync(name, p.OptionalUserId(), ct) is not { } owner) return Results.NotFound();
+            var history = await t.GetHistoryAsync(owner.Id, new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 100), tz), ct);
+            return Results.Ok(owner.Id == p.OptionalUserId() ? history : history with { Items = await t.MarkSeenByAsync(p.OptionalUserId(), history.Items, ct) });
+        });
         app.MapGet("/api/users/{name}/history/genres", async (string name, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
             await s.ViewableAsync(name, p.OptionalUserId(), ct) is { } owner ? Results.Ok(await t.GetHistoryGenresAsync(owner.Id, ct)) : Results.NotFound());
 

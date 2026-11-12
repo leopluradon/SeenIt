@@ -577,6 +577,32 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         }).ToList();
     }
 
+    /// <summary>The episodes (of these shows) the viewer has watched, to hide other people's episode titles as spoilers.</summary>
+    public async Task<HashSet<(int Show, int? Season, int? Episode)>> SeenEpisodesAsync(Guid? viewer, IEnumerable<int> showIds, CancellationToken ct)
+    {
+        var ids = showIds.Distinct().ToList();
+        if (viewer is not { } v || ids.Count == 0) return [];
+        return (await db.WatchEvents.AsNoTracking().Where(w => w.UserId == v && w.Type == MediaType.Episode && ids.Contains(w.TmdbId))
+                .Select(w => new { w.TmdbId, w.SeasonNumber, w.EpisodeNumber }).Distinct().ToListAsync(ct))
+            .Select(x => (x.TmdbId, x.SeasonNumber, x.EpisodeNumber)).ToHashSet();
+    }
+
+    /// <summary>Marks someone else's episode plays with whether the viewer has seen them.</summary>
+    public async Task<List<HistoryEntry>> MarkSeenByAsync(Guid? viewer, IReadOnlyList<HistoryEntry> entries, CancellationToken ct)
+    {
+        var seen = await SeenEpisodesAsync(viewer, entries.Where(e => e.Type == MediaType.Episode).Select(e => e.TmdbId), ct);
+        return entries.Select(e => e.Type == MediaType.Episode && e.SeasonNumber is not null
+            ? e with { YouWatched = seen.Contains((e.TmdbId, e.SeasonNumber, e.EpisodeNumber)) } : e).ToList();
+    }
+
+    /// <summary>The same for other people's check-ins.</summary>
+    public async Task<List<NowWatchingDto>> MarkSeenByAsync(Guid? viewer, IReadOnlyList<NowWatchingDto> items, CancellationToken ct)
+    {
+        var seen = await SeenEpisodesAsync(viewer, items.Where(e => e.Type == MediaType.Episode).Select(e => e.TmdbId), ct);
+        return items.Select(e => e.Type == MediaType.Episode
+            ? e with { YouWatched = seen.Contains((e.TmdbId, e.SeasonNumber, e.EpisodeNumber)) } : e).ToList();
+    }
+
     // ---------- Watchlist ----------
 
     public async Task AddToWatchlistAsync(Guid userId, MediaType type, int tmdbId, CancellationToken ct, DateTimeOffset? addedAt = null)

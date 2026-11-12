@@ -19,7 +19,10 @@
         }
     </div>
     <div class="poster-title">@Media.Title</div>
-    @if (!string.IsNullOrWhiteSpace(Detail)) { <div class="poster-detail" title="@Detail">@Detail</div> }
+    @if (!string.IsNullOrWhiteSpace(Detail))
+    {
+        <div class="poster-detail" title="@(DetailSeen ? Detail : null)"><Spoiler Watched="DetailSeen">@Detail</Spoiler></div>
+    }
     <div class="poster-sub" title="@SubTitle">
         @if (Sub is not null) { @Sub }
         else { @(Media.Year?.ToString() ?? "")<span class="dot-sep">@(Media.Type == MediaType.Movie ? "Movie" : "TV")</span> }
@@ -47,6 +50,8 @@
     [Parameter] public string? Sub { get; set; }
     /// <summary>An extra line under the title, cut to one line (e.g. the episode's name).</summary>
     [Parameter] public string? Detail { get; set; }
+    /// <summary>False when Detail is an episode title the viewer hasn't seen: it's blurred if they hide spoilers.</summary>
+    [Parameter] public bool DetailSeen { get; set; } = true;
     /// <summary>Hover text for the line under the title (e.g. the exact date behind "3d ago").</summary>
     [Parameter] public string? SubTitle { get; set; }
     [Parameter] public bool ShowScore { get; set; } = true;
