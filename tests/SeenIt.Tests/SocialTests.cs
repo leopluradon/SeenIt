@@ -42,7 +42,7 @@ public class SocialTests
         await db.SaveChangesAsync();
 
         var tracking = new TrackingService(db, null!);
-        var social = new SocialService(db, tracking, null!, new CheckInService(db, null!, tracking, null!),
+        var social = new SocialService(db, tracking, null!, new CheckInService(db, null!, tracking, null!, new LiveHub()),
             new UserDataCache(new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()), db), null!);
         var feed = await social.FeedAsync(Me.Id, 50, default);
 
