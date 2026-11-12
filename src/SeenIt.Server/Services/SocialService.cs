@@ -201,6 +201,9 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var pattern = "%" + q.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
         var users = await db.Users.AsNoTracking()
             .Where(u => u.Id != me && (EF.Functions.ILike(u.UserName!, pattern) || EF.Functions.ILike(u.DisplayName ?? "", pattern)))
+            // Only people whose profile is public, or who you're friends with (you follow each other).
+            .Where(u => u.Visibility == ProfileVisibility.Public
+                || (db.Follows.Any(f => f.FollowerId == me && f.FolloweeId == u.Id) && db.Follows.Any(f => f.FollowerId == u.Id && f.FolloweeId == me)))
             .OrderBy(u => u.UserName!.Length).Take(20).ToListAsync(ct);
         return await CardsAsync(me, users, ct);
     }
