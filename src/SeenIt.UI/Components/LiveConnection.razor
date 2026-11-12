@@ -1,0 +1,143 @@
+@* Keeps GET api/live open while signed in. When the server says something of yours changed (an episode finished on
+   Jellyfin, a check-in ran out, a change from another device), open pages reload through ReloadOnMenu. While the
+   page is hidden or the app is in the background, changes are only noted, and the page refreshes once it's back. *@
+@implements IAsyncDisposable
+@inject ApiClient Api
+@inject ContextMenu CtxMenu
+@inject IJSRuntime Js
+@code {
+    private CancellationTokenSource? life, connection;
+    private DotNetObjectReference<LiveConnection>? self;
+    private bool hidden, stale, reconnectNow;
+    private int pendingRefresh;
+    private TaskCompletionSource wake = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    // No word from the server (it pings every 25s) for this long means the connection silently died.
+    private static readonly TimeSpan Silence = TimeSpan.FromSeconds(70);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        life = new CancellationTokenSource();
+        AppLifecycle.Resumed += OnResumed;
+        AppLifecycle.Stopped += OnStopped;
+        self = DotNetObjectReference.Create(this);
+        try { await Js.InvokeVoidAsync("seenit.onVisibility", self); } catch (JSException) { } catch (InvalidOperationException) { }
+        _ = RunAsync(life.Token);
+    }
+
+    private async Task RunAsync(CancellationToken ct)
+    {
+        var retry = TimeSpan.FromSeconds(2);
+        while (!ct.IsCancellationRequested)
+        {
+            // Backgrounded: don't hold a connection open; reconnect (and refresh) when the app comes back.
+            if (hidden && AppVersionKnown) { await WaitForWakeAsync(ct); continue; }
+
+            using var conn = connection = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var opened = false;
+            try
+            {
+                using var resp = await Api.OpenLiveAsync(conn.Token);
+                if (resp is not null)
+                {
+                    opened = true;
+                    retry = TimeSpan.FromSeconds(2);
+                    using var stream = await resp.Content.ReadAsStreamAsync(conn.Token);
+                    using var reader = new StreamReader(stream);
+                    while (true)
+                    {
+                        using var quiet = CancellationTokenSource.CreateLinkedTokenSource(conn.Token);
+                        quiet.CancelAfter(Silence);
+                        var line = await reader.ReadLineAsync(quiet.Token);
+                        if (line is null) break;
+                        if (line.StartsWith("data:", StringComparison.Ordinal) && line[5..].Trim() != ApiClient.ClientId) Changed();
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception) { /* dropped, timed out or offline: reconnect below */ }
+
+            if (ct.IsCancellationRequested) return;
+            // Anything could have changed while disconnected.
+            if (opened) stale = true;
+            // Retry after a growing pause (2s → 1 min), or at once when the page/app comes back.
+            if (reconnectNow) reconnectNow = false;
+            else
+            {
+                await WaitForWakeAsync(ct, retry);
+                retry = TimeSpan.FromSeconds(Math.Min(retry.TotalSeconds * 2, 60));
+            }
+            if (stale && !hidden) Changed();
+        }
+    }
+
+    /// <summary>The Android app (which reports going to the background) rather than a browser tab.</summary>
+    private static bool AppVersionKnown => OperatingSystem.IsAndroid();
+
+    private async Task WaitForWakeAsync(CancellationToken ct, TimeSpan? max = null)
+    {
+        var w = wake = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            if (max is { } m) await w.Task.WaitAsync(m, ct);
+            else await w.Task.WaitAsync(ct);
+        }
+        catch (TimeoutException) { }
+        catch (OperationCanceledException) { }
+    }
+
+    /// <summary>Something changed: refresh now if visible (bursts within 400 ms become one), else when visible again.</summary>
+    private void Changed()
+    {
+        if (hidden) { stale = true; return; }
+        var mine = Interlocked.Increment(ref pendingRefresh);
+        _ = InvokeAsync(async () =>
+        {
+            await Task.Delay(400);
+            if (mine != pendingRefresh || hidden) return;
+            stale = false;
+            await CtxMenu.RaiseChangedAsync();
+        });
+    }
+
+    /// <summary>From seenit.js: the tab or window was hidden or shown.</summary>
+    [JSInvokable]
+    public void Visibility(bool visible)
+    {
+        if (visible == !hidden) return;
+        hidden = !visible;
+        if (visible) Back(reconnect: false);
+    }
+
+    private void OnStopped() => hidden = true;
+
+    private void OnResumed()
+    {
+        hidden = false;
+        Back(reconnect: true);
+    }
+
+    /// <summary>Back in view: catch up on what changed, and reconnect if the connection may have died meanwhile.</summary>
+    private void Back(bool reconnect)
+    {
+        if (reconnect)
+        {
+            stale = true;
+            reconnectNow = true;
+            try { connection?.Cancel(); } catch (ObjectDisposedException) { }
+        }
+        wake.TrySetResult();
+        if (stale) Changed();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        AppLifecycle.Resumed -= OnResumed;
+        AppLifecycle.Stopped -= OnStopped;
+        life?.Cancel();
+        try { await Js.InvokeVoidAsync("seenit.onVisibility", null); }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException) { }
+        self?.Dispose();
+    }
+}

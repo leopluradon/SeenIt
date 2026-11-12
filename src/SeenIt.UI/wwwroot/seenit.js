@@ -163,6 +163,16 @@ window.seenit = {
             open(el, r.left + Math.min(r.width / 2, 40), r.top + Math.min(r.height / 2, 40), false);
         });
     },
+    /** Tells LiveConnection when the tab is hidden or shown (null unregisters). */
+    onVisibility(dotnet) {
+        window.seenitVisibility = dotnet;
+        if (window.seenitVisibilityBound) return;
+        window.seenitVisibilityBound = true;
+        document.addEventListener('visibilitychange', () => {
+            const d = window.seenitVisibility;
+            if (d) d.invokeMethodAsync('Visibility', document.visibilityState === 'visible').catch(() => { });
+        });
+    },
     copyText(text) {
         return navigator.clipboard.writeText(text).then(() => true, () => false);
     },

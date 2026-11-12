@@ -5,7 +5,7 @@ using SeenIt.Server.Data;
 namespace SeenIt.Server.Services;
 
 /// <summary>"Watching now": manual check-ins (recorded as a play when they finish) and live Jellyfin playback.</summary>
-public class CheckInService(AppDbContext db, CatalogService catalog, TrackingService tracking, ActivityService activity)
+public class CheckInService(AppDbContext db, CatalogService catalog, TrackingService tracking, ActivityService activity, LiveHub live)
 {
     /// <summary>Jellyfin sessions that never sent a stop are dropped this long after they should have ended.</summary>
     private static readonly TimeSpan StaleGrace = TimeSpan.FromMinutes(30);
@@ -54,6 +54,7 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
         row.EndsAt = endsAt ?? now.AddMinutes(runtime);
         row.Source = source;
         await db.SaveChangesAsync(ct);
+        await live.NotifyWithFollowersAsync(db, userId, ct);
         return (await ToDtosAsync([row], ct))[0];
     }
 
@@ -61,7 +62,9 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
     {
         var q = db.CheckIns.Where(x => x.UserId == userId);
         if (onlySource is { } src) q = q.Where(x => x.Source == src);
-        return await q.ExecuteDeleteAsync(ct) > 0;
+        if (await q.ExecuteDeleteAsync(ct) == 0) return false;
+        await live.NotifyWithFollowersAsync(db, userId, ct);
+        return true;
     }
 
     /// <summary>Records finished manual check-ins as plays and clears abandoned Jellyfin ones.</summary>
@@ -79,9 +82,16 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
                 await activity.LogAsync(c.UserId, ActivityKind.Watch, c.Type, c.TmdbId, c.SeasonNumber, c.EpisodeNumber, "check-in finished");
             }
             catch (TrackingException) { /* the title vanished from TMDB; nothing to record */ }
+            await live.NotifyWithFollowersAsync(db, c.UserId, ct);
         }
         var staleBefore = now - StaleGrace;
-        await db.CheckIns.Where(x => x.Source != WatchSource.Manual && x.EndsAt < staleBefore).ExecuteDeleteAsync(ct);
+        var stale = db.CheckIns.Where(x => x.Source != WatchSource.Manual && x.EndsAt < staleBefore);
+        var staleUsers = await stale.Select(x => x.UserId).ToListAsync(ct);
+        if (staleUsers.Count > 0)
+        {
+            await stale.ExecuteDeleteAsync(ct);
+            foreach (var u in staleUsers) await live.NotifyWithFollowersAsync(db, u, ct);
+        }
         return due.Count;
     }
 

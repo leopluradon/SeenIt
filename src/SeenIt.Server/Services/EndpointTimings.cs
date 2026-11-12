@@ -43,7 +43,7 @@ public sealed class EndpointTimings
     /// <summary>Times API requests by route pattern ("GET /api/catalog/movie/{id:int}"), not by URL.</summary>
     public static async Task Middleware(HttpContext ctx, Func<Task> next)
     {
-        if (!ctx.Request.Path.StartsWithSegments("/api")) { await next(); return; }
+        if (!ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/api/live")) { await next(); return; }
         var started = Stopwatch.GetTimestamp();
         try { await next(); }
         finally

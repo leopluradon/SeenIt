@@ -77,6 +77,7 @@
 
     <AuthorizeView>
         <Authorized>
+            <LiveConnection />
             @{ var tabs = UiLayout.Tabs(Session.Me); }
             <nav class="tabbar" aria-label="Sections" style="grid-template-columns: repeat(@(tabs.Count + 1), 1fr)">
                 @foreach (var t in tabs)

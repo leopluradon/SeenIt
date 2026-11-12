@@ -487,8 +487,41 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         return await resp.Content.ReadFromJsonAsync<T>(Json);
     }
 
-    private static HttpRequestMessage Build(HttpMethod method, string url, object? body) =>
-        new(method, url) { Content = body is null ? null : JsonContent.Create(body, body.GetType(), options: Json) };
+    /// <summary>This page/app's id, sent with every request so the live channel can skip telling it about its own changes.</summary>
+    public static readonly string ClientId = Guid.NewGuid().ToString("N")[..12];
+
+    private static HttpRequestMessage Build(HttpMethod method, string url, object? body)
+    {
+        var req = new HttpRequestMessage(method, url) { Content = body is null ? null : JsonContent.Create(body, body.GetType(), options: Json) };
+        req.Headers.TryAddWithoutValidation("X-SeenIt-Client", ClientId);
+        return req;
+    }
+
+    /// <summary>Opens GET api/live, the server's "something of yours changed" event-stream. Null if it refused.</summary>
+    public async Task<HttpResponseMessage?> OpenLiveAsync(CancellationToken ct)
+    {
+        static HttpRequestMessage Make()
+        {
+            var r = Build(HttpMethod.Get, "api/live", null);
+            // In the browser, hand the body over as it arrives instead of after the (never-ending) response completes.
+            r.Options.Set(new HttpRequestOptionsKey<bool>("WebAssemblyEnableStreamingResponse"), true);
+            return r;
+        }
+        var req = Make();
+        if (await tokens.GetAccessTokenAsync() is not { } token) return null;
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (resp.StatusCode == HttpStatusCode.Unauthorized && await tokens.RefreshAsync(http) is { } fresh)
+        {
+            resp.Dispose();
+            req = Make();
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", fresh);
+            resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        if (resp.IsSuccessStatusCode) return resp;
+        resp.Dispose();
+        return null;
+    }
 
     /// <summary>Attaches the access token and, on a 401, refreshes it once and retries.</summary>
     private async Task<HttpResponseMessage> SendRawAsync(Func<HttpRequestMessage> build, bool auth)

@@ -229,7 +229,7 @@
     </Modal>
 }
 
-<ReloadOnMenu OnChange="LoadDashboard" />
+<ReloadOnMenu OnChange="Refresh" />
 @code {
     /// <summary>Once per app launch, not every time Home is opened.</summary>
     private static bool startChecked;
@@ -289,6 +289,18 @@
             await extrasTask;
         }
         await trendingTask;
+    }
+
+    /// <summary>After a change from the menu or another device (or an episode finishing on Jellyfin): Up next,
+    /// Recently watched, Watching now, friends and the stats widgets.</summary>
+    private async Task Refresh()
+    {
+        if (!signedIn) return;
+        var widgets = LoadWidgets();
+        await LoadDashboard();
+        try { if (!hidden.Contains("now")) now = await Api.CheckInAsync(); } catch { }
+        try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); } catch { }
+        await widgets;
     }
 
     private async Task LoadDashboard()

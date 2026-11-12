@@ -113,7 +113,7 @@ public record JellyfinPayload(
     }
 }
 
-public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService tracking, CheckInService checkIns, ActivityService activity, LibraryService library, ILogger<JellyfinService> log)
+public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService tracking, CheckInService checkIns, ActivityService activity, LibraryService library, ILogger<JellyfinService> log, LiveHub live)
 {
     private static readonly TimeSpan DuplicateWindow = TimeSpan.FromHours(3);
 
@@ -197,6 +197,7 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         await tracking.WatchAsync(user.Id, req with { WatchedAt = DateTimeOffset.UtcNow }, source, ct);
         await activity.LogAsync(user.Id, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
             reason, source, user.UserName);
+        await live.NotifyWithFollowersAsync(db, user.Id, ct);
         return $"{reason} → scrobbled";
     }
 

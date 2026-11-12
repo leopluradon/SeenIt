@@ -95,6 +95,7 @@
         break;
 }
 
+<ReloadOnMenu OnChange="Load" />
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
     private string tab = "", loaded = "";
