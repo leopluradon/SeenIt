@@ -1654,3 +1654,15 @@ html.compact .overview { line-height: 1.5; }
 .ctx-rate .rating-picker.compact .pip { width: 15px; height: 15px; }
 .ctx-sheet .ctx-rate .rating-picker.compact .pip { width: 22px; height: 22px; border-radius: 5px; }
 .ctx-sheet .ctx-rate .rating-picker { gap: 5px; }
+.season-order { margin: 4px 0 16px; }
+.order-pos { color: var(--text-2); font-weight: 600; }
+/* History → Shows → By show → No pages: every show as a wrapping grid of posters. */
+.no-pages { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
+.show-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 14px 10px; margin-top: 8px; }
+.show-wall-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; color: inherit; text-decoration: none; }
+.show-wall-poster { position: relative; display: block; aspect-ratio: 2 / 3; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); }
+.show-wall-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.show-wall-item:hover .show-wall-poster { outline: 2px solid var(--border); }
+.show-wall-title { font-weight: 600; font-size: .82rem; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.show-wall-who { display: flex; align-items: center; gap: 4px; color: var(--text-2); overflow: hidden; white-space: nowrap; }
+@media (min-width: 700px) { .show-wall { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); } }

@@ -1,6 +1,7 @@
 @* "When did you watch it?" Right now, on release, another date, or unknown. *@
 <Modal Open="Open && !instant" OpenChanged="OpenChanged" Title="@(Heading ?? (Through ? $"When did you watch everything up to {What}?" : $"When did you watch {What}?"))">
     <div class="stack">
+        @ChildContent
         @if (Through && ScopeSeason is > 1 and var sn)
         {
             <div class="segmented watch-scope" role="radiogroup" aria-label="How far back">
@@ -34,6 +35,8 @@
 </Modal>
 @code {
     [Parameter] public bool Open { get; set; }
+    /// <summary>Extra controls above the choices (the watch order, when marking a whole show).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
     [Parameter] public string What { get; set; } = "this";
     [Parameter] public DateOnly? ReleaseDate { get; set; }

@@ -1,0 +1,22 @@
+@* Which order you're watching a show in: TMDB's seasons or one of TMDB's alternative orders (episode groups). *@
+@if (Orders is { Options.Count: > 0 } wo)
+{
+    <div class="order-panel">
+        <label for="@id">Watch order</label>
+        <select id="@id" value="@(wo.SelectedId ?? "")" disabled="@Disabled" @onchange="Changed">
+            <option value="">TMDB's seasons</option>
+            @foreach (var o in wo.Options) { <option value="@o.Id" @key="o.Id">@o.Name (@o.Episodes)</option> }
+        </select>
+        @if (Hint is { Length: > 0 }) { <span class="muted small">@Hint</span> }
+    </div>
+}
+@code {
+    [Parameter] public WatchOrdersDto? Orders { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    /// <summary>The chosen order's id, or null for TMDB's seasons. The parent saves it.</summary>
+    [Parameter] public EventCallback<string?> OnChange { get; set; }
+    private readonly string id = "wo-" + Guid.NewGuid().ToString("N")[..8];
+
+    private Task Changed(ChangeEventArgs e) => OnChange.InvokeAsync(e.Value?.ToString() is { Length: > 0 } v ? v : null);
+}

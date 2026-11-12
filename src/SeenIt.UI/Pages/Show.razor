@@ -20,6 +20,12 @@ else if (s is not null)
                 <button class="btn @(s.Progress?.Completed == true ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="() => watchAllOpen = true">
                     <Icon Name="check" Size="18" /> @(s.Progress?.Completed == true ? "All caught up" : "Mark all watched")
                 </button>
+                @if (u.Plays > 0)
+                {
+                    <button class="btn btn-ghost" disabled="@busy" @onclick="() => unwatchOpen = true" title="Remove every episode play of this show from your history">
+                        <Icon Name="x" Size="18" /> Mark unwatched
+                    </button>
+                }
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
                     <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
                 </button>
@@ -105,16 +111,10 @@ else if (s is not null)
                     <span class="muted small">@StatusHint(s.TrackStatus)</span>
                 </div>
             }
-            @if (s.User is not null && orders is { Options.Count: > 0 } wo)
+            @if (s.User is not null)
             {
-                <div class="order-panel">
-                    <label for="watch-order">Watch order</label>
-                    <select id="watch-order" value="@(wo.SelectedId ?? "")" disabled="@busy" @onchange="SetOrder">
-                        <option value="">TMDB's seasons</option>
-                        @foreach (var o in wo.Options) { <option value="@o.Id" @key="o.Id">@o.Name (@o.Episodes)</option> }
-                    </select>
-                    <span class="muted small">@(wo.SelectedId is null ? "Watching chronologically or in story order? Pick it and Up next follows it." : "Up next, progress and next/previous follow this order. The episode list is below.")</span>
-                </div>
+                <WatchOrderPicker Orders="orders" Disabled="busy" OnChange="SetOrder"
+                                  Hint="@(orders?.SelectedId is null ? "Watching chronologically or in story order? Pick it and Up next follows it." : "Up next, progress, marking watched and next/previous follow this order. The episode list is below.")" />
             }
             @if (s.Progress is { } p)
             {
@@ -216,7 +216,19 @@ else if (s is not null)
 
     @if (s.User is { } user)
     {
-        <WatchDialog @bind-Open="watchAllOpen" What="every aired episode" Bulk="true" OnPick="WatchAll" />
+        <WatchDialog @bind-Open="watchAllOpen" What="every aired episode" Bulk="true" OnPick="WatchAll">
+            <WatchOrderPicker Orders="orders" Disabled="busy" OnChange="SetOrder"
+                              Hint="@(orders?.SelectedId is null ? "Recorded in season order." : "Recorded in this order (with release dates, each one keeps its own air date).")" />
+        </WatchDialog>
+        <Modal @bind-Open="unwatchOpen" Title="@($"Mark {s.Name} unwatched?")">
+            <div class="stack">
+                <p>This removes all @user.Plays episode play@(user.Plays == 1 ? "" : "s") of @s.Name from your history. Your ratings, watchlist and lists stay. You can undo it straight after.</p>
+                <div class="inline">
+                    <button class="btn btn-danger" disabled="@busy" @onclick="UnwatchAll"><Icon Name="x" Size="16" /> Mark unwatched</button>
+                    <button class="btn btn-ghost" @onclick="() => unwatchOpen = false">Cancel</button>
+                </div>
+            </div>
+        </Modal>
         <WatchDialog Open="pendingEpisode is not null" OpenChanged="o => { if (!o) pendingEpisode = null; }"
                      What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode"  AskWhen="askWhen" />
         <WatchDialog Open="pendingSeason is not null" OpenChanged="o => { if (!o) pendingSeason = null; }" What="@(pendingSeason?.Name ?? "")" Bulk="true" OnPick="WatchSeason"
@@ -285,7 +297,7 @@ else if (s is not null)
     [Parameter] public int Id { get; set; }
     private ShowDetail? s;
     private string? error;
-    private bool busy, watchAllOpen, listOpen, fixOpen, ownOpen, recommendOpen, askWhen;
+    private bool busy, watchAllOpen, unwatchOpen, listOpen, fixOpen, ownOpen, recommendOpen, askWhen;
     private async Task Reload() { s = await Api.ShowAsync(Id); StateHasChanged(); }
     private EpisodeRef? pendingEpisode;
     private SeasonSummary? pendingSeason;
@@ -323,9 +335,8 @@ else if (s is not null)
         catch { orders ??= new WatchOrdersDto([], null); }
     }
 
-    private async Task SetOrder(ChangeEventArgs e)
+    private async Task SetOrder(string? id)
     {
-        var id = e.Value?.ToString() is { Length: > 0 } v ? v : null;
         busy = true;
         try
         {
@@ -351,6 +362,16 @@ else if (s is not null)
         }
         catch (Exception ex) { Toasts.Error(ex); }
         busy = false;
+    }
+
+    private Task UnwatchAll()
+    {
+        unwatchOpen = false;
+        return Act(async () =>
+        {
+            var removed = await Api.UnwatchAsync(MediaType.Show, Id);
+            undo = () => Api.RestorePlaysAsync(removed.Plays);
+        }, $"Marked {s!.Name} unwatched");
     }
 
     private Task WatchAll(WatchChoice c) =>

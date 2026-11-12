@@ -682,7 +682,7 @@ public static class ApiEndpoints
                 string? sort, int? page, int? pageSize, string? tz, string? group, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
         {
             if (await s.ViewableAsync(name, p.OptionalUserId(), ct) is not { } owner) return Results.NotFound();
-            var history = await t.GetHistoryAsync(owner.Id, new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 100), tz, group == "show", ShowSortOf(sort)), ct);
+            var history = await t.GetHistoryAsync(owner.Id, new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 5000), tz, group == "show", ShowSortOf(sort)), ct);
             return Results.Ok(owner.Id == p.OptionalUserId() ? history : history with { Items = await t.MarkSeenByAsync(p.OptionalUserId(), history.Items, ct) });
         });
         app.MapGet("/api/users/{name}/history/genres", async (string name, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
@@ -692,7 +692,7 @@ public static class ApiEndpoints
         g.MapGet("/feed", (int? take, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.FeedAsync(p.UserId(), take ?? 40, ct));
         g.MapGet("/history", (MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
                 string? sort, int? page, int? pageSize, string? tz, string? group, string? user, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
-            s.FriendsHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 100), tz, group == "show", ShowSortOf(sort)), user, ct));
+            s.FriendsHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 5000), tz, group == "show", ShowSortOf(sort)), user, ct));
         g.MapGet("/history/genres", (ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.FriendsHistoryGenresAsync(p.UserId(), ct));
         g.MapGet("/search", (string q, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.SearchAsync(p.UserId(), q, ct));
         g.MapGet("/seen/{type}/{id:int}", (MediaType type, int id, int? season, int? episode, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>

@@ -86,4 +86,43 @@ public class HistoryFilterTests
         Assert.Equal("S01E01", shows.Items[1].Range);
         Assert.Equal(57 + 55 + 50, shows.TotalMinutes);
     }
+
+    [Fact]
+    public async Task By_show_lists_each_show_once_with_aired_counts_and_sorts()
+    {
+        var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        db.Shows.Add(new ShowMeta { TmdbId = 3, Name = "Severance", Genres = ["Drama"] });
+        db.Shows.Add(new ShowMeta { TmdbId = 4, Name = "Andor", Genres = ["Drama"] });
+        foreach (var e in new[] { 1, 2, 3 })
+            db.Episodes.Add(new EpisodeMeta { ShowTmdbId = 3, SeasonNumber = 1, EpisodeNumber = e, Name = $"E{e}", Runtime = 50, AirDate = new DateOnly(2022, 2, e) });
+        db.Episodes.Add(new EpisodeMeta { ShowTmdbId = 3, SeasonNumber = 2, EpisodeNumber = 1, Name = "Unaired", AirDate = new DateOnly(2099, 1, 1) });
+        db.Episodes.Add(new EpisodeMeta { ShowTmdbId = 4, SeasonNumber = 1, EpisodeNumber = 1, Name = "Kassa", Runtime = 40, AirDate = new DateOnly(2022, 9, 21) });
+        void W(int id, int s, int e, string at) => db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Episode, TmdbId = id, SeasonNumber = s, EpisodeNumber = e, WatchedAt = DateTimeOffset.Parse(at) });
+        W(3, 1, 1, "2026-01-01T20:00:00Z");
+        W(3, 1, 2, "2026-01-05T20:00:00Z");
+        W(3, 1, 2, "2026-02-05T20:00:00Z");   // a rewatch of the same episode: still 2 seen
+        W(4, 1, 1, "2026-01-10T20:00:00Z");
+        await db.SaveChangesAsync();
+        var t = new TrackingService(db, null!);
+
+        var page = await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Show, PerShow: true, PageSize: 5000), default);
+        Assert.Equal(2, page.TotalResults);
+        Assert.Equal(1, page.TotalPages);
+        var sev = page.Items[0];   // last watched first: Severance on Feb 5
+        Assert.Equal("Severance", sev.Title);
+        Assert.Equal(2, sev.Episodes);
+        Assert.Equal(3, sev.EpisodesAired);   // the unaired season 2 episode doesn't count
+        Assert.Equal("Season 1", sev.Range);
+        Assert.Equal(DateTimeOffset.Parse("2026-02-05T20:00:00Z"), sev.WatchedAt);
+        Assert.Equal(150, sev.Runtime);
+
+        var first = await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Show, PerShow: true, Oldest: true), default);
+        Assert.Equal(["Severance", "Andor"], first.Items.Select(i => i.Title));   // first watched Jan 1 vs Jan 10
+        var byTitle = await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Show, PerShow: true, ShowSort: "title"), default);
+        Assert.Equal(["Andor", "Severance"], byTitle.Items.Select(i => i.Title));
+        var most = await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Show, PerShow: true, ShowSort: "episodes"), default);
+        Assert.Equal("Severance", most.Items[0].Title);
+        // By day still splits Severance over its three days.
+        Assert.Equal(4, (await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Show), default)).TotalResults);
+    }
 }

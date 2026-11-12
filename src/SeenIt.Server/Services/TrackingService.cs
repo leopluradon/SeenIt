@@ -73,7 +73,17 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 .Select(w => (w.S, w.E)).ToHashSet()
             : [];
 
+        // Following another watch order (chronological, ...): record them in that order instead.
+        // Episodes it leaves out go after, in season order.
+        if ((await WatchOrderService.SequencesAsync(db, userId, [req.ShowTmdbId], ct)).GetValueOrDefault(req.ShowTmdbId).Sequence is { Count: > 0 } sequence)
+        {
+            var position = sequence.Select((x, i) => (x, i)).GroupBy(t => t.x).ToDictionary(g => g.Key, g => g.First().i);
+            episodes = episodes.OrderBy(e => position.TryGetValue((e.SeasonNumber, e.EpisodeNumber), out var i) ? i : int.MaxValue)
+                .ThenBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).ToList();
+        }
+
         var added = 0;
+        var stamp = DateTimeOffset.UtcNow;
         foreach (var e in episodes.Where(e => !watched.Contains((e.SeasonNumber, e.EpisodeNumber))))
         {
             db.WatchEvents.Add(new WatchEvent
@@ -82,6 +92,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 SeasonNumber = e.SeasonNumber, EpisodeNumber = e.EpisodeNumber,
                 // "Release date" gives every episode its own air date.
                 WatchedAt = PlayTime(when, req.WatchedAt, e.AirDate), Source = WatchSource.Manual,
+                // Plays sharing one time sort by when they were recorded: make that the order above, explicitly.
+                CreatedAt = stamp.AddTicks(added * 10),
             });
             added++;
         }
@@ -215,7 +227,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     {
         if (ids.Count > 5000) throw new TrackingException("That's too many plays at once.");
         var q = db.WatchEvents.Where(w => w.UserId == userId && ids.Contains(w.Id));
-        var plays = await q.Select(w => new RestorePlay(w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source)).ToListAsync(ct);
+        // Oldest first, so an undo records them back in the same order (ties break on when a play was recorded).
+        var plays = await q.OldestFirst().Select(w => new RestorePlay(w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source)).ToListAsync(ct);
         await q.ExecuteDeleteAsync(ct);
         return plays;
     }
@@ -227,7 +240,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         q = type == MediaType.Movie ? q.Where(w => w.Type == MediaType.Movie) : q.Where(w => w.Type == MediaType.Episode);
         if (type != MediaType.Movie && season is not null) q = q.Where(w => w.SeasonNumber == season);
         if (type != MediaType.Movie && episode is not null) q = q.Where(w => w.EpisodeNumber == episode);
-        var plays = await q.Select(w => new RestorePlay(w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source)).ToListAsync(ct);
+        // Oldest first, so an undo records them back in the same order (ties break on when a play was recorded).
+        var plays = await q.OldestFirst().Select(w => new RestorePlay(w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source)).ToListAsync(ct);
         await q.ExecuteDeleteAsync(ct);
         return plays;
     }
@@ -236,6 +250,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     public async Task<int> RestoreAsync(Guid userId, IReadOnlyList<RestorePlay> plays, CancellationToken ct)
     {
         if (plays.Count > 5000) throw new TrackingException("That's too many plays to restore at once.");
+        var stamp = DateTimeOffset.UtcNow;
+        var n = 0;
         foreach (var p in plays)
         {
             if (p.Type is not (MediaType.Movie or MediaType.Episode) || (p.Type == MediaType.Episode && (p.SeasonNumber is null || p.EpisodeNumber is null)))
@@ -246,6 +262,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 SeasonNumber = p.Type == MediaType.Episode ? p.SeasonNumber : null,
                 EpisodeNumber = p.Type == MediaType.Episode ? p.EpisodeNumber : null,
                 WatchedAt = p.WatchedAt, Source = p.Source,
+                CreatedAt = stamp.AddTicks(10 * n++),   // the order given (oldest first) breaks ties the same way again
             });
         }
         await db.SaveChangesAsync(ct);
@@ -374,7 +391,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     /// </summary>
     public async Task<HistoryPage> GetHistoryAsync(IReadOnlyCollection<Guid> userIds, HistoryQuery f, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
     {
-        var pageSize = Math.Clamp(f.PageSize, 1, 100);
+        // One per show can list everything on one page (a few hundred rows); plays stay at 100 a page.
+        var pageSize = Math.Clamp(f.PageSize, 1, f.PerShow && f.Type == MediaType.Show ? 5000 : 100);
         var page = Math.Max(f.Page, 1);
         var people = userIds.ToList();
         var q = FilterHistory(people.Count == 1 ? db.WatchEvents.Where(w => w.UserId == people[0]) : db.WatchEvents.Where(w => people.Contains(w.UserId)), f);
