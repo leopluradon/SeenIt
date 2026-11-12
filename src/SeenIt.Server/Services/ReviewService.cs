@@ -41,11 +41,14 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var start = new DateTime(year, month ?? 1, 1);
         var end = month is null ? start.AddYears(1) : start.AddMonths(1);
         var prevStart = month is null ? start.AddYears(-1) : start.AddMonths(-1);
-        // The period still in progress is compared at the same pace: the previous one only up to this moment's
-        // equivalent (Nov 11, 8 PM → Oct 11, 8 PM; a year → the same date and time a year ago).
+        // The period still in progress is compared at the same pace: the previous one only as far in as this one is,
+        // counted in elapsed time from the start (10 days 20 hours into November → the same into October). Counting
+        // days rather than matching dates keeps leap years and short months even; a longer stretch than the previous
+        // period has (March 31 vs February) just takes all of it.
         var nowLocal = Local(DateTimeOffset.UtcNow, tz);
         var current = nowLocal >= start && nowLocal < end;
-        var prevEnd = current ? Min(month is null ? nowLocal.AddYears(-1) : nowLocal.AddMonths(-1), start) : start;
+        var prevEnd = current ? Min(prevStart + (nowLocal - start), start) : start;
+        var prevWhole = prevEnd >= start;
 
         var since = await tracking.TrackingSinceAsync(userId, ct);
         bool Tracked(DateTime local) => since is null || DateOnly.FromDateTime(local) >= since;
@@ -225,9 +228,10 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var bookendEntries = await tracking.ToHistoryAsync(bookends, ct);
 
         var label = month is null ? year.ToString() : start.ToString("MMMM yyyy", En);
-        var prevLabel = !current ? (month is null ? (year - 1).ToString() : prevStart.ToString("MMMM yyyy", En))
-            : month is null ? $"{year - 1} through {prevEnd.ToString("MMM d", En)}"
-            : $"{prevStart.ToString("MMMM", En)} 1–{prevEnd.Day}, {prevStart.Year}";
+        var lastDay = prevEnd.AddTicks(-1);   // the last moment included, so midnight shows the day before
+        var prevLabel = !current || prevWhole ? (month is null ? (year - 1).ToString() : prevStart.ToString("MMMM yyyy", En))
+            : month is null ? $"{year - 1} through {lastDay.ToString("MMM d", En)} (the same {(nowLocal - start).Days + 1} days)"
+            : $"{prevStart.ToString("MMMM", En)} 1–{lastDay.Day}, {prevStart.Year}";
         var ratingValues = ratingsInPeriod.Select(r => r.Value).ToList();
 
         return new ReviewDto(
