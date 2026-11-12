@@ -23,7 +23,13 @@ else { <h1>Settings</h1> }
     </div>
 }
 
-<div class="settings @(Current is null ? "at-home" : "")">
+<div class="searchbar settings-search" role="search">
+    <Icon Name="search" Size="18" />
+    <input type="search" placeholder="Search settings" aria-label="Search settings" value="@query" @oninput="Search" />
+</div>
+<p class="muted settings-nomatch" hidden>No settings match “@query.Trim()”.</p>
+
+<div class="settings @(Current is null ? "at-home" : "") @(Searching ? "searching" : "")">
     <nav class="settings-nav" aria-label="Settings">
         @foreach (var g in Groups)
         {
@@ -33,7 +39,7 @@ else { <h1>Settings</h1> }
         }
     </nav>
     <div class="settings-body">
-        @if (Current is null)
+        @if (Current is null && !Searching)
         {
             <div class="settings-home">
                 @foreach (var g in Groups)
@@ -46,8 +52,9 @@ else { <h1>Settings</h1> }
                 }
             </div>
         }
-        @if (Tab == "account")
+        @if (Shows("account"))
         {
+        @if (Searching) { <h2 class="settings-group">@Groups.First(g => g.Key == "account").Title</h2> }
         <section class="panel" id="profile">
             <h2>Profile</h2>
             @if (Session.Me is { } me)
@@ -173,8 +180,9 @@ else { <h1>Settings</h1> }
             </form>
         </section>
         }
-        @if (Tab == "display")
+        @if (Shows("display"))
         {
+        @if (Searching) { <h2 class="settings-group">@Groups.First(g => g.Key == "display").Title</h2> }
         <section class="panel" id="start">
             <h2>Start page</h2>
             <p class="muted small">What SeenIt opens to. Tapping Home always goes home.</p>
@@ -423,8 +431,9 @@ else { <h1>Settings</h1> }
             </div>
         </section>
         }
-        @if (Tab == "tracking")
+        @if (Shows("tracking"))
         {
+        @if (Searching) { <h2 class="settings-group">@Groups.First(g => g.Key == "tracking").Title</h2> }
         <section class="panel" id="tracking">
             <h2>Dates & time zone</h2>
             <p class="muted small">If you back-filled your history before logging things as you watch them, those plays are dated the day you entered them and skew habits like your favorite day of the week. Set the day you started tracking for real: plays per month, day-of-week, and month and year reviews only count plays from then on (earlier years get no review). Totals still count everything.</p>
@@ -476,7 +485,7 @@ else { <h1>Settings</h1> }
             <div class="field">
                 <label for="auto-refresh">When something changes in another tab or device</label>
                 <select id="auto-refresh" class="narrow-select" value="@Fmt.Prefs.AutoRefresh" @onchange='e => SavePrefs(p => p with { AutoRefresh = Enum.TryParse<AutoRefresh>(e.Value?.ToString(), out var a) ? a : AutoRefresh.Always }, "Saved")'>
-                    <option value="@AutoRefresh.Always">Refresh the page straight away</option>
+                    <option value="@AutoRefresh.Always">Refresh the page right away</option>
                     <option value="@AutoRefresh.Ask">Show a Refresh button</option>
                     <option value="@AutoRefresh.Never">Don't refresh</option>
                 </select>
@@ -601,8 +610,9 @@ else { <h1>Settings</h1> }
             }
         </section>
         }
-        @if (Tab == "alerts")
+        @if (Shows("alerts"))
         {
+        @if (Searching) { <h2 class="settings-group">@Groups.First(g => g.Key == "alerts").Title</h2> }
         <section class="panel" id="alerts">
             <h2>Release alerts</h2>
             <p class="muted small">When a new episode of a show you watch (or have on your watchlist) or a watchlist movie comes out, it shows under the bell <Icon Name="bell" Size="14" /> at the top. Dropped shows are left out.</p>
@@ -656,8 +666,9 @@ else { <h1>Settings</h1> }
             <button class="btn btn-sm" @onclick="NewCalendarUrl">Make a new private link</button>
         </section>
         }
-        @if (Tab == "data")
+        @if (Shows("data"))
         {
+        @if (Searching) { <h2 class="settings-group">@Groups.First(g => g.Key == "data").Title</h2> }
         <section class="panel" id="imports">
             <h2>Import</h2>
             <p class="muted small">Re-importing is safe: a play you already have (logged here, by Jellyfin or by another import, within a day of the same date) is skipped, while separate viewings are all kept. Ratings are updated; watchlist and list entries aren't doubled.</p>
@@ -828,6 +839,13 @@ else { <h1>Settings</h1> }
     [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
     private Group? Current => Groups.FirstOrDefault(g => g.Key == TabParam);
     private string? Tab => Current?.Key;
+
+    // Search: every tab's sections are rendered, and seenit.filterSettings hides the ones whose text doesn't
+    // match, so anything written on the page (titles, labels, help, options) is searchable without a keyword list.
+    private string query = "", filtered = "";
+    private bool Searching => query.Trim().Length >= 2;
+    private bool Shows(string key) => Searching || Tab == key;
+    private void Search(ChangeEventArgs e) => query = e.Value?.ToString() ?? "";
     private string? scrollTo;
 
     /// <summary>Old links (settings#alerts) and in-page links: open the page that has the section, then scroll to it.</summary>
@@ -848,6 +866,12 @@ else { <h1>Settings</h1> }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        var want = Searching ? query.Trim() : "";
+        if (want != filtered)
+        {
+            filtered = want;
+            try { await Js.InvokeVoidAsync("seenit.filterSettings", want); } catch (JSException) { }
+        }
         if (scrollTo is not { } id) return;
         scrollTo = null;
         try { await Js.InvokeVoidAsync("seenit.scrollToId", id); } catch (JSException) { }

@@ -226,6 +226,30 @@ window.seenit = {
         c.toggle('posters-small', posters === 'Small');
         c.toggle('posters-large', posters === 'Large');
     },
+    /** Settings search: show only the sections whose text has every word typed (accents and case ignored); "" shows all. */
+    filterSettings(q) {
+        const fold = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const words = fold(q).split(/\s+/).filter(Boolean);
+        const body = document.querySelector('.settings-body');
+        if (!body) return;
+        let shown = 0;
+        for (const sec of body.querySelectorAll('section.panel')) {
+            // Form values count too (a select's options are in its text; inputs aren't).
+            const text = fold(sec.textContent + ' ' + [...sec.querySelectorAll('input[placeholder]')].map(i => i.placeholder).join(' '));
+            const hit = words.every(w => text.includes(w));
+            sec.hidden = !hit;
+            if (hit) shown++;
+        }
+        // A tab's heading goes when none of its sections match.
+        for (const h of body.querySelectorAll('.settings-group')) {
+            let n = h.nextElementSibling, any = false;
+            while (n && !n.classList.contains('settings-group')) { if (n.matches('section.panel') && !n.hidden) any = true; n = n.nextElementSibling; }
+            h.hidden = !any;
+        }
+        const none = document.querySelector('.settings-nomatch');
+        if (none) none.hidden = !(words.length && shown === 0);
+    },
+
     scrollToId(id) {
         const el = document.getElementById(id);
         if (el) el.scrollIntoView({ block: 'start', behavior: 'instant' });

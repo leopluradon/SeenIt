@@ -1676,3 +1676,9 @@ html.compact .overview { line-height: 1.5; }
 }
 .live-refresh > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-refresh .icon-btn { width: 28px; height: 28px; }
+/* Settings search */
+.settings-search { margin: 0 0 16px; max-width: 560px; }
+.settings-nomatch { margin: -4px 0 16px; }
+.settings-group { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin: 22px 0 8px; }
+.settings-body > .settings-group:first-child { margin-top: 0; }
+.settings.searching .settings-nav a.active { background: none; color: var(--text-2); }
