@@ -23,8 +23,8 @@
     @if (Type == MediaType.Show)
     {
         <div class="segmented segmented-sm" role="radiogroup" aria-label="Group shows">
-            <button role="radio" aria-checked="@(!PerShow)" class="@(PerShow ? "" : "on")" @onclick='() => Go(group: "", sort: SortFor(false))'>By day</button>
-            <button role="radio" aria-checked="@PerShow" class="@(PerShow ? "on" : "")" @onclick='() => Go(group: "show", sort: SortFor(true))'>One per show</button>
+            <button role="radio" aria-checked="@PerShow" class="@(PerShow ? "on" : "")" @onclick='() => Go(group: "", sort: SortFor(true))'>By show</button>
+            <button role="radio" aria-checked="@(!PerShow)" class="@(PerShow ? "" : "on")" @onclick='() => Go(group: "day", sort: SortFor(false))'>By day</button>
         </div>
     }
 </div>
@@ -243,8 +243,8 @@ else if (data is not null)
     [SupplyParameterFromQuery(Name = "page")] public int? PageParam { get; set; }
     [SupplyParameterFromQuery(Name = "group")] public string? GroupParam { get; set; }
 
-    /// <summary>Shows tab, one row per show over the whole period instead of one per show per day.</summary>
-    private bool PerShow => Type == MediaType.Show && GroupParam == "show";
+    /// <summary>Shows tab: one row per show over the whole period (the default), or one per show per day with ?group=day.</summary>
+    private bool PerShow => Type == MediaType.Show && GroupParam != "day";
 
     /// <summary>Keeps the order when switching grouping if it means something in both ("oldest"); title / most episodes only exist per show.</summary>
     private string SortFor(bool perShow) => Sort == "oldest" ? "oldest" : perShow && Sort is "title" or "episodes" ? Sort : "";
@@ -344,7 +344,7 @@ else if (data is not null)
             ["group"] = (type ?? TypeParam) == "Show" ? Blank(group ?? GroupParam) : null,
         };
         // Title and most-episodes orders only exist one-per-show.
-        if (p["group"] is null && p["sort"] is "title" or "episodes") p["sort"] = null;
+        if (((type ?? TypeParam) != "Show" || p["group"] is "day") && p["sort"] is "title" or "episodes") p["sort"] = null;
         if (p["period"] as string != "custom") { p["from"] = null; p["to"] = null; }
         Nav.NavigateTo(Nav.GetUriWithQueryParameters(Nav.ToAbsoluteUri(BasePath).ToString(), p));
     }
@@ -355,7 +355,7 @@ else if (data is not null)
     private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
         {
             ("type", TypeParam), ("q", Q), ("source", SourceParam), ("genre", Genre), ("period", Period),
-            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort), ("group", PerShow ? "show" : null),
+            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort), ("group", Type == MediaType.Show && !PerShow ? "day" : null),
         }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private void Submit() => Go(q: search.Trim() is { Length: > 0 } t ? t : "");
