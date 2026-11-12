@@ -45,7 +45,6 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
             .Where(u => normalized.Contains(u.NormalizedUserName!)).ToListAsync(ct);
         var skipped = wanted.Where(w => !targets.Any(t => string.Equals(t.UserName, w, StringComparison.OrdinalIgnoreCase))).ToList();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var headline = Trim($"{sender.DisplayName ?? sender.UserName} recommends {title}", 300);
         foreach (var to in targets)
         {
@@ -63,7 +62,9 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
             await db.Notifications.Where(x => x.RecommendationId == rec.Id).ExecuteDeleteAsync(ct);
             db.Notifications.Add(new Notification
             {
-                UserId = to.Id, Type = req.Type, TmdbId = req.TmdbId, Title = headline, PosterPath = poster, Day = today,
+                // The recipient's own calendar day, so the alert files under "Today" for them rather than the UTC date.
+                UserId = to.Id, Type = req.Type, TmdbId = req.TmdbId, Title = headline, PosterPath = poster,
+                Day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ReviewService.Zone(to.TimeZone)).DateTime),
                 Detail = note is null ? null : Trim(note, 400), RecommendationId = rec.Id,
             });
         }
