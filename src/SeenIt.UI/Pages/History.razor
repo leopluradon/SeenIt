@@ -142,12 +142,12 @@ else if (data is not null)
     else
     {
         <p class="muted small" title="@Fmt.HoursTip(data.TotalMinutes)">@(PerShow ? $"{data.TotalResults:N0} show{(data.TotalResults == 1 ? "" : "s")}" : Type == MediaType.Show ? "Episodes grouped by show and day" : $"{data.TotalResults:N0} play{(data.TotalResults == 1 ? "" : "s")}")@(data.TotalMinutes > 0 ? $" · {Fmt.Duration(data.TotalMinutes)}" : "")@(Summary is { } sm ? $" · {sm}" : "")</p>
-        @if (AllOnOnePage)
+        @if (AllOnOnePage && loadedPerShow)
         {
             <div class="show-wall">
                 @foreach (var h in data.Items)
                 {
-                    <a class="show-wall-item" href="@($"show/{h.TmdbId}")" @key="(h.TmdbId, h.Who)" data-ctx="@Menu.Play(h, false)"
+                    <a class="show-wall-item" href="@($"show/{h.TmdbId}")" @key="h.Id" data-ctx="@Menu.Play(h, false)"
                        title="@($"{h.Title} · {Seen(h)} · {h.Range}" + (WatchDates.IsUnknown(h.WatchedAt) ? "" : $" · {(Sort == "oldest" ? "first" : "last")} watched {h.WatchedAt.ToLocalTime().ToString(Fmt.DateLong)}"))">
                         <span class="show-wall-poster">
                             @if (Img.Poster(h.PosterPath, "w154") is { } src) { <img src="@src" alt="" loading="lazy" /> }
@@ -290,6 +290,9 @@ else if (data is not null)
     private int ActiveFilters => new[] { Period, Genre, SourceParam, Sort, Friends ? UserParam : null }.Count(v => !string.IsNullOrEmpty(v));
 
     private HistoryPage? data;
+    // Whether data holds one-per-show rows. Switching By day → By show renders once with the old per-day rows
+    // (the same show several times) before they're replaced, and the grid mustn't draw those.
+    private bool loadedPerShow;
     private List<string> genres = [];
     private string? error;
     private string search = "";
@@ -329,7 +332,12 @@ else if (data is not null)
     {
         error = null;
         var (from, to) = Range();
-        try { data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", AllOnOnePage ? 1 : PageParam ?? 1, AllOnOnePage ? 5000 : 50, PerShow: PerShow, ShowSort: PerShow ? Sort : null), Other, Friends, UserParam); }
+        var perShow = PerShow;
+        try
+        {
+            data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", AllOnOnePage ? 1 : PageParam ?? 1, AllOnOnePage ? 5000 : 50, PerShow: perShow, ShowSort: perShow ? Sort : null), Other, Friends, UserParam);
+            loadedPerShow = perShow;
+        }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s history is private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
