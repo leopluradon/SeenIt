@@ -29,7 +29,7 @@
         @if (PerShow)
         {
             <label class="check small no-pages" title="Every show on one page, as a wrapping grid of posters">
-                <input type="checkbox" checked="@AllOnOnePage" @onchange='e => Go(all: e.Value is true ? "1" : "")' /> No pages
+                <input type="checkbox" checked="@AllOnOnePage" @onchange='e => Go(all: e.Value is true ? "" : "0")' /> No pages
             </label>
         }
     }
@@ -271,8 +271,8 @@ else if (data is not null)
     [SupplyParameterFromQuery(Name = "group")] public string? GroupParam { get; set; }
     [SupplyParameterFromQuery(Name = "all")] public string? AllParam { get; set; }
 
-    /// <summary>By show, with every show on one page as a wrapping grid.</summary>
-    private bool AllOnOnePage => PerShow && AllParam == "1";
+    /// <summary>By show, with every show on one page as a wrapping grid (the default for By show).</summary>
+    private bool AllOnOnePage => PerShow && AllParam != "0";   // the default; ?all=0 pages it
 
     /// <summary>"All 62", "40 of 62" or "40 eps": short enough for a grid tile.</summary>
     private static string Seen(HistoryEntry h) => h.EpisodesAired is { } aired
@@ -393,7 +393,7 @@ else if (data is not null)
     private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
         {
             ("type", TypeParam), ("q", Q), ("source", SourceParam), ("genre", Genre), ("period", Period),
-            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort), ("group", Type == MediaType.Show && !PerShow ? "day" : null), ("all", AllOnOnePage ? "1" : null),
+            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort), ("group", Type == MediaType.Show && !PerShow ? "day" : null), ("all", PerShow && !AllOnOnePage ? "0" : null),
         }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private void Submit() => Go(q: search.Trim() is { Length: > 0 } t ? t : "");
