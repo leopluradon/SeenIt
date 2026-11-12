@@ -57,7 +57,8 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                     TmdbDates.Parse(type == MediaType.Movie ? c.ReleaseDate : c.FirstAirDate),
                     string.Join(", ", g.Select(x => x.Job).Where(x => x is not null).Distinct()),
                     type == MediaType.Show ? g.Sum(x => x.EpisodeCount ?? 0) : null,
-                    c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id));
+                    c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id),
+                    Jobs: g.Where(x => !string.IsNullOrWhiteSpace(x.Job)).Select(x => new CrewJob(x.Job!, x.Department)).Distinct().ToList());
             }).OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
 
         List<WatchedWith>? watched = null;
@@ -66,7 +67,8 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         var rated = 0;
         if (userId is { } me)
         {
-            watched = await WatchedWithAsync(castCredits, watchedMovies, watchedEpisodes, ct);
+            var crewCredits = (p.CombinedCredits?.Crew ?? []).Where(c => c.MediaType is "movie" or "tv").ToList();
+            watched = await WatchedWithAsync(castCredits, crewCredits, watchedMovies, watchedEpisodes, ct);
             following = await db.PersonFollows.AnyAsync(f => f.UserId == me && f.PersonId == id, ct);
             // Your ratings of their work: whole movies and shows (not seasons or episodes), talk-show appearances left out.
             var credited = cast.Where(c => !c.Appearance).Concat(crew).ToList();
@@ -182,13 +184,19 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
     }
 
     private async Task<List<WatchedWith>> WatchedWithAsync(
-        List<TmdbPersonCredit> credits, Dictionary<int, int> watchedMovies,
+        List<TmdbPersonCredit> credits, List<TmdbPersonCredit> crewCredits, Dictionary<int, int> watchedMovies,
         Dictionary<int, Dictionary<(int, int), int>> watchedEpisodes, CancellationToken ct)
     {
         var result = new List<WatchedWith>();
+        // Behind the camera: any job on a movie, but on a show only creating it (an episode director isn't in every episode).
+        var crewByTitle = crewCredits.Where(c => c.MediaType == "movie" || c.Job == "Creator")
+            .GroupBy(c => (c.MediaType, c.Id)).ToDictionary(g => g.Key, g => g.ToList());
+        string? Jobs(string mediaType, int id) => crewByTitle.TryGetValue((mediaType, id), out var g)
+            && string.Join(", ", g.Select(x => x.Job).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct()) is { Length: > 0 } s ? s : null;
 
         // Movies
-        var movieCredits = credits.Where(c => c.MediaType == "movie" && watchedMovies.ContainsKey(c.Id)).GroupBy(c => c.Id).ToList();
+        var movieCredits = credits.Concat(crewByTitle.Where(kv => kv.Key.MediaType == "movie").SelectMany(kv => kv.Value))
+            .Where(c => c.MediaType == "movie" && watchedMovies.ContainsKey(c.Id)).GroupBy(c => c.Id).ToList();
         var movieIds = movieCredits.Select(g => g.Key).ToList();
         var runtimes = await db.Movies.Where(m => movieIds.Contains(m.TmdbId)).Select(m => new { m.TmdbId, m.Runtime })
             .ToDictionaryAsync(m => m.TmdbId, m => m.Runtime ?? 0, ct);
@@ -197,12 +205,14 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
             var c = g.First();
             var plays = watchedMovies[g.Key];
             result.Add(new WatchedWith(MediaType.Movie, g.Key, c.Title ?? "", c.PosterPath,
-                JoinRoles(g), plays, (long)runtimes.GetValueOrDefault(g.Key) * plays, false, []));
+                JoinRoles(g), plays, (long)runtimes.GetValueOrDefault(g.Key) * plays, false, [], Jobs("movie", g.Key)));
         }
 
         // Shows: a guest credit lists its episodes, so only count the ones actually watched;
         // a regular's credit doesn't, so every watched episode counts.
-        var showCredits = credits.Where(c => c.MediaType == "tv" && watchedEpisodes.ContainsKey(c.Id)).GroupBy(c => c.Id).ToList();
+        // A show they created but aren't in counts like a regular role: every watched episode.
+        var showCredits = credits.Concat(crewByTitle.Where(kv => kv.Key.MediaType == "tv").SelectMany(kv => kv.Value))
+            .Where(c => c.MediaType == "tv" && watchedEpisodes.ContainsKey(c.Id)).GroupBy(c => c.Id).ToList();
         var showIds = showCredits.Select(g => g.Key).ToList();
         var shows = await db.Shows.AsNoTracking().Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
         var episodeMeta = (await db.Episodes.AsNoTracking().Where(e => showIds.Contains(e.ShowTmdbId))
@@ -212,7 +222,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         var details = await Task.WhenAll(showCredits.Select(async g =>
         {
             var episodes = new HashSet<(int, int)>();
-            foreach (var credit in g.Where(c => c.CreditId is not null))
+            foreach (var credit in g.Where(c => c.CreditId is not null && c.Job is null))   // cast credits only
             {
                 try
                 {
@@ -227,7 +237,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         foreach (var (showId, group, guestEpisodes) in details)
         {
             var mine = watchedEpisodes[showId];
-            var guest = guestEpisodes.Count > 0;
+            var guest = guestEpisodes.Count > 0 && Jobs("tv", showId) is null;   // their own show: all of it
             var keys = guest ? mine.Keys.Where(guestEpisodes.Contains).ToList() : mine.Keys.ToList();
             if (keys.Count == 0) continue; // watched the show, but none of their episodes
 
@@ -241,7 +251,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
             var c = group.First();
             result.Add(new WatchedWith(MediaType.Show, showId, shows.GetValueOrDefault(showId)?.Name ?? c.Name ?? "",
                 shows.GetValueOrDefault(showId)?.PosterPath ?? c.PosterPath, JoinRoles(group),
-                keys.Sum(k => mine[k]), minutes, guest, episodeRefs));
+                keys.Sum(k => mine[k]), minutes, guest, episodeRefs, Jobs("tv", showId)));
         }
 
         return result.OrderByDescending(w => w.Minutes).ToList();

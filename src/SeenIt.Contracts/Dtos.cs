@@ -509,7 +509,10 @@ public record PersonCreditDto(
     string? PosterPath,
     int VoteCount,
     bool Watched,
-    bool Appearance = false);   // talk shows, news, "Self" roles: listed separately
+    bool Appearance = false,    // talk shows, news, "Self" roles: listed separately
+    IReadOnlyList<CrewJob>? Jobs = null);   // crew only: each job with its TMDB department, to split directing/writing/other
+
+public record CrewJob(string Job, string? Department);
 
 /// <summary>A title the viewer has watched this person in.</summary>
 public record WatchedWith(
@@ -521,7 +524,8 @@ public record WatchedWith(
     int Plays,                  // movie plays, or episode plays
     long Minutes,
     bool GuestRole,             // true: Episodes lists exactly the episodes they're in
-    IReadOnlyList<EpisodeRef> Episodes);
+    IReadOnlyList<EpisodeRef> Episodes,
+    string? Jobs = null);       // what they did behind the camera on it ("Director, Screenplay")
 
 public record PersonDetail(
     int Id,

@@ -30,7 +30,7 @@ else if (p is not null)
                 ("Born", p.Birthday is { } b ? $"{(b).ToString(Fmt.DateFull)}" + (p.Deathday is null ? $" (age {Age(b, DateOnly.FromDateTime(DateTime.Today))})" : "") : null),
                 ("Died", p.Deathday is { } d ? $"{(d).ToString(Fmt.DateFull)}" + (p.Birthday is { } b2 ? $" (aged {Age(b2, d)})" : "") : null),
                 ("From", p.PlaceOfBirth),
-                ("Credits", $"{p.Cast.Count(c => !c.Appearance)} acting" + (p.Crew.Count > 0 ? $" · {p.Crew.Count} crew" : "")),
+                ("Credits", string.Join(" · ", Groups.Select(g => $"{GroupCount(g):N0} {g.ToLowerInvariant()}"))),
             ])" />
             @if (p.Biography is { } bio)
             {
@@ -64,6 +64,7 @@ else if (p is not null)
                             <a href="@Fmt.Href(w.Type, w.TmdbId)"><img src="@Img.Poster(w.PosterPath, "w154")" alt="" loading="lazy" /></a>
                             <div class="ww-body">
                                 <a href="@Fmt.Href(w.Type, w.TmdbId)" class="mini-title">@w.Title</a>
+                                @if (w.Jobs is not null) { <div class="small">@w.Jobs</div> }
                                 @if (w.Character is not null) { <div class="small">as @w.Character</div> }
                                 <div class="muted small" title="@Fmt.HoursTip(w.Minutes)">
                                     @(w.Type == MediaType.Movie
@@ -125,12 +126,22 @@ else if (p is not null)
                 <button class="@(tab == "all" ? "on" : "")" @onclick='() => tab = "all"'>All</button>
                 <button class="@(tab == "movies" ? "on" : "")" @onclick='() => tab = "movies"'>Movies</button>
                 <button class="@(tab == "tv" ? "on" : "")" @onclick='() => tab = "tv"'>TV</button>
-                @if (p.Crew.Count > 0) { <button class="@(tab == "crew" ? "on" : "")" @onclick='() => tab = "crew"'>Crew</button> }
             </div>
         </div>
+        @if (Groups.Count > 1)
+        {
+            <div class="chips role-chips" role="group" aria-label="Roles">
+                @foreach (var g in Groups)
+                {
+                    <button type="button" class="chip @(shown.Contains(g) ? "on" : "")" aria-pressed="@shown.Contains(g)" @onclick="() => ToggleGroup(g)" @key="g">
+                        @g <span class="chip-count">@GroupCount(g)</span>
+                    </button>
+                }
+            </div>
+        }
         <label class="check small seen-only"><input type="checkbox" @bind="seenOnly" /> Only show what I've watched</label>
         @{
-            var rows = (tab == "crew" ? p.Crew : p.Cast.Where(c => !c.Appearance))
+            var rows = Rows(shown)
                 .Where(c => tab switch { "movies" => c.Type == MediaType.Movie, "tv" => c.Type == MediaType.Show, _ => true })
                 .Where(c => !seenOnly || c.Watched).ToList();
         }
@@ -151,7 +162,7 @@ else if (p is not null)
             }
         </ol>
         @{ var appearances = p.Cast.Where(c => c.Appearance && (!seenOnly || c.Watched)).ToList(); }
-        @if (tab != "crew" && tab != "movies" && appearances.Count > 0)
+        @if (shown.Contains(Acting) && tab != "movies" && appearances.Count > 0)
         {
             <details class="appearances">
                 <summary>@Plural(appearances.Count, "talk show or TV appearance") as themself</summary>
@@ -177,11 +188,65 @@ else if (p is not null)
     private string? error;
     private bool bioOpen, seenOnly, following;
     private string tab = "all";
+    private HashSet<string> shown = [];
 
-    /// <summary>Their most popular work on TMDB (not talk-show appearances).</summary>
-    private List<PersonCreditDto> KnownFor => p?.Cast.Where(c => !c.Appearance && c.PosterPath is not null)
-        .Concat(p.Crew.Where(c => c.PosterPath is not null))
-        .DistinctBy(c => (c.Type, c.TmdbId)).OrderByDescending(c => c.VoteCount).Take(12).ToList() ?? [];
+    private const string Acting = "Acting", Directing = "Directing", Writing = "Writing", OtherCrew = "Other crew";
+
+    /// <summary>Which filmography group a crew job belongs to. Only directing itself counts as Directing (assistant directors are other crew).</summary>
+    private static string GroupOf(CrewJob j) =>
+        j.Job is "Director" or "Co-Director" ? Directing : j.Department == "Writing" ? Writing : OtherCrew;
+
+    private static IEnumerable<CrewJob> JobsOf(PersonCreditDto c) =>
+        c.Jobs ?? (c.Role ?? "").Split(", ", StringSplitOptions.RemoveEmptyEntries).Select(j => new CrewJob(j, null));
+
+    /// <summary>The group TMDB says they're known for: an editor or producer lands on Other crew.</summary>
+    private string Primary => p?.KnownFor switch { null or "Acting" => Acting, "Directing" => Directing, "Writing" => Writing, _ => OtherCrew };
+
+    /// <summary>The groups they have credits in, what they're known for first.</summary>
+    private List<string> Groups => p is null ? [] : new[] { Primary, Acting, Directing, Writing, OtherCrew }.Distinct().Where(g => GroupCount(g) > 0).ToList();
+
+    private int GroupCount(string g) => g == Acting ? p!.Cast.Count(c => !c.Appearance)
+        : p!.Crew.Count(c => JobsOf(c).Any(j => GroupOf(j) == g));
+
+    private void ToggleGroup(string g)
+    {
+        if (!shown.Remove(g)) shown.Add(g);
+        else if (shown.Count == 0) shown.Add(g);   // always keep one on
+    }
+
+    /// <summary>One row per title across the chosen groups: "Director, Screenplay" and, when acting is shown with crew, "as Kambei".</summary>
+    private List<PersonCreditDto> Rows(IReadOnlySet<string> groups)
+    {
+        if (p is null) return [];
+        var acting = groups.Contains(Acting) ? p.Cast.Where(c => !c.Appearance).ToList() : [];
+        var crew = p.Crew.Select(c => (Credit: c, Jobs: JobsOf(c).Where(j => groups.Contains(GroupOf(j))).Select(j => j.Job).Distinct().ToList()))
+            .Where(x => x.Jobs.Count > 0).ToList();
+        var crewOnly = groups.All(g => g != Acting);
+        var rows = new Dictionary<(MediaType, int), PersonCreditDto>();
+        foreach (var (c, jobs) in crew)
+            rows[(c.Type, c.TmdbId)] = c with { Role = string.Join(", ", jobs) };
+        foreach (var c in acting)
+        {
+            var key = (c.Type, c.TmdbId);
+            if (rows.TryGetValue(key, out var made))
+                rows[key] = made with { Role = c.Role is { Length: > 0 } r ? $"{made.Role} · as {r}" : made.Role,
+                                        EpisodeCount = Math.Max(made.EpisodeCount ?? 0, c.EpisodeCount ?? 0) is > 0 and var n ? n : null };
+            else rows[key] = groups.Count > 1 && c.Role is { Length: > 0 } r ? c with { Role = "as " + r } : c;
+        }
+        return rows.Values.OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
+    }
+
+    /// <summary>Their most popular work on TMDB in what they're known for (a director's films before their cameos), then the rest.</summary>
+    private List<PersonCreditDto> KnownFor
+    {
+        get
+        {
+            if (p is null) return [];
+            var main = Rows(new HashSet<string> { Primary }).Where(c => c.PosterPath is not null).OrderByDescending(c => c.VoteCount).ToList();
+            var rest = Rows(new HashSet<string>(Groups)).Where(c => c.PosterPath is not null).OrderByDescending(c => c.VoteCount);
+            return main.Concat(rest).DistinctBy(c => (c.Type, c.TmdbId)).Take(12).ToList();
+        }
+    }
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
@@ -223,8 +288,9 @@ else if (p is not null)
 
     protected override async Task OnParametersSetAsync()
     {
-        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; }
+        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; shown = []; }
         await Load();
+        if (p is not null && shown.Count == 0) shown = Groups.Count > 0 ? [Groups[0]] : [Acting];
     }
 
     private async Task Load()
