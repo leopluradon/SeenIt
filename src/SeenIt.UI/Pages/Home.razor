@@ -96,6 +96,20 @@
                         </section>
                     }
                     break;
+                case "torate":
+                    @if (toRate is { Count: > 0 })
+                    {
+                        <section class="row-section">
+                            <div class="section-head">
+                                <h2>To rate</h2>
+                                <div class="section-tools"><a href="settings#ratings" class="section-more" title="Choose what shows up here">Choose <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("torate")' /></div>
+                            </div>
+                            <div class="card-scroller torate-scroller">
+                                @foreach (var r in toRate) { <ToRateCard Item="r" OnRate="RateSuggestion" OnSkip="SkipSuggestion" @key="(r.Kind, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" /> }
+                            </div>
+                        </section>
+                    }
+                    break;
                 case "upcoming":
                     @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
                     else if (dash is not null)
@@ -239,6 +253,7 @@
     private FeedDto? feed;
     private string? error;
     private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows, forYou;
+    private List<ToRateItem>? toRate;
 
     /// <summary>"in 5 hours" close to an exact air time; "in 3 days" further out; nothing for today/tomorrow.</summary>
     private static string? Soon(CalendarEntry c) =>
@@ -282,8 +297,10 @@
             var extrasTask = LoadExtras();
             var forYouTask = LoadForYou();
             var widgetsTask = LoadWidgets();
+            var toRateTask = LoadToRate();
             await LoadDashboard();
             await widgetsTask;
+            await toRateTask;
             await forYouTask;
             await reviewTask;
             await extrasTask;
@@ -297,7 +314,9 @@
     {
         if (!signedIn) return;
         var widgets = LoadWidgets();
+        var rate = LoadToRate();
         await LoadDashboard();
+        await rate;
         try { if (!hidden.Contains("now")) now = await Api.CheckInAsync(); } catch { }
         try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); } catch { }
         await widgets;
@@ -308,6 +327,50 @@
         error = null;
         try { dash = await Api.DashboardAsync(); }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task LoadToRate()
+    {
+        if (hidden.Contains("torate")) return;
+        try { toRate = await Api.ToRateAsync(Fmt.Prefs.Count("torate")); }
+        catch { toRate ??= []; }
+    }
+
+    private static ToRateSkip SkipOf(ToRateItem i) => new(i.Type, i.TmdbId, i.SeasonNumber, i.EpisodeNumber);
+
+    /// <summary>Rated from the row: it leaves the row, with undo.</summary>
+    private async Task RateSuggestion((ToRateItem Item, double Rating) pick)
+    {
+        var (item, rating) = pick;
+        var before = toRate;
+        toRate = toRate?.Where(x => x != item).ToList();
+        try
+        {
+            await Api.RateAsync(new RatingRequest(item.Type, item.TmdbId, rating, item.SeasonNumber, item.EpisodeNumber));
+            Toasts.Show($"Rated {ToRateCard.NameOf(item)} {Fmt.Rating(rating)}", undo: async () =>
+            {
+                await Api.UnrateAsync(item.Type, item.TmdbId, item.SeasonNumber, item.EpisodeNumber);
+                await InvokeAsync(() => { toRate = before; StateHasChanged(); });
+            });
+        }
+        catch (Exception ex) { toRate = before; Toasts.Error(ex); }
+    }
+
+    /// <summary>× on a card: don't suggest that one again, with undo.</summary>
+    private async Task SkipSuggestion(ToRateItem item)
+    {
+        var before = toRate;
+        toRate = toRate?.Where(x => x != item).ToList();
+        try
+        {
+            await Api.SkipToRateAsync(SkipOf(item));
+            Toasts.Show($"Won't ask about {ToRateCard.NameOf(item)} again", undo: async () =>
+            {
+                await Api.UnskipToRateAsync(SkipOf(item));
+                await InvokeAsync(() => { toRate = before; StateHasChanged(); });
+            });
+        }
+        catch (Exception ex) { toRate = before; Toasts.Error(ex); }
     }
 
     // Stats widgets on Home: which profile widget each section is, and the data for the ones shown.
@@ -421,6 +484,7 @@
         if (shown.Contains("review") && reviewLinks.Count == 0) await LoadReviewLinks();
         if (shown.Any(k => k is "now" or "friends" or "onthisday" or "goals")) await LoadExtras();
         if (shown.Any(k => k.StartsWith("w-"))) await LoadWidgets();
+        if (shown.Contains("torate") && toRate is null) await LoadToRate();
     }
 
     private async Task Toggle(string key, bool visible)
@@ -437,6 +501,7 @@
             if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
             if (visible && key is "now" or "friends" or "goals") await LoadExtras();
             if (visible && key.StartsWith("w-")) await LoadWidgets();
+            if (visible && key == "torate" && toRate is null) await LoadToRate();
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

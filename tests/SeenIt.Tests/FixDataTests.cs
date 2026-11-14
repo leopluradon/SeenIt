@@ -80,8 +80,9 @@ public class FixDataTests
         Assert.Equal(all.Count, order.Count);
         Assert.Equal(["recent", "upnext"], order.Where(k => k is "recent" or "upnext"));
         Assert.DoesNotContain("bogus", order);
-        // "upcoming" follows "upnext" by default, so it lands right after it.
-        Assert.Equal(order.IndexOf("upnext") + 1, order.IndexOf("upcoming"));
+        // New sections slot in after the one they follow by default: "torate" after "upnext", then "upcoming".
+        Assert.Equal(order.IndexOf("upnext") + 1, order.IndexOf("torate"));
+        Assert.Equal(order.IndexOf("torate") + 1, order.IndexOf("upcoming"));
     }
 
     [Fact]

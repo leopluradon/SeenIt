@@ -247,6 +247,18 @@ public static class ApiEndpoints
         });
 
         g.MapGet("/progress", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetProgressAsync(p.UserId(), ct));
+        // "To rate" on Home, and waving a suggestion away (or taking that back).
+        g.MapGet("/torate", (int? max, ClaimsPrincipal p, ToRateService r, CancellationToken ct) => r.GetAsync(p.UserId(), max ?? UserPrefs.DefaultRowCount, ct));
+        g.MapPost("/torate/skip", async (ToRateSkip req, ClaimsPrincipal p, ToRateService r, CancellationToken ct) =>
+        {
+            await r.SkipAsync(p.UserId(), req, ct);
+            return Results.NoContent();
+        });
+        g.MapPost("/torate/unskip", async (ToRateSkip req, ClaimsPrincipal p, ToRateService r, CancellationToken ct) =>
+        {
+            await r.UnskipAsync(p.UserId(), req, ct);
+            return Results.NoContent();
+        });
         g.MapGet("/live", (HttpContext http, ClaimsPrincipal p, LiveHub hub, CancellationToken ct) => LiveHub.StreamAsync(http, p.UserId(), hub, ct));
         g.MapGet("/status/{type}/{id:int}", (MediaType type, int id, int? season, int? episode, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.ItemStatusAsync(p.UserId(), type, id, season, episode, ct));

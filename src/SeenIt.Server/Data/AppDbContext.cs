@@ -45,6 +45,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ListLike> ListLikes => Set<ListLike>();
     public DbSet<LibraryItem> Library => Set<LibraryItem>();
     public DbSet<TitleNote> Notes => Set<TitleNote>();
+    public DbSet<RateSkip> RateSkips => Set<RateSkip>();
 
     private bool checkingRecommendations;
 
@@ -179,6 +180,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
         b.Entity<ExternalScoreCache>(e => e.HasKey(x => new { x.Type, x.TmdbId }));
         b.Entity<NotInterested>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
+        b.Entity<RateSkip>(e => e.HasIndex(x => x.UserId));
         b.Entity<Recommendation>(e =>
         {
             e.HasKey(x => x.Id);
@@ -287,7 +289,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested), typeof(ListLike), typeof(LibraryItem), typeof(TitleNote), typeof(PersonFollow) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested), typeof(ListLike), typeof(LibraryItem), typeof(TitleNote), typeof(PersonFollow), typeof(RateSkip) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

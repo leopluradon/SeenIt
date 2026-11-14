@@ -1154,6 +1154,37 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("PushSubscriptions");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.RateSkip", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("EpisodeNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SeasonNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RateSkips");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.Rating", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1887,6 +1918,15 @@ namespace SeenIt.Server.Data.Migrations
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.PushSubscription", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.RateSkip", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()

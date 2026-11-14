@@ -135,7 +135,8 @@ public record UserPrefs(
     AutoRefresh AutoRefresh = AutoRefresh.Always,    // Ask: a "Refresh" bar instead of reloading the page under you
     bool AlertRecWatched = true,                     // superseded by Alerts[RecWatched]; still read when that isn't set
     IReadOnlyDictionary<AlertKind, AlertDelivery>? Alerts = null,   // per kind of alert; missing = Both
-    IReadOnlyList<string>? ProfileBadges = null)     // badge ids shown next to your name, in order (up to MaxBadges)
+    IReadOnlyList<string>? ProfileBadges = null,     // badge ids shown next to your name, in order (up to MaxBadges)
+    IReadOnlyList<string>? RateKinds = null)         // what "To rate" on Home offers: ScoreKinds keys; null = DefaultRateKinds
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -161,6 +162,9 @@ public record UserPrefs(
     /// <summary>Whether to show this source's score on this kind of page. Sources left out of Scores are off everywhere.</summary>
     public bool ShowsScore(string source, string kind) =>
         (source is "tmdb" or "friends" || Scores is null || Scores.Contains(source)) && HiddenScores?.Contains($"{source}/{kind}") != true;
+    /// <summary>"To rate" on Home starts with movies and shows; seasons and episodes are opt-in.</summary>
+    public static readonly string[] DefaultRateKinds = ["movie", "show"];
+    public bool RatesOnHome(string kind) => (RateKinds ?? DefaultRateKinds).Contains(kind);
     public int Count(string section) => HomeCounts?.TryGetValue(section, out var n) == true ? n : DefaultRowCount;
     public ListLayout LayoutFor(string page) => PageLayouts?.TryGetValue(page, out var l) == true ? l : ListLayout;
     public string? SortFor(string page) => PageSorts?.TryGetValue(page, out var s) == true ? s : null;
@@ -208,6 +212,7 @@ public record UserPrefs(
             .Take(UiPrefs.MaxSavedViews).ToList(),
         ProfileBanner = ProfileBanner is { Type: MediaType.Movie or MediaType.Show } ? ProfileBanner : null,
         ProfileBadge = ProfileBadge is { Length: > 0 and <= 80 } ? ProfileBadge : null,
+        RateKinds = RateKinds?.Where(k => ScoreKinds.Any(x => x.Key == k)).Distinct().ToList(),
     };
 }
 
@@ -224,6 +229,7 @@ public static class UiPrefs
         ("review", "Month / year in review banner"),
         ("goals", "Goals"),
         ("upnext", "Up next"),
+        ("torate", "To rate"),
         ("upcoming", "Coming up"),
         ("recent", "Recently watched"),
         ("foryou", "Picked for you"),
@@ -647,6 +653,14 @@ public record WatchlistEntry(MediaSummary Media, DateTimeOffset AddedAt, DateOnl
 public record WatchlistRequest(MediaType Type, int TmdbId);
 
 public record RatingRequest(MediaType Type, int TmdbId, double Rating, int? SeasonNumber = null, int? EpisodeNumber = null);
+/// <summary>
+/// Something you watched lately and haven't rated, for "To rate" on Home: a movie or episode, or a season or
+/// (ended) show you've just finished. A season is Type Show with SeasonNumber set, as in RatingRequest.
+/// </summary>
+public record ToRateItem(string Kind, MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber,
+    string Title, string? Detail, string? PosterPath, DateTimeOffset FinishedAt);
+/// <summary>"Not this one" on a To rate card (or undoing that).</summary>
+public record ToRateSkip(MediaType Type, int TmdbId, int? SeasonNumber = null, int? EpisodeNumber = null);
 public record RatingEntry(MediaType Type, int TmdbId, string Title, int? SeasonNumber, int? EpisodeNumber, string? PosterPath, double Rating, DateTimeOffset RatedAt);
 
 public record ShowProgressDto(

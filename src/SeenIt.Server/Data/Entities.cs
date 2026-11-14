@@ -608,6 +608,18 @@ public class LibraryItem
     public Guid? ImportJobId { get; set; }
 }
 
+/// <summary>A "To rate" suggestion you waved away; it stays out of the row (rating it later is still fine).</summary>
+public class RateSkip
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public MediaType Type { get; set; }
+    public int TmdbId { get; set; }
+    public int? SeasonNumber { get; set; }
+    public int? EpisodeNumber { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 /// <summary>A private note on a movie or show ("Recommended by Sam"). Only its owner sees it.</summary>
 public class TitleNote
 {

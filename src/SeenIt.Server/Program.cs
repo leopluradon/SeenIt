@@ -83,6 +83,7 @@ builder.Services.AddHttpClient("letterboxd", c =>
 });
 builder.Services.AddScoped<CatalogService>();
 builder.Services.AddScoped<TrackingService>();
+builder.Services.AddScoped<ToRateService>();
 builder.Services.AddScoped<ListService>();
 builder.Services.AddScoped<ReviewService>();
 builder.Services.AddScoped<PersonService>();

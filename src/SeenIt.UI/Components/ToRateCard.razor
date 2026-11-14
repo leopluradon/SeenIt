@@ -1,0 +1,49 @@
+@* One "To rate" suggestion on Home: poster, what it is, when you finished it, rating pips and a × to wave it away. *@
+<div class="torate-card" data-ctx="@Menu.Title(Item.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, Item.TmdbId, Item.Title, Item.PosterPath)">
+    <a class="torate-link" href="@Link">
+        <img src="@Img.Poster(Item.PosterPath, "w92")" alt="" loading="lazy" />
+        <span class="torate-text">
+            <span class="torate-kind">@KindLabel</span>
+            <b class="torate-title">@Item.Title</b>
+            @if (Detail is { Length: > 0 } d) { <span class="torate-detail small">@d</span> }
+            <span class="muted small" title="@Fmt.Exact(Item.FinishedAt)">@(Item.Kind is "season" or "show" ? "Finished" : "Watched") @Fmt.Relative(Item.FinishedAt)</span>
+        </span>
+    </a>
+    <button class="icon-btn torate-skip" disabled="@Busy" @onclick="() => OnSkip.InvokeAsync(Item)" title="Don't ask about this one" aria-label="@($"Don't ask me to rate {Name}")"><Icon Name="x" Size="16" /></button>
+    <div class="torate-rate">
+        <RatingPicker Value="null" ValueChanged="v => v is { } r ? OnRate.InvokeAsync((Item, r)) : Task.CompletedTask" />
+    </div>
+</div>
+@code {
+    [Parameter, EditorRequired] public ToRateItem Item { get; set; } = default!;
+    [Parameter] public EventCallback<(ToRateItem Item, double Rating)> OnRate { get; set; }
+    [Parameter] public EventCallback<ToRateItem> OnSkip { get; set; }
+    [Parameter] public bool Busy { get; set; }
+
+    private string KindLabel => Item.Kind switch { "movie" => "Movie", "episode" => "Episode", "season" => "Season", _ => "Show" };
+
+    private string? Detail => Item.Kind switch
+    {
+        "episode" => Fmt.Ep(Item.SeasonNumber, Item.EpisodeNumber) + (Item.Detail is { Length: > 0 } n ? $" · {n}" : ""),
+        "season" => $"Season {Item.SeasonNumber}",
+        "movie" => Item.Detail,
+        _ => null,
+    };
+
+    /// <summary>"Breaking Bad season 2", "Breaking Bad S02E05": for labels and toasts.</summary>
+    public static string NameOf(ToRateItem i) => i.Kind switch
+    {
+        "episode" => $"{i.Title} {Fmt.Ep(i.SeasonNumber, i.EpisodeNumber)}",
+        "season" => $"{i.Title} season {i.SeasonNumber}",
+        _ => i.Title,
+    };
+    private string Name => NameOf(Item);
+
+    private string Link => Item.Kind switch
+    {
+        "movie" => $"movie/{Item.TmdbId}",
+        "episode" => Fmt.EpisodeHref(Item.TmdbId, Item.SeasonNumber, Item.EpisodeNumber),
+        "season" => $"show/{Item.TmdbId}/season/{Item.SeasonNumber}",
+        _ => $"show/{Item.TmdbId}",
+    };
+}

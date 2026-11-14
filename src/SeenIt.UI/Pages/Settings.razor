@@ -329,6 +329,16 @@ else { <h1>Settings</h1> }
                 <button class="@(Fmt.Scale == RatingScale.FiveStars ? "on" : "")" @onclick="() => SaveScale(RatingScale.FiveStars)">★ 5 stars, with halves</button>
                 <button class="@(Fmt.Scale == RatingScale.Decimal ? "on" : "")" @onclick="() => SaveScale(RatingScale.Decimal)">1–10 with decimals (8.1)</button>
             </div>
+            <h3>To rate, on Home</h3>
+            <p class="muted small">What you've watched in the last @ToRateDays days and haven't rated, so you can rate it in one tap. A season shows up once you've seen every episode of it, and a show once it has ended and you've seen it all. Imports are left out.</p>
+            <div class="chips" role="group" aria-label="What To rate suggests">
+                @foreach (var (key, name) in UserPrefs.ScoreKinds)
+                {
+                    var on = Fmt.Prefs.RatesOnHome(key);
+                    <button class="chip @(on ? "on" : "")" aria-pressed="@on" @key="key" @onclick="() => ToggleRateKind(key)">@if (on) { <Icon Name="check" Size="14" /> }@name</button>
+                }
+            </div>
+            @if (!UserPrefs.ScoreKinds.Any(k => Fmt.Prefs.RatesOnHome(k.Key))) { <p class="muted small">Nothing is picked, so the row stays off Home.</p> }
         </section>
         <section class="panel" id="scores">
             <h2>Scores</h2>
@@ -1438,6 +1448,16 @@ else { <h1>Settings</h1> }
     {
         await SavePrefs(p => p with { Accent = key });
         await Theme.ApplyAccentAsync(key);
+    }
+
+    private const int ToRateDays = 60;   // ToRateService.Days
+
+    private Task ToggleRateKind(string key)
+    {
+        var kinds = UserPrefs.ScoreKinds.Select(k => k.Key).Where(Fmt.Prefs.RatesOnHome).ToList();
+        if (!kinds.Remove(key)) kinds.Add(key);
+        var name = UserPrefs.ScoreKinds.First(k => k.Key == key).Name;
+        return SavePrefs(p => p with { RateKinds = kinds }, kinds.Contains(key) ? $"{name} show up in To rate" : $"{name} left out of To rate");
     }
 
     private async Task SavePrefs(Func<UserPrefs, UserPrefs> change, string? done = null)

@@ -1750,3 +1750,17 @@ div.badge-pick { cursor: default; }
 .badge-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
 .badge-locked { margin-top: 8px; }
 .badge-locked summary { cursor: pointer; color: var(--text-2); font-size: .85rem; }
+
+/* ---------- To rate (Home) ---------- */
+.torate-scroller { grid-auto-columns: 300px; }
+.torate-card { position: relative; display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px 12px; min-width: 0; }
+.torate-link { display: flex; gap: 12px; align-items: center; color: var(--text); min-width: 0; padding-right: 26px; }
+.torate-link:hover { color: var(--text); }
+.torate-link img { width: 48px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-2); flex: none; }
+.torate-text { display: flex; flex-direction: column; min-width: 0; }
+.torate-kind { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.torate-title, .torate-detail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.torate-skip { position: absolute; top: 6px; right: 6px; }
+.torate-rate { display: flex; justify-content: center; min-height: 28px; align-items: center; }
+.torate-rate .pip { width: 20px; height: 20px; }
+@media (max-width: 700px) { .torate-scroller { grid-auto-columns: min(300px, 86vw); } .torate-rate .pip { width: 19px; height: 19px; } }
