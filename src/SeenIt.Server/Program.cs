@@ -89,6 +89,7 @@ builder.Services.AddScoped<PersonService>();
 builder.Services.AddScoped<JellyfinService>();
 builder.Services.AddScoped<CheckInService>();
 builder.Services.AddScoped<PushService>();
+builder.Services.AddScoped<EmbedService>();
 builder.Services.AddHostedService<PushWorker>();
 builder.Services.AddHttpClient("webpush", c => c.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddScoped<SocialService>();
@@ -272,7 +273,24 @@ app.MapApi();
 app.MapAdmin();
 app.MapAppRelease();
 app.MapFallback("/api/{**rest}", () => Results.NotFound());
-app.MapFallbackToFile("index.html");
+// Every page is index.html (the app draws it), but with that page's link-preview tags in its head, so a link pasted
+// into Discord, Slack, iMessage... shows the movie, show, person, profile or list (EmbedService).
+string? indexHtml = null;
+app.MapFallback("{*path:nonfile}", async (HttpContext http, EmbedService embeds, IConfiguration cfg, CancellationToken ct) =>
+{
+    if (indexHtml is null)
+    {
+        var file = app.Environment.WebRootFileProvider.GetFileInfo("index.html");
+        if (!file.Exists) return Results.NotFound();
+        using var reader = new StreamReader(file.CreateReadStream());
+        indexHtml = await reader.ReadToEndAsync(ct);
+    }
+    var embed = await embeds.ForPathAsync(http.Request.Path.Value ?? "", ct);
+    var site = (cfg["SeenIt:PublicUrl"] is { Length: > 0 } u ? u : "https://seenit.vohiyo.com/").TrimEnd('/');
+    var discord = http.Request.Headers.UserAgent.ToString().Contains("Discordbot", StringComparison.OrdinalIgnoreCase);
+    http.Response.Headers.CacheControl = "no-cache";
+    return Results.Content(embeds.Render(indexHtml, embed, site + http.Request.Path + http.Request.QueryString, discord), "text/html; charset=utf-8");
+});
 
 app.Run();
 
