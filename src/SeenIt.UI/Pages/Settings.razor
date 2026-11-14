@@ -626,6 +626,11 @@ else { <h1>Settings</h1> }
 
             }
             else { <Spinner /> }
+            <label class="check">
+                <input type="checkbox" checked="@Fmt.Prefs.AlertRecWatched" @onchange='e => SavePrefs(p => p with { AlertRecWatched = (bool)e.Value! }, (bool)e.Value! ? "Alerts on for watched recommendations" : "No alerts when someone watches what you recommend")' />
+                Alert me when someone watches something I recommended them
+            </label>
+            <p class="muted small">"Sam watched Heat", or "Sam started Severance" at their first episode. Once per recommendation, and only for watching after you sent it.</p>
         </section>
         <section class="panel" id="calendar">
             <h2>Calendar feed</h2>

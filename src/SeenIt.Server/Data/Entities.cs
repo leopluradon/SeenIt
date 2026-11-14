@@ -501,6 +501,8 @@ public class Notification
     public DateTimeOffset? ReadAt { get; set; }
     /// <summary>Set when a friend recommended this title (not a release): kept apart from release alerts.</summary>
     public Guid? RecommendationId { get; set; }
+    /// <summary>Set when someone watched (or started) a title you recommended them: this is that recommendation.</summary>
+    public Guid? WatchedRecommendationId { get; set; }
 }
 
 /// <summary>A friend sent you a title to watch, with an optional note.</summary>

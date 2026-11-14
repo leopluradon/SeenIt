@@ -127,7 +127,8 @@ public record UserPrefs(
     IReadOnlyList<SavedView>? SavedViews = null,     // filters saved as quick chips on History, Watchlist and Progress
     MediaRef? ProfileBanner = null,                  // a movie or show whose backdrop sits behind your name on your profile
     string? ProfileBadge = null,                     // a milestone shown next to your name (its label)
-    AutoRefresh AutoRefresh = AutoRefresh.Always)    // Ask: a "Refresh" bar instead of reloading the page under you
+    AutoRefresh AutoRefresh = AutoRefresh.Always,    // Ask: a "Refresh" bar instead of reloading the page under you
+    bool AlertRecWatched = true)                     // an alert when someone watches (or starts) a title you recommended them
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -700,7 +701,8 @@ public record ForYouGroup(MediaSummary Seed, IReadOnlyList<MediaSummary> Items);
 public record ForYouDto(IReadOnlyList<ForYouItem> Top, IReadOnlyList<ForYouGroup> Groups);
 
 public record NotificationDto(Guid Id, MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, string Title, string? Detail,
-    string? PosterPath, DateOnly Day, bool Read, bool Recommendation = false);   // Recommendation: Title is "Sam recommends Heat", Detail their note
+    string? PosterPath, DateOnly Day, bool Read, bool Recommendation = false,   // Recommendation: Title is "Sam recommends Heat", Detail their note
+    bool RecommendationWatched = false);   // "Sam watched Heat": someone watched a title you recommended them
 public record NotificationsDto(IReadOnlyList<NotificationDto> Items, int Unread);
 /// <summary>Release alerts and the private calendar feed. CalendarUrl is secret: anyone with it sees your calendar.</summary>
 public record AlertSettingsDto(bool Emails, bool EmailAvailable, string CalendarUrl, bool MonthlyBackup = false, string? WatchlistFeed = null, string? HistoryFeed = null);

@@ -7,7 +7,7 @@
     <h1>Alerts</h1>
     <a class="btn btn-sm btn-ghost" href="settings#alerts"><Icon Name="settings" Size="16" /> Alert settings</a>
 </div>
-<p class="muted small">New episodes of shows you watch or have on your watchlist, watchlist movies and new work from <a href="people">people you follow</a>, on the day they come out. Also titles friends <a href="recommendations">recommend to you</a>.</p>
+<p class="muted small">New episodes of shows you watch or have on your watchlist, watchlist movies and new work from <a href="people">people you follow</a>, on the day they come out. Also titles friends <a href="recommendations">recommend to you</a>, and when someone watches one you recommended them.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (data is null && error is null) { <Spinner /> }
@@ -30,7 +30,7 @@ else if (data is not null)
                         <img src="@Img.Poster(n.PosterPath, "w92")" alt="" loading="lazy" />
                         <div>
                             <div class="mini-title">@n.Title</div>
-                            <div class="muted small">@if (n.Recommendation) { <span>@(n.Detail is { } note ? $"“{note}”" : "Recommended to you")</span> } else if (n.Type == MediaType.Episode) { <Spoiler>@n.Detail</Spoiler> } else { <span>@(n.Detail is { Length: > 0 } d && d != "Out today" ? d : "Movie release")</span> }</div>
+                            <div class="muted small">@if (n.RecommendationWatched) { <span>@n.Detail</span> } else if (n.Recommendation) { <span>@(n.Detail is { } note ? $"“{note}”" : "Recommended to you")</span> } else if (n.Type == MediaType.Episode) { <Spoiler>@n.Detail</Spoiler> } else { <span>@(n.Detail is { Length: > 0 } d && d != "Out today" ? d : "Movie release")</span> }</div>
                         </div>
                         @if (!n.Read) { <span class="pill pill-sm">New</span> }
                     </a>

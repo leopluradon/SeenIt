@@ -44,6 +44,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<LibraryItem> Library => Set<LibraryItem>();
     public DbSet<TitleNote> Notes => Set<TitleNote>();
 
+    private bool checkingRecommendations;
+
+    /// <summary>After saving new plays, tells the people who recommended those titles (RecommendationWatchAlerts).</summary>
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        var plays = checkingRecommendations ? [] : ChangeTracker.Entries<WatchEvent>().Where(e => e.State == EntityState.Added).Select(e => e.Entity).ToList();
+        var saved = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        if (plays.Count > 0 && Database.IsRelational())
+        {
+            checkingRecommendations = true;
+            // An alert is a nice-to-have: it must never fail the play that was just saved.
+            try { await RecommendationWatchAlerts.NotifyAsync(this, plays, cancellationToken); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { Console.Error.WriteLine($"Recommendation watch alert failed: {ex}"); }
+            finally { checkingRecommendations = false; }
+        }
+        return saved;
+    }
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -168,7 +186,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.FromId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ToId).OnDelete(DeleteBehavior.Cascade);
         });
-        b.Entity<Notification>(e => e.HasOne<Recommendation>().WithMany().HasForeignKey(x => x.RecommendationId).OnDelete(DeleteBehavior.Cascade));
+        b.Entity<Notification>(e =>
+        {
+            e.HasOne<Recommendation>().WithMany().HasForeignKey(x => x.RecommendationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Recommendation>().WithMany().HasForeignKey(x => x.WatchedRecommendationId).OnDelete(DeleteBehavior.Cascade);
+        });
         b.Entity<PersonFollow>(e =>
         {
             e.HasKey(x => new { x.UserId, x.PersonId });
@@ -196,7 +218,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
         b.Entity<Notification>(e =>
         {
-            e.HasIndex(x => new { x.UserId, x.Type, x.TmdbId, x.SeasonNumber, x.EpisodeNumber }).IsUnique().AreNullsDistinct(false);
+            // One release alert per title/episode, but a recommendation of it, or a friend watching one you
+            // recommended, are separate alerts about the same title.
+            e.HasIndex(x => new { x.UserId, x.Type, x.TmdbId, x.SeasonNumber, x.EpisodeNumber, x.RecommendationId, x.WatchedRecommendationId })
+                .IsUnique().AreNullsDistinct(false);
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
             e.Property(x => x.Title).HasMaxLength(300);
             e.Property(x => x.Detail).HasMaxLength(400);

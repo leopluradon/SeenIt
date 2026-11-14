@@ -987,16 +987,21 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("WatchedRecommendationId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("RecommendationId");
 
+                    b.HasIndex("WatchedRecommendationId");
+
                     b.HasIndex("UserId", "CreatedAt");
 
-                    b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber")
+                    b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber", "RecommendationId", "WatchedRecommendationId")
                         .IsUnique();
 
-                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber"), false);
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "EpisodeNumber", "RecommendationId", "WatchedRecommendationId"), false);
 
                     b.ToTable("Notifications");
                 });
@@ -1773,6 +1778,11 @@ namespace SeenIt.Server.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("SeenIt.Server.Data.Recommendation", null)
+                        .WithMany()
+                        .HasForeignKey("WatchedRecommendationId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.PersonFollow", b =>
