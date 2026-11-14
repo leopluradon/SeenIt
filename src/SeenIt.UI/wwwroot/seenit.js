@@ -439,3 +439,72 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target instanceof HTMLInputElement && e.target.dataset.suggestOpen) e.preventDefault();
 }, true);
+
+/*
+ * Back / forward keeps your place. The browser restores scroll before Blazor has drawn the page (and
+ * before its data arrives), when the page is still too short, so you'd land at the top. Instead remember
+ * each page's position, and on Back wait until the page has rendered and is tall enough, then scroll there.
+ * Touching, scrolling or a key press cancels the restore. Same in the Android app, whose back button goes
+ * back through this history.
+ */
+(() => {
+    try { history.scrollRestoration = 'manual'; } catch { }
+    const KEY = 'seenit.scroll', MAX_PAGES = 100;
+    let saved = {};
+    try { saved = JSON.parse(sessionStorage.getItem(KEY) || '{}') || {}; } catch { saved = {}; }
+    const here = () => location.pathname + location.search;
+    let restoring = null, persistTimer = 0;
+
+    const persist = () => {
+        const keys = Object.keys(saved);
+        for (const k of keys.slice(0, Math.max(0, keys.length - MAX_PAGES))) delete saved[k];   // oldest first
+        try { sessionStorage.setItem(KEY, JSON.stringify(saved)); } catch { }
+    };
+    window.addEventListener('scroll', () => {
+        if (restoring) return;   // the page shrinking mid-restore isn't where you were
+        const k = here();
+        delete saved[k];         // re-insert, so the newest pages are kept
+        saved[k] = Math.round(window.scrollY);
+        clearTimeout(persistTimer);
+        persistTimer = setTimeout(persist, 300);
+    }, { passive: true });
+
+    window.addEventListener('popstate', () => {
+        const y = saved[here()];
+        if (y > 0) restore(y);
+    });
+
+    function restore(y) {
+        const token = {};
+        restoring = token;
+        const started = performance.now();
+        let changes = 0, lastChange = started;
+        // Wait for the new page to be drawn: a mutation after Back, then quiet for a moment.
+        const observer = new MutationObserver(() => { changes++; lastChange = performance.now(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+        const inputs = ['wheel', 'touchstart', 'keydown', 'mousedown'];
+        const stop = () => {
+            if (restoring === token) restoring = null;
+            observer.disconnect();
+            inputs.forEach(e => window.removeEventListener(e, stop, true));
+        };
+        inputs.forEach(e => window.addEventListener(e, stop, { capture: true, passive: true }));
+
+        const tick = () => {
+            if (restoring !== token) return;
+            const now = performance.now();
+            const max = document.documentElement.scrollHeight - window.innerHeight;
+            if (changes > 0 && max >= y - 2) {
+                if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+                // Done once the page has stopped changing (late images or rows could still push it).
+                if (now - lastChange > 400) return stop();
+            }
+            if (now - started > 5000) {   // never got tall enough: as close as it goes
+                if (changes > 0) window.scrollTo(0, Math.min(y, Math.max(0, max)));
+                return stop();
+            }
+            requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    }
+})();
