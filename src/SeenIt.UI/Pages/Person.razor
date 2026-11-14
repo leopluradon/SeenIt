@@ -123,9 +123,9 @@ else if (p is not null)
         <div class="section-head">
             <h2>Filmography</h2>
             <div class="segmented">
-                <button class="@(tab == "all" ? "on" : "")" @onclick='() => tab = "all"'>All</button>
-                <button class="@(tab == "movies" ? "on" : "")" @onclick='() => tab = "movies"'>Movies</button>
-                <button class="@(tab == "tv" ? "on" : "")" @onclick='() => tab = "tv"'>TV</button>
+                <button class="@(tab == "all" ? "on" : "")" @onclick='() => SetTab("all")'>All</button>
+                <button class="@(tab == "movies" ? "on" : "")" @onclick='() => SetTab("movies")'>Movies</button>
+                <button class="@(tab == "tv" ? "on" : "")" @onclick='() => SetTab("tv")'>TV</button>
             </div>
         </div>
         @if (Groups.Count > 1)
@@ -139,7 +139,7 @@ else if (p is not null)
                 }
             </div>
         }
-        <label class="check small seen-only"><input type="checkbox" @bind="seenOnly" /> Only show what I've watched</label>
+        <label class="check small seen-only"><input type="checkbox" @bind="seenOnly" @bind:after="Remember" /> Only show what I've watched</label>
         @{
             var rows = Rows(shown)
                 .Where(c => tab switch { "movies" => c.Type == MediaType.Movie, "tv" => c.Type == MediaType.Show, _ => true })
@@ -212,7 +212,15 @@ else if (p is not null)
     {
         if (!shown.Remove(g)) shown.Add(g);
         else if (shown.Count == 0) shown.Add(g);   // always keep one on
+        Remember();
     }
+
+    private void SetTab(string t) { tab = t; Remember(); }
+
+    // What you picked on each person's page this session, so Back (or coming back later) shows the same
+    // list, at the same length, and the scroll position can be restored.
+    private static readonly Dictionary<int, (string[] Shown, string Tab, bool SeenOnly)> Picked = [];
+    private void Remember() { if (p is not null) Picked[p.Id] = ([.. shown], tab, seenOnly); }
 
     /// <summary>One row per title across the chosen groups: "Director, Screenplay" and, when acting is shown with crew, "as Kambei".</summary>
     private List<PersonCreditDto> Rows(IReadOnlySet<string> groups)
@@ -288,9 +296,18 @@ else if (p is not null)
 
     protected override async Task OnParametersSetAsync()
     {
-        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; shown = []; }
+        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; seenOnly = false; shown = []; }
         await Load();
-        if (p is not null && shown.Count == 0) shown = Groups.Count > 0 ? [Groups[0]] : [Acting];
+        if (p is not null && shown.Count == 0)
+        {
+            if (Picked.TryGetValue(p.Id, out var was) && was.Shown.Any(g => Groups.Contains(g)))
+            {
+                shown = [.. was.Shown.Where(g => Groups.Contains(g))];
+                tab = was.Tab;
+                seenOnly = was.SeenOnly;
+            }
+            else shown = Groups.Count > 0 ? [Groups[0]] : [Acting];
+        }
     }
 
     private async Task Load()
