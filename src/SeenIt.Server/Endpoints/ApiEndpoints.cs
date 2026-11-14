@@ -416,6 +416,9 @@ public static class ApiEndpoints
         static AlertSettingsDto Alerts(AppUser u, ReleaseAlertService a, EmailService email) => new(u.ReleaseEmails, email.Enabled,
             $"{a.BaseUrl()}cal/{u.CalendarToken}.ics", u.MonthlyBackup,
             $"{a.BaseUrl()}feeds/{u.CalendarToken}/watchlist.rss", $"{a.BaseUrl()}feeds/{u.CalendarToken}/history.rss");
+        // Profile badges: everything you've earned (and what's next), for picking which to show.
+        g.MapGet("/badges", (ClaimsPrincipal p, BadgeService b, CancellationToken ct) => b.AllAsync(p.UserId(), ct));
+
         // Push notifications for alerts (browsers and installed web apps).
         g.MapGet("/push", async (ClaimsPrincipal p, PushService push, CancellationToken ct) =>
             new PushConfigDto(push.Enabled, push.PublicKey, await push.DevicesAsync(p.UserId(), ct)));

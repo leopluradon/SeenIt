@@ -24,7 +24,7 @@ public class SettingsBatchTests
         var fan = User("fan");
         db.Users.AddRange(picky, open, fan);
         await db.SaveChangesAsync();
-        var social = new SocialService(db, null!, null!, null!, null!, null!);
+        var social = new SocialService(db, null!, null!, null!, null!, null!, null!);
 
         Assert.Equal(new FollowResult(true), await social.FollowAsync(fan.Id, "picky", true, default));
         Assert.Equal(new FollowResult(false), await social.FollowAsync(fan.Id, "open", true, default));
@@ -49,7 +49,7 @@ public class SettingsBatchTests
         var a = User("a"); var b = User("b");
         db.Users.AddRange(picky, a, b);
         await db.SaveChangesAsync();
-        var social = new SocialService(db, null!, null!, null!, null!, null!);
+        var social = new SocialService(db, null!, null!, null!, null!, null!, null!);
         await social.FollowAsync(a.Id, "picky", true, default);
         await social.FollowAsync(b.Id, "picky", true, default);
         await social.ApproveAllAsync(picky.Id, default);

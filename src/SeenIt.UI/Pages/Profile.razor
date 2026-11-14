@@ -18,7 +18,11 @@ else if (p is not null)
         @if (p.Banner is { } banner) { <div class="profile-banner" style="background-image: url('@Img.Backdrop(banner, "w1280")')" aria-hidden="true"></div> }
         <Avatar Name="@p.User.Name" Url="@p.User.Avatar" Class="avatar-lg" />
         <div class="profile-info">
-            <h1>@p.User.Name @if (p.Badge is { } badge) { <span class="profile-badge" title="Milestone"><Icon Name="star" Size="12" /> @badge</span> }</h1>
+            <h1>@p.User.Name</h1>
+            @if (p.Badges is { Count: > 0 } pinned)
+            {
+                <div class="profile-badges" aria-label="Badges">@foreach (var b in pinned) { <BadgeChip Badge="b" @key="b.Id" /> }</div>
+            }
             <div class="muted small">
                 @@@p.User.UserName · joined @p.JoinedAt.ToLocalTime().ToString("MMMM yyyy")
                 @if (p.User.FollowsYou) { <span> · follows you</span> }
@@ -55,7 +59,7 @@ else if (p is not null)
             <span class="muted small only-mobile">Use the arrows to move, and the corner to resize.</span>
             <div class="inline">
                 <button class="btn btn-sm btn-primary" @onclick="() => adding = true"><Icon Name="plus" Size="14" /> Add widget</button>
-                <button class="btn btn-sm" @onclick="OpenStyle">Banner & color</button>
+                <button class="btn btn-sm" @onclick="OpenStyle">Style & badges</button>
                 <button class="btn btn-sm" @onclick="ResetDraft">Reset</button>
                 <button class="btn btn-sm" @onclick="CancelEditing">Cancel</button>
                 <button class="btn btn-sm btn-primary" @onclick="Save" disabled="@saving">@(saving ? "Saving…" : "Done")</button>
@@ -166,7 +170,7 @@ else if (p is not null)
         }
     </Modal>
 
-    <Modal Open="styleOpen" OpenChanged="v => styleOpen = v" Title="Banner & color">
+    <Modal Open="styleOpen" OpenChanged="v => styleOpen = v" Title="Banner, color & badges">
         <div class="form-stack">
             <h4 class="pw-cat-head">Banner</h4>
             <p class="muted small">A movie or show whose backdrop sits behind your name.@if (styleBannerTitle is not null) { <span> Now: <b>@styleBannerTitle</b>.</span> }</p>
@@ -185,15 +189,44 @@ else if (p is not null)
                 }
             </div>
 
-            <h4 class="pw-cat-head">Badge</h4>
-            <p class="muted small">A milestone shown next to your name (to people who can see your stats).</p>
-            @if (milestones is null) { <Spinner /> }
+            <h4 class="pw-cat-head">Badges</h4>
+            <p class="muted small">Pick up to @UserPrefs.MaxBadges to show next to your name, in the order you tap them (to people who can see your stats). Tiered ones move up by themselves as you go.</p>
+            @if (allBadges is null) { <Spinner /> }
             else
             {
-                <select @bind="styleBadge" aria-label="Badge">
-                    <option value="">None</option>
-                    @foreach (var m in milestones) { <option value="@m">@m</option> }
-                </select>
+                var earned = allBadges.Where(b => b.Earned).ToList();
+                @if (earned.Count == 0) { <p class="muted small">None yet. Watch, rate and finish a few things and they'll start coming.</p> }
+                <div class="badge-picker" role="group" aria-label="Badges to show">
+                    @foreach (var b in earned)
+                    {
+                        var at = styleBadges.IndexOf(b.Id);
+                        <button type="button" class="badge-pick @(at >= 0 ? "on" : "")" aria-pressed="@(at >= 0)" @key="b.Id"
+                                disabled="@(at < 0 && styleBadges.Count >= UserPrefs.MaxBadges)" @onclick="() => ToggleBadge(b.Id)">
+                            <BadgeChip Badge="b" Selected="at >= 0" />
+                            @if (at >= 0) { <span class="badge-order">@(at + 1)</span> }
+                            @if (b.Next is { } next && b.Progress is { } pr && b.Goal is { } goal)
+                            {
+                                <span class="badge-next" title="@($"{pr:N0} of {goal:N0}")">Next: @next <span class="badge-bar"><span style="width:@(Math.Min(100, pr * 100 / Math.Max(1, goal)))%"></span></span></span>
+                            }
+                        </button>
+                    }
+                </div>
+                var locked = allBadges.Where(b => !b.Earned).ToList();
+                @if (locked.Count > 0)
+                {
+                    <details class="badge-locked">
+                        <summary>Still to earn (@locked.Count)</summary>
+                        <div class="badge-picker">
+                            @foreach (var b in locked)
+                            {
+                                <div class="badge-pick" @key="b.Id">
+                                    <BadgeChip Badge="b" />
+                                    <span class="badge-next">@b.Description@if (b.Progress is { } pr && b.Goal is { } goal) { <span>: @pr.ToString("N0") of @goal.ToString("N0")</span><span class="badge-bar"><span style="width:@(Math.Min(100, pr * 100 / Math.Max(1, goal)))%"></span></span> }</span>
+                                </div>
+                            }
+                        </div>
+                    </details>
+                }
             }
             <div class="inline">
                 <button class="btn btn-primary" @onclick="SaveStyle" disabled="@saving">Save</button>
@@ -225,8 +258,14 @@ else if (p is not null)
     // Banner, accent and badge (saved with your settings, not the layout).
     private bool styleOpen;
     private MediaRef? styleBanner;
-    private string? styleBannerTitle, styleAccent, styleBadge;
-    private List<string>? milestones;
+    private string? styleBannerTitle, styleAccent;
+    private List<BadgeDto>? allBadges;
+    private List<string> styleBadges = [];
+
+    private void ToggleBadge(string id)
+    {
+        if (!styleBadges.Remove(id) && styleBadges.Count < UserPrefs.MaxBadges) styleBadges.Add(id);
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -433,12 +472,10 @@ else if (p is not null)
         styleBanner = Fmt.Prefs.ProfileBanner;
         styleBannerTitle = styleBanner is null ? null : "your current pick";
         styleAccent = Fmt.Prefs.Accent;
-        styleBadge = Fmt.Prefs.ProfileBadge ?? "";
-        if (milestones is null)
-        {
-            try { milestones = (await Api.MoreStatsAsync()).Milestones.Select(m => m.Label).Distinct().ToList(); }
-            catch { milestones = []; }
-        }
+        // What's showing now (an older single badge comes back as its badge family).
+        styleBadges = (Fmt.Prefs.ProfileBadges ?? p?.Badges?.Select(b => b.Id) ?? []).ToList();
+        try { allBadges = await Api.BadgesAsync(); }
+        catch { allBadges = []; }
     }
 
     private void PickBanner(Suggestion s)
@@ -452,13 +489,13 @@ else if (p is not null)
         saving = true;
         try
         {
-            var prefs = (Fmt.Prefs with { ProfileBanner = styleBanner, Accent = styleAccent, ProfileBadge = string.IsNullOrEmpty(styleBadge) ? null : styleBadge }).Clean();
+            var prefs = (Fmt.Prefs with { ProfileBanner = styleBanner, Accent = styleAccent, ProfileBadges = styleBadges.ToList(), ProfileBadge = null }).Clean();
             await Api.SavePrefsAsync(prefs);
             Session.Update(me => me with { Prefs = prefs });
             await Theme.ApplyAccentAsync(prefs.Accent);
             styleOpen = false;
             var fresh = await Api.ProfileAsync(Name);
-            p = p is null ? fresh : p with { Banner = fresh.Banner, Accent = fresh.Accent, Badge = fresh.Badge };
+            p = p is null ? fresh : p with { Banner = fresh.Banner, Accent = fresh.Accent, Badge = fresh.Badge, Badges = fresh.Badges };
         }
         catch (Exception ex) { Toasts.Show($"Couldn't save: {ex.Message}", error: true); }
         finally { saving = false; }

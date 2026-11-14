@@ -90,6 +90,7 @@ builder.Services.AddScoped<JellyfinService>();
 builder.Services.AddScoped<CheckInService>();
 builder.Services.AddScoped<PushService>();
 builder.Services.AddScoped<EmbedService>();
+builder.Services.AddScoped<BadgeService>();
 builder.Services.AddHostedService<PushWorker>();
 builder.Services.AddHttpClient("webpush", c => c.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddScoped<SocialService>();

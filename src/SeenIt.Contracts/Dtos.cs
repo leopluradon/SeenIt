@@ -131,13 +131,15 @@ public record UserPrefs(
     IReadOnlyDictionary<string, string>? PageSorts = null,         // last sort picked per page (UiPrefs.SortPages)
     IReadOnlyList<SavedView>? SavedViews = null,     // filters saved as quick chips on History, Watchlist and Progress
     MediaRef? ProfileBanner = null,                  // a movie or show whose backdrop sits behind your name on your profile
-    string? ProfileBadge = null,                     // a milestone shown next to your name (its label)
+    string? ProfileBadge = null,                     // older single badge (a milestone label); superseded by ProfileBadges
     AutoRefresh AutoRefresh = AutoRefresh.Always,    // Ask: a "Refresh" bar instead of reloading the page under you
     bool AlertRecWatched = true,                     // superseded by Alerts[RecWatched]; still read when that isn't set
-    IReadOnlyDictionary<AlertKind, AlertDelivery>? Alerts = null)   // per kind of alert; missing = Both
+    IReadOnlyDictionary<AlertKind, AlertDelivery>? Alerts = null,   // per kind of alert; missing = Both
+    IReadOnlyList<string>? ProfileBadges = null)     // badge ids shown next to your name, in order (up to MaxBadges)
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
+    public const int MaxBadges = 5;
     public static readonly (string Key, string Name)[] ScoreSources =
         [("imdb", "IMDb"), ("tomatoes", "Rotten Tomatoes"), ("popcorn", "RT audience"), ("metacritic", "Metacritic"),
          ("metacriticuser", "Metacritic users"), ("letterboxd", "Letterboxd"), ("trakt", "Trakt"), ("rogerebert", "Roger Ebert"), ("myanimelist", "MyAnimeList")];
@@ -186,6 +188,7 @@ public record UserPrefs(
     public UserPrefs Clean() => this with
     {
         Alerts = Alerts?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
+        ProfileBadges = ProfileBadges?.Where(b => b is { Length: > 0 and <= 60 }).Distinct().Take(MaxBadges).ToList(),
         StartPage = StartPages.Contains(StartPage) ? StartPage : "home",
         Scores = Scores?.Where(s => ScoreSources.Any(x => x.Key == s)).Distinct().ToList(),
         HomeCounts = HomeCounts?.Where(kv => UiPrefs.HomeSections.Any(h => h.Key == kv.Key)).ToDictionary(kv => kv.Key, kv => Math.Clamp(kv.Value, 4, 40)),
@@ -997,7 +1000,17 @@ public record ProfileDto(
     IReadOnlyList<ProfileWidget>? Layout = null,    // the widgets this viewer may see, in order
     string? Banner = null,                          // backdrop image path behind the name
     string? Accent = null,                          // the owner's accent color key
-    string? Badge = null);                          // a milestone pinned next to the name
+    string? Badge = null,                           // the first pinned badge's label (for app versions before Badges)
+    IReadOnlyList<BadgeDto>? Badges = null);        // badges pinned next to the name, in the owner's order
+
+/// <summary>Badge tiers, lowest first; Special is for one-off badges with no ladder.</summary>
+public enum BadgeTier { Bronze, Silver, Gold, Platinum, Special }
+/// <summary>
+/// A badge family ("movies", "genre:Horror") at the tier reached. Locked (not Earned) badges carry the first tier's
+/// name and the progress toward it, for the picker. Progress/Goal: toward the next tier (null at the top).
+/// </summary>
+public record BadgeDto(string Id, string Label, string Icon, BadgeTier Tier, string Description, bool Earned,
+    long? Progress = null, long? Goal = null, string? Next = null);
 
 /// <summary>A movie or show the user marked as a favorite, in their order.</summary>
 public record FavoriteEntry(MediaSummary Media, DateTimeOffset AddedAt);

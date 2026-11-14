@@ -279,6 +279,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task MarkNotificationsReadAsync() => SendAsync(HttpMethod.Post, "api/notifications/read");
     public Task<AlertSettingsDto> AlertSettingsAsync() => GetAsync<AlertSettingsDto>("api/alerts");
     public Task<PushConfigDto> PushAsync() => GetAsync<PushConfigDto>("api/push");
+    public Task<List<BadgeDto>> BadgesAsync() => GetAsync<List<BadgeDto>>("api/badges");
     public Task PushSubscribeAsync(PushSubscribeRequest r) => SendAsync(HttpMethod.Post, "api/push/subscribe", r);
     public Task PushUnsubscribeAsync(string endpoint) => SendAsync(HttpMethod.Post, "api/push/unsubscribe", new PushUnsubscribeRequest(endpoint));
     public Task PushTestAsync() => SendAsync(HttpMethod.Post, "api/push/test", new { });

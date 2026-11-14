@@ -1,0 +1,16 @@
+@* A profile badge: an icon in a tier-colored medal, and its name. Locked ones (in the picker) are greyed. *@
+<span class="badge-chip tier-@Badge.Tier.ToString().ToLowerInvariant() @(Badge.Earned ? "" : "locked") @(Selected ? "selected" : "")"
+      title="@Tip">
+    <span class="badge-medal" aria-hidden="true"><Icon Name="@Badge.Icon" Size="@(Large ? 18 : 13)" /></span>
+    <span class="badge-name">@Badge.Label</span>
+</span>
+@code {
+    [Parameter, EditorRequired] public BadgeDto Badge { get; set; } = default!;
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public bool Selected { get; set; }
+
+    private string Tip => Badge.Earned
+        ? $"{Badge.Label}: {Badge.Description}" + (Badge.Tier is BadgeTier.Special ? "" : $" ({Badge.Tier.ToString().ToLowerInvariant()})")
+            + (Badge.Next is { } n && Badge.Progress is { } p && Badge.Goal is { } g ? $". Next: {n} ({p:N0}/{g:N0})" : "")
+        : $"{Badge.Description}. {(Badge.Progress is { } lp && Badge.Goal is { } lg ? $"{lp:N0} of {lg:N0}" : "Not yet")}";
+}

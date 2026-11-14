@@ -5,7 +5,7 @@ using SeenIt.Server.Data;
 namespace SeenIt.Server.Services;
 
 /// <summary>Following, profiles, the friends feed and taste comparisons.</summary>
-public class SocialService(AppDbContext db, TrackingService tracking, ListService lists, CheckInService checkIns, UserDataCache cache, CatalogService catalog)
+public class SocialService(AppDbContext db, TrackingService tracking, ListService lists, CheckInService checkIns, UserDataCache cache, CatalogService catalog, BadgeService badges)
 {
     public Task<AppUser?> FindAsync(string userName) =>
         db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.NormalizedUserName == userName.Trim().ToUpperInvariant());
@@ -67,7 +67,8 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         // Banner and accent are part of how the profile looks, like the picture; the badge is a stat.
         var prefs = owner.Prefs();
         var banner = await BannerAsync(prefs.ProfileBanner, ct);
-        var badge = See(ProfilePart.Stats) ? prefs.ProfileBadge : null;
+        // Badges are stats: only for people who may see those. Always worked out, so always earned.
+        var pinned = See(ProfilePart.Stats) ? await badges.PinnedAsync(owner, prefs, ct) : [];
         if (!canView)
             return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, false, followers, followingCount, null, null, [], [], publicLists, Layout: layout,
                 Banner: banner, Accent: prefs.Accent);
@@ -86,7 +87,8 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             watchingNow,
             See(ProfilePart.Stats) ? await StatsAsync(owner.Id, ct) : null,
             recent, topRated, publicLists,
-            See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null, layout, banner, prefs.Accent, badge);
+            See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null, layout, banner, prefs.Accent,
+            pinned.FirstOrDefault()?.Label, pinned);
     }
 
     /// <summary>The backdrop of the movie or show picked as a profile banner (fetched from TMDB the first time).</summary>
