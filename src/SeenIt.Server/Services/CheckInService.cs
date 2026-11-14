@@ -13,6 +13,9 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
     /// <summary>A Jellyfin session that hasn't pinged in this long is over, whatever its runtime says (closed player, paused and walked away).</summary>
     private static readonly TimeSpan QuietLimit = TimeSpan.FromHours(1);
 
+    /// <summary>A Jellyfin player paused for this long is treated as walked away from.</summary>
+    public static readonly TimeSpan PauseLimit = TimeSpan.FromMinutes(30);
+
     public async Task<NowWatchingDto?> GetAsync(Guid userId, CancellationToken ct)
     {
         var c = await db.CheckIns.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct);
@@ -22,7 +25,8 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
     public static bool IsLive(CheckIn c) =>
         c.Source == WatchSource.Manual
             ? c.EndsAt > DateTimeOffset.UtcNow
-            : c.EndsAt + StaleGrace > DateTimeOffset.UtcNow && c.LastPingAt + QuietLimit > DateTimeOffset.UtcNow;
+            : c.EndsAt + StaleGrace > DateTimeOffset.UtcNow && c.LastPingAt + QuietLimit > DateTimeOffset.UtcNow
+              && (c.PausedAt == null || c.PausedAt + PauseLimit > DateTimeOffset.UtcNow);
 
     /// <summary>Starts (or replaces) the user's check-in. endsAt defaults to start + runtime. A player passes startedAt
     /// (now minus its playback position) so the progress bar matches where it is, even when resumed partway through.</summary>
@@ -59,6 +63,7 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
             row.EndsAt = endsAt ?? now.AddMinutes(runtime);
             row.Source = source;
             row.LastPingAt = now;
+            row.PausedAt = null;
         }
 
         var row = await db.CheckIns.FirstOrDefaultAsync(x => x.UserId == userId, ct);
@@ -107,7 +112,8 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
         }
         var staleBefore = now - StaleGrace;
         var quietBefore = now - QuietLimit;
-        var stale = db.CheckIns.Where(x => x.Source != WatchSource.Manual && (x.EndsAt < staleBefore || x.LastPingAt < quietBefore));
+        var pausedBefore = now - PauseLimit;
+        var stale = db.CheckIns.Where(x => x.Source != WatchSource.Manual && (x.EndsAt < staleBefore || x.LastPingAt < quietBefore || x.PausedAt < pausedBefore));
         var staleUsers = await stale.Select(x => x.UserId).ToListAsync(ct);
         if (staleUsers.Count > 0)
         {

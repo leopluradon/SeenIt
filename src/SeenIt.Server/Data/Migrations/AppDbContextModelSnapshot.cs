@@ -400,6 +400,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<DateTimeOffset>("LastPingAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("PausedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int?>("SeasonNumber")
                         .HasColumnType("integer");
 

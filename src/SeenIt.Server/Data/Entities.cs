@@ -315,6 +315,8 @@ public class CheckIn
     public WatchSource Source { get; set; }
     /// <summary>When the player last reported in. Jellyfin check-ins that go quiet stop counting as watching.</summary>
     public DateTimeOffset LastPingAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>When a Jellyfin player went on reporting "paused"; null while playing. A long pause stops counting as watching.</summary>
+    public DateTimeOffset? PausedAt { get; set; }
 }
 
 /// <summary>A single-use sign-up link. Signing up with it makes the inviter and the new member follow each other.</summary>

@@ -213,14 +213,30 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
             ? DateTimeOffset.UtcNow - TimeSpan.FromTicks(Math.Max(0, pos))
             : null;
 
+        // A paused player keeps reporting the same spot: note when the pause began (it stops counting as watching after a while).
+        if (p.NotificationType == "PlaybackProgress" && p.IsPaused == true && current is not null && current.Source == source && CheckInService.IsLive(current))
+        {
+            if (current.PausedAt is null || DateTimeOffset.UtcNow - current.LastPingAt > TimeSpan.FromMinutes(1))
+            {
+                var now = DateTimeOffset.UtcNow;
+                await db.CheckIns.Where(c => c.UserId == user.Id)
+                    .ExecuteUpdateAsync(c => c.SetProperty(x => x.LastPingAt, now).SetProperty(x => x.PausedAt, x => x.PausedAt ?? now), ct);
+                if (current.PausedAt is null) await live.NotifyWithFollowersAsync(db, user.Id, ct);
+            }
+            return "Paused";
+        }
+        // Paused with nothing live (the pause ran out, or it was never started here): don't bring it back.
+        if (p.NotificationType == "PlaybackProgress" && p.IsPaused == true) return "Paused";
+
         // Progress pings arrive every few seconds; only touch the database when something changed.
         if (p.NotificationType == "PlaybackProgress" && current is not null && current.Source == source && CheckInService.IsLive(current)
-            && (endsAt is null || p.IsPaused == true || Math.Abs((current.EndsAt - endsAt.Value).TotalMinutes) < 2)
+            && (endsAt is null || Math.Abs((current.EndsAt - endsAt.Value).TotalMinutes) < 2)
             && (startedAt is null || Math.Abs((current.StartedAt - startedAt.Value).TotalMinutes) < 2))
         {
             // Nothing to change, but note the player is still reporting so the check-in isn't dropped as quiet.
-            if (DateTimeOffset.UtcNow - current.LastPingAt > TimeSpan.FromMinutes(1))
-                await db.CheckIns.Where(c => c.UserId == user.Id).ExecuteUpdateAsync(c => c.SetProperty(x => x.LastPingAt, DateTimeOffset.UtcNow), ct);
+            if (current.PausedAt is not null || DateTimeOffset.UtcNow - current.LastPingAt > TimeSpan.FromMinutes(1))
+                await db.CheckIns.Where(c => c.UserId == user.Id)
+                    .ExecuteUpdateAsync(c => c.SetProperty(x => x.LastPingAt, DateTimeOffset.UtcNow).SetProperty(x => x.PausedAt, (DateTimeOffset?)null), ct);
             return "Still watching";
         }
 
