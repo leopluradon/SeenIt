@@ -2,6 +2,7 @@
 @page "/u/{UserName}/history"
 @* No [Authorize]: a public profile's history is open to anyone; your own needs signing in (below). *@
 @inject ApiClient Api
+@inject Confirm Confirmer
 @inject SessionState Session
 @inject Toasts Toasts
 @inject NavigationManager Nav
@@ -439,7 +440,7 @@ else if (data is not null)
     private async Task DeleteSelected()
     {
         var ids = selected.ToList();
-        if (ids.Count > 1 && !await Js.InvokeAsync<bool>("confirm", $"Delete {ids.Count} plays?")) return;
+        if (ids.Count > 1 && !await Confirmer.AskAsync($"Delete {ids.Count} plays?", "They go from your history. You can undo right after.", "Delete", danger: true)) return;
         bulkBusy = true;
         try
         {

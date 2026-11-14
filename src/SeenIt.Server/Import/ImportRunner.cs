@@ -16,6 +16,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
     private readonly Dictionary<ImportRef, int?> _resolved = [];
     private readonly Dictionary<(MediaType, int), bool> _metaOk = [];
     private readonly ImportUndo _undo = new();
+    private readonly List<ImportCheck> _checks = [];
 
     /// <summary>What rows get tagged with, so the import can be undone. The Letterboxd feed sync runs with an empty id: nothing to undo.</summary>
     private static Guid? Tag(ImportJob job) => job.Id == Guid.Empty ? null : job.Id;
@@ -71,6 +72,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         if (Tag(job) is not null)
         {
             job.UndoJson = ImportUndo.Merge(job.UndoJson, _undo);
+            job.ChecksJson = ImportCheck.Merge(job.ChecksJson, _checks);
             if (!resolving) job.PendingJson = PendingImport.Serialize(PendingImport.From(parsed, _resolved));
         }
         if (resolving) { await db.SaveChangesAsync(ct); return; }
@@ -391,11 +393,33 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             // Only an exact title counts. TMDB's first search result is often a different film
             // ("300" gave "My Poetic Works 300 Yen"), and a wrong match is worse than an unmatched
             // one, which at least gets listed. Release years differ between sources surprisingly
-            // often (300 is 2006 on Letterboxd, 2007 on TMDB), so neighboring years are tried too.
-            foreach (var year in r.Year is { } y ? new int?[] { y, y + 1, y - 1 } : [null])
-                if (Exact((await tmdb.SearchMovieAsync(r.Title, year, ct))?.Results, r.Title, r.Year) is { } m) return m.Id;
-            if (r.Year is not null && Exact((await tmdb.SearchMovieAsync(r.Title, null, ct))?.Results, r.Title, r.Year, maxYearGap: 2) is { } any)
-                return any.Id;
+            // often (300 is 2006 on Letterboxd, 2007 on TMDB), so neighboring years count too.
+            // Searching with the year finds an obscure film of that year; without it, the well-known ones.
+            var candidates = new List<TmdbListItem>();
+            void Add(IEnumerable<TmdbListItem> found) { foreach (var m in found) if (candidates.All(c => c.Id != m.Id)) candidates.Add(m); }
+            if (r.Year is { } y)
+            {
+                Add(Matches((await tmdb.SearchMovieAsync(r.Title, y, ct))?.Results, r.Title, y));
+                Add(Matches((await tmdb.SearchMovieAsync(r.Title, null, ct))?.Results, r.Title, y));
+                if (candidates.Count == 0)
+                    foreach (var near in new[] { y + 1, y - 1 })
+                        Add(Matches((await tmdb.SearchMovieAsync(r.Title, near, ct))?.Results, r.Title, y));
+                if (candidates.Count == 0)
+                    Add(Matches((await tmdb.SearchMovieAsync(r.Title, null, ct))?.Results, r.Title, y, maxYearGap: 2));
+            }
+            else Add(Matches((await tmdb.SearchMovieAsync(r.Title, null, ct))?.Results, r.Title, null));
+
+            if (candidates.Count == 1) return candidates[0].Id;
+            if (candidates.Count > 1)
+            {
+                // Namesakes (Under the Skin: Glazer's film is 2014 on TMDB, a little-known one is 2013, and
+                // Letterboxd says 2013). Letterboxd's own page says which it meant; otherwise take the best
+                // known one and list it on the import to check.
+                if (await LetterboxdTmdbIdAsync(r.Url, ct) is { } said) return said;
+                var pick = Choose(candidates);
+                AddCheck(MediaType.Movie, pick, r.Label, candidates);
+                return pick.Id;
+            }
             // Retitled on TMDB ("Glass Onion" is "Glass Onion: A Knives Out Mystery"): Letterboxd's
             // own page for the film names its TMDB id.
             return await LetterboxdTmdbIdAsync(r.Url, ct);
@@ -403,7 +427,13 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
 
         var shows = await tmdb.SearchShowAsync(r.Title, r.Year, ct) is { Results.Count: > 0 } withYear
             ? withYear : await tmdb.SearchShowAsync(r.Title, null, ct);
-        if (Exact(shows?.Results, r.Title, r.Year, maxYearGap: 99) is { } show) return show.Id;
+        var showMatches = Matches(shows?.Results, r.Title, r.Year, maxYearGap: 99);
+        if (showMatches.Count > 0)
+        {
+            // "The Office" (2005) or (2001): nearest year wins, and namesakes go on the list to check.
+            if (showMatches.Count > 1) AddCheck(MediaType.Show, showMatches[0], r.Label, showMatches);
+            return showMatches[0].Id;
+        }
 
         // TV Time and others tell same-named shows apart with a suffix TMDB doesn't use:
         // "The Office (US)", "Doctor Who (2005)", "MasterChef (IT)".
@@ -447,7 +477,11 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
     }
 
     /// <summary>A result whose title (or original title) matches, nearest in year first.</summary>
-    public static TmdbListItem? Exact(List<TmdbListItem>? results, string title, int? year, int maxYearGap = 1)
+    public static TmdbListItem? Exact(List<TmdbListItem>? results, string title, int? year, int maxYearGap = 1) =>
+        Matches(results, title, year, maxYearGap).FirstOrDefault();
+
+    /// <summary>Every result whose title (or original title) matches, within the year gap, nearest in year first.</summary>
+    public static List<TmdbListItem> Matches(List<TmdbListItem>? results, string? title, int? year, int maxYearGap = 1)
     {
         var want = Normalize(title);
         return (results ?? [])
@@ -455,10 +489,24 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             .Select(x => (x, Gap: year is { } y && YearOf(x) is { } ry ? Math.Abs(ry - y) : 0))
             .Where(x => x.Gap <= maxYearGap)
             .OrderBy(x => x.Gap)   // stable: keeps TMDB's popularity order between equals
-            .Select(x => x.x).FirstOrDefault();
+            .Select(x => x.x).ToList();
     }
 
-    private static int? YearOf(TmdbListItem x) =>
+    /// <summary>
+    /// Among same-named films a year or so apart, the far better known one is nearly always meant: a year's
+    /// difference is common between sites, a famous film being logged as its obscure namesake isn't.
+    /// </summary>
+    public static TmdbListItem Choose(List<TmdbListItem> candidates) =>
+        candidates.OrderByDescending(c => c.Popularity ?? 0).First();
+
+    private void AddCheck(MediaType type, TmdbListItem pick, string label, IEnumerable<TmdbListItem> all)
+    {
+        if (_checks.Any(c => c.Type == type && c.TmdbId == pick.Id)) return;
+        _checks.Add(new ImportCheck(type, pick.Id, label,
+            all.Where(c => c.Id != pick.Id).Take(5).Select(c => new ImportCheckOption(c.Id, c.Title ?? c.Name ?? "", YearOf(c), c.PosterPath)).ToList()));
+    }
+
+    public static int? YearOf(TmdbListItem x) =>
         (x.ReleaseDate ?? x.FirstAirDate) is { Length: >= 4 } d && int.TryParse(d[..4], out var y) ? y : null;
 
     /// <summary>

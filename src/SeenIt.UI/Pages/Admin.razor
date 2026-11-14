@@ -2,6 +2,7 @@
 @page "/admin/{Tab}"
 @attribute [Authorize]
 @inject ApiClient Api
+@inject Confirm Confirmer
 @inject SessionState Session
 @inject Toasts Toasts
 @inject IJSRuntime Js
@@ -475,7 +476,7 @@ else
 
     private async Task ResetLink(AdminUser u)
     {
-        if (!await Js.InvokeAsync<bool>("confirm", $"Create a password reset link for {u.UserName}? Anyone with the link can set a new password for this account for the next 2 hours.")) return;
+        if (!await Confirmer.AskAsync("Create a reset link?", $"Anyone with the link can set a new password for {u.UserName} for the next 2 hours.", "Create link")) return;
         try
         {
             if (await Api.AdminResetLinkAsync(u.Id) is { } link) resetLinks[u.Id] = link;

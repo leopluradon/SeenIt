@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @implements IDisposable
 @inject ApiClient Api
+@inject Confirm Confirmer
 @inject Toasts Toasts
 @inject SessionState Session
 @inject IServerConfig Server
@@ -855,13 +856,40 @@ else { <h1>Settings</h1> }
                                     </ul>
                                 </details>
                             }
-                            else if (j.Unmatched.Count > 0)
+                            @if (j.Checks is { Count: > 0 } chk)
+                            {
+                                <details class="small match-checks" open="@(chk.Count <= 10)">
+                                    <summary>Check these matches (@chk.Count): TMDB has more than one title by these names</summary>
+                                    <ul class="match-check-list">
+                                        @foreach (var c in chk)
+                                        {
+                                            <li @key="(c.Type, c.TmdbId)">
+                                                <div class="muted">In your import: <b>@c.Label</b></div>
+                                                <div class="match-choice picked">
+                                                    <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
+                                                    <span class="match-choice-main"><span class="muted">Matched to</span> <a href="@Fmt.Href(c.Type, c.TmdbId)"><b>@c.Title</b>@(c.Year is { } y ? $" ({y})" : "")</a></span>
+                                                    <button class="btn btn-sm" disabled="@checking" @onclick="() => ResolveCheck(j, c, null)"><Icon Name="check" Size="14" /> That's right</button>
+                                                </div>
+                                                @foreach (var o in c.Others)
+                                                {
+                                                    <div class="match-choice" @key="o.TmdbId">
+                                                        <img src="@Img.Poster(o.PosterPath, "w92")" alt="" loading="lazy" />
+                                                        <span class="match-choice-main"><a href="@Fmt.Href(c.Type, o.TmdbId)"><b>@o.Title</b>@(o.Year is { } oy ? $" ({oy})" : "")</a></span>
+                                                        <button class="btn btn-sm" disabled="@checking" @onclick="() => ResolveCheck(j, c, o)">It was this one</button>
+                                                    </div>
+                                                }
+                                            </li>
+                                        }
+                                    </ul>
+                                </details>
+                            }
+                            @if (j.Pending is not { Count: > 0 } && j.Unmatched.Count > 0)
                             {
                                 <details class="small"><summary>Which couldn't be matched (@j.Unmatched.Count)</summary><ul>@foreach (var u in j.Unmatched) { <li>@u</li> }</ul></details>
                             }
                             <div class="inline spread">
                                 <span class="muted small">@j.CreatedAt.ToLocalTime().ToString(Fmt.DateTimeLong)@(j.UndoneAt is { } undone ? $" · undone {(undone.ToLocalTime()).ToString(Fmt.DateLong)}" : "")</span>
-                                @if (j.CanUndo) { <button class="btn btn-sm btn-ghost" disabled="@undoing" @onclick="() => UndoImport(j)">Undo this import</button> }
+                                @if (j.CanUndo) { <button class="btn btn-sm" disabled="@undoing" @onclick="() => UndoImport(j)">Undo this import</button> }
                             </div>
                         </div>
                     }
@@ -1066,10 +1094,26 @@ else { <h1>Settings</h1> }
     private Guid matchJob;
     private PendingTitle? matching;
     private bool undoing;
+    private bool checking;
+
+    /// <summary>A match check answered: keep SeenIt's pick, or move everything to the other title.</summary>
+    private async Task ResolveCheck(ImportJobDto j, MatchCheck c, MatchOption? to)
+    {
+        checking = true;
+        try
+        {
+            var r = await Api.ResolveMatchCheckAsync(j.Id, new ResolveCheckRequest(c.Type, c.TmdbId, to?.TmdbId));
+            Toasts.Show(to is null ? $"Kept {c.Title}"
+                : $"Moved to {to.Title}{(to.Year is { } y ? $" ({y})" : "")}: {r?.Plays ?? 0} plays, {r?.Ratings ?? 0} ratings, {(r?.Watchlist ?? 0) + (r?.ListEntries ?? 0)} watchlist and list entries");
+            await LoadImports();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { checking = false; }
+    }
 
     private async Task UndoImport(ImportJobDto j)
     {
-        if (!await Js.InvokeAsync<bool>("confirm", $"Undo the {WatchSources.Name(j.Kind)} import of {j.FileName}? Everything it added is removed, and ratings it changed go back to what they were. Plays you logged yourself aren't touched.")) return;
+        if (!await Confirmer.AskAsync("Undo this import?", $"Everything the {WatchSources.Name(j.Kind)} import of {j.FileName} added is removed, and ratings it changed go back to what they were. Plays you logged yourself aren't touched.", "Undo import", danger: true)) return;
         undoing = true;
         try
         {
@@ -1206,7 +1250,7 @@ else { <h1>Settings</h1> }
 
     private async Task Regenerate()
     {
-        if (!await Js.InvokeAsync<bool>("confirm", "Generate a new webhook URL? The old one stops working, so you'll need to update Jellyfin, Plex or the Kodi add-on.")) return;
+        if (!await Confirmer.AskAsync("Generate a new webhook URL?", "The old one stops working, so you'll need to update Jellyfin, Plex or the Kodi add-on.", "Generate")) return;
         try { await Api.RegenerateJellyfinTokenAsync(); await LoadJellyfin(); Toasts.Show("New URL generated"); }
         catch (Exception ex) { Toasts.Error(ex); }
     }
@@ -1425,7 +1469,7 @@ else { <h1>Settings</h1> }
 
     private async Task NewCalendarUrl()
     {
-        if (!await Js.InvokeAsync<bool>("confirm", "Make a new private link? The old calendar link and your watchlist, history and private-list feeds stop working, so anything subscribed to them needs the new links.")) return;
+        if (!await Confirmer.AskAsync("Make a new private link?", "The old calendar link and your watchlist, history and private-list feeds stop working, so anything subscribed to them needs the new links.", "Make new link")) return;
         await SaveAlerts(new AlertSettingsRequest(NewCalendarUrl: true));
         Toasts.Show("New calendar link made");
     }
@@ -1661,7 +1705,7 @@ else { <h1>Settings</h1> }
     private async Task ClearData()
     {
         var what = PartsPicker.Describe(clearParts);
-        if (!await Js.InvokeAsync<bool>("confirm", $"Permanently delete {what}? This can't be undone. (Download your data first if you might want it back.)")) return;
+        if (!await Confirmer.AskAsync($"Permanently delete {what}?", "This can't be undone. Download your data first if you might want it back.", "Delete", danger: true)) return;
         clearing = true;
         try
         {
@@ -1676,7 +1720,7 @@ else { <h1>Settings</h1> }
 
     private async Task DeleteAccount()
     {
-        if (!await Js.InvokeAsync<bool>("confirm", "Really delete your SeenIt account and all your data? This can't be undone.")) return;
+        if (!await Confirmer.AskAsync("Delete your account?", "Your SeenIt account and all your data go for good. This can't be undone.", "Delete account", danger: true)) return;
         try
         {
             await Api.DeleteAccountAsync(new DeleteAccountRequest(deletePassword!));

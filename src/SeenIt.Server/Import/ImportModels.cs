@@ -90,6 +90,22 @@ public static class ImportFiles
 /// <summary>A rating an import overwrote, so undo can put the old one back.</summary>
 public record RatingBefore(Guid Id, double Value, DateTimeOffset RatedAt);
 
+/// <summary>A title matched by name that has namesakes on TMDB (see MatchCheck), as kept on the job.</summary>
+public record ImportCheck(MediaType Type, int TmdbId, string Label, List<ImportCheckOption> Others)
+{
+    public static List<ImportCheck> Parse(string? json) =>
+        string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<ImportCheck>>(json) ?? [];
+
+    /// <summary>Adds new checks to what's there; one per title picked.</summary>
+    public static string Merge(string? existing, IEnumerable<ImportCheck> more)
+    {
+        var all = Parse(existing);
+        foreach (var c in more) if (!all.Any(x => x.Type == c.Type && x.TmdbId == c.TmdbId)) all.Add(c);
+        return JsonSerializer.Serialize(all);
+    }
+}
+public record ImportCheckOption(int TmdbId, string Title, int? Year, string? PosterPath);
+
 /// <summary>What an import changed in place (rather than added), for undo.</summary>
 public class ImportUndo
 {

@@ -643,6 +643,14 @@ public static class ApiEndpoints
     private static void MapImports(RouteGroupBuilder g)
     {
         g.MapGet("", (ClaimsPrincipal p, ImportService s, CancellationToken ct) => s.RecentAsync(p.UserId(), ct));
+        g.MapPost("/{id:guid}/checks", async (Guid id, ResolveCheckRequest req, ClaimsPrincipal p, ImportService s, ActivityService a, CancellationToken ct) =>
+        {
+            var moved = await s.ResolveCheckAsync(p.UserId(), id, req, ct);
+            if (moved is { } r)
+                await a.LogAsync(p, ActivityKind.Rematch, req.Type, req.ToTmdbId,
+                    detail: $"from TMDB {req.TmdbId} (import check): {r.Plays} plays, {r.Ratings} ratings, {r.Watchlist} watchlist, {r.ListEntries} list entries");
+            return Results.Ok(moved ?? new RematchResult(0, 0, 0, 0));
+        });
         g.MapPost("/{id:guid}/undo", async (Guid id, ClaimsPrincipal p, ImportService s, ActivityService a, CancellationToken ct) =>
         {
             if (await s.UndoAsync(p.UserId(), id, ct) is not { } r) return Results.NotFound();

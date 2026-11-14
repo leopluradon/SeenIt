@@ -879,7 +879,17 @@ public record ImportJobDto(
     ImportParts Parts = ImportParts.All,
     DateTimeOffset? UndoneAt = null,
     bool CanUndo = false,                          // imports from before undo existed can't be undone
-    IReadOnlyList<PendingTitle>? Pending = null);  // unmatched titles that can still be matched by hand
+    IReadOnlyList<PendingTitle>? Pending = null,   // unmatched titles that can still be matched by hand
+    IReadOnlyList<MatchCheck>? Checks = null);     // titles matched by name where TMDB has others of that name
+
+/// <summary>
+/// An import title matched by name when TMDB has more than one of that name (Under the Skin: Glazer's
+/// 2014 film and a 2013 one). SeenIt picked one; this asks you to confirm it or switch.
+/// </summary>
+public record MatchCheck(MediaType Type, int TmdbId, string Label, string Title, int? Year, string? PosterPath, IReadOnlyList<MatchOption> Others);
+public record MatchOption(int TmdbId, string Title, int? Year, string? PosterPath);
+/// <summary>Keep the pick (ToTmdbId null) or move everything to another title.</summary>
+public record ResolveCheckRequest(MediaType Type, int TmdbId, int? ToTmdbId);
 
 /// <summary>An unmatched import title, with what it would bring in.</summary>
 public record PendingTitle(string Key, string Label, MediaType Type, string? Title, int? Year, string Summary);

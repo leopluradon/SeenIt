@@ -21,6 +21,29 @@ public class ImportMatchTests
     }
 
     [Fact]
+    public void Namesakes_go_to_the_better_known_film_not_the_nearest_year()
+    {
+        // Letterboxd: Under the Skin (2013). TMDB: Glazer's film is 2014, a little-known one 2013.
+        var glazer = Movie(97370, "Under the Skin", "2014-03-14") with { Popularity = 25.1 };
+        var other = Movie(698232, "Under the Skin", "2013-10-19") with { Popularity = 0.6 };
+        var found = ImportRunner.Matches([other, glazer, Movie(5, "Under the Skin of the City", "2001-01-01")], "Under the Skin", 2013);
+        Assert.Equal([698232, 97370], found.Select(m => m.Id));   // nearest year first, as before
+        Assert.Equal(97370, ImportRunner.Choose(found).Id);
+    }
+
+    [Fact]
+    public void Match_checks_keep_one_entry_per_pick()
+    {
+        var opt = new ImportCheckOption(698232, "Under the Skin", 2013, null);
+        var json = ImportCheck.Merge(null, [new ImportCheck(MediaType.Movie, 97370, "Under the Skin (2013)", [opt])]);
+        json = ImportCheck.Merge(json, [new ImportCheck(MediaType.Movie, 97370, "Under the Skin (2013)", [opt]), new ImportCheck(MediaType.Show, 2316, "The Office", [])]);
+        var all = ImportCheck.Parse(json);
+        Assert.Equal(2, all.Count);
+        Assert.Equal("Under the Skin", all[0].Others.Single().Title);
+        Assert.Empty(ImportCheck.Parse(null));
+    }
+
+    [Fact]
     public void Titles_compare_without_case_punctuation_or_accents()
     {
         Assert.Equal(ImportRunner.Normalize("Spider-Man: No Way Home"), ImportRunner.Normalize("spider man no way home"));

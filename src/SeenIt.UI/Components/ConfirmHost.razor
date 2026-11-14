@@ -1,0 +1,20 @@
+@* Shows Confirm's questions (see Services/Confirm.cs). One lives in the layout. *@
+@implements IDisposable
+@inject Confirm Confirm
+@if (Confirm.Current is { } q)
+{
+    <Modal Open="true" OpenChanged="o => { if (!o) Confirm.Answer(false); }" Title="@q.Title">
+        <div class="stack">
+            <p>@q.Message</p>
+            <div class="inline confirm-actions">
+                <button class="btn" @onclick="() => Confirm.Answer(false)">Cancel</button>
+                <button class="btn @(q.Danger ? "btn-danger" : "btn-primary")" @onclick="() => Confirm.Answer(true)">@q.Yes</button>
+            </div>
+        </div>
+    </Modal>
+}
+@code {
+    protected override void OnInitialized() => Confirm.Changed += Changed;
+    private void Changed() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Confirm.Changed -= Changed;
+}

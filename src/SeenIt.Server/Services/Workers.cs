@@ -18,6 +18,7 @@ public class ImportWorker(IServiceScopeFactory scopes, ILogger<ImportWorker> log
             await db.ImportJobs.Where(j => j.Status == ImportStatus.Running)
                 .ExecuteUpdateAsync(s => s.SetProperty(j => j.Status, ImportStatus.Queued), stoppingToken);
         }
+        await RecheckOldImportsAsync(stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -33,6 +34,23 @@ public class ImportWorker(IServiceScopeFactory scopes, ILogger<ImportWorker> log
                 await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
             }
         }
+    }
+
+    /// <summary>Imports from before match checks existed get theirs once (see ImportService.RecheckAsync).</summary>
+    private async Task RecheckOldImportsAsync(CancellationToken ct)
+    {
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var service = scope.ServiceProvider.GetRequiredService<ImportService>();
+            foreach (var job in await db.ImportJobs.Where(j => j.ChecksJson == null && j.Status != ImportStatus.Queued && j.Status != ImportStatus.Running).ToListAsync(ct))
+            {
+                await service.RecheckAsync(job, ct);
+                log.LogInformation("Checked matches of {Kind} import {Id}: {Checks}", job.Kind, job.Id, job.ChecksJson);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "Checking old imports' matches failed"); }
     }
 
     private async Task<bool> RunNextAsync(CancellationToken ct)

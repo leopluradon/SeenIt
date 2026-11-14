@@ -365,6 +365,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task SetPlexUserAsync(string? name) => SendAsync(HttpMethod.Put, "api/jellyfin/plex-user", new PlexUserRequest(name));
     public Task SetJellyfinThresholdAsync(int pct) => SendAsync(HttpMethod.Put, "api/jellyfin/threshold", new JellyfinThresholdRequest(pct));
 
+    public Task<RematchResult?> ResolveMatchCheckAsync(Guid id, ResolveCheckRequest r) => SendAsync<RematchResult>(HttpMethod.Post, $"api/imports/{id}/checks", r);
     public Task<UndoImportResult?> UndoImportAsync(Guid id) => SendAsync<UndoImportResult>(HttpMethod.Post, $"api/imports/{id}/undo");
     public Task<ResolveImportResult?> ResolveImportAsync(Guid id, ResolveImportRequest r) => SendAsync<ResolveImportResult>(HttpMethod.Post, $"api/imports/{id}/resolve", r);
     public Task<List<PlayDate>?> EditPlaysAsync(BulkEditPlaysRequest r) => SendAsync<List<PlayDate>>(HttpMethod.Post, "api/history/edit", r);

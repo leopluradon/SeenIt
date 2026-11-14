@@ -263,6 +263,9 @@ public class ImportJob
     public DateTimeOffset? UndoneAt { get; set; }
     /// <summary>JSON (ImportUndo): what the import changed in place, so undo can put it back.</summary>
     public string? UndoJson { get; set; }
+    /// <summary>JSON (List&lt;ImportCheck&gt;): titles matched by name that have namesakes on TMDB, to confirm.
+    /// Null for imports from before this existed; the import worker checks those once.</summary>
+    public string? ChecksJson { get; set; }
     /// <summary>JSON (List&lt;PendingImport&gt;): unmatched titles with their rows, for matching them by hand later.</summary>
     public string? PendingJson { get; set; }
 }

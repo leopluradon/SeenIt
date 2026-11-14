@@ -17,6 +17,7 @@ public static class UiServices
         services.AddScoped<SessionState>();
         services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<SessionState>());
         services.AddScoped<Toasts>();
+        services.AddScoped<Confirm>();
         services.AddScoped<BadgeScores>();
         services.AddScoped<WatchlistNudge>();
         services.AddScoped<ContextMenu>();
