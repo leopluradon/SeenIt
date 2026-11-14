@@ -5,6 +5,8 @@
 @inject SessionState Session
 @inject ApiClient Api
 @inject ThemeService Theme
+@inject IPlatform Platform
+@inject Toasts Toasts
 @* WatchlistNudge listens for "watched" to offer taking it off the watchlist; injecting it here starts it. *@
 @inject WatchlistNudge WatchlistNudge
 
@@ -35,6 +37,7 @@
             </AuthorizeView>
             <SearchBox Class="topsearch" IconSize="16" Placeholder="Search titles, people, members" ClearAfter="true" />
             <a href="search" class="icon-btn only-mobile" aria-label="Search"><Icon Name="search" /></a>
+            <button type="button" class="icon-btn topbar-share" @onclick="SharePage" aria-label="Share this page" title="Share this page"><Icon Name="share" /></button>
             <AuthorizeView>
                 <Authorized>
                     <NotificationBell />
@@ -152,4 +155,20 @@
     }
 
     private static string Initial(string? name) => string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
+
+    /// <summary>Shares the page you're on: its public link (it opens in the app for people who have it) and its title.</summary>
+    private async Task SharePage()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri);
+        string title;
+        try { title = await Js.InvokeAsync<string>("seenit.pageTitle"); }
+        catch { title = "SeenIt"; }
+        // Page titles end in "· SeenIt"; the shared text reads better without it.
+        if (title.EndsWith(" · SeenIt", StringComparison.Ordinal)) title = title[..^" · SeenIt".Length];
+        switch (await Platform.ShareLinkAsync(string.IsNullOrWhiteSpace(title) ? "SeenIt" : title, Platform.PublicUrl(path)))
+        {
+            case "copied": Toasts.Show("Link copied"); break;
+            case "failed": Toasts.Show("Couldn't share this page", error: true); break;
+        }
+    }
 }

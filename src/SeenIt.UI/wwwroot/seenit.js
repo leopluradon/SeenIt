@@ -1,5 +1,7 @@
 // Small browser helpers for the shared SeenIt UI.
 window.seenit = {
+    /** The tab title the page set (<PageTitle>), for sharing it. */
+    pageTitle() { return document.title || 'SeenIt'; },
     /** The text actually in a field: password managers can fill a box without telling Blazor. */
     fieldValue(id) { const el = document.getElementById(id); return el ? el.value : null; },
     // Customizing a profile: drag a widget's grip to move it, drag its corner to resize it (snaps to the grid).
