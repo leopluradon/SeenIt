@@ -83,8 +83,10 @@ public partial class EmbedService(AppDbContext db, CatalogService catalog, TmdbC
                 summary = $"{movies:N0} movie{(movies == 1 ? "" : "s")} and {shows:N0} show{(shows == 1 ? "" : "s")} watched";
             }
             var shown = user.DisplayName is { Length: > 0 } dn ? $"{dn} (@{user.UserName})" : $"@{user.UserName}";
-            return new($"{shown} on SeenIt", summary ?? "Their movies and shows on SeenIt.",
-                $"{Site}/api/users/{Uri.EscapeDataString(user.UserName!)}/avatar", false, "profile");
+            // Their picture if they've uploaded one (the avatar address 404s otherwise), else the SeenIt icon.
+            var picture = await db.Avatars.AnyAsync(a => a.UserId == user.Id, ct)
+                ? $"{Site}/api/users/{Uri.EscapeDataString(user.UserName!)}/avatar" : $"{Site}/icon-512.png";
+            return new($"{shown} on SeenIt", summary ?? "Their movies and shows on SeenIt.", picture, false, "profile");
         }
         if (ListRoute().Match(path) is { Success: true } lm && Guid.TryParse(lm.Groups[1].Value, out var listId))
         {
