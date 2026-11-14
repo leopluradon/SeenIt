@@ -503,6 +503,22 @@ public class Notification
     public Guid? RecommendationId { get; set; }
     /// <summary>Set when someone watched (or started) a title you recommended them: this is that recommendation.</summary>
     public Guid? WatchedRecommendationId { get; set; }
+    /// <summary>When it went out as a push notification (or was skipped: no devices, too old). Null = not yet.</summary>
+    public DateTimeOffset? PushedAt { get; set; }
+}
+
+/// <summary>A browser or installed web app (an iPhone Home Screen icon...) that gets alerts as push notifications.</summary>
+public class PushSubscription
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    /// <summary>The push service's URL for this device (Apple, Google, Mozilla...). Unique per device.</summary>
+    public string Endpoint { get; set; } = "";
+    public string P256dh { get; set; } = "";
+    public string Auth { get; set; } = "";
+    public string? Device { get; set; }   // a short label from the browser, for the settings list
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastSentAt { get; set; }
 }
 
 /// <summary>A friend sent you a title to watch, with an optional note.</summary>

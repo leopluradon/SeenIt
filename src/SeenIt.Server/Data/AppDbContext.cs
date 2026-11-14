@@ -38,6 +38,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotInterested> NotInterested => Set<NotInterested>();
     public DbSet<Recommendation> Recommendations => Set<Recommendation>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
     public DbSet<PersonFollow> PersonFollows => Set<PersonFollow>();
     public DbSet<PersonUpcoming> PersonUpcoming => Set<PersonUpcoming>();
     public DbSet<ListLike> ListLikes => Set<ListLike>();
@@ -223,10 +224,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasIndex(x => new { x.UserId, x.Type, x.TmdbId, x.SeasonNumber, x.EpisodeNumber, x.RecommendationId, x.WatchedRecommendationId })
                 .IsUnique().AreNullsDistinct(false);
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
+            e.HasIndex(x => x.PushedAt).HasFilter("\"PushedAt\" IS NULL");   // the push worker's queue
             e.Property(x => x.Title).HasMaxLength(300);
             e.Property(x => x.Detail).HasMaxLength(400);
         });
         b.Entity<AppUser>().HasIndex(u => u.CalendarToken).IsUnique();
+        b.Entity<PushSubscription>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Endpoint).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.Endpoint).HasMaxLength(1000);
+            e.Property(x => x.P256dh).HasMaxLength(200);
+            e.Property(x => x.Auth).HasMaxLength(100);
+            e.Property(x => x.Device).HasMaxLength(100);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         b.Entity<UserAvatar>(e =>
         {
             e.HasKey(x => x.UserId);

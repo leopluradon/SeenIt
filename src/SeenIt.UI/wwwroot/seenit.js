@@ -226,6 +226,74 @@ window.seenit = {
         c.toggle('posters-small', posters === 'Small');
         c.toggle('posters-large', posters === 'Large');
     },
+    /* ---------- Push notifications (website and installed web apps; not the Android app) ---------- */
+    _pushReg: null,
+    async _pushWorker() {
+        if (!('serviceWorker' in navigator)) return null;
+        if (!this._pushReg) {
+            this._pushReg = await navigator.serviceWorker.register('push-sw.js');
+            // A tapped notification asks an open window to go to its page, inside the app.
+            navigator.serviceWorker.addEventListener('message', e => {
+                if (e.data && e.data.type === 'seenit-navigate' && e.data.url && window.Blazor) window.Blazor.navigateTo(e.data.url);
+            });
+        }
+        await navigator.serviceWorker.ready;
+        return this._pushReg;
+    },
+    _pushIos() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); },
+    _pushStandalone() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; },
+    _pushDevice() {
+        const ua = navigator.userAgent;
+        const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) || this._pushIos() ? 'iPad' : /Android/.test(ua) ? 'Android'
+            : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'Device';
+        const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser';
+        return this._pushStandalone() ? `${os} (Home Screen app)` : `${os}, ${browser}`;
+    },
+    /** What this browser can do and whether it's subscribed: { supported, standalone, ios, permission, endpoint }. */
+    async pushState() {
+        const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+        const state = { supported, standalone: this._pushStandalone(), ios: this._pushIos(), permission: supported ? Notification.permission : 'unsupported', endpoint: null };
+        if (!supported) return state;
+        try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            const sub = reg && await reg.pushManager.getSubscription();
+            state.endpoint = sub ? sub.endpoint : null;
+        } catch { }
+        return state;
+    },
+    /** Asks permission (must follow a tap: iOS insists) and subscribes. Returns the keys for the server, or { error }. */
+    async pushSubscribe(publicKey) {
+        try {
+            const reg = await this._pushWorker();
+            if (!reg) return { error: 'This browser can\'t do push notifications.' };
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') return { error: permission === 'denied' ? 'Notifications are blocked for SeenIt. Allow them in this browser\'s (or iOS) settings.' : 'Notifications weren\'t allowed.' };
+            const key = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - publicKey.length % 4) % 4)), c => c.charCodeAt(0));
+            let sub = await reg.pushManager.getSubscription();
+            if (sub) {
+                // Made with another server key (keys changed): start over.
+                const old = sub.options && sub.options.applicationServerKey && new Uint8Array(sub.options.applicationServerKey);
+                if (old && (old.length !== key.length || old.some((b, i) => b !== key[i]))) { await sub.unsubscribe(); sub = null; }
+            }
+            sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+            const j = sub.toJSON();
+            return { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, device: this._pushDevice() };
+        } catch (e) {
+            return { error: (e && e.message) || 'Couldn\'t turn on notifications.' };
+        }
+    },
+    /** Unsubscribes this browser; returns the endpoint it had, so the server can forget it too. */
+    async pushUnsubscribe() {
+        try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            const sub = reg && await reg.pushManager.getSubscription();
+            if (!sub) return null;
+            const endpoint = sub.endpoint;
+            await sub.unsubscribe();
+            return endpoint;
+        } catch { return null; }
+    },
+
     /** Settings search: show only the sections whose text has every word typed (accents and case ignored); "" shows all. */
     filterSettings(q) {
         const fold = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -507,4 +575,12 @@ document.addEventListener('keydown', e => {
         };
         requestAnimationFrame(tick);
     }
+})();
+
+// Already using push on this device: register the worker on every load so tapped notifications reach this window.
+(() => {
+    try {
+        if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted')
+            navigator.serviceWorker.getRegistration().then(r => { if (r) window.seenit._pushWorker(); });
+    } catch { }
 })();

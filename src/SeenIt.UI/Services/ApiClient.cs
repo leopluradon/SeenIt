@@ -277,6 +277,10 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<RecapDto?> RecapAsync(int showId) => SendAsync<RecapDto>(HttpMethod.Get, $"api/shows/{showId}/recap");
     public Task MarkNotificationsReadAsync() => SendAsync(HttpMethod.Post, "api/notifications/read");
     public Task<AlertSettingsDto> AlertSettingsAsync() => GetAsync<AlertSettingsDto>("api/alerts");
+    public Task<PushConfigDto> PushAsync() => GetAsync<PushConfigDto>("api/push");
+    public Task PushSubscribeAsync(PushSubscribeRequest r) => SendAsync(HttpMethod.Post, "api/push/subscribe", r);
+    public Task PushUnsubscribeAsync(string endpoint) => SendAsync(HttpMethod.Post, "api/push/unsubscribe", new PushUnsubscribeRequest(endpoint));
+    public Task PushTestAsync() => SendAsync(HttpMethod.Post, "api/push/test", new { });
     public async Task<AlertSettingsDto> SetAlertSettingsAsync(AlertSettingsRequest r) => (await SendAsync<AlertSettingsDto>(HttpMethod.Put, "api/alerts", r))!;
     private sealed record UnreadResult(int Unread);
 

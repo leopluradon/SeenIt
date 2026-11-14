@@ -1685,3 +1685,7 @@ html.compact .overview { line-height: 1.5; }
 /* Person page: a show you've watched some of, but not the episodes this person is in. */
 .ep-partly { color: var(--text-2); flex-shrink: 0; font-size: 1rem; line-height: 1; width: 16px; text-align: center; }
 .film-row.partly .film-year { color: var(--text-2); }
+
+/* Settings → Push notifications: other devices */
+.push-devices { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 6px; }
+.push-devices li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

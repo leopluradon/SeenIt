@@ -409,6 +409,21 @@ public static class ApiEndpoints
         static AlertSettingsDto Alerts(AppUser u, ReleaseAlertService a, EmailService email) => new(u.ReleaseEmails, email.Enabled,
             $"{a.BaseUrl()}cal/{u.CalendarToken}.ics", u.MonthlyBackup,
             $"{a.BaseUrl()}feeds/{u.CalendarToken}/watchlist.rss", $"{a.BaseUrl()}feeds/{u.CalendarToken}/history.rss");
+        // Push notifications for alerts (browsers and installed web apps).
+        g.MapGet("/push", async (ClaimsPrincipal p, PushService push, CancellationToken ct) =>
+            new PushConfigDto(push.Enabled, push.PublicKey, await push.DevicesAsync(p.UserId(), ct)));
+        g.MapPost("/push/subscribe", async (PushSubscribeRequest req, ClaimsPrincipal p, PushService push, CancellationToken ct) =>
+        {
+            await push.SubscribeAsync(p.UserId(), req, ct);
+            return Results.NoContent();
+        });
+        g.MapPost("/push/unsubscribe", async (PushUnsubscribeRequest req, ClaimsPrincipal p, PushService push, CancellationToken ct) =>
+        {
+            await push.UnsubscribeAsync(p.UserId(), req.Endpoint, ct);
+            return Results.NoContent();
+        });
+        g.MapPost("/push/test", async (ClaimsPrincipal p, PushService push, CancellationToken ct) =>
+            Results.Ok(new { sent = await push.SendAsync(p.UserId(), new PushPayload("SeenIt", "Push notifications are working on this device.", "notifications", "test"), ct) }));
         g.MapGet("/alerts", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, EmailService email, CancellationToken ct) =>
             Alerts(await db.Users.AsNoTracking().FirstAsync(x => x.Id == p.UserId(), ct), a, email));
         g.MapPut("/alerts", async (AlertSettingsRequest req, ClaimsPrincipal p, HttpContext http, AppDbContext db, ReleaseAlertService a, EmailService email, CancellationToken ct) =>

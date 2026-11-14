@@ -632,6 +632,60 @@ else { <h1>Settings</h1> }
             </label>
             <p class="muted small">"Sam watched Heat", or "Sam started Severance" at their first episode. Once per recommendation, and only for watching after you sent it.</p>
         </section>
+        @if (Platform.AppVersion is null)
+        {
+        <section class="panel" id="push">
+            <h2>Push notifications</h2>
+            <p class="muted small">Get your alerts as notifications on this device: new episodes and releases (together, from 8 in the morning), recommendations, and friends watching what you recommended.</p>
+            @if (pushCfg is not { } pc || pushHere is not { } ph) { <Spinner /> }
+            else if (!pc.Enabled) { <p class="muted small">Push notifications aren't set up on this server.</p> }
+            else
+            {
+                var on = ph.Endpoint is { } ep && pc.Devices.Any(d => d.Endpoint == ep);
+                @if (!ph.Supported)
+                {
+                    @if (ph.Ios && !ph.Standalone)
+                    {
+                        <p class="small">On iPhone and iPad, notifications work from the Home Screen app: tap <b>Share</b> → <b>Add to Home Screen</b>, open SeenIt from that icon, and turn them on here. (Needs iOS 16.4 or later.)</p>
+                    }
+                    else { <p class="muted small">This browser can't show push notifications.</p> }
+                }
+                else if (ph.Permission == "denied" && !on)
+                {
+                    <p class="small">Notifications are blocked for SeenIt on this device. Allow them in @(ph.Ios ? "iOS Settings → Notifications → SeenIt" : "this browser's site settings"), then come back here.</p>
+                }
+                else
+                {
+                    <div class="inline">
+                        @if (on)
+                        {
+                            <span class="pill"><Icon Name="check" Size="14" /> On for this device</span>
+                            <button class="btn btn-sm" disabled="@pushBusy" @onclick="PushTest">Send a test</button>
+                            <button class="btn btn-sm btn-ghost" disabled="@pushBusy" @onclick="PushOff">Turn off</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-primary" disabled="@pushBusy" @onclick="PushOn"><Icon Name="bell" Size="16" /> Turn on for this device</button>
+                        }
+                    </div>
+                }
+                var others = pc.Devices.Where(d => d.Endpoint != ph.Endpoint).ToList();
+                @if (others.Count > 0)
+                {
+                    <p class="muted small">Also on:</p>
+                    <ul class="push-devices">
+                        @foreach (var d in others)
+                        {
+                            <li @key="d.Endpoint">
+                                <span>@(d.Device ?? "Another device") <span class="muted small">since @d.Since.ToLocalTime().ToString(Fmt.DateLong)</span></span>
+                                <button class="btn btn-sm btn-ghost" disabled="@pushBusy" @onclick="() => PushForget(d.Endpoint)">Remove</button>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        </section>
+        }
         <section class="panel" id="calendar">
             <h2>Calendar feed</h2>
             @if (alerts is { } cal)
@@ -837,7 +891,7 @@ else { <h1>Settings</h1> }
         new("account", "Account", "users", "Profile, privacy, invites, password", ["profile", "privacy", "invites", "account", "about", "delete"]),
         new("display", "Display", "eye", "Start page, dates, theme, layout, ratings, scores", ["start", "dates", "appearance", "layout", "ratings", "scores", "time", "spoilers", "region"]),
         new("tracking", "Tracking", "radio", "Time zone, marking watched, media servers", ["tracking", "marking", "jellyfin", "letterboxd", "letterboxd-sync"]),
-        new("alerts", "Alerts & feeds", "bell", "Release alerts, calendar, RSS feeds", ["alerts", "calendar", "feeds", "private-link"]),
+        new("alerts", "Alerts & feeds", "bell", "Release alerts, calendar, RSS feeds", ["alerts", "push", "calendar", "feeds", "private-link"]),
         new("data", "Import & export", "download", "Imports, exports, backups, clearing data", ["imports", "export", "clear"]),
     ];
 
@@ -1060,6 +1114,7 @@ else { <h1>Settings</h1> }
         _ = LoadFeatures();
         _ = LoadInvites();
         _ = LoadAlerts();
+        _ = LoadPush();
         await Task.WhenAll(LoadJellyfin(), LoadImports(), LoadRegions(), LoadTimeZones(), LoadAndroid(), LoadLetterboxd());
         StartPolling();
     }
@@ -1189,6 +1244,71 @@ else { <h1>Settings</h1> }
     }
 
     private AlertSettingsDto? alerts;
+
+    // ---------- Push notifications ----------
+    private sealed record PushBrowser(bool Supported, bool Standalone, bool Ios, string Permission, string? Endpoint);
+    private sealed record PushKeys(string? Endpoint, string? P256dh, string? Auth, string? Device, string? Error);
+    private PushConfigDto? pushCfg;
+    private PushBrowser? pushHere;
+    private bool pushBusy;
+
+    private async Task LoadPush()
+    {
+        if (Platform.AppVersion is not null) return;   // the Android app isn't a browser: no web push there
+        try
+        {
+            pushCfg = await Api.PushAsync();
+            pushHere = await Js.InvokeAsync<PushBrowser>("seenit.pushState");
+            StateHasChanged();
+        }
+        catch { pushCfg ??= new PushConfigDto(false, null, []); pushHere ??= new PushBrowser(false, false, false, "unsupported", null); }
+    }
+
+    private async Task PushOn()
+    {
+        pushBusy = true;
+        try
+        {
+            // Straight from the tap: iOS only shows the permission prompt for one.
+            var keys = await Js.InvokeAsync<PushKeys>("seenit.pushSubscribe", pushCfg!.PublicKey);
+            if (keys.Error is { } err) { Toasts.Show(err); return; }
+            await Api.PushSubscribeAsync(new PushSubscribeRequest(keys.Endpoint!, keys.P256dh!, keys.Auth!, keys.Device));
+            Toasts.Show("Notifications on for this device");
+            await LoadPush();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { pushBusy = false; }
+    }
+
+    private async Task PushOff()
+    {
+        pushBusy = true;
+        try
+        {
+            var endpoint = await Js.InvokeAsync<string?>("seenit.pushUnsubscribe") ?? pushHere?.Endpoint;
+            if (endpoint is not null) await Api.PushUnsubscribeAsync(endpoint);
+            Toasts.Show("Notifications off for this device");
+            await LoadPush();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { pushBusy = false; }
+    }
+
+    private async Task PushForget(string endpoint)
+    {
+        pushBusy = true;
+        try { await Api.PushUnsubscribeAsync(endpoint); await LoadPush(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { pushBusy = false; }
+    }
+
+    private async Task PushTest()
+    {
+        pushBusy = true;
+        try { await Api.PushTestAsync(); Toasts.Show("Sent. It should arrive in a few seconds."); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { pushBusy = false; }
+    }
 
     private async Task LoadAlerts()
     {

@@ -22,6 +22,8 @@ services:
       # Sign-ups need an invite link from a member unless this is true.
       SeenIt__OpenRegistration: "${OPEN_REGISTRATION:-false}"
       SeenIt__PublicUrl: "${PUBLIC_URL:-https://seenit.vohiyo.com/}"
+      SeenIt__VapidPublicKey: "${VAPID_PUBLIC_KEY:-}"
+      SeenIt__VapidPrivateKey: "${VAPID_PRIVATE_KEY:-}"
       # Usernames (comma-separated) that can open /admin.
       SeenIt__Admins: "${ADMINS:-leopluradon}"
       # Backup results written by seenit-backup (for the admin page and alert emails).

@@ -704,6 +704,13 @@ public record NotificationDto(Guid Id, MediaType Type, int TmdbId, int? SeasonNu
     string? PosterPath, DateOnly Day, bool Read, bool Recommendation = false,   // Recommendation: Title is "Sam recommends Heat", Detail their note
     bool RecommendationWatched = false);   // "Sam watched Heat": someone watched a title you recommended them
 public record NotificationsDto(IReadOnlyList<NotificationDto> Items, int Unread);
+/// <summary>Push notifications: whether the server can send them, and the key a browser subscribes with.</summary>
+public record PushConfigDto(bool Enabled, string? PublicKey, IReadOnlyList<PushDeviceDto> Devices);
+public record PushDeviceDto(string Endpoint, string? Device, DateTimeOffset Since, DateTimeOffset? LastSentAt);
+public record PushSubscribeRequest(string Endpoint, string P256dh, string Auth, string? Device = null);
+public record PushUnsubscribeRequest(string Endpoint);
+/// <summary>What the service worker shows. Url is relative to the site.</summary>
+public record PushPayload(string Title, string Body, string Url, string? Tag = null);
 /// <summary>Release alerts and the private calendar feed. CalendarUrl is secret: anyone with it sees your calendar.</summary>
 public record AlertSettingsDto(bool Emails, bool EmailAvailable, string CalendarUrl, bool MonthlyBackup = false, string? WatchlistFeed = null, string? HistoryFeed = null);
 public record AlertSettingsRequest(bool? Emails = null, bool NewCalendarUrl = false, bool? MonthlyBackup = null);
