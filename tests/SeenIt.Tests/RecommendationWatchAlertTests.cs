@@ -20,6 +20,10 @@ public class RecommendationWatchAlertTests
         db.Recommendations.Add(new Recommendation { FromId = Sam, ToId = Alex, Type = MediaType.Movie, TmdbId = 949, CreatedAt = Sent });
         db.Recommendations.Add(new Recommendation { FromId = Sam, ToId = Alex, Type = MediaType.Show, TmdbId = 95396, CreatedAt = Sent });
         await db.SaveChangesAsync();
+        foreach (var r in await db.Recommendations.ToListAsync())
+            db.Notifications.Add(new Notification { UserId = Alex, Type = r.Type, TmdbId = r.TmdbId, RecommendationId = r.Id, Kind = AlertKind.Recommendation,
+                Title = "Sam recommends it", Day = DateOnly.FromDateTime(Sent.UtcDateTime) });
+        await db.SaveChangesAsync();
         return db;
     }
 
@@ -37,6 +41,10 @@ public class RecommendationWatchAlertTests
         Assert.All(alerts, a => Assert.NotNull(a.WatchedRecommendationId));
         Assert.Equal("You recommended it on Nov 1", alerts[1].Detail);
 
+        // Watched means done with: both recommendations are cleared from Alex's inbox, and their alert read.
+        Assert.All(await db.Recommendations.ToListAsync(), r => Assert.NotNull(r.DismissedAt));
+        Assert.All(await db.Notifications.Where(n => n.RecommendationId != null).ToListAsync(), n => Assert.NotNull(n.ReadAt));
+
         // Watching again (or more episodes) doesn't alert a second time.
         await RecommendationWatchAlerts.NotifyAsync(db, [Play(MediaType.Movie, 949, Sent.AddDays(9)), Play(MediaType.Episode, 95396, Sent.AddDays(9), 1, 3)], default);
         Assert.Equal(2, await db.Notifications.CountAsync(n => n.UserId == Sam));
@@ -47,12 +55,16 @@ public class RecommendationWatchAlertTests
     {
         var db = await Setup();
         await RecommendationWatchAlerts.NotifyAsync(db, [Play(MediaType.Movie, 949, Sent.AddYears(-3))], default);   // an import of a 2023 watch
-        Assert.Equal(0, await db.Notifications.CountAsync());
+        Assert.Equal(0, await db.Notifications.CountAsync(n => n.WatchedRecommendationId != null));
+        Assert.Null((await db.Recommendations.SingleAsync(r => r.TmdbId == 949)).DismissedAt);   // watched before it was sent: stays in the inbox
         await RecommendationWatchAlerts.NotifyAsync(db, [Play(MediaType.Movie, 949, WatchDates.Unknown)], default);   // no date: counts
-        Assert.Equal(1, await db.Notifications.CountAsync());
+        Assert.Equal(1, await db.Notifications.CountAsync(n => n.WatchedRecommendationId != null));
 
         var off = await Setup(alertsOn: false);
         await RecommendationWatchAlerts.NotifyAsync(off, [Play(MediaType.Movie, 949, Sent.AddDays(1))], default);
-        Assert.Equal(0, await off.Notifications.CountAsync());
+        Assert.Equal(0, await off.Notifications.CountAsync(n => n.WatchedRecommendationId != null));
+        // Sam's alerts being off doesn't stop it leaving Alex's inbox.
+        Assert.NotNull((await off.Recommendations.SingleAsync(r => r.TmdbId == 949)).DismissedAt);
+        Assert.Null((await off.Recommendations.SingleAsync(r => r.TmdbId == 95396)).DismissedAt);   // not watched: still there
     }
 }
