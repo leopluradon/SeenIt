@@ -113,7 +113,7 @@ else if (p is not null)
                 @foreach (var c in KnownFor)
                 {
                     <PosterCard Media="@(new MediaSummary(c.Type, c.TmdbId, c.Title, c.Date?.Year, c.PosterPath, null, null, null))"
-                                Badge="@(c.Watched ? "✓ Seen" : null)" ShowScore="false" Sub="@c.Role" @key="(c.Type, c.TmdbId)" />
+                                Badge="@(c.Watched ? "✓ Seen" : c.PartlySeen ? "◐ Partly" : null)" ShowScore="false" Sub="@c.Role" @key="(c.Type, c.TmdbId)" />
                 }
             </div>
         </section>
@@ -150,13 +150,14 @@ else if (p is not null)
             @foreach (var c in rows)
             {
                 <li @key="(c.Type, c.TmdbId)">
-                    <a class="film-row @(c.Watched ? "watched" : "")" href="@Fmt.Href(c.Type, c.TmdbId)">
+                    <a class="film-row @(c.Watched ? "watched" : c.PartlySeen ? "partly" : "")" href="@Fmt.Href(c.Type, c.TmdbId)">
                         <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
                         <span class="film-main">
                             <b>@c.Title</b>
                             <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")@(c.Role is { Length: > 0 } r ? " · " + r : "")@(c.EpisodeCount is > 0 ? $" · {Plural(c.EpisodeCount.Value, "episode")}" : "")</span>
                         </span>
                         @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
+                        else if (c.PartlySeen) { <span class="ep-partly" title="@($"You've watched some of {c.Title}, but not the episodes {p.Name} is in")" aria-label="Partly seen: not their episodes">◐</span> }
                     </a>
                 </li>
             }
@@ -276,6 +277,8 @@ else if (p is not null)
         }
         if (parts.Count == 0) return null;
         var line = "Seen " + string.Join(" and ", parts);
+        var partly = released.Count(c => c.PartlySeen);
+        if (partly > 0) line += $" · {partly} more show{(partly == 1 ? "" : "s")} partly (not their episodes)";
         if (p.AvgRating is { } avg) line += $" · your average {Fmt.Avg(avg)} ({p.Rated:N0} rated)";
         return line;
     }

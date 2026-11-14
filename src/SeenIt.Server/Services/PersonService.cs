@@ -28,9 +28,16 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 .GroupBy(x => x.TmdbId)
                 .ToDictionary(g => g.Key, g => g.ToDictionary(x => (x.SeasonNumber ?? -1, x.EpisodeNumber ?? -1), x => x.N));
         }
-        bool Watched(MediaType t, int tmdbId) => t == MediaType.Movie ? watchedMovies.ContainsKey(tmdbId) : watchedEpisodes.ContainsKey(tmdbId);
-
         var castCredits = (p.CombinedCredits?.Cast ?? []).Where(c => c.MediaType is "movie" or "tv").ToList();
+        var crewCredits = (p.CombinedCredits?.Crew ?? []).Where(c => c.MediaType is "movie" or "tv").ToList();
+
+        // What you've actually seen them in: for a show that means one of *their* episodes (a guest role is
+        // checked episode by episode against TMDB), not just any episode of it. A show you've watched some of
+        // without seeing theirs is "partly seen", shown apart.
+        var watched = userId is null ? null : await WatchedWithAsync(castCredits, crewCredits, watchedMovies, watchedEpisodes, ct);
+        var seenShows = watched?.Where(w => w.Type == MediaType.Show).Select(w => w.TmdbId).ToHashSet() ?? [];
+        bool Watched(MediaType t, int tmdbId) => t == MediaType.Movie ? watchedMovies.ContainsKey(tmdbId) : seenShows.Contains(tmdbId);
+        bool Partly(MediaType t, int tmdbId) => t == MediaType.Show && !seenShows.Contains(tmdbId) && watchedEpisodes.ContainsKey(tmdbId);
 
         // One row per title: TV people often have several credits on the same show.
         var cast = castCredits.GroupBy(c => (c.MediaType, c.Id)).Select(g =>
@@ -45,7 +52,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 TmdbDates.Parse(type == MediaType.Movie ? c.ReleaseDate : c.FirstAirDate),
                 string.IsNullOrEmpty(roles) ? null : roles,
                 type == MediaType.Show ? g.Sum(x => x.EpisodeCount ?? 0) : null,
-                c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id), appearance);
+                c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id), appearance, PartlySeen: Partly(type, c.Id));
         }).OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
 
         var crew = (p.CombinedCredits?.Crew ?? []).Where(c => c.MediaType is "movie" or "tv")
@@ -58,17 +65,15 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                     string.Join(", ", g.Select(x => x.Job).Where(x => x is not null).Distinct()),
                     type == MediaType.Show ? g.Sum(x => x.EpisodeCount ?? 0) : null,
                     c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id),
-                    Jobs: g.Where(x => !string.IsNullOrWhiteSpace(x.Job)).Select(x => new CrewJob(x.Job!, x.Department)).Distinct().ToList());
+                    Jobs: g.Where(x => !string.IsNullOrWhiteSpace(x.Job)).Select(x => new CrewJob(x.Job!, x.Department)).Distinct().ToList(),
+                    PartlySeen: Partly(type, c.Id));
             }).OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
 
-        List<WatchedWith>? watched = null;
         var following = false;
         double? avg = null;
         var rated = 0;
         if (userId is { } me)
         {
-            var crewCredits = (p.CombinedCredits?.Crew ?? []).Where(c => c.MediaType is "movie" or "tv").ToList();
-            watched = await WatchedWithAsync(castCredits, crewCredits, watchedMovies, watchedEpisodes, ct);
             following = await db.PersonFollows.AnyAsync(f => f.UserId == me && f.PersonId == id, ct);
             // Your ratings of their work: whole movies and shows (not seasons or episodes), talk-show appearances left out.
             var credited = cast.Where(c => !c.Appearance).Concat(crew).ToList();
