@@ -503,6 +503,8 @@ public class Notification
     public Guid? RecommendationId { get; set; }
     /// <summary>Set when someone watched (or started) a title you recommended them: this is that recommendation.</summary>
     public Guid? WatchedRecommendationId { get; set; }
+    /// <summary>Which kind of alert this is; each kind has its own delivery setting (alert list, push, both, off).</summary>
+    public AlertKind Kind { get; set; }
     /// <summary>When it went out as a push notification (or was skipped: no devices, too old). Null = not yet.</summary>
     public DateTimeOffset? PushedAt { get; set; }
 }

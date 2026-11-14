@@ -7,7 +7,7 @@ namespace SeenIt.Server.Data;
 /// "Sam watched Heat" / "Sam started Severance": tells whoever recommended a title when the person they sent it to
 /// plays it. Runs after any save that adds plays (marking watched, Jellyfin and other scrobblers, check-ins, bulk
 /// marks), once per recommendation, and only for plays from after it was sent (or with no date), so importing old
-/// history doesn't set it off. The recommender can turn it off (UserPrefs.AlertRecWatched).
+/// history doesn't set it off. The recommender chooses alert, push, both or off (UserPrefs.Alerts[RecWatched]).
 /// </summary>
 public static class RecommendationWatchAlerts
 {
@@ -33,7 +33,7 @@ public static class RecommendationWatchAlerts
 
                 var from = await db.Users.AsNoTracking().Where(u => u.Id == rec.FromId)
                     .Select(u => new { u.PrefsJson, u.TimeZone }).FirstOrDefaultAsync(ct);
-                if (from is null || !UserPrefsStore.Read(from.PrefsJson).AlertRecWatched) continue;
+                if (from is null || UserPrefsStore.Read(from.PrefsJson).DeliveryFor(AlertKind.RecWatched) == AlertDelivery.Off) continue;
                 var who = await db.Users.AsNoTracking().Where(u => u.Id == rec.ToId)
                     .Select(u => u.DisplayName ?? u.UserName).FirstOrDefaultAsync(ct) ?? "Someone";
                 var (title, poster) = rec.Type == MediaType.Movie
@@ -46,7 +46,7 @@ public static class RecommendationWatchAlerts
                 var sent = TimeZoneInfo.ConvertTime(rec.CreatedAt, zone);
                 db.Notifications.Add(new Notification
                 {
-                    UserId = rec.FromId, Type = rec.Type, TmdbId = rec.TmdbId, WatchedRecommendationId = rec.Id,
+                    UserId = rec.FromId, Type = rec.Type, TmdbId = rec.TmdbId, WatchedRecommendationId = rec.Id, Kind = AlertKind.RecWatched,
                     Title = headline.Length > 300 ? headline[..300] : headline, PosterPath = poster,
                     Detail = $"You recommended it on {sent:MMM d}",
                     Day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime),

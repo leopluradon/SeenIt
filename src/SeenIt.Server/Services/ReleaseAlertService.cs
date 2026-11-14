@@ -14,17 +14,28 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
 {
     private const int EmailHour = 8;   // local time the daily digest goes out at the earliest
 
+    /// <summary>The kinds this person wants in their alerts list (Settings → Alerts); push-only and off kinds stay out of it.</summary>
+    private async Task<List<AlertKind>> ListedKindsAsync(Guid userId, CancellationToken ct)
+    {
+        var prefs = UserPrefsStore.Read(await db.Users.Where(u => u.Id == userId).Select(u => u.PrefsJson).FirstOrDefaultAsync(ct));
+        return Enum.GetValues<AlertKind>().Where(prefs.ListsAlert).ToList();
+    }
+
     public async Task<NotificationsDto> ListAsync(Guid userId, CancellationToken ct)
     {
-        var rows = await db.Notifications.AsNoTracking().Where(n => n.UserId == userId)
+        var kinds = await ListedKindsAsync(userId, ct);
+        var rows = await db.Notifications.AsNoTracking().Where(n => n.UserId == userId && kinds.Contains(n.Kind))
             .OrderByDescending(n => n.Day).ThenByDescending(n => n.CreatedAt).Take(60).ToListAsync(ct);
-        var unread = await db.Notifications.CountAsync(n => n.UserId == userId && n.ReadAt == null, ct);
+        var unread = await db.Notifications.CountAsync(n => n.UserId == userId && n.ReadAt == null && kinds.Contains(n.Kind), ct);
         return new NotificationsDto(rows.Select(n => new NotificationDto(n.Id, n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber,
             n.Title, n.Detail, n.PosterPath, n.Day, n.ReadAt is not null, n.RecommendationId is not null, n.WatchedRecommendationId is not null)).ToList(), unread);
     }
 
-    public Task<int> UnreadAsync(Guid userId, CancellationToken ct) =>
-        db.Notifications.CountAsync(n => n.UserId == userId && n.ReadAt == null, ct);
+    public async Task<int> UnreadAsync(Guid userId, CancellationToken ct)
+    {
+        var kinds = await ListedKindsAsync(userId, ct);
+        return await db.Notifications.CountAsync(n => n.UserId == userId && n.ReadAt == null && kinds.Contains(n.Kind), ct);
+    }
 
     public Task MarkAllReadAsync(Guid userId, CancellationToken ct) =>
         db.Notifications.Where(n => n.UserId == userId && n.ReadAt == null)
@@ -52,6 +63,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
             {
                 UserId = user.Id, Type = r.Type, TmdbId = r.TmdbId, SeasonNumber = r.SeasonNumber, EpisodeNumber = r.EpisodeNumber,
                 Title = Trim(r.Title, 300), PosterPath = r.PosterPath, Day = r.Date,
+                Kind = r.Via is not null ? AlertKind.Person : r.Type == MediaType.Movie ? AlertKind.Movie : AlertKind.Episode,
                 Detail = r.Type == MediaType.Episode ? Trim($"{Code(r.SeasonNumber, r.EpisodeNumber)}{(r.EpisodeTitle is { Length: > 0 } t ? " · " + t : "")}", 400)
                     : Trim((r.Type == MediaType.Show ? "New series out today" : "Out today") + (r.Via is { } via ? " · " + via : ""), 400),
             });
@@ -65,7 +77,10 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
 
         if (user.ReleaseEmails && email.Enabled && now.Hour >= EmailHour && user.LastReleaseEmail != today && user.Email is { Length: > 0 } to)
         {
-            var todays = await db.Notifications.AsNoTracking().Where(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.Day == today)
+            // Kinds turned off in Settings → Alerts stay out of the email too.
+            var prefs = UserPrefsStore.Read(user.PrefsJson);
+            var emailed = Enum.GetValues<AlertKind>().Where(k => prefs.DeliveryFor(k) != AlertDelivery.Off).ToList();
+            var todays = await db.Notifications.AsNoTracking().Where(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.Day == today && emailed.Contains(n.Kind))
                 .OrderBy(n => n.Title).ThenBy(n => n.SeasonNumber).ThenBy(n => n.EpisodeNumber).ToListAsync(ct);
             if (todays.Count > 0)
             {

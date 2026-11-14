@@ -961,6 +961,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int?>("EpisodeNumber")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
                     b.Property<string>("PosterPath")
                         .HasColumnType("text");
 

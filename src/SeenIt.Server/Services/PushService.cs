@@ -124,12 +124,14 @@ public class PushWorker(IServiceScopeFactory scopes, ILogger<PushWorker> log) : 
         var withDevices = push.Enabled
             ? (await db.PushSubscriptions.Where(s => users.Contains(s.UserId)).Select(s => s.UserId).Distinct().ToListAsync(ct)).ToHashSet()
             : [];
-        var zones = await db.Users.Where(u => users.Contains(u.Id)).Select(u => new { u.Id, u.TimeZone }).ToDictionaryAsync(u => u.Id, u => u.TimeZone, ct);
+        var people = await db.Users.Where(u => users.Contains(u.Id)).Select(u => new { u.Id, u.TimeZone, u.PrefsJson }).ToDictionaryAsync(u => u.Id, ct);
 
         foreach (var g in pending.GroupBy(n => n.UserId))
         {
-            // No devices, or more than two days old (push was off, the server was down): nothing to send.
-            var skip = g.Where(n => !withDevices.Contains(g.Key) || now - n.CreatedAt > TimeSpan.FromDays(2)).ToList();
+            // No devices, a kind they don't want pushed (Settings → Alerts), or more than two days old (push was off,
+            // the server was down): nothing to send.
+            var prefs = UserPrefsStore.Read(people.GetValueOrDefault(g.Key)?.PrefsJson);
+            var skip = g.Where(n => !withDevices.Contains(g.Key) || !prefs.PushesAlert(n.Kind) || now - n.CreatedAt > TimeSpan.FromDays(2)).ToList();
             foreach (var n in skip) n.PushedAt = now;
             var due = g.Except(skip).ToList();
             if (due.Count == 0) continue;
@@ -144,7 +146,7 @@ public class PushWorker(IServiceScopeFactory scopes, ILogger<PushWorker> log) : 
 
             var releases = due.Where(n => n.RecommendationId is null && n.WatchedRecommendationId is null).ToList();
             if (releases.Count == 0) continue;
-            var zone = ReviewService.Zone(zones.GetValueOrDefault(g.Key));
+            var zone = ReviewService.Zone(people.GetValueOrDefault(g.Key)?.TimeZone);
             var local = TimeZoneInfo.ConvertTime(now, zone);
             var today = DateOnly.FromDateTime(local.DateTime);
             foreach (var stale in releases.Where(n => n.Day < today.AddDays(-1)).ToList()) { stale.PushedAt = now; releases.Remove(stale); }

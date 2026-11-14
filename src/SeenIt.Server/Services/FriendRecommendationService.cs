@@ -65,7 +65,7 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
                 // The recipient's own calendar day, so the alert files under "Today" for them rather than the UTC date.
                 UserId = to.Id, Type = req.Type, TmdbId = req.TmdbId, Title = headline, PosterPath = poster,
                 Day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ReviewService.Zone(to.TimeZone)).DateTime),
-                Detail = note is null ? null : Trim(note, 400), RecommendationId = rec.Id,
+                Detail = note is null ? null : Trim(note, 400), RecommendationId = rec.Id, Kind = AlertKind.Recommendation,
             });
         }
         await db.SaveChangesAsync(ct);

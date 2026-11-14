@@ -614,7 +614,7 @@ else { <h1>Settings</h1> }
         {
         @if (Searching) { <h2 class="settings-group">@Groups.First(g => g.Key == "alerts").Title</h2> }
         <section class="panel" id="alerts">
-            <h2>Release alerts</h2>
+            <h2>Alerts</h2>
             <p class="muted small">When a new episode of a show you watch (or have on your watchlist) or a watchlist movie comes out, it shows under the bell <Icon Name="bell" Size="14" /> at the top. Dropped shows are left out.</p>
             @if (alerts is { } al)
             {
@@ -626,17 +626,31 @@ else { <h1>Settings</h1> }
 
             }
             else { <Spinner /> }
-            <label class="check">
-                <input type="checkbox" checked="@Fmt.Prefs.AlertRecWatched" @onchange='e => SavePrefs(p => p with { AlertRecWatched = (bool)e.Value! }, (bool)e.Value! ? "Alerts on for watched recommendations" : "No alerts when someone watches what you recommend")' />
-                Alert me when someone watches something I recommended them
-            </label>
-            <p class="muted small">"Sam watched Heat", or "Sam started Severance" at their first episode. Once per recommendation, and only for watching after you sent it.</p>
+            <h3 class="alert-kinds-head">What you hear about, and how</h3>
+            <p class="muted small">For each kind: in your alerts (the bell), as a push notification on devices where you've turned those on (below), both, or not at all. Push only buzzes the device and leaves your alerts list alone.</p>
+            <div class="alert-kinds">
+                @foreach (var (kind, name, hint) in UserPrefs.AlertKinds)
+                {
+                    var id = $"alert-kind-{kind}";
+                    <div class="alert-kind" @key="kind">
+                        <label for="@id"><b>@name</b><span class="muted small">@hint</span></label>
+                        <select id="@id" class="narrow-select" value="@Fmt.Prefs.DeliveryFor(kind)"
+                                @onchange='e => SetDelivery(kind, Enum.TryParse<AlertDelivery>(e.Value?.ToString(), out var d) ? d : AlertDelivery.Both)'>
+                            <option value="@AlertDelivery.Both">Alert and push</option>
+                            <option value="@AlertDelivery.Alert">Alert only</option>
+                            <option value="@AlertDelivery.Push">Push only</option>
+                            <option value="@AlertDelivery.Off">Off</option>
+                        </select>
+                    </div>
+                }
+            </div>
+            <p class="muted small">"Someone watched your recommendation" is once per recommendation, and only for watching after you sent it. The morning email leaves out kinds that are off.</p>
         </section>
         @if (Platform.AppVersion is null)
         {
         <section class="panel" id="push">
             <h2>Push notifications</h2>
-            <p class="muted small">Get your alerts as notifications on this device: new episodes and releases (together, from 8 in the morning), recommendations, and friends watching what you recommended.</p>
+            <p class="muted small">Get alerts as notifications on this device. Which kinds are pushed is set above. New episodes and releases come together, from 8 in the morning; the rest straight away.</p>
             @if (pushCfg is not { } pc || pushHere is not { } ph) { <Spinner /> }
             else if (!pc.Enabled) { <p class="muted small">Push notifications aren't set up on this server.</p> }
             else
@@ -1308,6 +1322,20 @@ else { <h1>Settings</h1> }
         try { await Api.PushTestAsync(); Toasts.Show("Sent. It should arrive in a few seconds."); }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { pushBusy = false; }
+    }
+
+    private Task SetDelivery(AlertKind kind, AlertDelivery d)
+    {
+        var all = Enum.GetValues<AlertKind>().ToDictionary(k => k, k => Fmt.Prefs.DeliveryFor(k));
+        all[kind] = d;
+        var name = UserPrefs.AlertKinds.First(k => k.Kind == kind).Name;
+        return SavePrefs(p => p with { Alerts = all }, d switch
+        {
+            AlertDelivery.Both => $"{name}: alert and push",
+            AlertDelivery.Alert => $"{name}: alert only",
+            AlertDelivery.Push => $"{name}: push only",
+            _ => $"{name}: off",
+        });
     }
 
     private async Task LoadAlerts()

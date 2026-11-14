@@ -77,6 +77,11 @@ public enum WatchDefault { Ask, Now, ReleaseDate }
 public enum ScoreSpoilers { Off, Unwatched, Always }
 /// <summary>What marking something watched does to it being on your watchlist.</summary>
 public enum WatchlistOnWatch { Remove, Ask, Keep }
+/// <summary>The kinds of alert, each with its own delivery setting (UserPrefs.Alerts). Stored on each alert as a number:
+/// add new kinds at the end.</summary>
+public enum AlertKind { Episode, Movie, Person, Recommendation, RecWatched }
+/// <summary>How an alert reaches you: in the alerts list (and bell), as a push notification, both, or not at all.</summary>
+public enum AlertDelivery { Both, Alert, Push, Off }
 /// <summary>What an open page does when something of yours changes elsewhere (another tab or device, Jellyfin...).</summary>
 public enum AutoRefresh { Always, Ask, Never }
 public enum ListLayout { Posters, Rows }
@@ -128,7 +133,8 @@ public record UserPrefs(
     MediaRef? ProfileBanner = null,                  // a movie or show whose backdrop sits behind your name on your profile
     string? ProfileBadge = null,                     // a milestone shown next to your name (its label)
     AutoRefresh AutoRefresh = AutoRefresh.Always,    // Ask: a "Refresh" bar instead of reloading the page under you
-    bool AlertRecWatched = true)                     // an alert when someone watches (or starts) a title you recommended them
+    bool AlertRecWatched = true,                     // superseded by Alerts[RecWatched]; still read when that isn't set
+    IReadOnlyDictionary<AlertKind, AlertDelivery>? Alerts = null)   // per kind of alert; missing = Both
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -161,8 +167,25 @@ public record UserPrefs(
         PartVisibility?.TryGetValue(part, out var v) == true ? v : profile;
 
     /// <summary>Clamps everything to allowed values.</summary>
+    /// <summary>How this kind of alert reaches you.</summary>
+    public AlertDelivery DeliveryFor(AlertKind kind) =>
+        Alerts is not null && Alerts.TryGetValue(kind, out var d) ? d
+        : kind == AlertKind.RecWatched && !AlertRecWatched ? AlertDelivery.Off   // the older on/off switch
+        : AlertDelivery.Both;
+    public bool ListsAlert(AlertKind kind) => DeliveryFor(kind) is AlertDelivery.Both or AlertDelivery.Alert;
+    public bool PushesAlert(AlertKind kind) => DeliveryFor(kind) is AlertDelivery.Both or AlertDelivery.Push;
+    public static readonly (AlertKind Kind, string Name, string Hint)[] AlertKinds =
+    [
+        (AlertKind.Episode, "New episodes", "Shows you watch or have on your watchlist, on the day they air."),
+        (AlertKind.Movie, "Movie releases", "Movies on your watchlist, on release day."),
+        (AlertKind.Person, "New work from people you follow", "Their new movies and shows."),
+        (AlertKind.Recommendation, "Recommendations to you", "When a friend sends you something to watch."),
+        (AlertKind.RecWatched, "Someone watched your recommendation", "\"Sam watched Heat\", or started a show you sent them."),
+    ];
+
     public UserPrefs Clean() => this with
     {
+        Alerts = Alerts?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
         StartPage = StartPages.Contains(StartPage) ? StartPage : "home",
         Scores = Scores?.Where(s => ScoreSources.Any(x => x.Key == s)).Distinct().ToList(),
         HomeCounts = HomeCounts?.Where(kv => UiPrefs.HomeSections.Any(h => h.Key == kv.Key)).ToDictionary(kv => kv.Key, kv => Math.Clamp(kv.Value, 4, 40)),
