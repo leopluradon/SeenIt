@@ -724,6 +724,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int>("Processed")
                         .HasColumnType("integer");
 
+                    b.Property<DateOnly?>("Since")
+                        .HasColumnType("date");
+
                     b.Property<int>("Skipped")
                         .HasColumnType("integer");
 

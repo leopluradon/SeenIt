@@ -762,6 +762,19 @@ else { <h1>Settings</h1> }
             <h2>Import</h2>
             <p class="muted small">Re-importing is safe: a play you already have (logged here, by Jellyfin or by another import, within a day of the same date) is skipped, while separate viewings are all kept. Ratings are updated; watchlist and list entries aren't doubled.</p>
             <PartsPicker @bind-Value="importParts" Label="What to import" />
+            <div class="import-since">
+                <label class="check small">
+                    <input type="checkbox" checked="@onlySince" @onchange="e => ToggleSince(e.Value is true)" />
+                    <span><b>Only what's new since</b> <span class="muted">plays, ratings and watchlist and list entries dated on or after this day; plays with no date are left out</span></span>
+                </label>
+                @if (onlySince)
+                {
+                    <input type="date" class="import-since-date" aria-label="Import only what's dated on or after"
+                           value="@(sinceDate?.ToString("yyyy-MM-dd"))" max="@DateTime.Today.ToString("yyyy-MM-dd")"
+                           @onchange="e => sinceDate = DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null" />
+                    @if (LastImportDay is { } last) { <span class="muted small">Your last import was @last.ToString(Fmt.DateLong).</span> }
+                }
+            </div>
             <div class="import-grid">
                 <div class="import-card">
                     <h3>Trakt</h3>
@@ -832,6 +845,7 @@ else { <h1>Settings</h1> }
                             <div class="inline spread">
                                 <b>@WatchSources.Name(j.Kind) · @j.FileName</b>
                                 @if (j.Parts != ImportParts.All) { <span class="muted small">@PartsPicker.Describe(j.Parts)</span> }
+                                @if (j.Since is { } since) { <span class="muted small">since @since.ToString(Fmt.DateLong)</span> }
                                 @if (j.UndoneAt is not null) { <span class="pill">Undone</span> } else { <span class="pill @StatusClass(j.Status)">@j.Status</span> }
                             </div>
                             @if (j.Status == ImportStatus.Running && j.Total > 0)
@@ -1222,9 +1236,23 @@ else { <h1>Settings</h1> }
         }, ct);
     }
 
+    private bool onlySince;
+    private DateOnly? sinceDate;
+
+    /// <summary>The day of your newest finished import, a likely starting point for "only what's new".</summary>
+    private DateOnly? LastImportDay => imports?.Where(j => j.Status == ImportStatus.Completed && j.UndoneAt is null)
+        .Select(j => (DateOnly?)DateOnly.FromDateTime((j.FinishedAt ?? j.CreatedAt).LocalDateTime)).Max();
+
+    private void ToggleSince(bool on)
+    {
+        onlySince = on;
+        if (on) sinceDate ??= LastImportDay ?? DateOnly.FromDateTime(DateTime.Today.AddDays(-30));
+    }
+
     private async Task Upload(ImportKind kind, InputFileChangeEventArgs e)
     {
         var file = e.File;
+        if (onlySince && sinceDate is null) { Toasts.Show("Pick the date to import from, or untick “Only what's new since”.", error: true); return; }
         if (file.Size > MaxUpload) { Toasts.Show("Exports over 50 MB aren't supported.", error: true); return; }
         uploading = true;
         try
@@ -1233,8 +1261,8 @@ else { <h1>Settings</h1> }
             using var buffer = new MemoryStream();
             await stream.CopyToAsync(buffer);
             buffer.Position = 0;
-            await Api.UploadImportAsync(kind, importParts, file.Name, buffer);
-            Toasts.Show($"{WatchSources.Name(kind)} import started");
+            await Api.UploadImportAsync(kind, importParts, file.Name, buffer, onlySince ? sinceDate : null);
+            Toasts.Show($"{WatchSources.Name(kind)} import started" + (onlySince && sinceDate is { } d ? $": only what's dated {d.ToString(Fmt.DateLong)} or later" : ""));
             await LoadImports();
         }
         catch (Exception ex) { Toasts.Error(ex); }

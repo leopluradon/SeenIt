@@ -880,7 +880,8 @@ public record ImportJobDto(
     DateTimeOffset? UndoneAt = null,
     bool CanUndo = false,                          // imports from before undo existed can't be undone
     IReadOnlyList<PendingTitle>? Pending = null,   // unmatched titles that can still be matched by hand
-    IReadOnlyList<MatchCheck>? Checks = null);     // titles matched by name where TMDB has others of that name
+    IReadOnlyList<MatchCheck>? Checks = null,      // titles matched by name where TMDB has others of that name
+    DateOnly? Since = null);                       // only what's dated on or after this day was brought in
 
 /// <summary>
 /// An import title matched by name when TMDB has more than one of that name (Under the Skin: Glazer's

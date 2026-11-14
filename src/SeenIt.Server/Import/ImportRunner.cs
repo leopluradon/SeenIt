@@ -43,6 +43,17 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         parsed.Keep(job.Parts);
         if (found > 0 && parsed.Total == 0)
             throw new InvalidDataException("Nothing in that file matched what you chose to import.");
+        if (job.Since is { } since && !resolving)
+        {
+            var tz = await db.Users.Where(u => u.Id == job.UserId).Select(u => u.TimeZone).FirstOrDefaultAsync(ct);
+            var zone = ReviewService.Zone(tz);
+            var midnight = since.ToDateTime(TimeOnly.MinValue);
+            var cutoff = new DateTimeOffset(midnight, zone.GetUtcOffset(midnight));
+            var kept = parsed.Total;
+            parsed.KeepSince(cutoff);
+            if (kept > 0 && parsed.Total == 0)
+                throw new InvalidDataException($"Nothing in that file is dated on or after {since:MMM d, yyyy}, so there was nothing new to import.");
+        }
         if (parsed.Total == 0)
             throw new InvalidDataException(job.Kind switch
             {

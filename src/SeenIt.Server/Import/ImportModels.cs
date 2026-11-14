@@ -50,6 +50,23 @@ public class ParsedImport
         Lists.RemoveAll(l => l.Items.Count == 0);
     }
 
+    /// <summary>
+    /// "Only what's new since": keeps plays, ratings and watchlist, list and library entries dated at or after
+    /// the cutoff. Plays with no date can't be placed, so they go. Shows known only by how far you got
+    /// (TV Time, Simkl CSV) stay if you last watched them since. Favorites have no date and are kept
+    /// (they're skipped if already there).
+    /// </summary>
+    public void KeepSince(DateTimeOffset cutoff)
+    {
+        History.RemoveAll(h => WatchDates.IsUnknown(h.WatchedAt) || h.WatchedAt < cutoff);
+        Progress.RemoveAll(p => p.LastWatchedAt is not { } at || at < cutoff);
+        Ratings.RemoveAll(r => r.RatedAt < cutoff);
+        Watchlist.RemoveAll(w => w.AddedAt < cutoff);
+        Library.RemoveAll(l => l.AddedAt < cutoff);
+        foreach (var l in Lists) l.Items.RemoveAll(i => i.AddedAt < cutoff);
+        Lists.RemoveAll(l => l.Items.Count == 0);
+    }
+
     public int Total => History.Count + Watchlist.Count + Ratings.Count + Lists.Sum(l => l.Items.Count) + Favorites.Count + Progress.Count + Library.Count;
 }
 

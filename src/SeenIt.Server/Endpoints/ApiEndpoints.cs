@@ -664,7 +664,7 @@ public static class ApiEndpoints
             return Results.Ok(r);
         });
 
-        g.MapPost("/{kind}", async (ImportKind kind, int? parts, IFormFile file, ClaimsPrincipal p, AppDbContext db, ActivityService a, CancellationToken ct) =>
+        g.MapPost("/{kind}", async (ImportKind kind, int? parts, DateOnly? since, IFormFile file, ClaimsPrincipal p, AppDbContext db, ActivityService a, CancellationToken ct) =>
         {
             var what = (ImportParts)(parts ?? (int)ImportParts.All) & ImportParts.All;
             if ((what & (ImportParts.Movies | ImportParts.Shows)) == 0 || (what & ~(ImportParts.Movies | ImportParts.Shows)) == 0)
@@ -680,10 +680,12 @@ public static class ApiEndpoints
 
             using var ms = new MemoryStream();
             await file.CopyToAsync(ms, ct);
-            var job = new ImportJob { UserId = uid, Kind = kind, Parts = what, FileName = Path.GetFileName(file.FileName), Payload = ms.ToArray(), Status = ImportStatus.Queued };
+            if (since is { } sd && sd > DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1))
+                return Results.BadRequest(new ProblemInfo("Pick a date that isn't in the future."));
+            var job = new ImportJob { UserId = uid, Kind = kind, Parts = what, Since = since, FileName = Path.GetFileName(file.FileName), Payload = ms.ToArray(), Status = ImportStatus.Queued };
             db.ImportJobs.Add(job);
             await db.SaveChangesAsync(ct);
-            await a.LogAsync(p, ActivityKind.Import, detail: $"{kind} upload {job.FileName} ({file.Length / 1024:N0} KB), {job.Parts}");
+            await a.LogAsync(p, ActivityKind.Import, detail: $"{kind} upload {job.FileName} ({file.Length / 1024:N0} KB), {job.Parts}{(since is { } d ? $", since {d:yyyy-MM-dd}" : "")}");
             return Results.Ok(new { job.Id });
         }).DisableAntiforgery();
     }

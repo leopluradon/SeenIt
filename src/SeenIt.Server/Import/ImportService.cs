@@ -14,7 +14,7 @@ public class ImportService(AppDbContext db, ImportRunner runner, CatalogService 
             .Select(j => new
             {
                 j.Id, j.Kind, j.FileName, j.Status, j.CreatedAt, j.FinishedAt, j.Total, j.Processed, j.Imported, j.Skipped, j.Failed,
-                j.Message, j.Unmatched, j.Parts, j.UndoneAt, CanUndo = j.UndoJson != null, j.PendingJson, j.ChecksJson,
+                j.Message, j.Unmatched, j.Parts, j.UndoneAt, CanUndo = j.UndoJson != null, j.PendingJson, j.ChecksJson, j.Since,
             })
             .ToListAsync(ct);
         var checks = jobs.ToDictionary(j => j.Id, j => j.UndoneAt is null ? ImportCheck.Parse(j.ChecksJson) : []);
@@ -27,7 +27,8 @@ public class ImportService(AppDbContext db, ImportRunner runner, CatalogService 
                 : [],
             checks[j.Id].Select(c => titles.TryGetValue((c.Type, c.TmdbId), out var t)
                 ? new MatchCheck(c.Type, c.TmdbId, c.Label, t.Title, t.Year, t.Poster, c.Others.Select(o => new MatchOption(o.TmdbId, o.Title, o.Year, o.PosterPath)).ToList())
-                : null).OfType<MatchCheck>().ToList())).ToList();
+                : null).OfType<MatchCheck>().ToList(),
+            j.Since)).ToList();
     }
 
     private async Task<Dictionary<(MediaType, int), (string Title, int? Year, string? Poster)>> TitlesAsync(IEnumerable<(MediaType Type, int Id)> refs, CancellationToken ct)

@@ -384,13 +384,13 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     }
     private sealed record AddedResult(int Added);
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");
-    public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content)
+    public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content, DateOnly? since = null)
     {
         using var form = new MultipartFormDataContent();
         var file = new StreamContent(content);
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         form.Add(file, "file", fileName);
-        using var resp = await SendRawAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/imports/{kind}?parts={(int)parts}") { Content = form }, auth: true);
+        using var resp = await SendRawAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/imports/{kind}?parts={(int)parts}" + (since is { } d ? $"&since={d:yyyy-MM-dd}" : "")) { Content = form }, auth: true);
         await EnsureOkAsync(resp);
     }
 

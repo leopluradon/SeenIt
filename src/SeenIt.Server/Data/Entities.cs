@@ -247,6 +247,8 @@ public class ImportJob
     public Guid UserId { get; set; }
     public ImportKind Kind { get; set; }
     public ImportParts Parts { get; set; } = ImportParts.All;
+    /// <summary>Only bring in what's dated on or after this day (in the user's time zone); null = everything.</summary>
+    public DateOnly? Since { get; set; }
     public string FileName { get; set; } = "";
     public byte[]? Payload { get; set; }
     public ImportStatus Status { get; set; }
