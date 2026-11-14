@@ -397,6 +397,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int?>("EpisodeNumber")
                         .HasColumnType("integer");
 
+                    b.Property<DateTimeOffset>("LastPingAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int?>("SeasonNumber")
                         .HasColumnType("integer");
 

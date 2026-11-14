@@ -313,6 +313,8 @@ public class CheckIn
     public DateTimeOffset EndsAt { get; set; }
     /// <summary>Manual check-ins become a play at EndsAt; Jellyfin ones are scrobbled by the webhook.</summary>
     public WatchSource Source { get; set; }
+    /// <summary>When the player last reported in. Jellyfin check-ins that go quiet stop counting as watching.</summary>
+    public DateTimeOffset LastPingAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 /// <summary>A single-use sign-up link. Signing up with it makes the inviter and the new member follow each other.</summary>

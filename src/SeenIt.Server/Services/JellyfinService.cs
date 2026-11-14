@@ -217,7 +217,12 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         if (p.NotificationType == "PlaybackProgress" && current is not null && current.Source == source && CheckInService.IsLive(current)
             && (endsAt is null || p.IsPaused == true || Math.Abs((current.EndsAt - endsAt.Value).TotalMinutes) < 2)
             && (startedAt is null || Math.Abs((current.StartedAt - startedAt.Value).TotalMinutes) < 2))
+        {
+            // Nothing to change, but note the player is still reporting so the check-in isn't dropped as quiet.
+            if (DateTimeOffset.UtcNow - current.LastPingAt > TimeSpan.FromMinutes(1))
+                await db.CheckIns.Where(c => c.UserId == user.Id).ExecuteUpdateAsync(c => c.SetProperty(x => x.LastPingAt, DateTimeOffset.UtcNow), ct);
             return "Still watching";
+        }
 
         var req = await ResolveAsync(p, ct);
         if (req is null) return "Now playing, but couldn't match it on TMDB";
