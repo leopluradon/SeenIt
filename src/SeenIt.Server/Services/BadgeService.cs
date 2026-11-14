@@ -17,21 +17,21 @@ public class BadgeService(AppDbContext db, IMemoryCache cache)
     // Tiered families: goals for bronze, silver, gold, platinum, diamond, emerald, ruby, sapphire, obsidian, mythic (BadgeTier order).
     private static readonly Ladder[] Ladders =
     [
-        new("movies", "film", "Different movies watched", [25, 100, 250, 500, 1000, 1750, 2500, 4000, 6000, 10000], n => $"{n:N0} movies"),
-        new("episodes", "tv", "Different episodes watched", [250, 1000, 2500, 5000, 10000, 15000, 25000, 40000, 60000, 100000], n => $"{n:N0} episodes"),
-        new("hours", "clock", "Hours spent watching, counting rewatches", [50, 250, 1000, 2500, 5000, 7500, 10000, 15000, 20000, 30000], n => $"{n:N0} hours"),
-        new("finished", "check", "Shows watched to the end (or every episode out so far)", [5, 15, 40, 75, 125, 200, 300, 450, 650, 1000], n => $"{n:N0} shows finished"),
-        new("ratings", "star", "Movies, shows and episodes rated", [25, 100, 250, 500, 1000, 1750, 2500, 4000, 6000, 10000], n => $"{n:N0} ratings"),
-        new("streak", "target", "Most days in a row with something watched", [3, 7, 14, 30, 60, 100, 180, 365, 500, 730], n => $"{n:N0}-day streak"),
-        new("dayone", "calendar", "Episodes watched the day they aired", [10, 25, 75, 150, 300, 600, 1000, 2000, 3500, 5000], n => $"{n:N0} on air day"),
-        new("rewatch", "repeat", "Movies watched more than once", [5, 15, 35, 70, 120, 200, 300, 450, 700, 1000], n => $"{n:N0} rewatched"),
-        new("classics", "history", "Movies from before 1970", [5, 15, 35, 70, 120, 200, 300, 450, 700, 1000], n => $"{n:N0} classics"),
-        new("recommender", "send", "Titles recommended to friends", [5, 15, 35, 70, 120, 200, 300, 450, 700, 1000], n => $"{n:N0} recommended"),
-        new("tastemaker", "users", "Recommendations friends went on to watch", [3, 10, 25, 50, 100, 150, 250, 400, 600, 1000], n => $"{n:N0} recs watched"),
-        new("curator", "list", "Public lists with at least 5 titles", [1, 3, 6, 10, 18, 30, 50, 80, 120, 200], n => $"{n:N0} lists"),
+        new("movies", "film", "Different movies watched", [50, 150, 300, 600, 1000, 1750, 2500, 4000, 6000, 10000], n => $"{n:N0} movies"),
+        new("episodes", "tv", "Different episodes watched", [500, 1500, 3000, 5000, 10000, 15000, 25000, 40000, 60000, 100000], n => $"{n:N0} episodes"),
+        new("hours", "clock", "Hours spent watching, counting rewatches", [100, 300, 1000, 2500, 5000, 7500, 10000, 15000, 20000, 30000], n => $"{n:N0} hours"),
+        new("finished", "check", "Shows watched to the end (or every episode out so far)", [5, 15, 30, 60, 100, 160, 250, 400, 650, 1000], n => $"{n:N0} shows finished"),
+        new("ratings", "star", "Movies, shows and episodes rated", [50, 150, 300, 600, 1000, 1750, 2500, 4000, 6000, 10000], n => $"{n:N0} ratings"),
+        new("streak", "target", "Most days in a row with something watched", [7, 14, 30, 60, 100, 180, 365, 500, 730, 1000], n => $"{n:N0}-day streak"),
+        new("dayone", "calendar", "Episodes watched the day they aired", [25, 75, 150, 300, 600, 1000, 2000, 3500, 5000, 8000], n => $"{n:N0} on air day"),
+        new("rewatch", "repeat", "Movies watched more than once", [10, 25, 50, 100, 150, 250, 400, 600, 800, 1000], n => $"{n:N0} rewatched"),
+        new("classics", "history", "Movies from before 1970", [10, 25, 50, 100, 150, 250, 400, 600, 800, 1000], n => $"{n:N0} classics"),
+        new("recommender", "send", "Titles recommended to friends", [10, 25, 50, 100, 150, 250, 400, 600, 800, 1000], n => $"{n:N0} recommended"),
+        new("tastemaker", "users", "Recommendations friends went on to watch", [5, 15, 30, 60, 100, 150, 250, 400, 600, 1000], n => $"{n:N0} recs watched"),
+        new("curator", "list", "Public lists with at least 5 titles", [3, 6, 10, 15, 25, 40, 60, 90, 130, 200], n => $"{n:N0} lists"),
     ];
     private static readonly string[] GenreTitles = ["fan", "buff", "devotee", "enthusiast", "connoisseur", "expert", "master", "grandmaster", "legend", "icon"];
-    private static readonly long[] GenreGoals = [10, 25, 50, 100, 175, 250, 400, 600, 800, 1000];
+    private static readonly long[] GenreGoals = [25, 50, 100, 175, 250, 400, 600, 800, 1000, 1500];
 
     /// <summary>Every badge for this person: earned ones at their tier, locked ones with progress. Cached for a few minutes.</summary>
     public Task<List<BadgeDto>> AllAsync(Guid userId, CancellationToken ct) =>
