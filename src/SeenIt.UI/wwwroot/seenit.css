@@ -1712,9 +1712,20 @@ html.compact .overview { line-height: 1.5; }
 .badge-chip.tier-silver   { --m1: #8e98a6; --m2: #e4e9f0; --ring: rgba(200, 208, 220, .55); }
 .badge-chip.tier-gold     { --m1: #c8901a; --m2: #ffe08a; --ring: rgba(245, 197, 66, .65); }
 .badge-chip.tier-platinum { --m1: #5fb8d4; --m2: #e3fbff; --ring: rgba(155, 231, 255, .7); }
+.badge-chip.tier-diamond  { --m1: #7ad7f0; --m2: #ffffff; --ring: rgba(190, 240, 255, .8); }
+.badge-chip.tier-emerald  { --m1: #12915f; --m2: #8ff0c0; --ring: rgba(60, 220, 150, .7); }
+.badge-chip.tier-ruby     { --m1: #b3122b; --m2: #ff8fa0; --ring: rgba(240, 70, 95, .7); }
+.badge-chip.tier-sapphire { --m1: #2349c4; --m2: #9fbcff; --ring: rgba(90, 130, 255, .75); }
+.badge-chip.tier-obsidian { --m1: #14121f; --m2: #8a78d6; --ring: rgba(150, 125, 235, .8); }
+.badge-chip.tier-obsidian .badge-medal, .badge-chip.tier-sapphire .badge-medal, .badge-chip.tier-ruby .badge-medal, .badge-chip.tier-emerald .badge-medal { color: #fff; }
+.badge-chip.tier-mythic   { --m1: #ff4fa3; --m2: #ffe66d; --ring: rgba(255, 140, 210, .85); }
+.badge-chip.tier-mythic .badge-medal { color: #fff; background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, .7), transparent 45%), conic-gradient(from var(--spin, 0deg), #ff4fa3, #ffe66d, #4fe3a1, #4fb6ff, #a56bff, #ff4fa3); animation: badge-spin 6s linear infinite; }
+@property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes badge-spin { to { --spin: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .badge-chip.tier-mythic .badge-medal { animation: none; } }
 .badge-chip.tier-special  { --m1: var(--accent); --m2: color-mix(in srgb, var(--accent) 45%, #fff); --ring: rgba(var(--accent-rgb), .6); }
 .badge-chip.tier-special .badge-medal { color: #fff; }
-.badge-chip.tier-gold, .badge-chip.tier-platinum { background: linear-gradient(135deg, color-mix(in srgb, var(--m2) 14%, transparent), transparent 70%), var(--surface); }
+.badge-chip.tier-gold, .badge-chip.tier-platinum, .badge-chip.tier-diamond, .badge-chip.tier-emerald, .badge-chip.tier-ruby, .badge-chip.tier-sapphire, .badge-chip.tier-obsidian, .badge-chip.tier-mythic { background: linear-gradient(135deg, color-mix(in srgb, var(--m2) 14%, transparent), transparent 70%), var(--surface); }
 .badge-chip.locked { filter: grayscale(1); opacity: .55; border-style: dashed; }
 .profile-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
 .profile-badges .badge-chip { animation: badge-in .25s ease-out backwards; }

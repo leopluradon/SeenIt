@@ -1004,7 +1004,7 @@ public record ProfileDto(
     IReadOnlyList<BadgeDto>? Badges = null);        // badges pinned next to the name, in the owner's order
 
 /// <summary>Badge tiers, lowest first; Special is for one-off badges with no ladder.</summary>
-public enum BadgeTier { Bronze, Silver, Gold, Platinum, Special }
+public enum BadgeTier { Bronze, Silver, Gold, Platinum, Diamond, Emerald, Ruby, Sapphire, Obsidian, Mythic, Special }
 /// <summary>
 /// A badge family ("movies", "genre:Horror") at the tier reached. Locked (not Earned) badges carry the first tier's
 /// name and the progress toward it, for the picker. Progress/Goal: toward the next tier (null at the top).

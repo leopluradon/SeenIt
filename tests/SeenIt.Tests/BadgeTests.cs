@@ -28,16 +28,16 @@ public class BadgeTests
         var svc = new BadgeService(db, new MemoryCache(new MemoryCacheOptions()));
         var all = (await svc.AllAsync(me.Id, default)).ToDictionary(b => b.Id);
 
-        Assert.Equal(("50 movies", BadgeTier.Bronze, true), (all["movies"].Label, all["movies"].Tier, all["movies"].Earned));
-        Assert.Equal(("250 movies", 60L, 250L), (all["movies"].Next, all["movies"].Progress, all["movies"].Goal));
-        Assert.Equal(("30-day streak", BadgeTier.Silver), (all["streak"].Label, all["streak"].Tier));   // 60 days in a row
-        Assert.Equal("Horror fan", all["genre:Horror"].Label);
+        Assert.Equal(("25 movies", BadgeTier.Bronze, true), (all["movies"].Label, all["movies"].Tier, all["movies"].Earned));
+        Assert.Equal(("100 movies", 60L, 100L), (all["movies"].Next, all["movies"].Progress, all["movies"].Goal));
+        Assert.Equal(("60-day streak", BadgeTier.Diamond), (all["streak"].Label, all["streak"].Tier));   // 60 days in a row
+        Assert.Equal("Horror devotee", all["genre:Horror"].Label);
         Assert.True(all["classics"].Earned);       // 12 from before 1970
         Assert.True(all["perfect10"].Earned);
         Assert.True(all["founder"].Earned);
         Assert.False(all["episodes"].Earned);
         Assert.Equal(0L, all["episodes"].Progress);
-        Assert.Equal("100 hours", all["hours"].Label);   // 61 plays × 100 min
+        Assert.Equal("50 hours", all["hours"].Label);   // 61 plays × 100 min
 
         // Only earned badges show, in the chosen order; an old single milestone badge maps to its family.
         var pinned = await svc.PinnedAsync(me, UserPrefs.Default with { ProfileBadges = ["streak", "episodes", "movies"] }, default);
