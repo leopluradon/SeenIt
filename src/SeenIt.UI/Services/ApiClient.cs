@@ -13,7 +13,7 @@ public class ApiException(string message, HttpStatusCode status) : Exception(mes
 }
 
 /// <summary>Typed client for the SeenIt API. Used unchanged by the website and the mobile app.</summary>
-public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offline, ConnectivityState connectivity)
+public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offline, ConnectivityState connectivity, IServerConfig server)
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -186,6 +186,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         GetAsync<ItemStatus>($"api/status/{type}/{id}" + (season is { } s && episode is { } e ? $"?season={s}&episode={e}" : ""));
     public Task<List<ShowProgressDto>> ProgressAsync() => GetAsync<List<ShowProgressDto>>("api/progress");
     public Task<List<CalendarEntry>> CalendarAsync(DateOnly from, int days) => GetAsync<List<CalendarEntry>>($"api/calendar?from={from:yyyy-MM-dd}&days={days}");
+    public Task<List<ToRateItem>> ToRateAsync(int max) => GetAsync<List<ToRateItem>>($"api/torate?max={max}");
+    public Task SkipToRateAsync(ToRateSkip s) => SendAsync(HttpMethod.Post, "api/torate/skip", s);
+    public Task UnskipToRateAsync(ToRateSkip s) => SendAsync(HttpMethod.Post, "api/torate/unskip", s);
     public Task<DashboardDto> DashboardAsync() => GetAsync<DashboardDto>("api/dashboard");
     public Task<int> StartRewatchAsync(int showId) => SendAsync<int>(HttpMethod.Post, $"api/shows/{showId}/rewatch")!;
     public Task StopRewatchAsync(int showId) => SendAsync(HttpMethod.Delete, $"api/shows/{showId}/rewatch");
@@ -390,7 +393,11 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         await EnsureOkAsync(resp);
     }
 
-    public Uri BaseAddress => http.BaseAddress!;
+    /// <summary>
+    /// The server's real address, for things the browser loads itself (profile pictures). In the app the
+    /// HttpClient talks to a placeholder host that only its own handler understands; the WebView can't reach it.
+    /// </summary>
+    public Uri BaseAddress => Uri.TryCreate(server.Url.EndsWith('/') ? server.Url : server.Url + "/", UriKind.Absolute, out var u) ? u : http.BaseAddress!;
 
     public async Task UploadAvatarAsync(string fileName, string contentType, Stream content)
     {
