@@ -8,6 +8,12 @@ namespace SeenIt.Mobile;
 
 // Share an IMDb, TMDB, Letterboxd or Trakt link from another app → open it in SeenIt (search resolves the link).
 [IntentFilter([Intent.ActionSend], Categories = [Intent.CategoryDefault], DataMimeType = "text/plain", Label = "SeenIt")]
+// App Links: seenit.vohiyo.com pages open here instead of the browser (verified by /.well-known/assetlinks.json).
+// Only page links: downloads, the API and feeds stay with the browser.
+[IntentFilter([Intent.ActionView], Categories = [Intent.CategoryDefault, Intent.CategoryBrowsable], AutoVerify = true,
+    DataScheme = "https", DataHost = "seenit.vohiyo.com",
+    DataPathPrefixes = ["/movie/", "/show/", "/person/", "/u/", "/list/", "/lists", "/history", "/progress", "/calendar", "/watchlist",
+        "/notifications", "/recommendations", "/friends", "/people", "/discover", "/search", "/stats", "/invite/", "/pick", "/favorites", "/ratings"])]
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop,
     ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
@@ -25,6 +31,9 @@ public class MainActivity : MauiAppCompatActivity
     private static string? PathFor(Intent? intent)
     {
         if (intent?.GetStringExtra(PathExtra) is { Length: > 0 } path) return path;
+        // An App Link: the same page, in the app.
+        if (intent?.Action == Intent.ActionView && intent.Data is { Scheme: "https" } appLink && appLink.Host == "seenit.vohiyo.com")
+            return ((appLink.EncodedPath ?? "").TrimStart('/') + (appLink.EncodedQuery is { Length: > 0 } q ? "?" + q : "")) is { Length: > 0 } page ? page : null;
         if (intent?.Action == Intent.ActionSend && intent.GetStringExtra(Intent.ExtraText) is { Length: > 0 } text)
         {
             var link = System.Text.RegularExpressions.Regex.Match(text, @"https?://\S+");
@@ -45,6 +54,7 @@ public class MainActivity : MauiAppCompatActivity
     {
         base.OnCreate(savedInstanceState);
         DeepLinks.Open(PathFor(Intent));
+        AppNotifications.Resume(this);
         if (Window is not { } window) return;
 
         // Android 15+ draws apps edge-to-edge, and the WebView doesn't report safe-area insets to

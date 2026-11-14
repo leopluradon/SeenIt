@@ -646,12 +646,30 @@ else { <h1>Settings</h1> }
             </div>
             <p class="muted small">"Someone watched your recommendation" is once per recommendation, and only for watching after you sent it. The morning email leaves out kinds that are off.</p>
         </section>
-        @if (Platform.AppVersion is null)
+        @if (Platform.AppVersion is null || Platform.Notifications is not null)
         {
         <section class="panel" id="push">
             <h2>Push notifications</h2>
             <p class="muted small">Get alerts as notifications on this device. Which kinds are pushed is set above. New episodes and releases come together, from 8 in the morning; the rest straight away.</p>
-            @if (pushCfg is not { } pc || pushHere is not { } ph) { <Spinner /> }
+            @if (Platform.Notifications is { } native)
+            {
+                @* The Android app: the phone's own notifications, collected in the background. *@
+                <div class="inline">
+                    @if (native.IsOn)
+                    {
+                        <span class="pill"><Icon Name="check" Size="14" /> On for this phone</span>
+                        <button class="btn btn-sm" disabled="@pushBusy" @onclick="PushTest">Send a test</button>
+                        <button class="btn btn-sm btn-ghost" disabled="@pushBusy" @onclick="NativeOff">Turn off</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-primary" disabled="@pushBusy" @onclick="NativeOn"><Icon Name="bell" Size="16" /> Turn on for this phone</button>
+                    }
+                </div>
+                <p class="muted small">The app checks for new alerts in the background, about every 15 minutes (Android may wait longer while the phone is idle).</p>
+            }
+            @if (pushCfg is not { } pc || pushHere is not { } ph) { @if (Platform.Notifications is null) { <Spinner /> } }
+            else if (Platform.Notifications is not null) { @PushDevices(pc, Platform.Notifications.DeviceEndpoint) }
             else if (!pc.Enabled) { <p class="muted small">Push notifications aren't set up on this server.</p> }
             else
             {
@@ -683,20 +701,7 @@ else { <h1>Settings</h1> }
                         }
                     </div>
                 }
-                var others = pc.Devices.Where(d => d.Endpoint != ph.Endpoint).ToList();
-                @if (others.Count > 0)
-                {
-                    <p class="muted small">Also on:</p>
-                    <ul class="push-devices">
-                        @foreach (var d in others)
-                        {
-                            <li @key="d.Endpoint">
-                                <span>@(d.Device ?? "Another device") <span class="muted small">since @d.Since.ToLocalTime().ToString(Fmt.DateLong)</span></span>
-                                <button class="btn btn-sm btn-ghost" disabled="@pushBusy" @onclick="() => PushForget(d.Endpoint)">Remove</button>
-                            </li>
-                        }
-                    </ul>
-                }
+                @PushDevices(pc, ph.Endpoint)
             }
         </section>
         }
@@ -1266,13 +1271,51 @@ else { <h1>Settings</h1> }
     private PushBrowser? pushHere;
     private bool pushBusy;
 
+    /// <summary>Your other devices with notifications on, each removable.</summary>
+    private RenderFragment PushDevices(PushConfigDto pc, string? here) => __builder =>
+    {
+        var others = pc.Devices.Where(d => d.Endpoint != here).ToList();
+        if (others.Count == 0) return;
+        <p class="muted small">Also on:</p>
+        <ul class="push-devices">
+            @foreach (var d in others)
+            {
+                <li @key="d.Endpoint">
+                    <span>@(d.Device ?? "Another device") <span class="muted small">since @d.Since.ToLocalTime().ToString(Fmt.DateLong)</span></span>
+                    <button class="btn btn-sm btn-ghost" disabled="@pushBusy" @onclick="() => PushForget(d.Endpoint)">Remove</button>
+                </li>
+            }
+        </ul>
+    };
+
+    private async Task NativeOn()
+    {
+        pushBusy = true;
+        try
+        {
+            if (await Platform.Notifications!.TurnOnAsync() is { } why) { Toasts.Show(why); return; }
+            Toasts.Show("Notifications on for this phone");
+            await LoadPush();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { pushBusy = false; }
+    }
+
+    private async Task NativeOff()
+    {
+        pushBusy = true;
+        try { await Platform.Notifications!.TurnOffAsync(); Toasts.Show("Notifications off for this phone"); await LoadPush(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { pushBusy = false; }
+    }
+
     private async Task LoadPush()
     {
-        if (Platform.AppVersion is not null) return;   // the Android app isn't a browser: no web push there
         try
         {
             pushCfg = await Api.PushAsync();
-            pushHere = await Js.InvokeAsync<PushBrowser>("seenit.pushState");
+            // The Android app isn't a browser: it has its own notifications instead of web push.
+            pushHere = Platform.Notifications is null ? await Js.InvokeAsync<PushBrowser>("seenit.pushState") : new PushBrowser(false, false, false, "app", null);
             StateHasChanged();
         }
         catch { pushCfg ??= new PushConfigDto(false, null, []); pushHere ??= new PushBrowser(false, false, false, "unsupported", null); }
@@ -1319,7 +1362,12 @@ else { <h1>Settings</h1> }
     private async Task PushTest()
     {
         pushBusy = true;
-        try { await Api.PushTestAsync(); Toasts.Show("Sent. It should arrive in a few seconds."); }
+        try
+        {
+            await Api.PushTestAsync();
+            if (Platform.Notifications is { IsOn: true } native) await native.CheckNowAsync();   // the app collects it now, not in 15 minutes
+            Toasts.Show("Sent. It should arrive in a few seconds.");
+        }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { pushBusy = false; }
     }

@@ -4,4 +4,7 @@
                  android:supportsRtl="true" android:usesCleartextTraffic="false" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Alerts as notifications (asked for when you turn them on in Settings), and keeping that check after a reboot. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>

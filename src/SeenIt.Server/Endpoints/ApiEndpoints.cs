@@ -250,15 +250,22 @@ public static class ApiEndpoints
         g.MapGet("/live", (HttpContext http, ClaimsPrincipal p, LiveHub hub, CancellationToken ct) => LiveHub.StreamAsync(http, p.UserId(), hub, ct));
         g.MapGet("/status/{type}/{id:int}", (MediaType type, int id, int? season, int? episode, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.ItemStatusAsync(p.UserId(), type, id, season, episode, ct));
-        g.MapGet("/pick", async (PickKind? kind, PickSource? source, int? maxMinutes, bool? streaming, string? region, string? exclude,
-            ClaimsPrincipal p, AppDbContext db, PickService picks, CancellationToken ct) =>
+        g.MapGet("/pick", async (PickKind? kind, PickSource? source, int? maxMinutes, bool? streaming, string? region, string? exclude, string? with,
+            ClaimsPrincipal p, AppDbContext db, PickService picks, SocialService social, CancellationToken ct) =>
         {
             var uid = p.UserId();
             var saved = await db.Users.Where(u => u.Id == uid).Select(u => u.Region).FirstOrDefaultAsync(ct);
             var code = saved ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r : "US");
             var skip = (exclude ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            // Watching together: only people whose profile you're allowed to see (their watchlist and history decide the pick).
+            var group = new List<(Guid Id, string Name)>();
+            foreach (var name in (with ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(8))
+            {
+                if (await social.ViewableAsync(name, uid, ct) is not { } friend) return Results.BadRequest(new ProblemInfo($"You can't see {name}'s watchlist."));
+                if (friend.Id != uid) group.Add((friend.Id, friend.DisplayName ?? friend.UserName ?? name));
+            }
             var pick = await picks.PickAsync(uid, kind ?? PickKind.Any, source ?? PickSource.Both, maxMinutes is > 0 ? maxMinutes : null,
-                streaming ?? false, code, skip, ct);
+                streaming ?? false, code, skip, ct, group);
             return pick is null ? Results.NoContent() : Results.Ok(pick);
         });
         g.MapGet("/onthisday", (string? tz, ClaimsPrincipal p, OnThisDayService s, CancellationToken ct) => s.GetAsync(p.UserId(), tz, ct));
@@ -422,6 +429,13 @@ public static class ApiEndpoints
             await push.UnsubscribeAsync(p.UserId(), req.Endpoint, ct);
             return Results.NoContent();
         });
+        g.MapPost("/push/app", async (AppPushRegisterRequest req, ClaimsPrincipal p, PushService push, CancellationToken ct) =>
+        {
+            await push.RegisterAppAsync(p.UserId(), req, ct);
+            return Results.NoContent();
+        });
+        g.MapGet("/push/app/{install}", (string install, ClaimsPrincipal p, PushService push, CancellationToken ct) =>
+            push.TakeAppMessagesAsync(p.UserId(), install, ct));
         g.MapPost("/push/test", async (ClaimsPrincipal p, PushService push, CancellationToken ct) =>
             Results.Ok(new { sent = await push.SendAsync(p.UserId(), new PushPayload("SeenIt", "Push notifications are working on this device.", "notifications", "test"), ct) }));
         g.MapGet("/alerts", async (ClaimsPrincipal p, AppDbContext db, ReleaseAlertService a, EmailService email, CancellationToken ct) =>

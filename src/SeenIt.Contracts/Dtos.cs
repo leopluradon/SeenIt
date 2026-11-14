@@ -732,6 +732,8 @@ public record PushConfigDto(bool Enabled, string? PublicKey, IReadOnlyList<PushD
 public record PushDeviceDto(string Endpoint, string? Device, DateTimeOffset Since, DateTimeOffset? LastSentAt);
 public record PushSubscribeRequest(string Endpoint, string P256dh, string Auth, string? Device = null);
 public record PushUnsubscribeRequest(string Endpoint);
+/// <summary>The Android app on one phone (InstallId: a GUID it made up on first run).</summary>
+public record AppPushRegisterRequest(string InstallId, string? Device = null);
 /// <summary>What the service worker shows. Url is relative to the site.</summary>
 public record PushPayload(string Title, string Body, string Url, string? Tag = null);
 /// <summary>Release alerts and the private calendar feed. CalendarUrl is secret: anyone with it sees your calendar.</summary>

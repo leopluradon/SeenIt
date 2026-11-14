@@ -20,10 +20,31 @@
             <button class="chip @(maxMinutes == mins ? "on" : "")" @onclick="() => Set(() => maxMinutes = mins)" @key="label">@label</button>
         }
     </div>
+    @if (friends is { Count: > 0 })
+    {
+        <div class="chips pick-who" role="group" aria-label="Who's watching">
+            <span class="muted small">Who's watching</span>
+            <button class="chip @(with.Count == 0 ? "on" : "")" aria-pressed="@(with.Count == 0)" @onclick="() => Set(() => with.Clear())">Just me</button>
+            @foreach (var f in friends)
+            {
+                var on = with.Contains(f.UserName);
+                <button class="chip @(on ? "on" : "")" aria-pressed="@on" @key="f.UserName" @onclick="() => Set(() => { if (!with.Remove(f.UserName)) with.Add(f.UserName); })">
+                    <Avatar Name="@(f.DisplayName ?? f.UserName)" Url="@f.Avatar" Class="avatar-xs" /> @(f.DisplayName ?? f.UserName)
+                </button>
+            }
+        </div>
+    }
+    @if (with.Count > 0)
+    {
+        <p class="muted small pick-group-note">From everyone's watchlists, leaving out anything any of you has seen or started. Titles more of you want come up more often.</p>
+    }
     <div class="chips">
+        @if (with.Count == 0)
+        {
         <button class="chip @(source == PickSource.Both ? "on" : "")" @onclick="() => Set(() => source = PickSource.Both)">Watchlist + paused</button>
         <button class="chip @(source == PickSource.Watchlist ? "on" : "")" @onclick="() => Set(() => source = PickSource.Watchlist)">Watchlist</button>
         <button class="chip @(source == PickSource.Paused ? "on" : "")" @onclick="() => Set(() => source = PickSource.Paused)">Paused shows</button>
+        }
         <label class="check small"><input type="checkbox" checked="@streaming" @onchange="e => Set(() => streaming = e.Value is true)" /> Streaming now</label>
     </div>
 </div>
@@ -33,7 +54,7 @@
 else if (nothing)
 {
     <Empty Title="Nothing matches.">
-        <span>Loosen the filters, or add things to your <a href="watchlist">watchlist</a>.</span>
+        <span>@(with.Count > 0 ? "Nothing on your watchlists that none of you has seen fits. Loosen the filters, or add to your " : "Loosen the filters, or add things to your ")<a href="watchlist">watchlist</a>.</span>
     </Empty>
 }
 else if (pick is { } p)
@@ -106,8 +127,16 @@ else if (pick is { } p)
     private PickDto? pick;
     private string? error;
     private readonly List<string> seen = [];
+    // Watching together: people you follow (whose watchlists you can see) to pick for as well.
+    private List<UserCard>? friends;
+    private readonly List<string> with = [];
 
-    protected override Task OnInitializedAsync() => Roll();
+    protected override async Task OnInitializedAsync()
+    {
+        try { friends = (await Api.FollowingAsync()).Where(f => !f.Requested).OrderBy(f => f.DisplayName ?? f.UserName, StringComparer.OrdinalIgnoreCase).ToList(); }
+        catch { friends = []; }   // the group option just doesn't show
+        await Roll();
+    }
 
     private Task Set(Action change)
     {
@@ -125,7 +154,7 @@ else if (pick is { } p)
             if (pick is not null) seen.Add($"{pick.Media.Type}:{pick.Media.TmdbId}");
             // Don't let the "already shown" list grow without end; old picks can come round again.
             if (seen.Count > 25) seen.RemoveAt(0);
-            pick = await Api.PickAsync(kind, source, maxMinutes, streaming, seen);
+            pick = await Api.PickAsync(kind, source, maxMinutes, streaming, seen, with);
             nothing = pick is null;
         }
         catch (Exception ex) { error = ex.Message; }

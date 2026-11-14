@@ -167,6 +167,10 @@ public class MobilePlatform(IServerConfig server) : IPlatform
 
     public async Task OpenExternalAsync(string url) => await Launcher.Default.OpenAsync(new Uri(url));
 
+#if ANDROID
+    public INativeNotifications? Notifications { get; } = new AppNotifications();
+#endif
+
     public void SetChromeColor(string hex) => MainThread.BeginInvokeOnMainThread(() =>
     {
 #if ANDROID

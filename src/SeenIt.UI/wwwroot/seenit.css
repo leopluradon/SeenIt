@@ -1695,3 +1695,7 @@ html.compact .overview { line-height: 1.5; }
 .alert-kinds { display: grid; gap: 10px; margin: 8px 0; }
 .alert-kind { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .alert-kind label { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 220px; }
+
+/* Pick: who's watching */
+.pick-who .chip { gap: 6px; }
+.pick-group-note { margin: -6px 0 12px; }

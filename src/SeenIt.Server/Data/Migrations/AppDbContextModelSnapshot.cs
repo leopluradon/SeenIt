@@ -203,6 +203,30 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Activity");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.AppPushMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubscriptionId", "CreatedAt");
+
+                    b.ToTable("AppPushMessages");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.AppUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1592,6 +1616,15 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.AppPushMessage", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.PushSubscription", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

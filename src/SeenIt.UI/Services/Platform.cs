@@ -21,6 +21,21 @@ public interface IPlatform
     Task OpenExternalAsync(string url);
     /// <summary>Colors what's around the page (the phone's status/navigation bar area) to match the theme.</summary>
     void SetChromeColor(string hex);
+    /// <summary>The device's own notifications (the Android app). Null on the website, which uses web push instead.</summary>
+    INativeNotifications? Notifications => null;
+}
+
+/// <summary>Alerts as the phone's own notifications. The app checks for new ones in the background.</summary>
+public interface INativeNotifications
+{
+    bool IsOn { get; }
+    /// <summary>This phone's entry in the server's device list ("app:…"), so it isn't listed as another device.</summary>
+    string DeviceEndpoint { get; }
+    /// <summary>Asks for permission and starts checking. Returns why it couldn't, or null.</summary>
+    Task<string?> TurnOnAsync();
+    Task TurnOffAsync();
+    /// <summary>Collects and shows waiting notifications right away (after "Send a test").</summary>
+    Task CheckNowAsync();
 }
 
 public class BrowserPlatform(IJSRuntime js, NavigationManager nav) : IPlatform

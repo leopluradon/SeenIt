@@ -192,10 +192,11 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<OnThisDayItem>> OnThisDayAsync() => GetAsync<List<OnThisDayItem>>($"api/onthisday?tz={Tz}");
 
     /// <summary>A random pick, or null when nothing matches the filters.</summary>
-    public Task<PickDto?> PickAsync(PickKind kind, PickSource source, int? maxMinutes, bool streaming, IEnumerable<string> exclude) =>
+    public Task<PickDto?> PickAsync(PickKind kind, PickSource source, int? maxMinutes, bool streaming, IEnumerable<string> exclude, IEnumerable<string>? with = null) =>
         SendAsync<PickDto>(HttpMethod.Get,
             $"api/pick?kind={kind}&source={source}&streaming={(streaming ? "true" : "false")}&region={DeviceRegion}"
             + (maxMinutes is { } m ? $"&maxMinutes={m}" : "")
+            + (with?.Any() == true ? $"&with={Uri.EscapeDataString(string.Join(',', with))}" : "")
             + $"&exclude={Uri.EscapeDataString(string.Join(',', exclude))}");
 
     public Task SetShowStatusAsync(int showId, ShowTrackStatus status) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/status", new ShowStatusRequest(status));
@@ -281,6 +282,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task PushSubscribeAsync(PushSubscribeRequest r) => SendAsync(HttpMethod.Post, "api/push/subscribe", r);
     public Task PushUnsubscribeAsync(string endpoint) => SendAsync(HttpMethod.Post, "api/push/unsubscribe", new PushUnsubscribeRequest(endpoint));
     public Task PushTestAsync() => SendAsync(HttpMethod.Post, "api/push/test", new { });
+    public Task AppPushRegisterAsync(string installId, string? device) => SendAsync(HttpMethod.Post, "api/push/app", new AppPushRegisterRequest(installId, device));
+    /// <summary>The Android app collecting its waiting notifications (they're removed on the server once taken).</summary>
+    public async Task<List<PushPayload>> AppPushTakeAsync(string installId) => await GetAsync<List<PushPayload>>($"api/push/app/{Uri.EscapeDataString(installId)}") ?? [];
     public async Task<AlertSettingsDto> SetAlertSettingsAsync(AlertSettingsRequest r) => (await SendAsync<AlertSettingsDto>(HttpMethod.Put, "api/alerts", r))!;
     private sealed record UnreadResult(int Unread);
 

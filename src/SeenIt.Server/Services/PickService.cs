@@ -4,18 +4,24 @@ using SeenIt.Server.Data;
 
 namespace SeenIt.Server.Services;
 
-/// <summary>"Pick something for me": a random title from the watchlist and/or paused shows, within the filters.</summary>
+/// <summary>
+/// "Pick something for me": a random title from the watchlist and/or paused shows, within the filters. With
+/// friends along ("who's watching"), it picks from everyone's watchlists instead, leaving out anything any of
+/// you has watched (or started, for shows), and favoring titles that are on more than one of your lists.
+/// </summary>
 public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickService> log)
 {
-    private record Candidate(MediaType Type, int TmdbId, MediaSummary Media, int? Minutes, string Reason);
+    internal record Candidate(MediaType Type, int TmdbId, MediaSummary Media, int? Minutes, string Reason, int Weight = 1);
 
     public async Task<PickDto?> PickAsync(Guid userId, PickKind kind, PickSource source, int? maxMinutes, bool streamingOnly,
-        string region, IReadOnlyCollection<string> exclude, CancellationToken ct)
+        string region, IReadOnlyCollection<string> exclude, CancellationToken ct, IReadOnlyList<(Guid Id, string Name)>? group = null)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var candidates = new List<Candidate>();
 
-        if (source is PickSource.Watchlist or PickSource.Both)
+        if (group is { Count: > 0 })
+            candidates = await GroupCandidatesAsync(userId, group, kind, today, ct);
+        else if (source is PickSource.Watchlist or PickSource.Both)
         {
             var list = await db.Watchlist.Where(w => w.UserId == userId).ToListAsync(ct);
             if (kind != PickKind.Show)
@@ -61,7 +67,8 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
         if (fresh.Count > 0) candidates = fresh;
         if (candidates.Count == 0) return null;
 
-        var shuffled = candidates.OrderBy(_ => Random.Shared.Next()).ToList();
+        // Weighted shuffle (each key is u^(1/weight)): a title on three watchlists comes up three times as often as one on one.
+        var shuffled = candidates.OrderByDescending(c => Math.Pow(Random.Shared.NextDouble(), 1.0 / c.Weight)).ToList();
         foreach (var c in shuffled.Take(streamingOnly ? 30 : 1))
         {
             List<ProviderDto> streaming = [];
@@ -87,6 +94,48 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
             return pick;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Watching together: everything on any of your watchlists that none of you has seen (movies) or started (shows),
+    /// weighted by how many of you want to watch it.
+    /// </summary>
+    internal async Task<List<Candidate>> GroupCandidatesAsync(Guid userId, IReadOnlyList<(Guid Id, string Name)> group, PickKind kind, DateOnly today, CancellationToken ct)
+    {
+        var names = group.Where(g => g.Id != userId).DistinctBy(g => g.Id).ToDictionary(g => g.Id, g => g.Name);
+        var ids = names.Keys.Append(userId).ToList();
+        var lists = await db.Watchlist.Where(w => ids.Contains(w.UserId) && w.Type != MediaType.Episode).ToListAsync(ct);
+        var seenMovies = (await db.WatchEvents.Where(w => ids.Contains(w.UserId) && w.Type == MediaType.Movie).Select(w => w.TmdbId).Distinct().ToListAsync(ct)).ToHashSet();
+        var startedShows = (await db.WatchEvents.Where(w => ids.Contains(w.UserId) && w.Type == MediaType.Episode).Select(w => w.TmdbId).Distinct().ToListAsync(ct)).ToHashSet();
+        var wanted = lists
+            .Where(w => w.Type == MediaType.Movie ? kind != PickKind.Show && !seenMovies.Contains(w.TmdbId) : kind != PickKind.Movie && !startedShows.Contains(w.TmdbId))
+            .GroupBy(w => (w.Type, w.TmdbId))
+            .ToDictionary(g => g.Key, g => g.Select(w => w.UserId).Distinct().ToList());
+
+        string Reason(List<Guid> owners)
+        {
+            var who = owners.Where(o => o != userId).Select(o => names[o] + "'s").Order(StringComparer.OrdinalIgnoreCase).ToList();
+            var mine = owners.Contains(userId);
+            if (mine) who.Add("your");
+            var joined = who.Count switch { 1 => who[0], 2 => $"{who[0]} and {who[1]}", _ => string.Join(", ", who[..^1]) + " and " + who[^1] };
+            return owners.Count == ids.Count && ids.Count > 1 ? "On all your watchlists"
+                : $"On {joined} watchlist{(who.Count > 1 ? "s" : "")}";
+        }
+
+        var candidates = new List<Candidate>();
+        var movieIds = wanted.Keys.Where(k => k.Type == MediaType.Movie).Select(k => k.TmdbId).ToList();
+        var showIds = wanted.Keys.Where(k => k.Type == MediaType.Show).Select(k => k.TmdbId).ToList();
+        foreach (var m in await db.Movies.Where(m => movieIds.Contains(m.TmdbId) && m.ReleaseDate != null && m.ReleaseDate <= today).ToListAsync(ct))
+        {
+            var owners = wanted[(MediaType.Movie, m.TmdbId)];
+            candidates.Add(new Candidate(MediaType.Movie, m.TmdbId, CatalogService.ToSummary(m), m.Runtime, Reason(owners), owners.Count));
+        }
+        foreach (var s in await db.Shows.Where(s => showIds.Contains(s.TmdbId) && s.FirstAirDate != null && s.FirstAirDate <= today).ToListAsync(ct))
+        {
+            var owners = wanted[(MediaType.Show, s.TmdbId)];
+            candidates.Add(new Candidate(MediaType.Show, s.TmdbId, CatalogService.ToSummary(s), s.EpisodeRuntime, Reason(owners), owners.Count));
+        }
+        return candidates;
     }
 
     /// <summary>With a time budget: how many unwatched episodes, from the next one on, fit in it.</summary>

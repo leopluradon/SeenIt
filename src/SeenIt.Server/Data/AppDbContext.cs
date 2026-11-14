@@ -39,6 +39,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<NotInterested> NotInterested => Set<NotInterested>();
     public DbSet<Recommendation> Recommendations => Set<Recommendation>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<AppPushMessage> AppPushMessages => Set<AppPushMessage>();
     public DbSet<PersonFollow> PersonFollows => Set<PersonFollow>();
     public DbSet<PersonUpcoming> PersonUpcoming => Set<PersonUpcoming>();
     public DbSet<ListLike> ListLikes => Set<ListLike>();
@@ -239,6 +240,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.Auth).HasMaxLength(100);
             e.Property(x => x.Device).HasMaxLength(100);
             e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<AppPushMessage>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.SubscriptionId, x.CreatedAt });
+            e.Property(x => x.PayloadJson).HasMaxLength(4000);
+            e.HasOne<PushSubscription>().WithMany().HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<UserAvatar>(e =>
         {

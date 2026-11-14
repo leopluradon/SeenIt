@@ -16,8 +16,36 @@ namespace SeenIt.Server.Services;
 /// </summary>
 public class PushService(AppDbContext db, IHttpClientFactory http, IConfiguration config, ILogger<PushService> log)
 {
+    public const string AppPrefix = "app:";
     public string? PublicKey => config["SeenIt:VapidPublicKey"] is { Length: > 0 } k && config["SeenIt:VapidPrivateKey"] is { Length: > 0 } ? k : null;
+    /// <summary>Web push is set up (VAPID keys). The Android app's notifications work either way.</summary>
     public bool Enabled => PublicKey is not null;
+
+    /// <summary>The Android app on one phone: it collects its notifications with TakeAppMessagesAsync.</summary>
+    public async Task RegisterAppAsync(Guid userId, AppPushRegisterRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(req.InstallId, out var install)) throw new TrackingException("That isn't an app install id.");
+        var endpoint = AppPrefix + install.ToString("N");
+        var row = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == endpoint, ct);
+        if (row is null) db.PushSubscriptions.Add(row = new Data.PushSubscription { Endpoint = endpoint, P256dh = "-", Auth = "-" });
+        row.UserId = userId;
+        row.Device = req.Device is { Length: > 0 } d ? (d.Length > 100 ? d[..100] : d) : "Android app";
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Hands the app its waiting notifications (oldest first) and forgets them.</summary>
+    public async Task<List<PushPayload>> TakeAppMessagesAsync(Guid userId, string installId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(installId, out var install)) return [];
+        var endpoint = AppPrefix + install.ToString("N");
+        var sub = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == endpoint && s.UserId == userId, ct);
+        if (sub is null) return [];
+        var rows = await db.AppPushMessages.Where(m => m.SubscriptionId == sub.Id).OrderBy(m => m.CreatedAt).Take(50).ToListAsync(ct);
+        db.AppPushMessages.RemoveRange(rows);
+        sub.LastSentAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return rows.Select(r => JsonSerializer.Deserialize<PushPayload>(r.PayloadJson, JsonSerializerOptions.Web)).OfType<PushPayload>().ToList();
+    }
 
     public async Task SubscribeAsync(Guid userId, PushSubscribeRequest req, CancellationToken ct)
     {
@@ -49,9 +77,17 @@ public class PushService(AppDbContext db, IHttpClientFactory http, IConfiguratio
     /// <summary>Sends to every device of this user. Returns how many got it.</summary>
     public async Task<int> SendAsync(Guid userId, PushPayload payload, CancellationToken ct)
     {
-        if (!Enabled) return 0;
         var subs = await db.PushSubscriptions.Where(s => s.UserId == userId).ToListAsync(ct);
-        if (subs.Count == 0) return 0;
+        var body = JsonSerializer.Serialize(payload, JsonSerializerOptions.Web);
+        var sent = 0;
+        // The Android app: waits in its outbox until the app next checks (every 15 minutes or so).
+        foreach (var app in subs.Where(s => s.Endpoint.StartsWith(AppPrefix, StringComparison.Ordinal)))
+        {
+            db.AppPushMessages.Add(new AppPushMessage { SubscriptionId = app.Id, PayloadJson = body });
+            sent++;
+        }
+        subs = subs.Where(s => !s.Endpoint.StartsWith(AppPrefix, StringComparison.Ordinal)).ToList();
+        if (!Enabled || subs.Count == 0) { await db.SaveChangesAsync(ct); return sent; }
         var client = new PushServiceClient(http.CreateClient("webpush"))
         {
             DefaultAuthentication = new VapidAuthentication(PublicKey!, config["SeenIt:VapidPrivateKey"]!)
@@ -60,8 +96,6 @@ public class PushService(AppDbContext db, IHttpClientFactory http, IConfiguratio
                 Subject = (config["SeenIt:PublicUrl"] is { Length: > 0 } site ? site : "https://seenit.local/").TrimEnd('/'),
             },
         };
-        var body = JsonSerializer.Serialize(payload, JsonSerializerOptions.Web);
-        var sent = 0;
         foreach (var s in subs)
         {
             var target = new WebPushSubscription { Endpoint = s.Endpoint };
@@ -118,12 +152,16 @@ public class PushWorker(IServiceScopeFactory scopes, ILogger<PushWorker> log) : 
     public static async Task RunOnceAsync(AppDbContext db, PushService push, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
+        // An app that hasn't checked in for 3 days (uninstalled, signed out): drop what was waiting for it.
+        var expired = await db.AppPushMessages.Where(m => m.CreatedAt < now.AddDays(-3)).ToListAsync(ct);
+        if (expired.Count > 0) db.AppPushMessages.RemoveRange(expired);
         var pending = await db.Notifications.Where(n => n.PushedAt == null).OrderBy(n => n.CreatedAt).Take(500).ToListAsync(ct);
-        if (pending.Count == 0) return;
+        if (pending.Count == 0) { if (expired.Count > 0) await db.SaveChangesAsync(ct); return; }
         var users = pending.Select(n => n.UserId).Distinct().ToList();
-        var withDevices = push.Enabled
-            ? (await db.PushSubscriptions.Where(s => users.Contains(s.UserId)).Select(s => s.UserId).Distinct().ToListAsync(ct)).ToHashSet()
-            : [];
+        var webOn = push.Enabled;
+        var withDevices = (await db.PushSubscriptions
+            .Where(s => users.Contains(s.UserId) && (webOn || s.Endpoint.StartsWith(PushService.AppPrefix)))
+            .Select(s => s.UserId).Distinct().ToListAsync(ct)).ToHashSet();
         var people = await db.Users.Where(u => users.Contains(u.Id)).Select(u => new { u.Id, u.TimeZone, u.PrefsJson }).ToDictionaryAsync(u => u.Id, ct);
 
         foreach (var g in pending.GroupBy(n => n.UserId))

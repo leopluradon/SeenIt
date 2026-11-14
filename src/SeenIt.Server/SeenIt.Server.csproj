@@ -29,4 +29,7 @@
     <ProjectReference Include="..\SeenIt.Web\SeenIt.Web.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="SeenIt.Tests" />
+  </ItemGroup>
 </Project>

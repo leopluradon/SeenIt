@@ -250,6 +250,23 @@ app.UseAuthorization();
 app.Use(LiveHub.Middleware);
 
 app.MapGet("/healthz", () => Results.Ok("ok"));
+
+// Android App Links: lets the SeenIt app open seenit.vohiyo.com links itself. Android checks this when the app is
+// installed; the fingerprint is the app's signing certificate (the shared debug keystore, docs/android-release.md).
+app.MapGet("/.well-known/assetlinks.json", (IConfiguration config) => Results.Json(new object[]
+{
+    new
+    {
+        relation = new[] { "delegate_permission/common.handle_all_urls" },
+        target = new
+        {
+            @namespace = "android_app",
+            package_name = config["SeenIt:AndroidPackage"] ?? "app.seenit.mobile",
+            sha256_cert_fingerprints = new[] { config["SeenIt:AndroidCertSha256"]
+                ?? "0F:D6:5D:99:C5:F4:F0:BF:07:76:96:77:9F:6C:09:28:1C:1B:BE:9A:6E:69:1E:E6:A8:1D:41:7D:09:2A:62:89" },
+        },
+    },
+}));
 app.MapAuth();
 app.MapApi();
 app.MapAdmin();

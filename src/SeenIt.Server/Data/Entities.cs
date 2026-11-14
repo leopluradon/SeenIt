@@ -509,7 +509,18 @@ public class Notification
     public DateTimeOffset? PushedAt { get; set; }
 }
 
-/// <summary>A browser or installed web app (an iPhone Home Screen icon...) that gets alerts as push notifications.</summary>
+/// <summary>Notifications waiting for the Android app, which collects them in the background (it isn't a browser,
+/// so it can't get web push). One row per notification per app install.</summary>
+public class AppPushMessage
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SubscriptionId { get; set; }
+    public string PayloadJson { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>A browser or installed web app (an iPhone Home Screen icon...) that gets alerts as push notifications.
+/// The Android app registers here too, with an "app:" endpoint: its notifications go to AppPushMessage instead.</summary>
 public class PushSubscription
 {
     public Guid Id { get; set; } = Guid.NewGuid();
