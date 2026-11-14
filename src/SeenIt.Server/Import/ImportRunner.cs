@@ -417,7 +417,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 // known one and list it on the import to check.
                 if (await LetterboxdTmdbIdAsync(r.Url, ct) is { } said) return said;
                 var pick = Choose(candidates);
-                AddCheck(MediaType.Movie, pick, r.Label, candidates);
+                AddCheck(MediaType.Movie, pick, r.Label, candidates, r.Year);
                 return pick.Id;
             }
             // Retitled on TMDB ("Glass Onion" is "Glass Onion: A Knives Out Mystery"): Letterboxd's
@@ -431,7 +431,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         if (showMatches.Count > 0)
         {
             // "The Office" (2005) or (2001): nearest year wins, and namesakes go on the list to check.
-            if (showMatches.Count > 1) AddCheck(MediaType.Show, showMatches[0], r.Label, showMatches);
+            if (showMatches.Count > 1) AddCheck(MediaType.Show, showMatches[0], r.Label, showMatches, r.Year);
             return showMatches[0].Id;
         }
 
@@ -486,6 +486,8 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         var want = Normalize(title);
         return (results ?? [])
             .Where(x => Normalize(x.Title ?? x.Name) == want || Normalize(x.OriginalTitle ?? x.OriginalName) == want)
+            // With a year to go on, a title TMDB has no date for (an announced or stub entry) isn't it.
+            .Where(x => year is null || YearOf(x) is not null)
             .Select(x => (x, Gap: year is { } y && YearOf(x) is { } ry ? Math.Abs(ry - y) : 0))
             .Where(x => x.Gap <= maxYearGap)
             .OrderBy(x => x.Gap)   // stable: keeps TMDB's popularity order between equals
@@ -499,11 +501,33 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
     public static TmdbListItem Choose(List<TmdbListItem> candidates) =>
         candidates.OrderByDescending(c => c.Popularity ?? 0).First();
 
-    private void AddCheck(MediaType type, TmdbListItem pick, string label, IEnumerable<TmdbListItem> all)
+    /// <summary>
+    /// Whether a pick among namesakes is worth a person's look: another one is about as well known (or better
+    /// known), or the pick is off the year the import gave while a namesake from that year exists (Under the
+    /// Skin). A famous film with an obscure namesake (Troy, Twilight) isn't.
+    /// </summary>
+    public static bool Doubtful(TmdbListItem pick, IEnumerable<TmdbListItem> candidates, int? year)
     {
-        if (_checks.Any(c => c.Type == type && c.TmdbId == pick.Id)) return;
-        _checks.Add(new ImportCheck(type, pick.Id, label,
-            all.Where(c => c.Id != pick.Id).Take(5).Select(c => new ImportCheckOption(c.Id, c.Title ?? c.Name ?? "", YearOf(c), c.PosterPath)).ToList()));
+        var others = candidates.Where(c => c.Id != pick.Id).ToList();
+        if (others.Count == 0) return false;
+        var known = pick.Popularity ?? 0;
+        if (others.Any(o => (o.Popularity ?? 0) >= known / 3)) return true;
+        return year is { } y && YearOf(pick) != y && others.Any(o => YearOf(o) == y);
+    }
+
+    /// <summary>The namesakes to offer instead: best known first, and only ones that aren't far behind or are from the import's year.</summary>
+    public static List<ImportCheckOption> Alternatives(TmdbListItem pick, IEnumerable<TmdbListItem> candidates, int? year)
+    {
+        var others = candidates.Where(c => c.Id != pick.Id).DistinctBy(c => c.Id).OrderByDescending(c => c.Popularity ?? 0).ToList();
+        var top = others.FirstOrDefault()?.Popularity ?? 0;
+        return others.Where((c, i) => i == 0 || (c.Popularity ?? 0) >= top / 10 || (year is { } y && YearOf(c) == y)).Take(4)
+            .Select(c => new ImportCheckOption(c.Id, c.Title ?? c.Name ?? "", YearOf(c), c.PosterPath)).ToList();
+    }
+
+    private void AddCheck(MediaType type, TmdbListItem pick, string label, IReadOnlyList<TmdbListItem> all, int? year)
+    {
+        if (_checks.Any(c => c.Type == type && c.TmdbId == pick.Id) || !Doubtful(pick, all, year)) return;
+        _checks.Add(new ImportCheck(type, pick.Id, label, Alternatives(pick, all, year)));
     }
 
     public static int? YearOf(TmdbListItem x) =>

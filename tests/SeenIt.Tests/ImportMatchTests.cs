@@ -32,6 +32,26 @@ public class ImportMatchTests
     }
 
     [Fact]
+    public void Only_doubtful_picks_are_listed_to_check()
+    {
+        var glazer = Movie(97370, "Under the Skin", "2014-03-14") with { Popularity = 5.7 };
+        var other = Movie(698232, "Under the Skin", "2013-10-19") with { Popularity = 0.29 };
+        // Import: picked Glazer's, but the file said 2013 and there's a 2013 namesake.
+        Assert.True(ImportRunner.Doubtful(glazer, [glazer, other], 2013));
+        // An older import that took the obscure one: a far better known namesake exists.
+        Assert.True(ImportRunner.Doubtful(other, [glazer, other], 2013));
+        Assert.Equal(97370, ImportRunner.Alternatives(other, [glazer, other], 2013).Single().TmdbId);
+
+        // Twilight (2008) with an obscure 2007 namesake, and the file says 2008: fine as it is.
+        var twilight = Movie(8966, "Twilight", "2008-11-20") with { Popularity = 30 };
+        Assert.False(ImportRunner.Doubtful(twilight, [twilight, Movie(256153, "Twilight", "2007-01-01") with { Popularity = 0.5 }], 2008));
+        // Two about as well known: worth a look.
+        Assert.True(ImportRunner.Doubtful(twilight, [twilight, Movie(1, "Twilight", "2008-01-01") with { Popularity = 12 }], 2008));
+        // A namesake with no date isn't a candidate when the file has a year.
+        Assert.Single(ImportRunner.Matches([twilight, Movie(2, "Twilight", "")], "Twilight", 2008));
+    }
+
+    [Fact]
     public void Match_checks_keep_one_entry_per_pick()
     {
         var opt = new ImportCheckOption(698232, "Under the Skin", 2013, null);

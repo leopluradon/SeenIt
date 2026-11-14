@@ -96,11 +96,10 @@ public class ImportService(AppDbContext db, ImportRunner runner, CatalogService 
                 var found = movie
                     ? (await tmdb.SearchMovieAsync(t.Title, null, ct))?.Results.Concat((t.Year is { } y ? await tmdb.SearchMovieAsync(t.Title, y, ct) : null)?.Results ?? []).ToList()
                     : (await tmdb.SearchShowAsync(t.Title, null, ct))?.Results;
-                var others = ImportRunner.Matches(found, t.Title, t.Year, maxYearGap: movie ? 1 : 99)
-                    .Where(o => o.Id != id).DistinctBy(o => o.Id).Take(5).ToList();
-                if (others.Count > 0)
-                    checks.Add(new ImportCheck(type, id, t.Year is { } yr ? $"{t.Title} ({yr})" : t.Title,
-                        others.Select(o => new ImportCheckOption(o.Id, o.Title ?? o.Name ?? "", ImportRunner.YearOf(o), o.PosterPath)).ToList()));
+                var matches = ImportRunner.Matches(found, t.Title, t.Year, maxYearGap: movie ? 1 : 99).DistinctBy(o => o.Id).ToList();
+                // The current pick has to be among them to compare with (one matched through Letterboxd's page may not be).
+                if (matches.FirstOrDefault(o => o.Id == id) is { } current && ImportRunner.Doubtful(current, matches, t.Year))
+                    checks.Add(new ImportCheck(type, id, t.Year is { } yr ? $"{t.Title} ({yr})" : t.Title, ImportRunner.Alternatives(current, matches, t.Year)));
             }
         }
         job.ChecksJson = System.Text.Json.JsonSerializer.Serialize(checks);
