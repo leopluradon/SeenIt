@@ -67,19 +67,22 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
         }
 
         var row = await db.CheckIns.FirstOrDefaultAsync(x => x.UserId == userId, ct);
-        var adding = row is null;
-        if (row is null) db.CheckIns.Add(row = new CheckIn { UserId = userId });
-        Apply(row);
-        try { await db.SaveChangesAsync(ct); }
-        catch (DbUpdateException ex) when (adding && ex.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+        if (row is null && db.Database.IsRelational())
         {
-            // Jellyfin sends playback start and the first progress report a few ms apart: both found no check-in
-            // and both added one. The other request's row is there now, so update that one instead.
-            db.Entry(row).State = EntityState.Detached;
+            // Jellyfin sends playback start and the first progress report a few ms apart, and both find no
+            // check-in. Creating it with ON CONFLICT DO NOTHING lets the later one update the earlier one's row
+            // instead of failing on the key, which EF logs as an error (and that set off the error alert email).
+            var at = now.ToUniversalTime();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "CheckIns" ("UserId", "Type", "TmdbId", "StartedAt", "EndsAt", "Source", "LastPingAt")
+                VALUES ({userId}, {(int)req.Type}, {req.TmdbId}, {at}, {at}, {(int)source}, {at})
+                ON CONFLICT ("UserId") DO NOTHING
+                """, ct);
             row = await db.CheckIns.FirstAsync(x => x.UserId == userId, ct);
-            Apply(row);
-            await db.SaveChangesAsync(ct);
         }
+        if (row is null) db.CheckIns.Add(row = new CheckIn { UserId = userId });   // in-memory tests
+        Apply(row);
+        await db.SaveChangesAsync(ct);
         await live.NotifyWithFollowersAsync(db, userId, ct);
         return (await ToDtosAsync([row], ct))[0];
     }
