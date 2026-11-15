@@ -280,6 +280,10 @@ else { <h1>Settings</h1> }
                 <input type="checkbox" checked="@Fmt.Prefs.DismissButtons" @onchange='e => SavePrefs(p => p with { DismissButtons = (bool)e.Value! }, "Saved")' />
                 Show the “Not interested” × on posters
             </label>
+            <label class="check">
+                <input type="checkbox" checked="@(!Fmt.Prefs.HidePlaySources)" @onchange='e => SavePrefs(p => p with { HidePlaySources = !(bool)e.Value! }, "Saved")' />
+                Show where each play came from (a “Letterboxd” or “Jellyfin” tag in your history and on movie and episode pages)
+            </label>
             <p class="muted small">Each list can still switch between posters and rows. “Not interested” is always on a title's page.</p>
             <h3>Tabs at the bottom of the app</h3>
             <p class="muted small">Pick up to @UiPrefs.MaxTabs, in order. “More” is always last and links to everything else. These tabs appear on phones and narrow windows.</p>

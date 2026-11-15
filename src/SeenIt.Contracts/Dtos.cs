@@ -136,7 +136,8 @@ public record UserPrefs(
     bool AlertRecWatched = true,                     // superseded by Alerts[RecWatched]; still read when that isn't set
     IReadOnlyDictionary<AlertKind, AlertDelivery>? Alerts = null,   // per kind of alert; missing = Both
     IReadOnlyList<string>? ProfileBadges = null,     // badge ids shown next to your name, in order (up to MaxBadges)
-    IReadOnlyList<string>? RateKinds = null)         // what "To rate" on Home offers: ScoreKinds keys; null = DefaultRateKinds
+    IReadOnlyList<string>? RateKinds = null,         // what "To rate" on Home offers: ScoreKinds keys; null = DefaultRateKinds
+    bool HidePlaySources = false)                    // no "Letterboxd"/"Jellyfin" tag on plays in history and on title pages
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];

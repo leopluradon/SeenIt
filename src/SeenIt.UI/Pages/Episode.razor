@@ -81,7 +81,7 @@ else if (e is not null)
                             <div class="play" @key="p.Id">
                                 <Icon Name="check" Size="16" Class="ok" />
                                 <span>@Fmt.PlayedAt(p.WatchedAt)</span>
-                                @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
+                                @if (Fmt.ShowsSource(p.Source)) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
                                 <button class="icon-btn" @onclick="() => editing = p" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
                                 <button class="icon-btn" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
                             </div>

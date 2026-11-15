@@ -110,6 +110,8 @@ public static class Fmt
     public static string PlayedAt(DateTimeOffset d) =>
         WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString(Fmt.DateTimeLong);
     public static string Source(WatchSource s) => WatchSources.Name(s);
+    /// <summary>Whether a play gets its "Letterboxd"/"Jellyfin" tag: not for ones logged by hand, nor when the user hides them.</summary>
+    public static bool ShowsSource(WatchSource s) => s != WatchSource.Manual && !Prefs.HidePlaySources;
     /// <summary>An episode's label in the user's style: S02E05, 2x05, or Season 2, Episode 5.</summary>
     public static string Ep(int? s, int? e) => Prefs.EpisodeStyle switch
     {

@@ -72,7 +72,7 @@ else if (m is not null)
                                     <Icon Name="check" Size="16" Class="ok" />
                                     <span>@Fmt.PlayedAt(p.WatchedAt)</span>
                                     @if (p.WatchedAt > DateTimeOffset.Now) { <span class="pill pill-sm">Upcoming</span> }
-                                    @if (p.Source != WatchSource.Manual) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
+                                    @if (Fmt.ShowsSource(p.Source)) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
                                     <button class="icon-btn" disabled="@busy" @onclick="() => editing = p" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
                                     <button class="icon-btn" disabled="@busy" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
                                 </div>
