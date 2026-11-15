@@ -15,7 +15,8 @@ namespace SeenIt.Server.Services;
 public class TvmazeService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory http, ILogger<TvmazeService> log)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private sealed record TvmazeShow(int Id, TvmazeChannel? Network, TvmazeChannel? WebChannel);
+    private sealed record TvmazeShow(int Id, TvmazeChannel? Network, TvmazeChannel? WebChannel, [property: System.Text.Json.Serialization.JsonPropertyName("_embedded")] TvmazeEmbedded? Embedded = null);
+    private sealed record TvmazeEmbedded(List<TvmazeEpisode>? Episodes);
     private sealed record TvmazeChannel(string? Name);
     public sealed record TvmazeEpisode(int? Season, int? Number, string? Airdate, string? Airtime, string? Airstamp, string? Type);
 
@@ -35,19 +36,25 @@ public class TvmazeService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory 
             show.AirNetwork = Trim(found.Network?.Name ?? found.WebChannel?.Name);
         }
 
-        var episodes = await GetAsync<List<TvmazeEpisode>>(client, $"shows/{show.TvmazeId}/episodes", ct) ?? [];
+        // The show with its episodes in one call: whether it's on a TV network or only a streaming service decides
+        // whether its dates can beat TMDB's (see Apply).
+        var full = await GetAsync<TvmazeShow>(client, $"shows/{show.TvmazeId}?embed=episodes", ct);
+        if (full is null) { await db.SaveChangesAsync(ct); return 0; }
         var cached = await db.Episodes.Where(e => e.ShowTmdbId == show.TmdbId && e.SeasonNumber > 0).ToListAsync(ct);
-        var set = Apply(cached, episodes);
+        var set = Apply(cached, full.Embedded?.Episodes ?? [], streamingOnly: full.Network is null && full.WebChannel is not null);
         await db.SaveChangesAsync(ct);
         return set;
     }
 
     /// <summary>
-    /// Copies TVmaze's dates and times onto the cached episodes. Returns how many changed. The episode's date
-    /// becomes TVmaze's when that's a few days earlier than TMDB's (AirDates.Effective); a time is only kept
-    /// when TVmaze has one (a blank time comes back as a made-up noon UTC) and it falls within a day of that date.
+    /// Copies TVmaze's dates and times onto the cached episodes. Returns how many changed. For a show TVmaze lists
+    /// only on a streaming service (Dexter: Resurrection on Paramount+), the episode's date becomes TVmaze's when
+    /// that's a few days earlier than TMDB's TV-airing date (AirDates.Effective). For shows on a TV network the two
+    /// sites often number episodes differently (Beavis and Butt-Head's half-hours came out a week apart), so
+    /// TMDB's date stands. A time is only kept when TVmaze has one (a blank time comes back as a made-up noon UTC)
+    /// and it falls within a day of the episode's date.
     /// </summary>
-    public static int Apply(List<EpisodeMeta> cached, IEnumerable<TvmazeEpisode> episodes)
+    public static int Apply(List<EpisodeMeta> cached, IEnumerable<TvmazeEpisode> episodes, bool streamingOnly)
     {
         var byKey = episodes.Where(e => e.Season is not null && e.Number is not null && e.Type is null or "regular")
             .GroupBy(e => (e.Season!.Value, e.Number!.Value)).ToDictionary(g => g.Key, g => g.First());
@@ -55,7 +62,8 @@ public class TvmazeService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory 
         foreach (var e in cached)
         {
             if (!byKey.TryGetValue((e.SeasonNumber, e.EpisodeNumber), out var tv)) continue;
-            var day = DateOnly.TryParseExact(tv.Airdate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : (DateOnly?)null;
+            // Only kept for streaming-only shows: CatalogService recomputes the date from it on every TMDB refresh.
+            var day = streamingOnly && DateOnly.TryParseExact(tv.Airdate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : (DateOnly?)null;
             var tmdbDay = e.TmdbAirDate ?? e.AirDate;
             var airs = AirDates.Effective(tmdbDay, day);
             if (e.TvmazeAirDate != day || e.AirDate != airs || e.TmdbAirDate != tmdbDay) set++;
