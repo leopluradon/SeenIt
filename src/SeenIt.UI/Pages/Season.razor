@@ -100,7 +100,7 @@ else if (season is not null)
                 <div class="episode-body">
                     <div class="episode-title">
                         <a href="@Fmt.EpisodeHref(Id, e.SeasonNumber, e.EpisodeNumber)"><b><Spoiler Watched="e.Plays > 0">@e.Name</Spoiler></b></a>
-                        <span class="muted small">@if (Place(e) is { } pl) { <span class="order-pos" title="@($"Episode {pl.Position} of {order!.Name}{(pl.Part is { } pt ? $", in {pt}" : "")}")">#@pl.Position@(pl.Part is { } pn && order!.Parts.Count > 1 ? $" · {pn}" : "") · </span> }@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) @if (e.AirDate is { } ad) { <span class="dot-sep">@ad.ToString(Fmt.DateLong)</span> } @if (e.Runtime is > 0) { <span class="dot-sep">@Fmt.Runtime(e.Runtime)</span> }</span>
+                        <span class="muted small">@if (Place(e) is { } pl) { <span class="order-pos" title="@($"Episode {pl.Position} of {order!.Name}{(pl.Part is { } pt ? $", in {pt}" : "")}")">#@pl.Position@(pl.Part is { } pn && order!.Parts.Count > 1 ? $" · {pn}" : "") · </span> }@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) <EpisodeBadge Mark="e.Mark" /> @if (e.AirDate is { } ad) { <span class="dot-sep">@ad.ToString(Fmt.DateLong)</span> } @if (e.Runtime is > 0) { <span class="dot-sep">@Fmt.Runtime(e.Runtime)</span> }</span>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(e.Overview)) { <Spoiler Watched="e.Plays > 0" Block="true"><p class="episode-overview">@e.Overview</p></Spoiler> }
                     <AuthorizeView>

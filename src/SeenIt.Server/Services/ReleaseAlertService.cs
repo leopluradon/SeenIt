@@ -27,8 +27,10 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
         var rows = await db.Notifications.AsNoTracking().Where(n => n.UserId == userId && kinds.Contains(n.Kind))
             .OrderByDescending(n => n.Day).ThenByDescending(n => n.CreatedAt).Take(60).ToListAsync(ct);
         var unread = await db.Notifications.CountAsync(n => n.UserId == userId && n.ReadAt == null && kinds.Contains(n.Kind), ct);
+        var marker = await EpisodeMarker.LoadAsync(db, rows.Where(n => n.Type == MediaType.Episode).Select(n => n.TmdbId), ct);
         return new NotificationsDto(rows.Select(n => new NotificationDto(n.Id, n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber,
-            n.Title, n.Detail, n.PosterPath, n.Day, n.ReadAt is not null, n.RecommendationId is not null, n.WatchedRecommendationId is not null)).ToList(), unread);
+            n.Title, n.Detail, n.PosterPath, n.Day, n.ReadAt is not null, n.RecommendationId is not null, n.WatchedRecommendationId is not null,
+            n.Type == MediaType.Episode ? marker.Of(n.TmdbId, n.SeasonNumber, n.EpisodeNumber) : EpisodeMark.None)).ToList(), unread);
     }
 
     public async Task<int> UnreadAsync(Guid userId, CancellationToken ct)

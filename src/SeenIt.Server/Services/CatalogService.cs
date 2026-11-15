@@ -121,6 +121,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             row.Runtime = e.Runtime;
             row.StillPath = e.StillPath;
             row.VoteAverage = e.VoteAverage;
+            row.EpisodeType = e.EpisodeType;
         }
         // Only prune when the fetch clearly worked, so a partial TMDB response can't wipe a show.
         if (fetched.Count > 0)
@@ -610,11 +611,15 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
                 .Select(r => (double?)r.Value).FirstOrDefaultAsync(ct);
         }
 
+        var marker = await EpisodeMarker.LoadAsync(db, [showId], ct);
         return new SeasonDetail(showId, show.Name, seasonNumber, season.Name ?? $"Season {seasonNumber}", NullIfEmpty(season.Overview), season.PosterPath,
             (season.Episodes ?? []).Select(e => new EpisodeDto(e.Id, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Overview,
                 TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage,
                 plays.GetValueOrDefault(e.EpisodeNumber), ratings.TryGetValue(e.EpisodeNumber, out var r) ? r : null,
-                rewatched.Contains(e.EpisodeNumber))).ToList(),
+                rewatched.Contains(e.EpisodeNumber),
+                // TMDB's own type for this season is the freshest; the cached list knows the show's last season.
+                e.EpisodeType == "finale" && marker.Of(showId, e.SeasonNumber, e.EpisodeNumber) != EpisodeMark.SeriesFinale
+                    ? EpisodeMark.SeasonFinale : marker.Of(showId, e.SeasonNumber, e.EpisodeNumber))).ToList(),
             Cast(seasonCredits?.Cast),
             rewatch?.Number,
             SeasonCompleted(seasonPlays, season.Episodes?.Count ?? 0),
@@ -695,18 +700,20 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
                 .Select(r => (double?)r.Value).FirstOrDefaultAsync(ct);
         }
 
+        var marker = await EpisodeMarker.LoadAsync(db, [showId], ct);
         return new EpisodeDetail(
             showId, show.Name, show.PosterPath, show.BackdropPath, e.SeasonNumber, e.EpisodeNumber, e.Id,
             e.Name, NullIfEmpty(e.Overview), TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage, e.VoteCount,
             Cast(e.GuestStars),
             (e.Crew ?? []).Where(c => c.Job is "Director" or "Writer" or "Teleplay" or "Story" or "Screenplay")
                 .DistinctBy(c => (c.Id, c.Job)).Select(c => new CrewMember(c.Id, c.Name, c.Job, c.ProfilePath)).ToList(),
-            index < 0 ? null : Ref(index - 1),
-            index < 0 ? null : Ref(index + 1),
+            index < 0 ? null : marker.Mark(showId, Ref(index - 1)),
+            index < 0 ? null : marker.Mark(showId, Ref(index + 1)),
             rating,
             plays,
             seasons,
-            Cast(e.Credits?.Cast).Where(c => e.GuestStars?.All(g => g.Id != c.Id) != false).ToList());
+            Cast(e.Credits?.Cast).Where(c => e.GuestStars?.All(g => g.Id != c.Id) != false).ToList(),
+            marker.Of(showId, e.SeasonNumber, e.EpisodeNumber));
     }
 
     /// <summary>

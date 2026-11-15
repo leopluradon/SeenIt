@@ -1774,3 +1774,11 @@ div.badge-pick { cursor: default; }
 .import-since { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 16px; }
 .import-since .check { flex: 1 1 320px; }
 .import-since-date { max-width: 180px; }
+
+/* ---------- Premiere / finale badges ---------- */
+.ep-badge { display: inline-block; vertical-align: middle; font-size: .68rem; font-weight: 700; letter-spacing: .02em; line-height: 1.5;
+    padding: 0 7px; border-radius: 999px; white-space: nowrap; background: var(--surface-3); color: var(--text-2); }
+.ep-badge-premiere { background: rgba(79, 140, 255, .18); color: #9fbfff; }
+.ep-badge-finale { background: var(--accent-soft); color: var(--accent-text); }
+.ep-badge-series-finale { background: var(--accent); color: var(--on-accent); }
+.upnext-text .ep-badge { margin-top: 3px; }

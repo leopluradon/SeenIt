@@ -1,0 +1,14 @@
+@* "Season premiere", "Season finale", "Series finale"... on an episode (EpisodeMark). Nothing for ordinary ones. *@
+@if (EpisodeMarks.Label(Mark) is { } label)
+{
+    <span class="ep-badge @Css" title="@label">@label</span>
+}
+@code {
+    [Parameter] public EpisodeMark Mark { get; set; }
+    private string Css => Mark switch
+    {
+        EpisodeMark.SeriesFinale => "ep-badge-series-finale",
+        EpisodeMark.SeasonFinale => "ep-badge-finale",
+        _ => "ep-badge-premiere",
+    };
+}

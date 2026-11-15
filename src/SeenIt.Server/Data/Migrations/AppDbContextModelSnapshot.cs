@@ -495,6 +495,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<DateTimeOffset?>("AirStamp")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("EpisodeType")
+                        .HasColumnType("text");
+
                     b.Property<string>("Name")
                         .HasColumnType("text");
 

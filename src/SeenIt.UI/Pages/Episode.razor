@@ -23,7 +23,7 @@ else if (e is not null)
             @if (e.Plays is { Count: > 0 }) { <span class="poster-badge done"><Icon Name="check" Size="14" /></span> }
         </div>
         <div class="episode-hero-info">
-            <div class="muted">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)</div>
+            <div class="muted">@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber) <EpisodeBadge Mark="e.Mark" /></div>
             <h1><Spoiler Watched="Seen">@(e.Name ?? $"Episode {e.EpisodeNumber}")</Spoiler></h1>
             <div class="facts">
                 @if (e.AirDate is { } ad) { <span>@(aired ? "Aired" : "Airs") @ad.ToString(Fmt.DateLong)</span> }
@@ -110,14 +110,14 @@ else if (e is not null)
         {
             <a class="episode-nav-link" href="@Fmt.EpisodeHref(Id, prev.SeasonNumber, prev.EpisodeNumber)">
                 <Icon Name="chevron-left" Size="18" />
-                <span><span class="muted small">Previous · @Fmt.Ep(prev.SeasonNumber, prev.EpisodeNumber)</span><br /><Spoiler Watched="prev.Watched">@prev.Name</Spoiler></span>
+                <span><span class="muted small">Previous · @Fmt.Ep(prev.SeasonNumber, prev.EpisodeNumber)</span> <EpisodeBadge Mark="prev.Mark" /><br /><Spoiler Watched="prev.Watched">@prev.Name</Spoiler></span>
             </a>
         }
         else { <span></span> }
         @if (e.Next is { } next)
         {
             <a class="episode-nav-link next" href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)">
-                <span><span class="muted small">Next · @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</span><br /><Spoiler Watched="next.Watched">@next.Name</Spoiler></span>
+                <span><span class="muted small">Next · @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</span> <EpisodeBadge Mark="next.Mark" /><br /><Spoiler Watched="next.Watched">@next.Name</Spoiler></span>
                 <Icon Name="chevron-right" Size="18" />
             </a>
         }

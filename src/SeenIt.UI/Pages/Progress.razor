@@ -120,7 +120,7 @@ else if (items is not null)
                         </div>
                         @if (p.NextEpisode is { } n)
                         {
-                            <div class="small">Next: <a href="@Fmt.EpisodeHref(p.ShowTmdbId, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> <Spoiler>@n.Name</Spoiler></a></div>
+                            <div class="small">Next: <a href="@Fmt.EpisodeHref(p.ShowTmdbId, n.SeasonNumber, n.EpisodeNumber)"><b>@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)</b> <Spoiler>@n.Name</Spoiler></a> <EpisodeBadge Mark="n.Mark" /></div>
                         }
                         else if (p.Completed || p.ShowStatus is not null) { <div class="small @(p.Returning is not null ? "ok" : p.ShowStatus is "Ended" or "Canceled" ? "muted" : "ok")">@WaitLine(p)</div> }
                         @if (p.LastWatchedAt is { } lw) { <div class="muted small">Last watched <RelTime At="lw" />@(p.Status != ShowTrackStatus.Watching ? $" · {p.Status}" : "")</div> }

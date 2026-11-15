@@ -391,6 +391,14 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     /// </summary>
     public async Task<HistoryPage> GetHistoryAsync(IReadOnlyCollection<Guid> userIds, HistoryQuery f, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
     {
+        var page = await GetHistoryCoreAsync(userIds, f, names, ct);
+        // Premiere/finale badges on single episodes (not on a show's day of several).
+        var marker = await EpisodeMarker.LoadAsync(db, page.Items.Where(i => i.Type == MediaType.Episode).Select(i => i.TmdbId), ct);
+        return page with { Items = page.Items.Select(i => i.Episodes is null or 1 ? marker.Mark(i) : i).ToList() };
+    }
+
+    private async Task<HistoryPage> GetHistoryCoreAsync(IReadOnlyCollection<Guid> userIds, HistoryQuery f, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
+    {
         // One per show can list everything on one page (a few hundred rows); plays stay at 100 a page.
         var pageSize = Math.Clamp(f.PageSize, 1, f.PerShow && f.Type == MediaType.Show ? 5000 : 100);
         var page = Math.Max(f.Page, 1);
@@ -828,8 +836,12 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     // ---------- Progress, calendar, dashboard ----------
 
-    public Task<List<ShowProgressDto>> GetProgressAsync(Guid userId, CancellationToken ct) =>
-        new ProgressCalculator(db).ForUserAsync(userId, null, ct);
+    public async Task<List<ShowProgressDto>> GetProgressAsync(Guid userId, CancellationToken ct)
+    {
+        var progress = await new ProgressCalculator(db).ForUserAsync(userId, null, ct);
+        var marker = await EpisodeMarker.LoadAsync(db, progress.Where(p => p.NextEpisode is not null).Select(p => p.ShowTmdbId), ct);
+        return progress.Select(marker.Mark).ToList();
+    }
 
     /// <summary>How long away from a show before its page offers a "previously on" recap.</summary>
     public static readonly TimeSpan RecapAfter = TimeSpan.FromDays(30);
@@ -924,7 +936,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             }
         }
 
-        return entries.OrderBy(e => e.Date).ThenBy(e => e.Title).ThenBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).ToList();
+        var marker = await EpisodeMarker.LoadAsync(db, entries.Where(e => e.Type == MediaType.Episode).Select(e => e.TmdbId), ct);
+        return entries.Select(marker.Mark).OrderBy(e => e.Date).ThenBy(e => e.Title).ThenBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).ToList();
     }
 
     public async Task SetShowStatusAsync(Guid userId, int showId, ShowTrackStatus status, CancellationToken ct)
@@ -1001,7 +1014,9 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var upcoming = (await GetCalendarAsync(userId, today, prefs.ComingUpDays, ct)).Take(prefs.Count("upcoming")).ToList();
         var recent = await db.WatchEvents.Where(w => w.UserId == userId)
             .NewestFirst().Take(prefs.Count("recent")).ToListAsync(ct);
-        return new DashboardDto(upNext, upcoming, await ToHistoryAsync(recent, ct));
+        var history = await ToHistoryAsync(recent, ct);
+        var marker = await EpisodeMarker.LoadAsync(db, history.Where(h => h.Type == MediaType.Episode).Select(h => h.TmdbId), ct);
+        return new DashboardDto(upNext, upcoming, history.Select(marker.Mark).ToList());
     }
 
     // ---------- Stats ----------

@@ -448,8 +448,39 @@ public record ShowDetail(
     long RemainingMinutes = 0,    // aired episodes you haven't watched
     ShowTrackStatus TrackStatus = ShowTrackStatus.Watching);
 
+/// <summary>A milestone episode, shown as a badge: S01E01, a season's first or last, or the very last.</summary>
+public enum EpisodeMark { None, SeriesPremiere, SeasonPremiere, SeasonFinale, SeriesFinale }
+
+public static class EpisodeMarks
+{
+    /// <param name="type">TMDB's episode type ("finale" marks a season's last).</param>
+    /// <param name="ended">The show has ended or been canceled.</param>
+    /// <param name="lastSeason">The show's highest season number.</param>
+    /// <param name="lastEpisode">The highest episode number in this episode's season.</param>
+    public static EpisodeMark Of(int season, int episode, string? type, bool ended, int lastSeason, int lastEpisode)
+    {
+        if (season <= 0) return EpisodeMark.None;   // specials
+        var last = season == lastSeason && episode == lastEpisode;
+        // An ended show's very last episode is its finale even before TMDB's type is known.
+        if (ended && last && (type is "finale" or null)) return EpisodeMark.SeriesFinale;
+        if (type == "finale") return EpisodeMark.SeasonFinale;
+        if (episode == 1) return season == 1 ? EpisodeMark.SeriesPremiere : EpisodeMark.SeasonPremiere;
+        return EpisodeMark.None;
+    }
+
+    public static string? Label(EpisodeMark m) => m switch
+    {
+        EpisodeMark.SeriesPremiere => "Series premiere",
+        EpisodeMark.SeasonPremiere => "Season premiere",
+        EpisodeMark.SeasonFinale => "Season finale",
+        EpisodeMark.SeriesFinale => "Series finale",
+        _ => null,
+    };
+}
+
 public record EpisodeRef(int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate, bool Watched = false,
-    DateTimeOffset? AirsAt = null, string? Network = null);   // exact time and channel, from TVmaze, when known
+    DateTimeOffset? AirsAt = null, string? Network = null,   // exact time and channel, from TVmaze, when known
+    EpisodeMark Mark = EpisodeMark.None);
 
 public record EpisodeDto(
     int TmdbId,
@@ -463,7 +494,8 @@ public record EpisodeDto(
     double? VoteAverage,
     int Plays,
     double? Rating,
-    bool Rewatched = false);   // played since the current rewatch started
+    bool Rewatched = false,    // played since the current rewatch started
+    EpisodeMark Mark = EpisodeMark.None);
 
 public record SeasonDetail(
     int ShowTmdbId,
@@ -533,7 +565,8 @@ public record EpisodeDetail(
     double? Rating,
     IReadOnlyList<PlayDto>? Plays,    // null when signed out
     IReadOnlyList<SeasonSummary>? Seasons = null,
-    IReadOnlyList<CastMember>? Cast = null);   // regulars in this episode; guests are in GuestStars
+    IReadOnlyList<CastMember>? Cast = null,    // regulars in this episode; guests are in GuestStars
+    EpisodeMark Mark = EpisodeMark.None);
 
 // ---------- People ----------
 
@@ -627,7 +660,8 @@ public record HistoryEntry(
     string? Range = null,      // Shows view: "S04E01–S04E05", or one episode's number
     string? Who = null,        // Friends' history: whose play this is (a UserName from HistoryPage.People)
     bool? YouWatched = null,   // Someone else's play: whether the viewer has seen this episode too (null on your own)
-    int? EpisodesAired = null);  // One-per-show view: episodes out so far (Episodes is then how many of them were seen)
+    int? EpisodesAired = null,   // One-per-show view: episodes out so far (Episodes is then how many of them were seen)
+    EpisodeMark Mark = EpisodeMark.None);
 
 /// <summary>History filters. Type = Show groups episodes into one row per show per day. From is inclusive, To exclusive; both are absolute instants computed by the client in its own time zone.</summary>
 public record HistoryQuery(
@@ -744,7 +778,8 @@ public record ForYouDto(IReadOnlyList<ForYouItem> Top, IReadOnlyList<ForYouGroup
 
 public record NotificationDto(Guid Id, MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, string Title, string? Detail,
     string? PosterPath, DateOnly Day, bool Read, bool Recommendation = false,   // Recommendation: Title is "Sam recommends Heat", Detail their note
-    bool RecommendationWatched = false);   // "Sam watched Heat": someone watched a title you recommended them
+    bool RecommendationWatched = false,    // "Sam watched Heat": someone watched a title you recommended them
+    EpisodeMark Mark = EpisodeMark.None);
 public record NotificationsDto(IReadOnlyList<NotificationDto> Items, int Unread);
 /// <summary>Push notifications: whether the server can send them, and the key a browser subscribes with.</summary>
 public record PushConfigDto(bool Enabled, string? PublicKey, IReadOnlyList<PushDeviceDto> Devices);
@@ -774,7 +809,8 @@ public record CalendarEntry(
     bool Started = true,             // you've watched some of this show (false: only on your watchlist)
     DateTimeOffset? AirsAt = null,   // exact air time, from TVmaze, when known
     string? Network = null,
-    string? Via = null);             // a person you follow made it ("Christopher Nolan"); Type is Movie or Show
+    string? Via = null,              // a person you follow made it ("Christopher Nolan"); Type is Movie or Show
+    EpisodeMark Mark = EpisodeMark.None);
 
 public record StatsDto(
     int MoviesWatched,

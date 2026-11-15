@@ -157,6 +157,8 @@ public class EpisodeMeta
     public int? Runtime { get; set; }
     public string? StillPath { get; set; }
     public double? VoteAverage { get; set; }
+    /// <summary>TMDB's episode type: "finale", "mid_season", or "standard"; null until the show is next fetched.</summary>
+    public string? EpisodeType { get; set; }
 }
 
 // ---------- Per-user tracking ----------

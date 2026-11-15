@@ -194,7 +194,7 @@ else if (data is not null)
                                     <div class="history-who small"><Avatar Name="@person.Name" Url="@person.Avatar" Class="avatar-xs" /> <b>@person.Name</b></div>
                                 }
                                 <div class="mini-title">@h.Title</div>
-                                @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · <Spoiler Watched="h.YouWatched ?? true">@h.EpisodeTitle</Spoiler></div> }
+                                @if (h.Type == MediaType.Episode) { <div class="small">@Fmt.Ep(h.SeasonNumber, h.EpisodeNumber) · <Spoiler Watched="h.YouWatched ?? true">@h.EpisodeTitle</Spoiler> <EpisodeBadge Mark="h.Mark" /></div> }
                                 @if (PerShow)
                                 {
                                     <div class="small">@(h.EpisodesAired is { } aired ? (h.Episodes >= aired ? $"All {aired} episodes" : $"{h.Episodes} of {aired} episodes") : h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div>

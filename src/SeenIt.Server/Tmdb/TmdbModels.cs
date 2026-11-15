@@ -117,7 +117,8 @@ public record TmdbEpisode(
     string? AirDate,
     int? Runtime,
     string? StillPath,
-    double? VoteAverage);
+    double? VoteAverage,
+    string? EpisodeType = null);   // "standard", "finale" or "mid_season"
 
 public record TmdbEpisodeDetail(
     int Id,
