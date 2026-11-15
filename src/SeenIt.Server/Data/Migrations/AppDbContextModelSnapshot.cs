@@ -510,8 +510,14 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<string>("StillPath")
                         .HasColumnType("text");
 
+                    b.Property<DateOnly?>("TmdbAirDate")
+                        .HasColumnType("date");
+
                     b.Property<int?>("TmdbId")
                         .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("TvmazeAirDate")
+                        .HasColumnType("date");
 
                     b.Property<double?>("VoteAverage")
                         .HasColumnType("double precision");

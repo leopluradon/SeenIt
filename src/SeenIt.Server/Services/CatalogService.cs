@@ -117,7 +117,8 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             row.TmdbId = e.Id;
             row.Name = e.Name;
             row.Overview = e.Overview;
-            row.AirDate = TmdbDates.Parse(e.AirDate);
+            row.TmdbAirDate = TmdbDates.Parse(e.AirDate);
+            row.AirDate = AirDates.Effective(row.TmdbAirDate, row.TvmazeAirDate);
             row.Runtime = e.Runtime;
             row.StillPath = e.StillPath;
             row.VoteAverage = e.VoteAverage;
@@ -514,12 +515,16 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
 
         // The next episode's exact time and channel, when TVmaze has them.
         DateTimeOffset? nextAt = null;
+        DateOnly? nextDay = null;
         string? nextNetwork = null;
         if (s.NextEpisodeToAir is { } upcoming)
         {
-            nextAt = await db.Episodes.AsNoTracking()
+            // The cached copy has TVmaze's earlier date when it streams first (AirDates.Effective).
+            var cachedNext = await db.Episodes.AsNoTracking()
                 .Where(e => e.ShowTmdbId == id && e.SeasonNumber == upcoming.SeasonNumber && e.EpisodeNumber == upcoming.EpisodeNumber)
-                .Select(e => e.AirStamp).FirstOrDefaultAsync(ct);
+                .Select(e => new { e.AirStamp, e.AirDate }).FirstOrDefaultAsync(ct);
+            nextAt = cachedNext?.AirStamp;
+            nextDay = cachedNext?.AirDate;
             nextNetwork = await db.Shows.AsNoTracking().Where(x => x.TmdbId == id).Select(x => x.AirNetwork).FirstOrDefaultAsync(ct)
                           ?? s.Networks?.FirstOrDefault()?.Name;
         }
@@ -539,7 +544,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast),
             PickVideos(s.Videos),
             (s.Recommendations?.Results ?? []).Take(18).Select(x => ToSummary(x, MediaType.Show)).ToList(),
-            s.NextEpisodeToAir is { } n ? marker.Mark(id, new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, TmdbDates.Parse(n.AirDate), AirsAt: nextAt, Network: nextNetwork)) : null,
+            s.NextEpisodeToAir is { } n ? marker.Mark(id, new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, nextDay ?? TmdbDates.Parse(n.AirDate), AirsAt: nextAt, Network: nextNetwork)) : null,
             user,
             progress,
             totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus);
@@ -614,9 +619,12 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
         }
 
         var marker = await EpisodeMarker.LoadAsync(db, [showId], ct);
+        // Dates from the cached list, which has TVmaze's earlier one when the show streams before it airs.
+        var days = await db.Episodes.AsNoTracking().Where(x => x.ShowTmdbId == showId && x.SeasonNumber == seasonNumber)
+            .ToDictionaryAsync(x => x.EpisodeNumber, x => x.AirDate, ct);
         return new SeasonDetail(showId, show.Name, seasonNumber, season.Name ?? $"Season {seasonNumber}", NullIfEmpty(season.Overview), season.PosterPath,
             (season.Episodes ?? []).Select(e => new EpisodeDto(e.Id, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Overview,
-                TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage,
+                days.TryGetValue(e.EpisodeNumber, out var day) && day is not null ? day : TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage,
                 plays.GetValueOrDefault(e.EpisodeNumber), ratings.TryGetValue(e.EpisodeNumber, out var r) ? r : null,
                 rewatched.Contains(e.EpisodeNumber),
                 // TMDB's own type for this season is the freshest; the cached list knows the show's last season.
@@ -705,7 +713,9 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
         var marker = await EpisodeMarker.LoadAsync(db, [showId], ct);
         return new EpisodeDetail(
             showId, show.Name, show.PosterPath, show.BackdropPath, e.SeasonNumber, e.EpisodeNumber, e.Id,
-            e.Name, NullIfEmpty(e.Overview), TmdbDates.Parse(e.AirDate), e.Runtime, e.StillPath, e.VoteAverage, e.VoteCount,
+            e.Name, NullIfEmpty(e.Overview),
+            siblings.FirstOrDefault(x => x.SeasonNumber == e.SeasonNumber && x.EpisodeNumber == e.EpisodeNumber)?.AirDate ?? TmdbDates.Parse(e.AirDate),
+            e.Runtime, e.StillPath, e.VoteAverage, e.VoteCount,
             Cast(e.GuestStars),
             (e.Crew ?? []).Where(c => c.Job is "Director" or "Writer" or "Teleplay" or "Story" or "Screenplay")
                 .DistinctBy(c => (c.Id, c.Job)).Select(c => new CrewMember(c.Id, c.Name, c.Job, c.ProfilePath)).ToList(),

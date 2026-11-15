@@ -9,10 +9,17 @@
 else if (e is not null)
 {
     var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);
-    <nav class="crumbs">
-        <a href="@($"show/{Id}")"><Icon Name="chevron-left" Size="16" /> @e.ShowName</a>
-        <span class="muted">/</span>
-        <a href="@($"show/{Id}/season/{Season}")">@(Season == 0 ? "Specials" : $"Season {Season}")</a>
+    <nav class="crumbs season-crumbs">
+        <span class="crumbs-path">
+            <a href="@($"show/{Id}")"><Icon Name="chevron-left" Size="16" /> @e.ShowName</a>
+            <span class="muted">/</span>
+            <a href="@($"show/{Id}/season/{Season}")">@(Season == 0 ? "Specials" : $"Season {Season}")</a>
+        </span>
+        @* Like the season page's: just the episode numbers up here (names could spoil); the cards at the bottom have more. *@
+        <span class="season-step">
+            @if (e.Previous is { } tp) { <a href="@Fmt.EpisodeHref(Id, tp.SeasonNumber, tp.EpisodeNumber)" aria-label="@($"Previous: {Fmt.Ep(tp.SeasonNumber, tp.EpisodeNumber)}")"><Icon Name="chevron-left" Size="16" /> @Fmt.Ep(tp.SeasonNumber, tp.EpisodeNumber)</a> }
+            @if (e.Next is { } tn) { <a href="@Fmt.EpisodeHref(Id, tn.SeasonNumber, tn.EpisodeNumber)" aria-label="@($"Next: {Fmt.Ep(tn.SeasonNumber, tn.EpisodeNumber)}")">@Fmt.Ep(tn.SeasonNumber, tn.EpisodeNumber) <Icon Name="chevron-right" Size="16" /></a> }
+        </span>
     </nav>
 
     <div class="episode-hero">

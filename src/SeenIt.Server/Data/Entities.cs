@@ -143,6 +143,20 @@ public class ShowMeta
     public bool IsOngoing => Status is "Returning Series" or "In Production" or "Planned" or "Pilot";
 }
 
+/// <summary>Which of an episode's dates SeenIt goes by.</summary>
+public static class AirDates
+{
+    /// <summary>How much earlier TVmaze may be and still win. Further apart, the sources are about different things.</summary>
+    public const int MaxEarlierDays = 7;
+
+    /// <summary>
+    /// The earlier of TMDB's and TVmaze's dates, when TVmaze's is up to a week earlier: a show streaming before
+    /// it airs on TV is out when it streams. Otherwise TMDB's, which is what everything else follows.
+    /// </summary>
+    public static DateOnly? Effective(DateOnly? tmdb, DateOnly? tvmaze) =>
+        tmdb is { } t && tvmaze is { } v && v < t && t.DayNumber - v.DayNumber <= MaxEarlierDays ? v : tmdb;
+}
+
 public class EpisodeMeta
 {
     public int ShowTmdbId { get; set; }
@@ -153,7 +167,12 @@ public class EpisodeMeta
     public string? Overview { get; set; }
     /// <summary>Exact air time from TVmaze (TMDB only has the day).</summary>
     public DateTimeOffset? AirStamp { get; set; }
+    /// <summary>When it comes out: TMDB's date, or TVmaze's when that's a few days earlier (AirDates.Effective).</summary>
     public DateOnly? AirDate { get; set; }
+    /// <summary>TMDB's own date. It follows the TV airing (Dexter: Resurrection on Showtime, Sundays).</summary>
+    public DateOnly? TmdbAirDate { get; set; }
+    /// <summary>TVmaze's date, for the channel it lists first: often a streaming service that has it earlier (Paramount+, Fridays).</summary>
+    public DateOnly? TvmazeAirDate { get; set; }
     public int? Runtime { get; set; }
     public string? StillPath { get; set; }
     public double? VoteAverage { get; set; }

@@ -1795,3 +1795,4 @@ div.badge-pick { cursor: default; }
 .upnext-text .ep-badge { margin-top: 3px; }
 .more-avatar { width: 48px; height: 48px; font-size: 1.3rem; display: grid; place-items: center; flex-shrink: 0; }
 .poster-mark { margin-top: 3px; }
+.crumbs-path { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
