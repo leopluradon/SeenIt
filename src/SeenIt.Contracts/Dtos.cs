@@ -1062,7 +1062,9 @@ public record CompareDto(
     IReadOnlyList<CompareItem> RatedBoth,     // closest agreement first
     IReadOnlyList<CompareItem> WatchedBoth,   // most recently watched by A first
     IReadOnlyList<CompareItem> BLovedANot,    // rated 8+ by B, not watched by A
-    IReadOnlyList<CompareItem> ALovedBNot);
+    IReadOnlyList<CompareItem> ALovedBNot,
+    IReadOnlyList<CompareItem>? AOnly = null,   // watched by A, not by B, most recently watched first
+    IReadOnlyList<CompareItem>? BOnly = null);  // watched by B, not by A
 /// <summary>A title in a comparison, with each person's rating if they rated it.</summary>
 public record CompareItem(MediaSummary Media, double? A, double? B);
 

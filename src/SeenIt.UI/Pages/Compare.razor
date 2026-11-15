@@ -125,6 +125,8 @@ else if (c is not null)
     {
         yield return ("rated", "Rated by both", c!.RatedBoth);
         yield return ("watched", "Watched by both", c.WatchedBoth);
+        yield return ("a-only", $"Only {c.A.Name} has seen", c.AOnly ?? []);
+        yield return ("b-only", $"Only {c.B.Name} has seen", c.BOnly ?? []);
         yield return ("b-loved", $"{c.B.Name} loved, {c.A.Name} hasn't seen", c.BLovedANot);
         yield return ("a-loved", $"{c.A.Name} loved, {c.B.Name} hasn't seen", c.ALovedBNot);
     }

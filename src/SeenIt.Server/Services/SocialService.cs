@@ -362,6 +362,15 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             .Concat(aw.Shows.Keys.Intersect(bw.Shows.Keys).Select(id => (Key: (MediaType.Show, id), Last: aw.Shows[id])))
             .OrderByDescending(x => x.Last).Select(x => x.Key).ToList();
 
+        // What only one of them has seen (a show counts once either has watched any episode).
+        List<(MediaType, int)> Only((Dictionary<int, DateTimeOffset> Movies, Dictionary<int, DateTimeOffset> Shows) mine,
+                                    (Dictionary<int, DateTimeOffset> Movies, Dictionary<int, DateTimeOffset> Shows) theirs) =>
+            mine.Movies.Where(m => !theirs.Movies.ContainsKey(m.Key)).Select(m => (Key: (MediaType.Movie, m.Key), Last: m.Value))
+                .Concat(mine.Shows.Where(x => !theirs.Shows.ContainsKey(x.Key)).Select(x => (Key: (MediaType.Show, x.Key), Last: x.Value)))
+                .OrderByDescending(x => x.Last).Select(x => x.Key).ToList();
+        var aOnly = Only(aw, bw);
+        var bOnly = Only(bw, aw);
+
         // Someone whose ratings aren't visible to the viewer compares without them.
         async Task<bool> RatingsVisible(AppUser u)
         {
@@ -382,7 +391,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var bLoved = br.Where(r => r.Value >= 8 && !Seen(aw, r.Key)).OrderByDescending(r => r.Value).Select(r => r.Key).ToList();
         var aLoved = ar.Where(r => r.Value >= 8 && !Seen(bw, r.Key)).OrderByDescending(r => r.Value).Select(r => r.Key).ToList();
 
-        var (movies, shows) = await tracking.LoadMetaAsync(watchedBoth.Concat(shared).Concat(bLoved).Concat(aLoved).Distinct(), ct);
+        var (movies, shows) = await tracking.LoadMetaAsync(watchedBoth.Concat(shared).Concat(bLoved).Concat(aLoved).Concat(aOnly).Concat(bOnly).Distinct(), ct);
         List<CompareItem> Items(IEnumerable<(MediaType Type, int Id)> keys) => keys
             .Select(k => (k.Type == MediaType.Movie
                     ? movies.TryGetValue(k.Id, out var m) ? CatalogService.ToSummary(m) : null
@@ -394,6 +403,6 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var ratedBoth = Items(shared).OrderBy(i => Math.Abs(i.A!.Value - i.B!.Value)).ThenByDescending(i => i.A + i.B).ToList();
         return new CompareDto(cardA, cardB, await StatsAsync(a.Id, ct), await StatsAsync(b.Id, ct), compat,
             aw.Movies.Keys.Intersect(bw.Movies.Keys).Count(), aw.Shows.Keys.Intersect(bw.Shows.Keys).Count(),
-            ratedBoth, Items(watchedBoth), Items(bLoved), Items(aLoved));
+            ratedBoth, Items(watchedBoth), Items(bLoved), Items(aLoved), Items(aOnly), Items(bOnly));
     }
 }
