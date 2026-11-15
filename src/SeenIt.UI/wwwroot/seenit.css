@@ -614,9 +614,20 @@ a.cast { color: var(--text); }
 .welcome { border-color: var(--accent); background: var(--accent-soft); }
 .searchbar { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 6px 6px 14px; margin-bottom: 14px; color: var(--muted); }
 .searchbar input { flex: 1; background: none !important; border: 0 !important; }
-.more-list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.more-list a, .more-list button { display: flex; align-items: center; gap: 14px; padding: 15px 16px; border: 0; border-bottom: 1px solid var(--border); background: none; text-align: left; font-weight: 600; cursor: pointer; }
-.more-list > :last-child { border-bottom: 0; color: var(--accent-hover); }
+.more-profile { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin: 4px 0 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); }
+.more-profile:hover { color: var(--text); border-color: var(--surface-3); }
+.more-profile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.more-profile-text b { font-size: 1.05rem; }
+.more-profile > svg { color: var(--muted); }
+.more-group { margin-bottom: 20px; }
+.more-group h2 { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 2px; }
+.more-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.more-grid a { display: flex; align-items: center; gap: 12px; padding: 13px 14px; min-height: 52px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-weight: 600; font-size: .92rem; }
+.more-grid a:hover { border-color: var(--surface-3); background: var(--surface-2); color: var(--text); }
+.more-grid a svg { color: var(--accent-hover); flex: none; }
+.more-grid a span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.more-signout { margin: 8px 0 24px; color: var(--accent-hover); }
+@media (max-width: 420px) { .more-grid { grid-template-columns: 1fr 1fr; } .more-grid a { padding: 12px; gap: 10px; font-size: .88rem; } }
 
 /* ---------- Phones ---------- */
 @media (max-width: 900px) {
@@ -1782,3 +1793,4 @@ div.badge-pick { cursor: default; }
 .ep-badge-finale { background: var(--accent-soft); color: var(--accent-text); }
 .ep-badge-series-finale { background: var(--accent); color: var(--on-accent); }
 .upnext-text .ep-badge { margin-top: 3px; }
+.more-avatar { width: 48px; height: 48px; font-size: 1.3rem; display: grid; place-items: center; flex-shrink: 0; }

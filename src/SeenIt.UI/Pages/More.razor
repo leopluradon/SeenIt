@@ -3,36 +3,82 @@
 @inject SessionState Session
 @inject NavigationManager Nav
 <PageTitle>More · SeenIt</PageTitle>
-<h1>More</h1>
-<nav class="more-list">
-    @if (Session.Me is { } me) { <a href="@Fmt.UserHref(me.UserName)"><Icon Name="users" /> My profile</a> }
-    <a href="friends"><Icon Name="users" /> Friends</a>
-    <a href="recommendations"><Icon Name="send" /> Recommendations</a>
-    <a href="people"><Icon Name="user-plus" /> People you follow</a>
-    <a href="watchlist"><Icon Name="bookmark" /> Watchlist</a>
-    <a href="favorites"><Icon Name="heart" /> Favorites</a>
-    <a href="library"><Icon Name="download" /> My library</a>
-    <a href="for-you"><Icon Name="star" /> For you</a>
-    <a href="notifications"><Icon Name="bell" /> Release alerts</a>
-    <a href="pick"><Icon Name="shuffle" /> Pick something for me</a>
-    <a href="history"><Icon Name="history" /> History</a>
-    <a href="duplicates"><Icon Name="copy" /> Possible duplicates</a>
-    <a href="lists"><Icon Name="list" /> Lists</a>
-    <a href="ratings"><Icon Name="star" /> Ratings</a>
-    <a href="stats"><Icon Name="chart" /> Stats</a>
-    <a href="goals"><Icon Name="target" /> Goals</a>
-    <a href="@($"review/{DateTime.Today.Year}/{DateTime.Today.Month}")"><Icon Name="chart" /> Month in review</a>
-    <a href="@($"review/{DateTime.Today.Year}")"><Icon Name="chart" /> Year in review</a>
-    <a href="progress"><Icon Name="progress" /> Progress</a>
-    <a href="calendar"><Icon Name="calendar" /> Calendar</a>
-    <a href="discover"><Icon Name="compass" /> Discover</a>
-    <a href="search"><Icon Name="search" /> Search</a>
-    <a href="settings"><Icon Name="settings" /> Settings</a>
-    @if (Session.Me?.IsAdmin == true) { <a href="admin"><Icon Name="shield" /> Admin</a> }
-    <a href="settings#layout"><Icon Name="menu" /> Customize tabs</a>
-    <button @onclick="Logout"><Icon Name="logout" /> Sign out</button>
-</nav>
+<h1 class="visually-hidden">More</h1>
+
+@if (Session.Me is { } me)
+{
+    <a class="more-profile" href="@Fmt.UserHref(me.UserName)">
+        <Avatar Name="@(me.DisplayName ?? me.UserName)" Url="@me.Avatar" Class="more-avatar" />
+        <span class="more-profile-text">
+            <b>@(me.DisplayName ?? me.UserName)</b>
+            <span class="muted small">@@@me.UserName · View your profile</span>
+        </span>
+        <Icon Name="chevron-right" Size="18" />
+    </a>
+}
+
+@foreach (var (title, links) in Groups())
+{
+    var shown = links.Where(l => l.Show).ToList();
+    if (shown.Count == 0) continue;
+    <section class="more-group" @key="title">
+        <h2>@title</h2>
+        <nav class="more-grid" aria-label="@title">
+            @foreach (var l in shown)
+            {
+                <a href="@l.Href" @key="l.Href"><Icon Name="@l.Icon" Size="20" /><span>@l.Label</span></a>
+            }
+        </nav>
+    </section>
+}
+
+<button class="btn btn-block more-signout" @onclick="Logout"><Icon Name="logout" Size="18" /> Sign out</button>
+
 @code {
+    private sealed record Link(string Label, string Icon, string Href, bool Show = true);
+
+    /// <summary>Everything SeenIt has, grouped by what you'd go looking for.</summary>
+    private IEnumerable<(string Title, Link[] Links)> Groups()
+    {
+        var today = DateTime.Today;
+        yield return ("Watching", [
+            new("Progress", "progress", "progress"),
+            new("Calendar", "calendar", "calendar"),
+            new("Watchlist", "bookmark", "watchlist"),
+            new("History", "history", "history"),
+            new("Release alerts", "bell", "notifications"),
+        ]);
+        yield return ("Find something", [
+            new("Search", "search", "search"),
+            new("Discover", "compass", "discover"),
+            new("For you", "eye", "for-you"),
+            new("Pick for me", "shuffle", "pick"),
+        ]);
+        yield return ("Your collection", [
+            new("Lists", "list", "lists"),
+            new("Ratings", "star", "ratings"),
+            new("Favorites", "heart", "favorites"),
+            new("Library", "download", "library"),
+        ]);
+        yield return ("Stats", [
+            new("Stats", "chart", "stats"),
+            new($"{today:MMMM} so far", "clock", $"review/{today.Year}/{today.Month}"),
+            new($"{today.Year} so far", "chart", $"review/{today.Year}"),
+            new("Goals", "target", "goals"),
+        ]);
+        yield return ("Friends", [
+            new("Friends", "users", "friends"),
+            new("Recommendations", "send", "recommendations"),
+            new("People you follow", "user-plus", "people"),
+        ]);
+        yield return ("Settings", [
+            new("Settings", "settings", "settings"),
+            new("Customize tabs", "menu", "settings#layout"),
+            new("Duplicates", "copy", "duplicates"),
+            new("Admin", "shield", "admin", Session.Me?.IsAdmin == true),
+        ]);
+    }
+
     private async Task Logout()
     {
         await Session.LogoutAsync();
