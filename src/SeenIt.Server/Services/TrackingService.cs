@@ -674,6 +674,13 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             .Select(x => (x.TmdbId, x.SeasonNumber, x.EpisodeNumber)).ToHashSet();
     }
 
+    /// <summary>Premiere/finale badges on episode plays (EpisodeMarker).</summary>
+    public async Task<List<HistoryEntry>> MarkEpisodesAsync(IReadOnlyList<HistoryEntry> entries, CancellationToken ct)
+    {
+        var marker = await EpisodeMarker.LoadAsync(db, entries.Where(e => e.Type == MediaType.Episode).Select(e => e.TmdbId), ct);
+        return entries.Select(marker.Mark).ToList();
+    }
+
     /// <summary>Marks someone else's episode plays with whether the viewer has seen them.</summary>
     public async Task<List<HistoryEntry>> MarkSeenByAsync(Guid? viewer, IReadOnlyList<HistoryEntry> entries, CancellationToken ct)
     {

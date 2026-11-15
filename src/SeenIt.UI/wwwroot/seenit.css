@@ -1794,3 +1794,4 @@ div.badge-pick { cursor: default; }
 .ep-badge-series-finale { background: var(--accent); color: var(--on-accent); }
 .upnext-text .ep-badge { margin-top: 3px; }
 .more-avatar { width: 48px; height: 48px; font-size: 1.3rem; display: grid; place-items: center; flex-shrink: 0; }
+.poster-mark { margin-top: 3px; }

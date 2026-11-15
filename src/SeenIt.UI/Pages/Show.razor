@@ -141,7 +141,7 @@ else if (s is not null)
                     @if (p.NextEpisode is { } n)
                     {
                         <div class="inline spread next-ep">
-                            <span>Next@(p.WatchOrder is { } won ? $" ({won})" : ""): <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@(n.SeasonNumber == 0 ? $"Special {n.EpisodeNumber}" : Fmt.Ep(n.SeasonNumber, n.EpisodeNumber))</b> <Spoiler>@n.Name</Spoiler></a></span>
+                            <span>Next@(p.WatchOrder is { } won ? $" ({won})" : ""): <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@(n.SeasonNumber == 0 ? $"Special {n.EpisodeNumber}" : Fmt.Ep(n.SeasonNumber, n.EpisodeNumber))</b> <Spoiler>@n.Name</Spoiler></a> <EpisodeBadge Mark="n.Mark" /></span>
                             <span class="inline">
                                 <WhenButton Small="true" Disabled="busy" What="@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)" OnClick="() => { askWhen = true; pendingEpisode = n; }" />
                                 <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => { askWhen = false; pendingEpisode = n; }"><Icon Name="check" Size="14" /> Watched</button>
@@ -159,7 +159,7 @@ else if (s is not null)
             @if (s.Overview is not null) { <p class="overview">@s.Overview</p> }
             @if (s.NextEpisodeToAir is { } next)
             {
-                <p class="next-airing"><Icon Name="calendar" Size="16" /> <span>Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> <Spoiler>@next.Name</Spoiler></a> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }
+                <p class="next-airing"><Icon Name="calendar" Size="16" /> <span>Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> <Spoiler>@next.Name</Spoiler></a> <EpisodeBadge Mark="next.Mark" /> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }
                     @if (Fmt.AirTime(next.AirsAt, next.Network) is { } when) { <span>· @when</span> }
                     @if (NextCountdown(next) is { } cd) { <span class="countdown"> · @cd</span> }</span></p>
             }

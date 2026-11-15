@@ -79,6 +79,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
                 .NewestFirst().Take(24).ToListAsync(ct), ct)
             : [];
         if (!isMe) recent = await tracking.MarkSeenByAsync(viewer, recent, ct);
+        recent = await tracking.MarkEpisodesAsync(recent, ct);
         var watchingNow = See(ProfilePart.WatchingNow) ? await checkIns.GetAsync(owner.Id, ct) : null;
         if (!isMe && watchingNow is not null) watchingNow = (await tracking.MarkSeenByAsync(viewer, [watchingNow], ct))[0];
         var topRated = See(ProfilePart.Ratings) ? await tracking.TopRatedAsync(owner.Id, 18, ct) : [];
@@ -295,7 +296,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var rows = await db.WatchEvents.AsNoTracking()
             .Where(w => historyIds.Contains(w.UserId) && w.WatchedAt > WatchDates.Unknown && w.WatchedAt <= DateTimeOffset.UtcNow.AddDays(1))
             .NewestFirst().Take(Math.Clamp(take, 1, 100)).ToListAsync(ct);
-        var entries = await tracking.MarkSeenByAsync(me, await tracking.ToHistoryAsync(rows, ct), ct);
+        var entries = await tracking.MarkEpisodesAsync(await tracking.MarkSeenByAsync(me, await tracking.ToHistoryAsync(rows, ct), ct), ct);
         return new FeedDto(watching, rows.Zip(entries, (w, e) => new ActivityItem(byId[w.UserId], e)).ToList());
     }
 

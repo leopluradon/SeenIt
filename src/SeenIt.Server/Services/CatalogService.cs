@@ -524,6 +524,8 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
                           ?? s.Networks?.FirstOrDefault()?.Name;
         }
 
+        var marker = await EpisodeMarker.LoadAsync(db, [id], ct);
+        if (progress is not null) progress = marker.Mark(progress);
         return new ShowDetail(
             s.Id, s.Name, NullIfEmpty(s.Tagline), s.Overview, TmdbDates.Parse(s.FirstAirDate), TmdbDates.Parse(s.LastAirDate), s.Status,
             s.Networks?.Select(n => n.Name).ToList() ?? [],
@@ -537,7 +539,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast),
             PickVideos(s.Videos),
             (s.Recommendations?.Results ?? []).Take(18).Select(x => ToSummary(x, MediaType.Show)).ToList(),
-            s.NextEpisodeToAir is { } n ? new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, TmdbDates.Parse(n.AirDate), AirsAt: nextAt, Network: nextNetwork) : null,
+            s.NextEpisodeToAir is { } n ? marker.Mark(id, new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, TmdbDates.Parse(n.AirDate), AirsAt: nextAt, Network: nextNetwork)) : null,
             user,
             progress,
             totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus);
