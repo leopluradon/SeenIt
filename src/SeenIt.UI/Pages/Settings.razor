@@ -948,6 +948,18 @@ else { <h1>Settings</h1> }
             <h2>Clear data</h2>
             <p class="muted small">Delete some or all of what you've tracked, for a fresh start or before re-importing. Your account, settings and friends stay.</p>
             <PartsPicker @bind-Value="clearParts" Label="What to clear" />
+            <div class="import-since">
+                <label class="check small">
+                    <input type="checkbox" checked="@clearBeforeOn" @onchange="e => { clearBeforeOn = e.Value is true; if (clearBeforeOn) clearBefore ??= DateOnly.FromDateTime(DateTime.Today); }" />
+                    <span><b>Only what's dated before</b> <span class="muted">this day (the day itself is kept): plays by when you watched them, ratings by when you gave them, watchlist and list entries by when you added them. Plays with no date, your lists themselves and show statuses stay.</span></span>
+                </label>
+                @if (clearBeforeOn)
+                {
+                    <input type="date" class="import-since-date" aria-label="Clear only what's dated before"
+                           value="@(clearBefore?.ToString("yyyy-MM-dd"))"
+                           @onchange="e => clearBefore = DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null" />
+                }
+            </div>
             <form class="stack narrow" @onsubmit="ClearData">
                 <input type="password" placeholder="Password to confirm" @bind="clearPassword" @bind:event="oninput" autocomplete="current-password" aria-label="Password to confirm clearing data" />
                 <button class="btn btn-danger" type="submit" disabled="@(string.IsNullOrEmpty(clearPassword) || clearing)">@(clearing ? "Clearing…" : "Clear data")</button>
@@ -1734,16 +1746,21 @@ else { <h1>Settings</h1> }
 
     private Task ClearTrackingSince() => SaveTrackingSince(new ChangeEventArgs { Value = "" });
 
+    private bool clearBeforeOn;
+    private DateOnly? clearBefore;
+
     private async Task ClearData()
     {
-        var what = PartsPicker.Describe(clearParts);
+        if (clearBeforeOn && clearBefore is null) { Toasts.Show("Pick the date, or untick “Only what's dated before”.", error: true); return; }
+        DateOnly? before = clearBeforeOn ? clearBefore : null;
+        var what = PartsPicker.Describe(clearParts) + (before is { } bd ? $" dated before {bd.ToString(Fmt.DateLong)}" : "");
         if (!await Confirmer.AskAsync($"Permanently delete {what}?", "This can't be undone. Download your data first if you might want it back.", "Delete", danger: true)) return;
         clearing = true;
         try
         {
-            var r = await Api.ClearDataAsync(new ClearDataRequest(clearPassword!, clearParts));
+            var r = await Api.ClearDataAsync(new ClearDataRequest(clearPassword!, clearParts, before));
             clearPassword = null;
-            Toasts.Show(r is null ? "Cleared" : $"Cleared {r.Plays:N0} plays, {r.Ratings:N0} ratings, {r.Watchlist:N0} watchlist entries and {r.Lists:N0} list{(clearParts.HasFlag(ImportParts.Movies) && clearParts.HasFlag(ImportParts.Shows) ? "s" : " entries")}");
+            Toasts.Show(r is null ? "Cleared" : $"Cleared {r.Plays:N0} plays, {r.Ratings:N0} ratings, {r.Watchlist:N0} watchlist entries and {r.Lists:N0} list{(clearParts.HasFlag(ImportParts.Movies) && clearParts.HasFlag(ImportParts.Shows) && before is null ? "s" : " entries")}");
             await LoadImports();
         }
         catch (Exception ex) { Toasts.Error(ex); }

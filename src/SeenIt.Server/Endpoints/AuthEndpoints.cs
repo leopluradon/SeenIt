@@ -275,9 +275,17 @@ public static partial class AuthEndpoints
             if (u is null) return Results.Unauthorized();
             if (!await users.CheckPasswordAsync(u, req.Password))
                 return Results.BadRequest(new ProblemInfo("Wrong password."));
-            var r = await tracking.ClearAsync(u.Id, req.Parts & ImportParts.All, ct);
+            DateTimeOffset? cutoff = null;
+            if (req.Before is { } day)
+            {
+                // The start of that day where the user is: everything earlier goes, the day itself stays.
+                var zone = ReviewService.Zone(u.TimeZone);
+                var midnight = day.ToDateTime(TimeOnly.MinValue);
+                cutoff = new DateTimeOffset(midnight, zone.GetUtcOffset(midnight));
+            }
+            var r = await tracking.ClearAsync(u.Id, req.Parts & ImportParts.All, ct, cutoff);
             await activity.LogAsync(p, ActivityKind.ClearData,
-                detail: $"{req.Parts & ImportParts.All}: {r.Plays} plays, {r.Ratings} ratings, {r.Watchlist} watchlist, {r.Lists} lists");
+                detail: $"{req.Parts & ImportParts.All}{(req.Before is { } b ? $" before {b:yyyy-MM-dd}" : "")}: {r.Plays} plays, {r.Ratings} ratings, {r.Watchlist} watchlist, {r.Lists} lists");
             return Results.Ok(r);
         }).RequireRateLimiting("auth");
 

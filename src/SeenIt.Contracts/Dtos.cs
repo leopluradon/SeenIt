@@ -332,7 +332,8 @@ public record InviteDto(string Code, DateTimeOffset CreatedAt, DateTimeOffset Ex
 public record InviteCheck(bool Valid, string? InvitedBy);
 public record DeleteAccountRequest(string Password);
 /// <summary>Wipes the chosen data but keeps the account, its settings and friends.</summary>
-public record ClearDataRequest(string Password, ImportParts Parts);
+/// <param name="Before">Only what's dated before this day (in your time zone), not the day itself; null = everything.</param>
+public record ClearDataRequest(string Password, ImportParts Parts, DateOnly? Before = null);
 public record ClearDataResult(int Plays, int Ratings, int Watchlist, int Lists);
 
 // ---------- Catalog (TMDB) ----------

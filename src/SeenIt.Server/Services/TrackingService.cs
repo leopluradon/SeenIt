@@ -1081,45 +1081,58 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     /// Deletes the chosen kinds of data for movies and/or shows. History for shows also clears their
     /// rewatches and paused/dropped status; clearing everything also forgets past imports.
     /// </summary>
-    public async Task<ClearDataResult> ClearAsync(Guid userId, ImportParts parts, CancellationToken ct)
+    /// <summary>
+    /// Deletes the chosen parts. With <paramref name="before"/>, only what's dated earlier than it goes: plays
+    /// by when they were watched (ones with no date stay, as they can't be placed), ratings by when they were
+    /// given, watchlist, list, favorite and library entries by when they were added. Lists themselves, show
+    /// statuses, rewatches and check-ins aren't dated history, so they stay too.
+    /// </summary>
+    public async Task<ClearDataResult> ClearAsync(Guid userId, ImportParts parts, CancellationToken ct, DateTimeOffset? before = null)
     {
         bool movies = parts.HasFlag(ImportParts.Movies), shows = parts.HasFlag(ImportParts.Shows);
         if (!movies && !shows) return new(0, 0, 0, 0);
+        var all = before is null;
+        var cutoff = before?.ToUniversalTime() ?? DateTimeOffset.MaxValue;   // Npgsql only takes UTC values
+        var unknown = WatchDates.Unknown;
         int plays = 0, ratings = 0, watchlist = 0, lists = 0;
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         if (parts.HasFlag(ImportParts.History))
         {
             plays = await db.WatchEvents.Where(w => w.UserId == userId
-                && (movies && w.Type == MediaType.Movie || shows && w.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
-            await db.CheckIns.Where(c => c.UserId == userId
-                && (movies && c.Type == MediaType.Movie || shows && c.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
-            if (shows)
+                && (movies && w.Type == MediaType.Movie || shows && w.Type != MediaType.Movie)
+                && (all || (w.WatchedAt < cutoff && w.WatchedAt != unknown))).ExecuteDeleteAsync(ct);
+            if (all)
             {
-                await db.Rewatches.Where(r => r.UserId == userId).ExecuteDeleteAsync(ct);
-                await db.ShowStates.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
+                await db.CheckIns.Where(c => c.UserId == userId
+                    && (movies && c.Type == MediaType.Movie || shows && c.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+                if (shows)
+                {
+                    await db.Rewatches.Where(r => r.UserId == userId).ExecuteDeleteAsync(ct);
+                    await db.ShowStates.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
+                }
             }
         }
         if (parts.HasFlag(ImportParts.Ratings))
             ratings = await db.Ratings.Where(r => r.UserId == userId
-                && (movies && r.Type == MediaType.Movie || shows && r.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+                && (movies && r.Type == MediaType.Movie || shows && r.Type != MediaType.Movie) && r.RatedAt < cutoff).ExecuteDeleteAsync(ct);
         if (parts.HasFlag(ImportParts.Library))
             await db.Library.Where(l => l.UserId == userId
-                && (movies && l.Type == MediaType.Movie || shows && l.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+                && (movies && l.Type == MediaType.Movie || shows && l.Type != MediaType.Movie) && l.AddedAt < cutoff).ExecuteDeleteAsync(ct);
         if (parts.HasFlag(ImportParts.Watchlist))
             watchlist = await db.Watchlist.Where(w => w.UserId == userId
-                && (movies && w.Type == MediaType.Movie || shows && w.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+                && (movies && w.Type == MediaType.Movie || shows && w.Type != MediaType.Movie) && w.AddedAt < cutoff).ExecuteDeleteAsync(ct);
         if (parts.HasFlag(ImportParts.Lists))
         {
             lists += await db.Favorites.Where(f => f.UserId == userId
-                && (movies && f.Type == MediaType.Movie || shows && f.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
-            if (movies && shows)
+                && (movies && f.Type == MediaType.Movie || shows && f.Type != MediaType.Movie) && f.AddedAt < cutoff).ExecuteDeleteAsync(ct);
+            if (movies && shows && all)
                 lists += await db.Lists.Where(l => l.UserId == userId).ExecuteDeleteAsync(ct);
             else
                 lists += await db.ListItems.Where(i => db.Lists.Any(l => l.Id == i.ListId && l.UserId == userId)
-                    && (movies ? i.Type == MediaType.Movie : i.Type != MediaType.Movie)).ExecuteDeleteAsync(ct);
+                    && (movies && i.Type == MediaType.Movie || shows && i.Type != MediaType.Movie) && i.AddedAt < cutoff).ExecuteDeleteAsync(ct);
         }
-        if (parts == ImportParts.All)
+        if (parts == ImportParts.All && all)
         {
             await db.ImportJobs.Where(j => j.UserId == userId).ExecuteDeleteAsync(ct);
             await db.JellyfinEvents.Where(j => j.UserId == userId).ExecuteDeleteAsync(ct);
