@@ -207,7 +207,7 @@ else if (data is not null)
                                 @if (h.Type == MediaType.Show) { <div class="small">@(h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div> }
                                 <div class="muted small">
                                     @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString(Fmt.TimeOnly))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
-                                    @if (Fmt.ShowsSource(h.Source)) { <span class="pill pill-sm">@SourceLabel(h.Source)</span> }
+                                    @if (Fmt.ShowsSource(h.Source)) { <span class="pill pill-sm">@Fmt.Source(h.Source)</span> }
                                 </div>
                                 }
                             </div>
