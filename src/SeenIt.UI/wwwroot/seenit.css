@@ -1796,3 +1796,6 @@ div.badge-pick { cursor: default; }
 .more-avatar { width: 48px; height: 48px; font-size: 1.3rem; display: grid; place-items: center; flex-shrink: 0; }
 .poster-mark { margin-top: 3px; }
 .crumbs-path { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+/* A show's name inside an episode card: its own link to the show. */
+.title-link { cursor: pointer; }
+.title-link:hover, .title-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }

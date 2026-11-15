@@ -4,7 +4,7 @@
     <a href="@Href"><img src="@Img.Poster(Item.PosterPath, "w154")" alt="" /></a>
     <div class="now-body">
         <span class="now-kicker"><Icon Name="radio" Size="14" /> @(Who is null ? "Watching now" : $"{Who} is watching")@(WatchSources.IsScrobbler(Item.Source) ? $" on {WatchSources.Name(Item.Source)}" : "")</span>
-        <a href="@Href" class="mini-title">@Item.Title</a>
+        <a href="@(Item.Type == MediaType.Episode ? $"show/{Item.TmdbId}" : Href)" class="mini-title">@Item.Title</a>
         @if (Item.Type == MediaType.Episode)
         {
             <div class="small">@Fmt.Ep(Item.SeasonNumber, Item.EpisodeNumber)@if (Item.EpisodeTitle is not null) { <span class="dot-sep"></span><Spoiler Watched="Item.YouWatched ?? false">@Item.EpisodeTitle</Spoiler> }</div>

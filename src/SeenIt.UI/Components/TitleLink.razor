@@ -1,0 +1,19 @@
+@* A show's name inside a card that links somewhere else (an episode): clicking the name opens the show,
+   anywhere else on the card still follows the card's own link. Links can't nest, so this one navigates itself. *@
+@inject NavigationManager Nav
+@if (Href is null) { @ChildContent }
+else
+{
+    <span class="title-link" role="link" tabindex="0" title="@Title"
+          @onclick="Go" @onclick:preventDefault @onclick:stopPropagation
+          @onkeydown="Key" @onkeydown:stopPropagation>@ChildContent</span>
+}
+@code {
+    /// <summary>Where the name goes (the show); null renders the name as plain text.</summary>
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private void Go() => Nav.NavigateTo(Href!);
+    private void Key(KeyboardEventArgs e) { if (e.Key is "Enter") Go(); }
+}

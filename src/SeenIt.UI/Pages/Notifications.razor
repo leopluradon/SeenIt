@@ -29,7 +29,7 @@ else if (data is not null)
                     <a class="mini-item @(n.Read ? "" : "unread")" href="@(n.Recommendation ? "recommendations" : n.Type == MediaType.Episode ? Fmt.EpisodeHref(n.TmdbId, n.SeasonNumber, n.EpisodeNumber) : Fmt.Href(n.Type, n.TmdbId))" @key="n.Id">
                         <img src="@Img.Poster(n.PosterPath, "w92")" alt="" loading="lazy" />
                         <div>
-                            <div class="mini-title">@n.Title</div>
+                            <div class="mini-title"><TitleLink Href="@(n.Type == MediaType.Episode && !n.Recommendation ? $"show/{n.TmdbId}" : null)">@n.Title</TitleLink></div>
                             <div class="muted small">@if (n.RecommendationWatched) { <span>@n.Detail</span> } else if (n.Recommendation) { <span>@(n.Detail is { } note ? $"“{note}”" : "Recommended to you")</span> } else if (n.Type == MediaType.Episode) { <Spoiler>@n.Detail</Spoiler> <EpisodeBadge Mark="n.Mark" /> } else { <span>@(n.Detail is { Length: > 0 } d && d != "Out today" ? d : "Movie release")</span> }</div>
                         </div>
                         @if (!n.Read) { <span class="pill pill-sm">New</span> }

@@ -18,7 +18,7 @@
                     @onclick="() => OnDismiss.InvokeAsync(Media)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="x" Size="14" /></button>
         }
     </div>
-    <div class="poster-title">@Media.Title</div>
+    <div class="poster-title"><TitleLink Href="@TitleHref" Title="@($"Go to {Media.Title}")">@Media.Title</TitleLink></div>
     @if (!string.IsNullOrWhiteSpace(Detail))
     {
         <div class="poster-detail" title="@(DetailSeen ? Detail : null)"><Spoiler Watched="DetailSeen">@Detail</Spoiler></div>
@@ -51,6 +51,8 @@
     [Parameter] public string? Sub { get; set; }
     /// <summary>An extra line under the title, cut to one line (e.g. the episode's name).</summary>
     [Parameter] public string? Detail { get; set; }
+    /// <summary>When the card links to an episode: where the show's name goes (the show page).</summary>
+    [Parameter] public string? TitleHref { get; set; }
     /// <summary>A premiere/finale badge for an episode's card (recently watched, friends' activity).</summary>
     [Parameter] public EpisodeMark Mark { get; set; }
     /// <summary>False when Detail is an episode title the viewer hasn't seen: it's blurred if they hide spoilers.</summary>

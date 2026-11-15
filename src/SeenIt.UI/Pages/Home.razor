@@ -127,7 +127,7 @@
                                         <a class="mini-item" href="@Fmt.CalHref(c)" data-ctx="@Menu.Cal(c)">
                                             <img src="@Img.Poster(c.PosterPath, "w92")" alt="" loading="lazy" />
                                             <div>
-                                                <div class="mini-title">@c.Title</div>
+                                                <div class="mini-title"><TitleLink Href="@(c.Type == MediaType.Episode ? $"show/{c.TmdbId}" : null)">@c.Title</TitleLink></div>
                                                 <div class="muted small">@if (c.Type == MediaType.Episode) { @Fmt.Ep(c.SeasonNumber, c.EpisodeNumber)<span class="dot-sep"></span><Spoiler Watched="c.Watched">@c.EpisodeTitle</Spoiler> <EpisodeBadge Mark="c.Mark" /> } else { <span>@Fmt.CalKind(c)</span> }</div>
                                             </div>
                                             <span class="mini-date">@Fmt.Day(c.Date)@if (c.AirsAt is { } cat) { <span> · @cat.ToLocalTime().ToString(Fmt.TimeOnly)</span> }@if (Soon(c) is { } cd) { <span class="countdown"> · @cd</span> }</span>
@@ -152,7 +152,7 @@
                                 {
                                     var h = a.Entry;
                                     <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
-                                                Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)" Detail="@h.EpisodeTitle" Mark="h.Mark" DetailSeen="@(h.YouWatched ?? true)" Ctx="@Menu.Play(h, false)"
+                                                Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)" Detail="@h.EpisodeTitle" Mark="h.Mark" TitleHref="@(h.Type == MediaType.Episode ? $"show/{h.TmdbId}" : null)" DetailSeen="@(h.YouWatched ?? true)" Ctx="@Menu.Play(h, false)"
                                                 Sub="@($"{a.User.Name} · " + (h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))" SubTitle="@Fmt.Exact(h.WatchedAt)"
                                                 ShowScore="false" @key="h.Id" />
                                 }
@@ -179,7 +179,7 @@
                                     @foreach (var h in dash.RecentHistory)
                                     {
                                         <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
-                                                    Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)" Detail="@h.EpisodeTitle" Mark="h.Mark" DetailSeen="@(h.YouWatched ?? true)" Ctx="@Menu.Play(h, true)"
+                                                    Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)" Detail="@h.EpisodeTitle" Mark="h.Mark" TitleHref="@(h.Type == MediaType.Episode ? $"show/{h.TmdbId}" : null)" DetailSeen="@(h.YouWatched ?? true)" Ctx="@Menu.Play(h, true)"
                                                     Sub="@(h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · {Fmt.Relative(h.WatchedAt)}" : Fmt.Relative(h.WatchedAt))" SubTitle="@Fmt.Exact(h.WatchedAt)"
                                                     ShowScore="false" @key="h.Id" />
                                     }
