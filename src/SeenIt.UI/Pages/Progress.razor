@@ -203,8 +203,9 @@ else if (items is not null)
         pendingMovie = null;
         try
         {
-            await Api.WatchAsync(Fmt.Watch(MediaType.Movie, m.TmdbId, c));
-            Toasts.Show($"Watched {m.Title}{Fmt.When(c)}");
+            var r = await Api.WatchAsync(Fmt.Watch(MediaType.Movie, m.TmdbId, c));
+            var undo = Api.UndoFor(r, MediaType.Movie, m.TmdbId);
+            Toasts.Show($"Watched {m.Title}{Fmt.When(c)}", undo: undo is null ? null : async () => { await undo(); await InvokeAsync(async () => { await LoadFranchises(); StateHasChanged(); }); });
             await LoadFranchises();
         }
         catch (Exception ex) { Toasts.Error(ex); }
@@ -300,8 +301,9 @@ else if (items is not null)
         pending = null;
         try
         {
-            await Api.WatchAsync(Fmt.Watch(MediaType.Episode, p.ShowTmdbId, c, n.SeasonNumber, n.EpisodeNumber));
-            Toasts.Show($"Watched {p.Name} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
+            var r = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, p.ShowTmdbId, c, n.SeasonNumber, n.EpisodeNumber));
+            var undo = Api.UndoFor(r, MediaType.Show, p.ShowTmdbId);
+            Toasts.Show($"Watched {p.Name} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}", undo: undo is null ? null : async () => { await undo(); await InvokeAsync(async () => { await Load(); StateHasChanged(); }); });
             await Load();
         }
         catch (Exception ex) { Toasts.Error(ex); }

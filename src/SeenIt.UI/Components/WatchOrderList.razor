@@ -67,13 +67,20 @@
         busy = true;
         try
         {
+            WatchedResult? r;
+            string done;
             if (c.Through)
-                Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At, InOrder: true)), c));
+            {
+                r = await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At, InOrder: true));
+                done = Fmt.Through(r.Added, c);
+            }
             else
             {
-                await Api.WatchAsync(Fmt.Watch(MediaType.Episode, ShowId, c, e.SeasonNumber, e.EpisodeNumber));
-                Toasts.Show($"Watched {Label(e)}{Fmt.When(c)}");
+                r = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, ShowId, c, e.SeasonNumber, e.EpisodeNumber));
+                done = $"Watched {Label(e)}{Fmt.When(c)}";
             }
+            var undo = Api.UndoFor(r, MediaType.Show, ShowId);
+            Toasts.Show(done, undo: undo is null ? null : async () => { await undo(); await InvokeAsync(() => OnChanged.InvokeAsync()); });
             await OnChanged.InvokeAsync();
         }
         catch (Exception ex) { Toasts.Error(ex); }

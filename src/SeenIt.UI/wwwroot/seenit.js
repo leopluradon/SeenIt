@@ -97,7 +97,7 @@ window.seenit = {
             el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         },
     },
-    // Escape closes the dialog on top. Each open dialog registers here; the newest one wins.
+    // Escape (and Back, see dialogHistory below) closes the dialog on top. Each open dialog registers here; the newest one wins.
     _dialogs: [],
     dialogOpened(id, dotnet) {
         this._dialogs = this._dialogs.filter(d => d.id !== id);
@@ -110,8 +110,79 @@ window.seenit = {
                 this._dialogs[this._dialogs.length - 1].dotnet.invokeMethodAsync('Escape');
             });
         }
+        this.dialogHistory.opened();
     },
-    dialogClosed(id) { this._dialogs = this._dialogs.filter(d => d.id !== id); },
+    dialogClosed(id) {
+        const was = this._dialogs.length;
+        this._dialogs = this._dialogs.filter(d => d.id !== id);
+        if (was && !this._dialogs.length) this.dialogHistory.closed();
+    },
+
+    /*
+     * Back closes an open dialog or menu sheet instead of leaving the page (the Android back button too).
+     * Opening one adds a history entry for the same address, marked seenitDialog; Back from it is caught here,
+     * before Blazor's own popstate listener sees it, and closes the dialog. Closing it any other way steps back
+     * over that entry quietly. If a dialog closes by going to another page, its entry is left behind, and
+     * landing on it later (Back from that page) skips straight past it.
+     */
+    dialogHistory: {
+        marked: false,       // our entry is the current one
+        ignorePops: 0,       // pops we caused ourselves
+        lastIndex: 0,        // Blazor's _index of the entry we're on, to tell Back from Forward
+        closeTimer: 0,
+        opened() {
+            this.bind();
+            clearTimeout(this.closeTimer);   // one dialog handing over to the next (menu → date picker) keeps the entry
+            this.closeTimer = 0;
+            if (this.marked) return;
+            const state = history.state && typeof history.state === 'object' ? history.state : {};
+            history.pushState({ ...state, seenitDialog: true }, '', location.href);
+            this.marked = true;
+        },
+        closed() {
+            clearTimeout(this.closeTimer);
+            this.closeTimer = setTimeout(() => {
+                this.closeTimer = 0;
+                if (!this.marked) return;
+                this.marked = false;
+                if (history.state && history.state.seenitDialog) { this.ignorePops++; history.back(); }
+            }, 150);
+        },
+        bind() {
+            if (this.bound) return;
+            this.bound = true;
+            const self = this, root = window.seenit;
+            const record = () => { self.lastIndex = (history.state && history.state._index) || 0; };
+            for (const name of ['pushState', 'replaceState']) {
+                const original = history[name].bind(history);
+                history[name] = (...args) => { const r = original(...args); if (!(args[0] && args[0].seenitDialog)) self.marked = false; record(); return r; };
+            }
+            record();
+            // Capture: runs before Blazor's (bubbling) listener, so it can keep Blazor from navigating.
+            window.addEventListener('popstate', e => {
+                const onMarker = !!(history.state && history.state.seenitDialog);
+                if (self.ignorePops > 0) { self.ignorePops--; e.stopImmediatePropagation(); record(); return; }
+                if (self.marked && !onMarker && root._dialogs.length) {
+                    // Back from the dialog's entry: close the dialog, stay on the page.
+                    self.marked = false;
+                    e.stopImmediatePropagation();
+                    record();
+                    root._dialogs[root._dialogs.length - 1].dotnet.invokeMethodAsync('Escape');
+                    return;
+                }
+                if (onMarker && !root._dialogs.length) {
+                    // A dialog's leftover entry: carry on past it in the same direction.
+                    const index = (history.state && history.state._index) || 0;
+                    e.stopImmediatePropagation();
+                    // Not ignored: the entry beyond is a real page change, which Blazor should handle.
+                    if (self.lastIndex > index) history.back(); else history.forward();
+                    return;
+                }
+                self.marked = onMarker;
+                record();
+            }, true);
+        },
+    },
 
     /**
      * Right-click (or long-press on touch) anything with a data-ctx attribute to open SeenIt's menu for it.
@@ -320,6 +391,38 @@ window.seenit = {
         if (none) none.hidden = !(words.length && shown === 0);
     },
 
+    /**
+     * Desktop nav: hide links from the right (data-fit, lowest first) until the rest fit, and mark their copies in the
+     * More menu. Measured rather than set by breakpoints, because fonts (and so widths) differ between systems.
+     */
+    navFit() {
+        const nav = document.querySelector('.topnav');
+        if (!nav) return;
+        const links = [...nav.querySelectorAll('[data-fit]')].sort((a, b) => a.dataset.fit - b.dataset.fit);
+        // The hidden property, not a class: NavLink rewrites its class attribute on every navigation.
+        links.forEach(a => { a.hidden = false; });
+        const hidden = new Set();
+        if (getComputedStyle(nav).display !== 'none')
+            for (const a of links) {
+                if (nav.scrollWidth <= nav.clientWidth + 1) break;
+                a.hidden = true;
+                hidden.add(a.dataset.fit);
+            }
+        window.seenit._navHidden = hidden;
+        document.querySelectorAll('.navmore-menu [data-fit-menu]').forEach(a => a.classList.toggle('nav-in', hidden.has(a.dataset.fitMenu)));
+        if (!window.seenit._navFitBound) {
+            window.seenit._navFitBound = true;
+            let queued = false;
+            window.addEventListener('resize', () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; window.seenit.navFit(); }); } });
+            if (document.fonts) document.fonts.ready.then(() => window.seenit.navFit());
+        }
+    },
+    /** Brings the first element matching the selector into view, unless Back is putting the page where it was. */
+    scrollToFirst(selector) {
+        if (window.seenit._restoring && window.seenit._restoring()) return;
+        const el = document.querySelector(selector);
+        if (el) el.scrollIntoView({ block: 'start', behavior: 'instant' });
+    },
     scrollToId(id) {
         const el = document.getElementById(id);
         if (el) el.scrollIntoView({ block: 'start', behavior: 'instant' });
@@ -524,6 +627,7 @@ document.addEventListener('keydown', e => {
     try { saved = JSON.parse(sessionStorage.getItem(KEY) || '{}') || {}; } catch { saved = {}; }
     const here = () => location.pathname + location.search;
     let restoring = null, persistTimer = 0;
+    window.seenit._restoring = () => !!restoring;
 
     const persist = () => {
         const keys = Object.keys(saved);

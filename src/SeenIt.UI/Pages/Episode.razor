@@ -189,12 +189,12 @@ else if (e is not null)
     {
         if (c.Through)
         {
-            await Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Season, Number, c.When, c.At, SeasonOnly: c.SeasonOnly)), c)));
+            await Act(async () => ThroughToast(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Season, Number, c.When, c.At, SeasonOnly: c.SeasonOnly)), c));
             return;
         }
         var unrated = e?.Rating is null;
-        await Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
-        if (unrated && e is { Rating: null, Plays.Count: > 0 }) ratePrompt = true;   // offer a rating while it's fresh
+        await Act(async () => undo = Api.UndoFor(await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), MediaType.Show, Id), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
+        if (unrated && e is { Rating: null, Plays.Count: > 0 } && Fmt.Prefs.RatesOnHome("episode")) ratePrompt = true;   // offer a rating while it's fresh, for the kinds picked under Settings → Ratings
     }
 
     /// <summary>One tap: mark this watched now and go to the next episode.</summary>
@@ -204,8 +204,8 @@ else if (e is not null)
         busy = true;
         try
         {
-            await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, new WatchChoice(WatchTime.Now), Season, Number));
-            Toasts.Show($"Watched {Fmt.Ep(Season, Number)}");
+            var r = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, new WatchChoice(WatchTime.Now), Season, Number));
+            Toasts.Show($"Watched {Fmt.Ep(Season, Number)}", undo: Api.UndoFor(r, MediaType.Show, Id));
             Nav.NavigateTo(Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber));
         }
         catch (Exception ex) { Toasts.Error(ex); }
@@ -219,13 +219,27 @@ else if (e is not null)
     }, "Play removed");
 
     private Task Rate(double? value) => value is { } v
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, v, Season, Number)), $"Rated {Fmt.Rating(v)}")
+        ? Act(async () => undo = await Rerate(e!.Rating, r => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, r, Season, Number)), () => Api.UnrateAsync(MediaType.Episode, Id, Season, Number), v), $"Rated {Fmt.Rating(v)}")
         : Act(async () =>
         {
             var old = e!.Rating;
             await Api.UnrateAsync(MediaType.Episode, Id, Season, Number);
             if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, o, Season, Number));
         }, "Rating removed");
+
+    /// <summary>The toast after "up to here": how many were marked, with Undo.</summary>
+    private void ThroughToast(WatchedResult r, WatchChoice c)
+    {
+        undo = Api.UndoFor(r, MediaType.Show, Id);
+        Toasts.Show(Fmt.Through(r.Added, c), undo: TakeUndo());
+    }
+
+    /// <summary>Saves a rating and returns its Undo: back to the rating it had, or to none.</summary>
+    private static async Task<Func<Task>> Rerate(double? old, Func<double, Task> rate, Func<Task> unrate, double value)
+    {
+        await rate(value);
+        return old is { } o ? () => rate(o) : unrate;
+    }
 
     // Set by an action that can be undone; the toast it shows gets an Undo button.
     private Func<Task>? undo;

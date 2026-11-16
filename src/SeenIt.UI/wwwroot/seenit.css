@@ -100,6 +100,17 @@ p.center { display: block; }
 .topnav a { padding: 7px 11px; border-radius: var(--radius-sm); color: var(--text-2); font-weight: 550; font-size: .92rem; white-space: nowrap; }
 .topnav a:hover { color: var(--text); background: var(--surface-2); }
 .topnav a.active { color: var(--text); background: var(--surface-3); }
+/* "More" after the nav: what doesn't fit, plus pages without a link of their own up here. */
+.navmore { position: relative; flex-shrink: 0; }
+.navmore-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 11px; border-radius: var(--radius-sm); border: 0; background: none;
+    color: var(--text-2); font-weight: 550; font-size: .92rem; cursor: pointer; white-space: nowrap; }
+.navmore-btn:hover, .navmore-btn.open { color: var(--text); background: var(--surface-2); }
+.navmore-menu { right: 0; left: auto; top: 42px; max-height: calc(100vh - 80px); overflow-y: auto; }
+/* seenit.navFit hides nav links that don't fit ([hidden]) and shows their copies in More (.nav-in). */
+.topnav a[hidden] { display: none; }
+.navmore-menu a[data-fit-menu]:not(.nav-in) { display: none; }
+@media (max-width: 1279px) { .topsearch { width: 200px; } }
+@media (max-width: 1099px) { .topsearch { width: 170px; } }
 .topsearch {
     margin-left: auto; display: flex; align-items: center; gap: 8px;
     background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
@@ -403,6 +414,7 @@ a.cast { color: var(--text); }
 .episodes { display: flex; flex-direction: column; gap: 12px; }
 .episode { display: flex; gap: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
 .episode.watched { border-color: rgba(var(--ok-rgb), .25); }
+.episode { scroll-margin-top: calc(var(--topbar-h) + 12px); }
 .episode-still { position: relative; width: 220px; flex-shrink: 0; aspect-ratio: 16/9; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); }
 .episode-still img { width: 100%; height: 100%; object-fit: cover; }
 .episode.watched .episode-still img { opacity: .55; }
@@ -630,16 +642,12 @@ a.cast { color: var(--text); }
 @media (max-width: 420px) { .more-grid { grid-template-columns: 1fr 1fr; } .more-grid a { padding: 12px; gap: 10px; font-size: .88rem; } }
 
 /* ---------- Phones ---------- */
+/* The top nav goes at 900px, so the tab bar takes over from there down (tablets in portrait, phones in landscape too). */
 @media (max-width: 900px) {
-    .topnav, .topsearch, .only-desktop { display: none !important; }
+    .topnav, .navmore, .topsearch, .only-desktop { display: none !important; }
     .only-mobile { display: inline-flex !important; }
     .topbar-inner { justify-content: space-between; gap: 8px; }
     .brand { margin-right: auto; }
-}
-@media (max-width: 760px) {
-    :root { --gutter: 16px; --topbar-h: 54px; }
-    body { font-size: 14.5px; }
-    h1 { font-size: 1.45rem; }
     .main { padding-top: 20px; padding-bottom: calc(var(--tabbar-h) + 32px + env(safe-area-inset-bottom)); }
     .footer { padding-bottom: calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom)); }
     .tabbar {
@@ -650,6 +658,11 @@ a.cast { color: var(--text); }
     .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: var(--tabbar-h); color: var(--muted); font-size: .68rem; font-weight: 650; }
     .tabbar a.active { color: var(--accent); }
     .toaster { bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 760px) {
+    :root { --gutter: 16px; --topbar-h: 54px; }
+    body { font-size: 14.5px; }
+    h1 { font-size: 1.45rem; }
     .poster-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 16px 10px; }
     .poster-scroller { grid-auto-columns: 112px; }
     .card-scroller { grid-auto-columns: 82%; }
@@ -659,11 +672,13 @@ a.cast { color: var(--text); }
     .hero-poster { width: 120px; }
     .hero-shade { background: linear-gradient(0deg, var(--bg) 10%, rgba(var(--bg-rgb), .6)); }
     .actions .btn { flex: 1 1 auto; }
-    .episode { flex-direction: column; }
+    /* Season pages: a small still beside the text, so a season is a scroll rather than a dozen screens. */
+    .episode { gap: 12px; padding: 10px; }
+    .episode-overview { -webkit-line-clamp: 2; font-size: .85rem; }
     .episode-hero { grid-template-columns: 1fr; gap: 16px; }
     .episode-nav { grid-template-columns: 1fr; }
     .episode-nav-link.next { grid-column: 1; }
-    .episode-still { width: 100%; }
+    .episode-still { width: 112px; align-self: flex-start; }
     .progress-list, .mini-list { grid-template-columns: minmax(0, 1fr); }
     .stat-panels { grid-template-columns: 1fr; }
     .hbar { grid-template-columns: 96px 1fr 40px; }
@@ -1020,7 +1035,6 @@ html[data-theme="nord"] {
 }
 .bulk-actions { display: flex; gap: 8px; margin-left: auto; }
 @media (max-width: 760px) {
-    .bulk-bar { bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); }
     .bulk-actions { margin-left: 0; width: 100%; }
     .bulk-actions .btn { flex: 1; }
 }
@@ -1171,7 +1185,6 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .rate-prompt { position: fixed; left: 50%; transform: translateX(-50%); bottom: 84px; z-index: 99; display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; justify-content: center;
     width: max-content; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); animation: pop .2s ease-out; }
 .rate-prompt-title { font-size: .9rem; }
-@media (max-width: 700px) { .rate-prompt { bottom: calc(76px + env(safe-area-inset-bottom)); } }
 .rate-prompt .rating-picker { flex: none; }
 .rate-prompt .pip { background: var(--surface-3); }
 .rate-prompt .rating-picker.compact .pip { width: 16px; height: 16px; }
@@ -1455,10 +1468,16 @@ html.compact .overview { line-height: 1.5; }
 }
 .to-top.show { opacity: 1; transform: none; pointer-events: auto; }
 .to-top:hover { background: var(--surface-3); }
-@media (max-width: 760px) {
-    .to-top { right: 16px; bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom)); }
-}
 @media (prefers-reduced-motion: reduce) { .to-top { transition: none; } }
+/* Floating bits sit above the tab bar wherever it shows (see "Phones"). */
+@media (max-width: 900px) {
+    .bulk-bar { bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); }
+    .to-top { right: 16px; bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom)); }
+    .rate-prompt { bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom)); }
+}
+/* While "Rate it?" is up, toasts ("Watched …") sit above it instead of on top of it. */
+body:has(.rate-prompt) .toaster { bottom: 176px; }
+@media (max-width: 900px) { body:has(.rate-prompt) .toaster { bottom: calc(var(--tabbar-h) + 104px + env(safe-area-inset-bottom)); } }
 
 /* ----- Customizable profile: a grid of widgets ----- */
 .pw-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 168px; grid-auto-flow: row dense; gap: 16px; margin-bottom: 20px; }

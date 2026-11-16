@@ -17,7 +17,15 @@ else if (s is not null)
         <Actions>
             @if (s.User is { } u)
             {
-                <button class="btn @(s.Progress?.Completed == true ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="() => watchAllOpen = true">
+                @* The everyday action leads: the next episode (S01E01 for a show you haven't started). Marking the whole show is secondary. *@
+                @if (NextUp is { } up)
+                {
+                    <button class="btn btn-primary" disabled="@busy" @onclick="() => { askWhen = false; pendingEpisode = up; }">
+                        <Icon Name="check" Size="18" /> Watched @(up.SeasonNumber == 0 ? $"Special {up.EpisodeNumber}" : Fmt.Ep(up.SeasonNumber, up.EpisodeNumber))
+                    </button>
+                    <WhenButton Disabled="busy" What="@Fmt.Ep(up.SeasonNumber, up.EpisodeNumber)" OnClick="() => { askWhen = true; pendingEpisode = up; }" />
+                }
+                <button class="btn @(s.Progress?.Completed == true ? "btn-watched" : NextUp is null ? "btn-primary" : "")" disabled="@busy" @onclick="() => watchAllOpen = true">
                     <Icon Name="check" Size="18" /> @(s.Progress?.Completed == true ? "All caught up" : "Mark all watched")
                 </button>
                 @if (u.Plays > 0)
@@ -252,6 +260,23 @@ else if (s is not null)
         _ => "",
     };
 
+    /// <summary>
+    /// The episode to offer in the header: what's next in your progress, or for a show you haven't started its first
+    /// aired episode (in your watch order if you picked one). Null for dropped shows and when nothing's left.
+    /// </summary>
+    private EpisodeRef? NextUp
+    {
+        get
+        {
+            if (s?.User is null || s.TrackStatus == ShowTrackStatus.Dropped) return null;
+            if (s.Progress is { } p) return p.NextEpisode is { } n && (n.AirDate is null || n.AirDate <= DateOnly.FromDateTime(DateTime.Today)) ? n : null;
+            if (order?.Parts.SelectMany(x => x.Episodes).FirstOrDefault(x => x.IsNext) is { } o)
+                return new EpisodeRef(o.SeasonNumber, o.EpisodeNumber, o.Name, o.AirDate);
+            return s.Seasons.Where(x => x.SeasonNumber > 0 && x.EpisodeCount > 0 && x.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today))
+                .OrderBy(x => x.SeasonNumber).Select(x => new EpisodeRef(x.SeasonNumber, 1, null, x.AirDate)).FirstOrDefault();
+        }
+    }
+
     public static string RewatchLabel(int number) => number == 2 ? "Rewatching" : $"Rewatch #{number - 1}";
 
     private async Task StartRewatch()
@@ -375,7 +400,7 @@ else if (s is not null)
     }
 
     private Task WatchAll(WatchChoice c) =>
-        Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, null, c.At, When: c.When)), $"Marked all aired episodes watched{Fmt.When(c)}");
+        Act(async () => undo = Api.UndoFor(await Api.BulkWatchAsync(new BulkWatchRequest(Id, null, c.At, When: c.When)), MediaType.Show, Id), $"Marked all aired episodes watched{Fmt.When(c)}");
 
     /// <summary>"in 5 hours" with an exact time; "in 3 days" from the date otherwise (nothing for today/tomorrow, which the date already says).</summary>
     private static string? NextCountdown(EpisodeRef n) =>
@@ -387,15 +412,15 @@ else if (s is not null)
         if (pendingSeason is not { } season) return Task.CompletedTask;
         pendingSeason = null;
         return c.Through
-            ? Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(season.SeasonNumber, null, c.When, c.At)), c)))
-            : Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, season.SeasonNumber, c.At, When: c.When)), $"Marked {season.Name} watched{Fmt.When(c)}");
+            ? Act(async () => ThroughToast(await Api.WatchThroughAsync(Id, new WatchThroughRequest(season.SeasonNumber, null, c.When, c.At)), c))
+            : Act(async () => undo = Api.UndoFor(await Api.BulkWatchAsync(new BulkWatchRequest(Id, season.SeasonNumber, c.At, When: c.When)), MediaType.Show, Id), $"Marked {season.Name} watched{Fmt.When(c)}");
     }
 
     private Task WatchEpisode(WatchChoice c)
     {
         if (pendingEpisode is not { } n) return Task.CompletedTask;
         pendingEpisode = null;
-        return Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, n.SeasonNumber, n.EpisodeNumber)), $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
+        return Act(async () => undo = Api.UndoFor(await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, n.SeasonNumber, n.EpisodeNumber)), MediaType.Show, Id), $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
     }
 
     private Task ToggleNotInterested() => s!.User!.NotInterested
@@ -419,13 +444,27 @@ else if (s is not null)
         : Act(() => Api.AddToWatchlistAsync(MediaType.Show, Id), "Added to watchlist");
 
     private Task Rate(double? value) => value is { } v
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Show, Id, v)), $"Rated {Fmt.Rating(v)}")
+        ? Act(async () => undo = await Rerate(s!.User!.Rating, r => Api.RateAsync(new RatingRequest(MediaType.Show, Id, r)), () => Api.UnrateAsync(MediaType.Show, Id), v), $"Rated {Fmt.Rating(v)}")
         : Act(async () =>
         {
             var old = s!.User!.Rating;
             await Api.UnrateAsync(MediaType.Show, Id);
             if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Show, Id, o));
         }, "Rating removed");
+
+    /// <summary>The toast after "up to here": how many were marked, with Undo.</summary>
+    private void ThroughToast(WatchedResult r, WatchChoice c)
+    {
+        undo = Api.UndoFor(r, MediaType.Show, Id);
+        Toasts.Show(Fmt.Through(r.Added, c), undo: TakeUndo());
+    }
+
+    /// <summary>Saves a rating and returns its Undo: back to the rating it had, or to none.</summary>
+    private static async Task<Func<Task>> Rerate(double? old, Func<double, Task> rate, Func<Task> unrate, double value)
+    {
+        await rate(value);
+        return old is { } o ? () => rate(o) : unrate;
+    }
 
     // Set by an action that can be undone; the toast it shows gets an Undo button.
     private Func<Task>? undo;

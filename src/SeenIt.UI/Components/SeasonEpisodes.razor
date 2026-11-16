@@ -97,12 +97,20 @@
         busy = true;
         try
         {
-            if (c.Through) Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At, SeasonOnly: c.SeasonOnly)), c));
+            WatchedResult? r;
+            string done;
+            if (c.Through)
+            {
+                r = await Api.WatchThroughAsync(ShowId, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At, SeasonOnly: c.SeasonOnly));
+                done = Fmt.Through(r.Added, c);
+            }
             else
             {
-                await Api.WatchAsync(Fmt.Watch(MediaType.Episode, ShowId, c, e.SeasonNumber, e.EpisodeNumber));
-                Toasts.Show($"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}{Fmt.When(c)}");
+                r = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, ShowId, c, e.SeasonNumber, e.EpisodeNumber));
+                done = $"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}{Fmt.When(c)}";
             }
+            var undo = Api.UndoFor(r, MediaType.Show, ShowId);
+            Toasts.Show(done, undo: undo is null ? null : async () => { await undo(); await InvokeAsync(async () => { await Load(selected); await OnChanged.InvokeAsync(); StateHasChanged(); }); });
             await Load(selected);
             await OnChanged.InvokeAsync();
         }

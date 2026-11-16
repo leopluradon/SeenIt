@@ -56,6 +56,21 @@ public class TokenManager(ITokenStore store)
         return _access;
     }
 
+    /// <summary>
+    /// The access token, renewed first if it's about to expire. Requests that can't be sent twice (file uploads)
+    /// would otherwise go out with an expired token after the page sat open for an hour, and sign you out.
+    /// </summary>
+    public async Task<string?> GetFreshAccessTokenAsync(HttpClient http)
+    {
+        await LoadAsync();
+        if (_access is not null && _expires != DateTimeOffset.MinValue && _expires - DateTimeOffset.UtcNow < TimeSpan.FromMinutes(2))
+        {
+            try { return await RefreshAsync(http) ?? _access; }
+            catch (Exception) { return _access; }   // timed out or offline: the request itself reports that
+        }
+        return _access;
+    }
+
     public async Task SaveAsync(TokenResponse t)
     {
         _access = t.AccessToken;

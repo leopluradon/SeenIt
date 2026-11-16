@@ -21,7 +21,7 @@ else if (m is not null)
             @if (m.User is { } u)
             {
                 <button class="btn @(u.Plays > 0 ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="() => { askWhen = false; watchOpen = true; }">
-                    <Icon Name="check" Size="18" /> @(u.Plays switch { 0 => "Mark watched", 1 => "Watched", var n => $"Watched {n}×" })
+                    <Icon Name="check" Size="18" /> @* Seen already: tapping it logs another viewing, so say so. *@@(u.Plays switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })
                 </button>
                 <WhenButton Disabled="busy" What="@m.Title" OnClick="() => { askWhen = true; watchOpen = true; }" />
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
@@ -202,8 +202,8 @@ else if (m is not null)
     private async Task Watch(WatchChoice c)
     {
         var unrated = m?.User?.Rating is null;
-        await Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Movie, Id, c)), $"Watched {m!.Title}{Fmt.When(c)}");
-        if (unrated && m?.User is { Plays: > 0, Rating: null }) ratePrompt = true;   // offer a rating while it's fresh
+        await Act(async () => undo = Api.UndoFor(await Api.WatchAsync(Fmt.Watch(MediaType.Movie, Id, c)), MediaType.Movie, Id), $"Watched {m!.Title}{Fmt.When(c)}");
+        if (unrated && m?.User is { Plays: > 0, Rating: null } && Fmt.Prefs.RatesOnHome("movie")) ratePrompt = true;   // offer a rating while it's fresh
     }
 
     private Task RemovePlay(PlayDto p) => Act(async () =>
@@ -239,13 +239,20 @@ else if (m is not null)
         : Act(() => Api.AddToWatchlistAsync(MediaType.Movie, Id), "Added to watchlist");
 
     private Task Rate(double? value) => value is { } v
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Movie, Id, v)), $"Rated {Fmt.Rating(v)}")
+        ? Act(async () => undo = await Rerate(m!.User!.Rating, r => Api.RateAsync(new RatingRequest(MediaType.Movie, Id, r)), () => Api.UnrateAsync(MediaType.Movie, Id), v), $"Rated {Fmt.Rating(v)}")
         : Act(async () =>
         {
             var old = m!.User!.Rating;
             await Api.UnrateAsync(MediaType.Movie, Id);
             if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Movie, Id, o));
         }, "Rating removed");
+
+    /// <summary>Saves a rating and returns its Undo: back to the rating it had, or to none.</summary>
+    private static async Task<Func<Task>> Rerate(double? old, Func<double, Task> rate, Func<Task> unrate, double value)
+    {
+        await rate(value);
+        return old is { } o ? () => rate(o) : unrate;
+    }
 
     // Set by an action that can be undone; the toast it shows gets an Undo button.
     private Func<Task>? undo;

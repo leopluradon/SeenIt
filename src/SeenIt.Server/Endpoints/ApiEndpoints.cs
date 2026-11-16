@@ -111,21 +111,23 @@ public static class ApiEndpoints
 
     private static void MapTracking(RouteGroupBuilder g)
     {
-        g.MapPost("/watch", async (WatchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        g.MapPost("/watch", async (WatchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
+            var before = await WatchedResults.BeforeAsync(db, p.UserId(), req.Type, req.TmdbId, ct);
             var added = await t.WatchAsync(p.UserId(), req, WatchSource.Manual, ct);
             var what = req.EpisodeNumber is null && req.Type != MediaType.Movie ? $"{added} episode{(added == 1 ? "" : "s")}" : null;
             await a.LogAsync(p, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
                 string.Join(", ", new[] { what, ActivityService.When(req.When, req.WatchedAt) }.OfType<string>()) is { Length: > 0 } d ? d : null);
-            return Results.Ok(new { added });
+            return Results.Ok(await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct));
         });
 
-        g.MapPost("/watch/bulk", async (BulkWatchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        g.MapPost("/watch/bulk", async (BulkWatchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
+            var before = await WatchedResults.BeforeAsync(db, p.UserId(), MediaType.Show, req.ShowTmdbId, ct);
             var added = await t.BulkWatchAsync(p.UserId(), req, ct);
             await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, req.ShowTmdbId, req.SeasonNumber, null,
                 $"{added} episode{(added == 1 ? "" : "s")}" + (ActivityService.When(req.When, req.WatchedAt) is { } w ? ", " + w : ""));
-            return Results.Ok(new { added });
+            return Results.Ok(await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct));
         });
 
         g.MapDelete("/watch", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
@@ -305,12 +307,13 @@ public static class ApiEndpoints
             await a.LogAsync(p, ActivityKind.WatchOrder, MediaType.Show, id, detail: req.OrderId ?? "TMDB seasons");
             return Results.NoContent();
         });
-        g.MapPost("/shows/{id:int}/watch-through", async (int id, WatchThroughRequest req, ClaimsPrincipal p, WatchOrderService w, ActivityService a, CancellationToken ct) =>
+        g.MapPost("/shows/{id:int}/watch-through", async (int id, WatchThroughRequest req, ClaimsPrincipal p, WatchOrderService w, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
+            var before = await WatchedResults.BeforeAsync(db, p.UserId(), MediaType.Show, id, ct);
             var n = await w.WatchThroughAsync(p.UserId(), id, req, ct);
             if (n > 0) await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, id, req.SeasonNumber, req.EpisodeNumber,
                 $"{n} episodes up to here{(req.InOrder ? " in watch order" : "")}");
-            return Results.Ok(new { added = n });
+            return Results.Ok(await WatchedResults.AfterAsync(db, p.UserId(), before, n, ct));
         });
         g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
@@ -778,5 +781,31 @@ public static class ApiEndpoints
         // Older app versions: you vs them.
         g.MapGet("/compare/{name}", async (string name, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>
             await s.CompareAsync(p.UserId(), p.Identity?.Name ?? "", name, ct) is { } c ? Results.Ok(c) : Results.NotFound());
+    }
+}
+
+/// <summary>
+/// Works out what a "mark watched" request added, for its Undo: the plays it recorded by hand since the request
+/// started, and whether it took the title off the watchlist (Settings → Tracking).
+/// </summary>
+internal static class WatchedResults
+{
+    public sealed record Before(DateTimeOffset Since, MediaType Type, int TmdbId, bool OnWatchlist);
+
+    public static async Task<Before> BeforeAsync(AppDbContext db, Guid userId, MediaType type, int tmdbId, CancellationToken ct)
+    {
+        var listType = type == MediaType.Movie ? MediaType.Movie : MediaType.Show;
+        var onWatchlist = await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == listType && w.TmdbId == tmdbId, ct);
+        return new Before(DateTimeOffset.UtcNow, listType, tmdbId, onWatchlist);
+    }
+
+    public static async Task<WatchedResult> AfterAsync(AppDbContext db, Guid userId, Before b, int added, CancellationToken ct)
+    {
+        var playType = b.Type == MediaType.Movie ? MediaType.Movie : MediaType.Episode;
+        var ids = added == 0 ? [] : await db.WatchEvents.AsNoTracking()
+            .Where(w => w.UserId == userId && w.Type == playType && w.TmdbId == b.TmdbId && w.Source == WatchSource.Manual && w.CreatedAt >= b.Since)
+            .Select(w => w.Id).ToListAsync(ct);
+        var left = b.OnWatchlist && !await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == b.Type && w.TmdbId == b.TmdbId, ct);
+        return new WatchedResult(added, ids, left);
     }
 }

@@ -111,17 +111,31 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     // ---------- Tracking ----------
 
     // "Now" is pinned to the moment of the tap, so a play queued offline keeps its real time.
-    public async Task WatchAsync(WatchRequest r)
+    /// <summary>Records a play. Returns what was added, for Undo; null when it was queued offline.</summary>
+    public async Task<WatchedResult?> WatchAsync(WatchRequest r)
     {
-        await SendQueueableAsync(HttpMethod.Post, "api/watch",
+        var result = await SendQueueableAsync<WatchedResult>(HttpMethod.Post, "api/watch",
             r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
         await RaiseWatched(r.Type, r.TmdbId);
+        return result;
     }
-    public async Task BulkWatchAsync(BulkWatchRequest r)
+    public async Task<WatchedResult?> BulkWatchAsync(BulkWatchRequest r)
     {
-        await SendQueueableAsync(HttpMethod.Post, "api/watch/bulk",
+        var result = await SendQueueableAsync<WatchedResult>(HttpMethod.Post, "api/watch/bulk",
             r.When is null or WatchTime.Now && r.WatchedAt is null ? r with { When = WatchTime.Custom, WatchedAt = DateTimeOffset.UtcNow } : r);
         await RaiseWatched(MediaType.Show, r.ShowTmdbId);
+        return result;
+    }
+
+    /// <summary>The Undo for a toast after marking something watched, or null when there's nothing to undo (queued offline, nothing added).</summary>
+    public Func<Task>? UndoFor(WatchedResult? r, MediaType type, int tmdbId) =>
+        r is { PlayIds.Count: > 0 } or { LeftWatchlist: true } ? () => UndoWatchedAsync(r, type, tmdbId) : null;
+
+    /// <summary>Undo for marking something watched: removes the plays it added and puts it back on the watchlist if it left.</summary>
+    public async Task UndoWatchedAsync(WatchedResult r, MediaType type, int tmdbId)
+    {
+        if (r.PlayIds.Count > 0) await DeleteHistoryAsync(r.PlayIds);
+        if (r.LeftWatchlist) await AddToWatchlistAsync(type == MediaType.Movie ? MediaType.Movie : MediaType.Show, tmdbId);
     }
     /// <summary>After marking something watched (the watchlist "ask" prompt listens).</summary>
     public event Func<MediaType, int, Task>? Watched;
@@ -376,13 +390,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>The order you follow for the show, or null for TMDB's seasons.</summary>
     public Task<WatchOrderDto?> WatchOrderAsync(int showId) => SendAsync<WatchOrderDto>(HttpMethod.Get, $"api/shows/{showId}/order");
     public Task SetWatchOrderAsync(int showId, string? orderId) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/order", new SetWatchOrderRequest(orderId));
-    public async Task<int> WatchThroughAsync(int showId, WatchThroughRequest r)
+    public async Task<WatchedResult> WatchThroughAsync(int showId, WatchThroughRequest r)
     {
-        var added = (await SendAsync<AddedResult>(HttpMethod.Post, $"api/shows/{showId}/watch-through", r))?.Added ?? 0;
-        if (added > 0) await RaiseWatched(MediaType.Show, showId);
-        return added;
+        var result = await SendAsync<WatchedResult>(HttpMethod.Post, $"api/shows/{showId}/watch-through", r) ?? new WatchedResult(0, []);
+        if (result.Added > 0) await RaiseWatched(MediaType.Show, showId);
+        return result;
     }
-    private sealed record AddedResult(int Added);
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");
     public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content, DateOnly? since = null)
     {
@@ -434,6 +447,25 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         }
         if (offline.Enabled) await offline.SetAsync(url, json);
         return JsonSerializer.Deserialize<T>(json, Json)!;
+    }
+
+    /// <summary>As below, with the server's answer; default when it was queued offline (or the server sent none).</summary>
+    private async Task<T?> SendQueueableAsync<T>(HttpMethod method, string url, object body)
+    {
+        try { return await SendAsync<T>(method, url, body); }
+        catch (ApiException ex) when (ex.Status == 0 && offline.Enabled)
+        {
+            await QueueAsync(method, url, body);
+            return default;
+        }
+    }
+
+    private async Task QueueAsync(HttpMethod method, string url, object body)
+    {
+        var queue = await offline.GetQueueAsync();
+        queue.Add(new QueuedRequest(method.Method, url, JsonSerializer.Serialize(body, body.GetType(), Json), DateTimeOffset.UtcNow));
+        await offline.SetQueueAsync(queue);
+        connectivity.Set(offline: true, queue.Count);
     }
 
     /// <summary>Changes that can wait: when offline on the app they're queued and sent once the server is back.</summary>
@@ -546,7 +578,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     private async Task<HttpResponseMessage> SendRawAsync(Func<HttpRequestMessage> build, bool auth)
     {
         var req = build();
-        if (auth && await tokens.GetAccessTokenAsync() is { } token)
+        if (auth && await tokens.GetFreshAccessTokenAsync(http) is { } token)
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         HttpResponseMessage resp;

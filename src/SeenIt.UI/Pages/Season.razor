@@ -222,6 +222,18 @@ else if (season is not null)
 
     protected override Task OnParametersSetAsync() => Load();
 
+    /// <summary>Opening a season you're partway through goes straight to the next episode, once per visit.</summary>
+    private (int, int)? scrolledFor;
+    [Inject] private IJSRuntime Js { get; set; } = default!;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (season is null || scrolledFor == (Id, Number)) return;
+        scrolledFor = (Id, Number);
+        var aired = season.Episodes.Where(e => e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today)).ToList();
+        if (Watched == 0 || aired.All(Done) || Ordered.FirstOrDefault(e => !Done(e)) is not { } next || next == Ordered.First()) return;
+        try { await Js.InvokeVoidAsync("seenit.scrollToFirst", ".episodes .episode:not(.watched)"); } catch (JSException) { }
+    }
+
     private async Task Load()
     {
         error = null;
@@ -250,9 +262,9 @@ else if (season is not null)
         if (pending is not { } e) return Task.CompletedTask;
         pending = null;
         if (c.Through)
-            return Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At,
-                InOrder: order is not null && Place(e) is not null, SeasonOnly: c.SeasonOnly)), c)));
-        return Act(() => Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, e.SeasonNumber, e.EpisodeNumber)), $"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}{Fmt.When(c)}");
+            return Act(async () => ThroughToast(await Api.WatchThroughAsync(Id, new WatchThroughRequest(e.SeasonNumber, e.EpisodeNumber, c.When, c.At,
+                InOrder: order is not null && Place(e) is not null, SeasonOnly: c.SeasonOnly)), c));
+        return Act(async () => undo = Api.UndoFor(await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, e.SeasonNumber, e.EpisodeNumber)), MediaType.Show, Id), $"Watched {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}{Fmt.When(c)}");
     }
     private Task Unwatch(EpisodeDto e) => Act(async () =>
     {
@@ -260,15 +272,15 @@ else if (season is not null)
         undo = () => Api.RestorePlaysAsync(removed.Plays);
     }, "Removed from history");
     private Task WatchSeason(WatchChoice c) => c.Through
-        ? Act(async () => Toasts.Show(Fmt.Through(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Number, null, c.When, c.At)), c)))
-        : Act(() => Api.BulkWatchAsync(new BulkWatchRequest(Id, Number, c.At, When: c.When)), $"Marked {season!.Name} watched{Fmt.When(c)}");
+        ? Act(async () => ThroughToast(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Number, null, c.When, c.At)), c))
+        : Act(async () => undo = Api.UndoFor(await Api.BulkWatchAsync(new BulkWatchRequest(Id, Number, c.At, When: c.When)), MediaType.Show, Id), $"Marked {season!.Name} watched{Fmt.When(c)}");
     private Task UnwatchSeason() => Act(async () =>
     {
         var removed = await Api.UnwatchAsync(MediaType.Episode, Id, Number);
         undo = () => Api.RestorePlaysAsync(removed.Plays);
     }, "Season removed from history");
     private Task Rate(EpisodeDto e, double? v) => v is { } r
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, r, e.SeasonNumber, e.EpisodeNumber)), $"Rated {Fmt.Rating(r)}")
+        ? Act(async () => undo = await Rerate(e.Rating, x => Api.RateAsync(new RatingRequest(MediaType.Episode, Id, x, e.SeasonNumber, e.EpisodeNumber)), () => Api.UnrateAsync(MediaType.Episode, Id, e.SeasonNumber, e.EpisodeNumber), r), $"Rated {Fmt.Rating(r)}")
         : Act(async () =>
         {
             var old = e.Rating;
@@ -277,13 +289,27 @@ else if (season is not null)
         }, "Rating removed");
 
     private Task RateSeason(double? v) => v is { } r
-        ? Act(() => Api.RateAsync(new RatingRequest(MediaType.Show, Id, r, Number)), $"Rated {season!.Name} {Fmt.Rating(r)}")
+        ? Act(async () => undo = await Rerate(season!.Rating, x => Api.RateAsync(new RatingRequest(MediaType.Show, Id, x, Number)), () => Api.UnrateAsync(MediaType.Show, Id, Number), r), $"Rated {season!.Name} {Fmt.Rating(r)}")
         : Act(async () =>
         {
             var old = season!.Rating;
             await Api.UnrateAsync(MediaType.Show, Id, Number);
             if (old is { } o) undo = () => Api.RateAsync(new RatingRequest(MediaType.Show, Id, o, Number));
         }, "Rating removed");
+
+    /// <summary>The toast after "up to here": how many were marked, with Undo.</summary>
+    private void ThroughToast(WatchedResult r, WatchChoice c)
+    {
+        undo = Api.UndoFor(r, MediaType.Show, Id);
+        Toasts.Show(Fmt.Through(r.Added, c), undo: TakeUndo());
+    }
+
+    /// <summary>Saves a rating and returns its Undo: back to the rating it had, or to none.</summary>
+    private static async Task<Func<Task>> Rerate(double? old, Func<double, Task> rate, Func<Task> unrate, double value)
+    {
+        await rate(value);
+        return old is { } o ? () => rate(o) : unrate;
+    }
 
     // Set by an action that can be undone; the toast it shows gets an Undo button.
     private Func<Task>? undo;

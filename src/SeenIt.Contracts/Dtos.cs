@@ -534,6 +534,9 @@ public record WatchRequest(
 /// <summary>Marks every aired episode of a show (or one season) watched.</summary>
 public record BulkWatchRequest(int ShowTmdbId, int? SeasonNumber = null, DateTimeOffset? WatchedAt = null, bool OnlyUnwatched = true, WatchTime? When = null);
 
+/// <summary>What marking something watched did, so it can be undone: the plays it added, and whether that took the title off the watchlist.</summary>
+public record WatchedResult(int Added, IReadOnlyList<Guid> PlayIds, bool LeftWatchlist = false);
+
 /// <summary>Plays recorded with "unknown date" are stored at the Unix epoch.</summary>
 public static class WatchDates
 {

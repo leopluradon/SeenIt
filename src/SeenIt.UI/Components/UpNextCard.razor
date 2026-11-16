@@ -39,8 +39,11 @@
         busy = true;
         try
         {
-            await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Progress.ShowTmdbId, c, ep.SeasonNumber, ep.EpisodeNumber));
-            Toasts.Show($"Watched {Progress.Name} {Fmt.Ep(ep.SeasonNumber, ep.EpisodeNumber)}{Fmt.When(c)}");
+            var r = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Progress.ShowTmdbId, c, ep.SeasonNumber, ep.EpisodeNumber));
+            var undo = Api.UndoFor(r, MediaType.Show, Progress.ShowTmdbId);
+            var onWatched = OnWatched;   // this card may be gone (the next show moved up) by the time Undo is tapped
+            Toasts.Show($"Watched {Progress.Name} {Fmt.Ep(ep.SeasonNumber, ep.EpisodeNumber)}{Fmt.When(c)}",
+                undo: undo is null ? null : async () => { await undo(); await onWatched.InvokeAsync(); });
             await OnWatched.InvokeAsync();
         }
         catch (Exception ex) { Toasts.Error(ex); }

@@ -419,19 +419,19 @@
             switch (t.Kind)
             {
                 case MenuKind.Episode:
-                    await Api.WatchAsync(Fmt.Watch(MediaType.Episode, t.Id, c, t.S, t.E));
-                    return ($"Watched {Name(t)}{Fmt.When(c)}", null);
+                    var er = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, t.Id, c, t.S, t.E));
+                    return ($"Watched {Name(t)}{Fmt.When(c)}", Api.UndoFor(er, MediaType.Show, t.Id));
                 case MenuKind.Title when t.Type == MediaType.Movie:
-                    await Api.WatchAsync(Fmt.Watch(MediaType.Movie, t.Id, c));
-                    return ($"Watched {t.Title}{Fmt.When(c)}", null);
+                    var mr = await Api.WatchAsync(Fmt.Watch(MediaType.Movie, t.Id, c));
+                    return ($"Watched {t.Title}{Fmt.When(c)}", Api.UndoFor(mr, MediaType.Movie, t.Id));
                 default:
                     if (!dialogBulk && st?.NextEpisode is { } n)
                     {
-                        await Api.WatchAsync(Fmt.Watch(MediaType.Episode, t.Id, c, n.SeasonNumber, n.EpisodeNumber));
-                        return ($"Watched {t.Title} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}", null);
+                        var nr = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, t.Id, c, n.SeasonNumber, n.EpisodeNumber));
+                        return ($"Watched {t.Title} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}", Api.UndoFor(nr, MediaType.Show, t.Id));
                     }
-                    await Api.BulkWatchAsync(new BulkWatchRequest(t.Id, null, c.At, When: c.When));
-                    return ($"Marked all aired episodes of {t.Title} watched{Fmt.When(c)}", null);
+                    var br = await Api.BulkWatchAsync(new BulkWatchRequest(t.Id, null, c.At, When: c.When));
+                    return ($"Marked all aired episodes of {t.Title} watched{Fmt.When(c)}", Api.UndoFor(br, MediaType.Show, t.Id));
             }
         });
     }
@@ -450,8 +450,8 @@
         if (acted is not { S: { } s, E: { } e } t) return Task.CompletedTask;
         return Do(async () =>
         {
-            var added = await Api.WatchThroughAsync(t.Id, new WatchThroughRequest(s, e, c.When, c.At, SeasonOnly: c.SeasonOnly));
-            return (Fmt.Through(added, c), null);
+            var r = await Api.WatchThroughAsync(t.Id, new WatchThroughRequest(s, e, c.When, c.At, SeasonOnly: c.SeasonOnly));
+            return (Fmt.Through(r.Added, c), Api.UndoFor(r, MediaType.Show, t.Id));
         });
     }
 

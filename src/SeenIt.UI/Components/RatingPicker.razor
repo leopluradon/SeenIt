@@ -27,7 +27,7 @@ else if (Fmt.FiveStars)
                 {
                     var n = full - h;
                     <button type="button" role="radio" aria-checked="@(Value == n)" aria-label="@($"{Fmt.Stars(n)} stars")"
-                            class="@(h == 1 ? "left" : "right")" @onmouseenter="() => hover = n" @onclick="() => Pick(n)"></button>
+                            class="@(h == 1 ? "left" : "right")" @onpointerenter="e => Preview(e, n)" @onclick="() => Pick(n)"></button>
                 }
             </span>
         }
@@ -42,7 +42,7 @@ else
             var n = i;
             <button type="button" role="radio" aria-checked="@(Value == n)" aria-label="@n out of 10"
                     class="pip @((hover ?? Value) >= n - 0.5 ? "on" : "")"
-                    @onmouseenter="() => hover = n" @onclick="() => Pick(n)"></button>
+                    @onpointerenter="e => Preview(e, n)" @onclick="() => Pick(n)"></button>
         }
         <span class="rating-value">@((hover ?? Value) is { } v ? Fmt.Stars(v) : "–")</span>
     </div>
@@ -54,7 +54,14 @@ else
     private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
     private double? hover, draft;
 
-    private Task Pick(int n) => ValueChanged.InvokeAsync(Value == n ? null : n);
+    /// <summary>Hovering previews a rating, with a mouse only: touch fires pointerenter too and the preview would stick.</summary>
+    private void Preview(PointerEventArgs e, int n) { if (e.PointerType == "mouse") hover = n; }
+
+    private Task Pick(int n)
+    {
+        hover = null;   // show what was picked (or cleared), not the preview
+        return ValueChanged.InvokeAsync(Value == n ? null : n);
+    }
 
     private static double? Parse(object? v) =>
         double.TryParse(v?.ToString(), System.Globalization.NumberStyles.Float, Inv, out var d) ? Math.Round(Math.Clamp(d, 1, 10), 1) : null;

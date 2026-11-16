@@ -11,12 +11,18 @@
             <p class="muted small">Also marks the earlier episodes you haven't watched @(seasonOnly ? $"in season {sn}" : $"in seasons 1–{sn}").</p>
         }
         else if (Through) { <p class="muted small">Also marks every earlier episode you haven't watched@(ThroughNote).</p> }
-        <button class="btn btn-primary btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Now))"><Icon Name="check" Size="16" /> Right now</button>
+        @* Several episodes at once are usually catching up on something watched long ago, so their air dates come first. *@
         @if (Bulk || Through)
         {
-            <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release dates <span class="muted small">(each episode's air date)</span></button>
+            <button class="btn btn-primary btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))"><Icon Name="calendar" Size="16" /> Release dates <span class="small">(each episode's air date)</span></button>
+            <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Now))"><Icon Name="check" Size="16" /> Right now</button>
         }
-        else if (ReleaseDate is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today))
+        else
+        {
+            <button class="btn btn-primary btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Now))"><Icon Name="check" Size="16" /> Right now</button>
+        }
+        <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.Custom, DateTimeOffset.Now.AddDays(-1)))">Yesterday</button>
+        @if (!(Bulk || Through) && ReleaseDate is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today))
         {
             <button class="btn btn-block" @onclick="() => Pick(new WatchChoice(WatchTime.ReleaseDate))">Release date <span class="muted small">(@rd.ToString(Fmt.DateLong))</span></button>
         }
