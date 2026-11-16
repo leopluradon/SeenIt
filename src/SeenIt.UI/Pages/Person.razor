@@ -4,7 +4,7 @@
 @inject Toasts Toasts
 <PageTitle>@(p?.Name ?? "Person") · SeenIt</PageTitle>
 
-<ErrorBox Message="@error" OnRetry="Load" />
+<ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
 @if (p is null && error is null) { <Spinner /> }
 else if (p is not null)
 {
@@ -187,6 +187,7 @@ else if (p is not null)
     [Parameter] public int Id { get; set; }
     private PersonDetail? p;
     private string? error;
+    private bool notFound;
     private bool bioOpen, seenOnly, following;
     private string tab = "all";
     private HashSet<string> shown = [];
@@ -316,7 +317,9 @@ else if (p is not null)
     private async Task Load()
     {
         error = null;
+        notFound = false;
         try { p = await Api.PersonAsync(Id); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no one at this address on TMDB."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
     }
 

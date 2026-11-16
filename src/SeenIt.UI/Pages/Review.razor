@@ -222,5 +222,5 @@ else if (r is not null)
         else Nav.NavigateTo($"review/{Year + step}");
     }
 
-    private static string HourLabel(int h) => new DateTime(2000, 1, 1, h, 0, 0).ToString("h tt").ToLowerInvariant();
+    private static string HourLabel(int h) => Fmt.Prefs.Clock24 ? $"{h:00}:00" : new DateTime(2000, 1, 1, h, 0, 0).ToString("h tt").ToLowerInvariant();
 }

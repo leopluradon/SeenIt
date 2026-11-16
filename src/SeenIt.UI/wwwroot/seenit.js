@@ -592,6 +592,18 @@ window.seenit = {
     },
 };
 
+// A quick second tap (an impatient double tap on "Right now") shouldn't land on whatever was under a dialog or menu
+// that the first tap just closed. Clicks inside one are noted; for a moment after it closes, clicks outside are dropped.
+(() => {
+    let lastInside = 0;
+    const inDialog = t => t instanceof Element && !!t.closest('.modal, .ctx-menu, .menu');
+    document.addEventListener('click', e => {
+        if (inDialog(e.target)) { lastInside = Date.now(); return; }
+        const open = document.querySelector('.modal, .ctx-menu');
+        if (!open && Date.now() - lastInside < 450) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+})();
+
 // Any tap on a plain link to the search page (header icon, tab bar, More menu) primes the keyboard.
 document.addEventListener('click', e => {
     const a = e.target instanceof Element ? e.target.closest('a[href]') : null;

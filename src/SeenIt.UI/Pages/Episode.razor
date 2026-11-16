@@ -4,7 +4,7 @@
 @inject NavigationManager Nav
 <PageTitle>@(e is null ? "Episode" : $"{e.ShowName} {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}") · SeenIt</PageTitle>
 
-<ErrorBox Message="@error" OnRetry="Load" />
+<ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
 @if (e is null && error is null) { <Spinner /> }
 else if (e is not null)
 {
@@ -59,7 +59,8 @@ else if (e is not null)
                     {
                         <button class="btn" disabled="@busy" @onclick="() => { through = true; watchOpen = true; }" title="Mark this and every earlier episode watched">Mark up to here</button>
                     }
-                    @if (aired) { <CheckInButton Request="@(new CheckInRequest(MediaType.Episode, Id, Season, Number))" /> }
+                    <button type="button" class="btn btn-more" data-ctx="@Menu.Episode(Id, Season, Number, e.ShowName, e.Name, e.ShowPosterPath)" aria-label="More actions" title="More: check in, rate, go to season…"
+                            onclick="seenit.openMenuFor(this)"><Icon Name="more" Size="18" /></button>
                 }
                 else
                 {
@@ -155,6 +156,7 @@ else if (e is not null)
     [Parameter] public int Number { get; set; }
     private EpisodeDetail? e;
     private string? error;
+    private bool notFound;
     private bool busy, watchOpen, through, ratePrompt, askWhen;
     private PlayDto? editing;
 
@@ -167,8 +169,10 @@ else if (e is not null)
     private async Task Load()
     {
         error = null;
+        notFound = false;
         if (e is not null && (e.ShowTmdbId != Id || e.SeasonNumber != Season || e.EpisodeNumber != Number)) e = null;
         try { e = await Api.EpisodeAsync(Id, Season, Number); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = $"This show has no episode {Fmt.Ep(Season, Number)}."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
     }
 

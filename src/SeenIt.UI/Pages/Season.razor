@@ -2,9 +2,10 @@
 @inject ApiClient Api
 @inject Toasts Toasts
 @inject SessionState Session
+@inject Confirm Confirmer
 <PageTitle>@(season is null ? "Season" : $"{season.ShowName} · {season.Name}") · SeenIt</PageTitle>
 
-<ErrorBox Message="@error" OnRetry="Load" />
+<ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
 @if (season is null && error is null) { <Spinner /> }
 else if (season is not null)
 {
@@ -164,6 +165,7 @@ else if (season is not null)
     [Parameter] public int Number { get; set; }
     private SeasonDetail? season;
     private string? error;
+    private bool notFound;
     private bool busy, watchAllOpen;
     private EpisodeDto? pending;
     private bool pendingThrough, seasonThrough;
@@ -237,8 +239,10 @@ else if (season is not null)
     private async Task Load()
     {
         error = null;
+        notFound = false;
         if (season is not null && (season.ShowTmdbId != Id || season.SeasonNumber != Number)) season = null;
         try { season = await Api.SeasonAsync(Id, Number); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = $"This show has no season {Number}."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
         if (season is not null && Session.Me is not null && ordersFor != Id) { ordersFor = Id; await LoadOrder(); }
     }
@@ -274,7 +278,13 @@ else if (season is not null)
     private Task WatchSeason(WatchChoice c) => c.Through
         ? Act(async () => ThroughToast(await Api.WatchThroughAsync(Id, new WatchThroughRequest(Number, null, c.When, c.At)), c))
         : Act(async () => undo = Api.UndoFor(await Api.BulkWatchAsync(new BulkWatchRequest(Id, Number, c.At, When: c.When)), MediaType.Show, Id), $"Marked {season!.Name} watched{Fmt.When(c)}");
-    private Task UnwatchSeason() => Act(async () =>
+    private async Task UnwatchSeason()
+    {
+        if (!await Confirmer.AskAsync($"Unwatch {season!.Name}?", $"This removes every play of its episodes from your history ({Watched} episode{(Watched == 1 ? "" : "s")}). Ratings stay. You can undo it straight after.", "Unwatch season", danger: true)) return;
+        await UnwatchSeasonNow();
+    }
+
+    private Task UnwatchSeasonNow() => Act(async () =>
     {
         var removed = await Api.UnwatchAsync(MediaType.Episode, Id, Number);
         undo = () => Api.RestorePlaysAsync(removed.Plays);

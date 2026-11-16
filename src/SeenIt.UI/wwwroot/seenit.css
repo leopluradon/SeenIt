@@ -286,6 +286,8 @@ html.has-ptr, html.has-ptr body { overscroll-behavior-y: contain; }
 .poster-mark-list { background: rgba(0, 0, 0, .75); color: var(--text); }
 .poster-score { position: absolute; bottom: 8px; right: 8px; background: rgba(0, 0, 0, .75); font-size: .74rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
 .poster-card { position: relative; }
+.actions .btn.btn-more { flex: 0 0 auto; padding: 0 12px; }
+.note-add { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 12px; color: var(--muted); }
 .poster-sub { padding-right: 26px; }
 .poster-more { position: absolute; right: -6px; bottom: -6px; width: 32px; height: 32px; display: grid; place-items: center;
     border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
@@ -702,7 +704,10 @@ a.cast { color: var(--text); }
     .settings-nav { display: none; }   /* phones: the overview cards and "All settings" link instead */
     .page-head .segmented { width: 100%; }
     .page-head .segmented button { flex: 1; justify-content: center; padding: 6px 8px; }
-    .pip { width: 15px; height: 15px; }
+    /* Finger-sized rating pips on phones. */
+    .pip { width: 21px; height: 21px; border-radius: 5px; }
+    .rating-picker.compact { gap: 3px; }
+    .rating-picker.compact .pip { width: 18px; height: 18px; border-radius: 4px; }
     .modal { top: auto; bottom: 0; transform: translateX(-50%); width: 100vw; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
     .auth-card { margin: 8px auto; padding: 22px; border: 0; background: transparent; }
 }
@@ -1205,7 +1210,7 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .rate-prompt .rating-picker { flex: none; }
 .rate-prompt .pip { background: var(--surface-3); }
 .rate-prompt .rating-picker.compact .pip { width: 16px; height: 16px; }
-@media (max-width: 420px) { .rate-prompt { gap: 6px; padding: 8px 10px; } .rate-prompt .rating-picker.compact .pip { width: 13px; height: 13px; } .rate-prompt-title { font-size: .82rem; } }
+@media (max-width: 420px) { .rate-prompt { gap: 6px; padding: 8px 10px; } .rate-prompt .rating-picker.compact .pip { width: 17px; height: 17px; } .rate-prompt-title { font-size: .82rem; } }
 
 /* Calendar month grid */
 .cal-jump { width: auto; padding: 4px 8px; }
@@ -1255,6 +1260,16 @@ img.avatar-img { object-fit: cover; padding: 0; background: var(--surface-2); di
 .detail-wide { max-width: none; }
 .detail-cols { display: grid; gap: 0 28px; grid-template-columns: minmax(0, 1fr); }
 .detail-you, .detail-info { min-width: 0; }
+/* One column (phones, tablets): what it is and where to watch it first, then your rating and plays, then the credits. */
+@media (max-width: 899px) {
+    .detail-info { display: contents; }
+    .detail-info > .overview { order: 1; }
+    .detail-info > .where-to-watch, .detail-info > p.muted { order: 2; }
+    .detail-you { order: 3; }
+    .detail-info > .crew { order: 4; }
+    .detail-info > .next-airing { order: 0; }
+    .detail-info > .links { order: 5; }
+}
 @media (min-width: 900px) {
     .detail-cols { grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); align-items: start; }
     .detail-you { grid-column: 2; grid-row: 1; }

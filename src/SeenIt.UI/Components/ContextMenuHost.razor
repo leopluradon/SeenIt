@@ -54,6 +54,7 @@
 {
     <AddToListDialog Open="listOpen" OpenChanged="ListClosed" Type="d.Type" TmdbId="d.Id" Selected="listSelected" />
     <RecommendDialog Open="recOpen" OpenChanged="o => recOpen = o" Type="d.Type" TmdbId="d.Id" Title="@(d.Title ?? "this")" />
+    <OwnedDialog Open="ownOpen" OpenChanged="o => ownOpen = o" Type="d.Type" TmdbId="d.Id" Title="@(d.Title ?? "this")" Current="actedStatus?.Owned" OnChanged="CtxMenu.RaiseChangedAsync" />
 }
 
 @code {
@@ -61,7 +62,7 @@
     /// <summary>The item a dialog is acting on (the menu itself is closed by then).</summary>
     private MenuTarget? acted;
     private ItemStatus? status, actedStatus;
-    private bool sheet, busy, showAll, pickDate, pickThrough, listOpen, recOpen, dialogBulk;
+    private bool sheet, busy, showAll, pickDate, pickThrough, listOpen, recOpen, ownOpen, dialogBulk;
     private string position = "";
     private string? expanded;   // "watch" or "friends"
     private List<FriendSeen>? friends;
@@ -263,6 +264,9 @@
                 <Icon Name="heart" Size="16" /> <span>@(s?.Favorite == true ? "Remove from favorites" : "Add to favorites")</span>
             </button>
             <button type="button" class="ctx-item" role="menuitem" @onclick="() => Recommend(t)"><Icon Name="send" Size="16" /> <span>Recommend to a friend…</span></button>
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => Own(t)">
+                <Icon Name="download" Size="16" /> <span>@(s?.Owned is { } own ? "In your library" : "Own it…")</span><span class="ctx-hint">@(s?.Owned is { } o ? OwnedFormats.Label(o) : "your library")</span>
+            </button>
         }
 
         <button type="button" class="ctx-item @(expanded == "friends" ? "open" : "")" role="menuitem" aria-expanded="@(expanded == "friends")" @onclick="() => Friends(t)">
@@ -550,6 +554,14 @@
     {
         listOpen = open;
         if (!open) await CtxMenu.RaiseChangedAsync();
+    }
+
+    private void Own(MenuTarget t)
+    {
+        acted = t;
+        actedStatus = status;
+        Close();
+        ownOpen = true;
     }
 
     private void Recommend(MenuTarget t)

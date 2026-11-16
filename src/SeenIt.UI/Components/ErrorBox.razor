@@ -1,11 +1,44 @@
+@* A page's load error. "Not found" offers somewhere to go rather than a Retry that can't help; losing the connection
+   retries by itself once the server answers again. *@
+@implements IDisposable
+@inject ApiClient Api
 @if (!string.IsNullOrEmpty(Message))
 {
     <div class="error-box" role="alert">
         <span>@Message</span>
-        @if (OnRetry.HasDelegate) { <button class="btn btn-sm" @onclick="OnRetry">Retry</button> }
+        @if (NotFound)
+        {
+            <span class="inline"><a class="btn btn-sm" href="search">Search</a><a class="btn btn-sm btn-ghost" href="">Home</a></span>
+        }
+        else if (OnRetry.HasDelegate) { <button class="btn btn-sm" @onclick="OnRetry">Retry</button> }
     </div>
 }
 @code {
     [Parameter] public string? Message { get; set; }
     [Parameter] public EventCallback OnRetry { get; set; }
+    /// <summary>What the page shows doesn't exist (a bad link): no Retry.</summary>
+    [Parameter] public bool NotFound { get; set; }
+
+    private Timer? timer;
+    private bool checking;
+
+    /// <summary>ApiClient's message when the server can't be reached.</summary>
+    private bool Offline => Message?.StartsWith("Can't reach the SeenIt server", StringComparison.Ordinal) == true;
+
+    protected override void OnParametersSet()
+    {
+        if (Offline && OnRetry.HasDelegate) timer ??= new Timer(_ => _ = InvokeAsync(Check), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        else { timer?.Dispose(); timer = null; }
+    }
+
+    private async Task Check()
+    {
+        if (checking || !Offline) return;
+        checking = true;
+        try { if (await Api.PingAsync()) await OnRetry.InvokeAsync(); }
+        catch (Exception) { /* still offline */ }
+        finally { checking = false; }
+    }
+
+    public void Dispose() => timer?.Dispose();
 }

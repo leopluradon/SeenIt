@@ -29,7 +29,10 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>Saves the UserPrefs bundle (display, tracking, home, privacy parts).</summary>
     public Task SavePrefsAsync(UserPrefs p) => SetPreferencesAsync(new PreferencesRequest(Prefs: p));
     public Task SetPreferencesAsync(PreferencesRequest r) => SendAsync(HttpMethod.Put, "api/auth/preferences", r);
-    public Task ChangePasswordAsync(ChangePasswordRequest r) => SendAsync(HttpMethod.Post, "api/auth/password", r);
+    public async Task ChangePasswordAsync(ChangePasswordRequest r) => await tokens.SaveAsync((await SendAsync<TokenResponse>(HttpMethod.Post, "api/auth/password", r))!);
+    /// <summary>Changes your email or username; the server signs this device in again (the old tokens stop working).</summary>
+    public async Task ChangeEmailAsync(ChangeEmailRequest r) => await tokens.SaveAsync((await SendAsync<TokenResponse>(HttpMethod.Post, "api/auth/email", r))!);
+    public async Task ChangeUserNameAsync(ChangeUserNameRequest r) => await tokens.SaveAsync((await SendAsync<TokenResponse>(HttpMethod.Post, "api/auth/username", r))!);
     private Task<ServerFeatures?>? _features;
 
     /// <summary>What the server supports. Cached for the session; a failed lookup is retried next time.</summary>

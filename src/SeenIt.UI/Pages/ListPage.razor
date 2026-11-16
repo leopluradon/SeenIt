@@ -3,9 +3,10 @@
 @inject Toasts Toasts
 @inject NavigationManager Nav
 @inject IPlatform Platform
+@inject Confirm Confirmer
 <PageTitle>@(list?.Name ?? "List") · SeenIt</PageTitle>
 
-<ErrorBox Message="@error" OnRetry="Load" />
+<ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
 @if (list is null && error is null) { <Spinner /> }
 else if (list is not null)
 {
@@ -211,6 +212,7 @@ else if (list is not null)
     [Inject] private IJSRuntime Js { get; set; } = default!;
     private ListDetail? list;
     private string? error;
+    private bool notFound;
     private bool editOpen;
     private string find = "";
     private bool arranging, orderChanged;
@@ -271,7 +273,9 @@ else if (list is not null)
     private async Task Load()
     {
         error = null;
+        notFound = false;
         try { list = await Api.ListAsync(Id); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "This list doesn't exist, has been deleted, or is private."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -299,6 +303,7 @@ else if (list is not null)
     private async Task Delete()
     {
         var (id, name) = (Id, list!.Name);
+        if (!await Confirmer.AskAsync($"Delete “{name}”?", $"The list and its {list.Items.Count} entr{(list.Items.Count == 1 ? "y" : "ies")} go. The movies and shows themselves, and your history, stay. You can undo it straight after.", "Delete list", danger: true)) return;
         try
         {
             await Api.DeleteListAsync(id);

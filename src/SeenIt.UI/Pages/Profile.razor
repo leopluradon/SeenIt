@@ -8,7 +8,7 @@
 @inject ThemeService Theme
 <PageTitle>@(p?.User.Name ?? Name) · SeenIt</PageTitle>
 
-<ErrorBox Message="@error" OnRetry="Load" />
+<ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
 @if (p is null && error is null) { <Spinner /> }
 else if (p is not null)
 {
@@ -243,6 +243,7 @@ else if (p is not null)
     private ProfileDto? p;
     private ProfileWidgetData? data;
     private string? error;
+    private bool notFound;
 
     // Editing: a working copy of the layout, saved with Done.
     private List<ProfileWidget>? draft;
@@ -277,7 +278,7 @@ else if (p is not null)
     {
         error = null;
         try { p = await Api.ProfileAsync(Name); }
-        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no one with that username."; return; }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no one with that username."; notFound = true; return; }
         catch (Exception ex) { error = ex.Message; return; }
         await LoadData();
     }

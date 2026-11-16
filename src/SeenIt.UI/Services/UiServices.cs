@@ -227,6 +227,13 @@ public static class Fmt
         _ => null,
     };
 
+    /// <summary>The short date to show beside a <see cref="Day"/> heading: only when the heading is "Today", "Tomorrow" or "Yesterday".</summary>
+    public static string? DayNote(DateOnly d)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        return Math.Abs(d.DayNumber - today.DayNumber) <= 1 ? d.ToString(DateShort) : null;
+    }
+
     public static string Day(DateOnly d)
     {
         var today = DateOnly.FromDateTime(DateTime.Now);

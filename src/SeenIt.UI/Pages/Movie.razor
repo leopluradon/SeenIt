@@ -5,7 +5,7 @@
 @inject NavigationManager Nav
 <PageTitle>@(m?.Title ?? "Movie") · SeenIt</PageTitle>
 
-<ErrorBox Message="@error" OnRetry="Load" />
+<ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
 @if (m is null && error is null) { <Spinner /> }
 else if (m is not null)
 {
@@ -32,13 +32,13 @@ else if (m is not null)
                 </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
                 <button class="btn" @onclick="() => recommendOpen = true" title="Send it to friends"><Icon Name="send" Size="18" /> Recommend</button>
-                <button class="btn @(u.Owned is not null ? "btn-on" : "")" @onclick="() => ownOpen = true" title="Your library: what you own">
-                    <Icon Name="download" Size="18" /> @(u.Owned is { } own ? OwnedFormats.Label(own) : "Own it")
-                </button>
-                @if (m.ReleaseDate is null || m.ReleaseDate <= DateOnly.FromDateTime(DateTime.Today))
+                @* Things few people use (owning, checking in, not interested…) are in the ⋯ menu; owning shows here once you do. *@
+                @if (u.Owned is { } own)
                 {
-                    <CheckInButton Request="@(new CheckInRequest(MediaType.Movie, Id))" />
+                    <button class="btn btn-on" @onclick="() => ownOpen = true" title="Your library: what you own"><Icon Name="download" Size="18" /> @OwnedFormats.Label(own)</button>
                 }
+                <button type="button" class="btn btn-more" data-ctx="@Menu.Title(MediaType.Movie, Id, m.Title, m.PosterPath)" aria-label="More actions" title="More: check in, own it, not interested…"
+                        onclick="seenit.openMenuFor(this)"><Icon Name="more" Size="18" /></button>
             }
             else
             {
@@ -171,6 +171,7 @@ else if (m is not null)
     [Parameter] public int Id { get; set; }
     private MovieDetail? m;
     private string? error;
+    private bool notFound;
     private bool busy, watchOpen, listOpen, fixOpen, ownOpen, recommendOpen, ratePrompt, askWhen;
     private PlayDto? editing;
 
@@ -181,8 +182,10 @@ else if (m is not null)
     private async Task Load()
     {
         error = null;
+        notFound = false;
         if (m?.TmdbId != Id) m = null;
         try { m = await Api.MovieAsync(Id); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no movie at this address on TMDB."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
     }
 

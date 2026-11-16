@@ -2,6 +2,7 @@
 @implements IDisposable
 @inject IJSRuntime Js
 @inject NavigationManager Nav
+@inject Confirm Confirmer
 @inject SessionState Session
 @inject ApiClient Api
 @inject ThemeService Theme
@@ -181,6 +182,7 @@
 
     private async Task Logout()
     {
+        if (!await Confirmer.AskAsync("Sign out?", "You'll need your password to sign back in on this device.", "Sign out")) return;
         await Session.LogoutAsync();
         Nav.NavigateTo("");
     }

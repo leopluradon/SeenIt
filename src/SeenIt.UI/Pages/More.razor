@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject SessionState Session
 @inject NavigationManager Nav
+@inject Confirm Confirmer
 <PageTitle>More · SeenIt</PageTitle>
 <h1 class="visually-hidden">More</h1>
 
@@ -81,6 +82,7 @@
 
     private async Task Logout()
     {
+        if (!await Confirmer.AskAsync("Sign out?", "You'll need your password to sign back in on this device.", "Sign out")) return;
         await Session.LogoutAsync();
         Nav.NavigateTo("");
     }

@@ -253,15 +253,50 @@ public static partial class AuthEndpoints
             return Results.NoContent();
         });
 
-        me.MapPost("/password", async (ChangePasswordRequest req, ClaimsPrincipal p, UserManager<AppUser> users, ActivityService activity) =>
+        me.MapPost("/password", async Task<Results<SignInHttpResult, BadRequest<ProblemInfo>, UnauthorizedHttpResult>> (
+            ChangePasswordRequest req, ClaimsPrincipal p, UserManager<AppUser> users, SignInManager<AppUser> signIn, ActivityService activity) =>
         {
             var u = await users.FindByIdAsync(p.UserId().ToString());
-            if (u is null) return Results.Unauthorized();
-            // Changing the password rotates the security stamp, which invalidates other devices' refresh tokens.
+            if (u is null) return TypedResults.Unauthorized();
+            // Changing the password rotates the security stamp, which invalidates other devices' refresh tokens
+            // (and this one's: so it gets new ones back, rather than being signed out within the hour).
             var r = await users.ChangePasswordAsync(u, req.CurrentPassword, req.NewPassword);
-            if (r.Succeeded) await activity.LogAsync(p, ActivityKind.PasswordChanged);
-            return r.Succeeded ? Results.NoContent()
-                : Results.BadRequest(new ProblemInfo(string.Join(" ", r.Errors.Select(e => e.Description))));
+            if (!r.Succeeded) return Bad(string.Join(" ", r.Errors.Select(e => e.Description)));
+            await activity.LogAsync(p, ActivityKind.PasswordChanged);
+            return TypedResults.SignIn(await signIn.CreateUserPrincipalAsync(u), authenticationScheme: IdentityConstants.BearerScheme);
+        }).RequireRateLimiting("auth");
+
+        // Changing your email or username rotates the account's security stamp (signing out other devices), so this
+        // device gets fresh tokens back, the way signing in does.
+        me.MapPost("/email", async Task<Results<SignInHttpResult, BadRequest<ProblemInfo>, UnauthorizedHttpResult>> (
+            ChangeEmailRequest req, ClaimsPrincipal p, UserManager<AppUser> users, SignInManager<AppUser> signIn, ActivityService activity) =>
+        {
+            if (await users.FindByIdAsync(p.UserId().ToString()) is not { } u) return TypedResults.Unauthorized();
+            if (!await users.CheckPasswordAsync(u, req.Password ?? "")) return Bad("That password isn't right.");
+            var email = req.NewEmail?.Trim() ?? "";
+            if (!email.Contains('@') || email.Length > 256) return Bad("Enter a valid email address.");
+            if (string.Equals(email, u.Email, StringComparison.OrdinalIgnoreCase)) return Bad("That's already your email.");
+            var r = await users.SetEmailAsync(u, email);
+            if (!r.Succeeded) return Bad(r.Errors.Any(e => e.Code == "DuplicateEmail") ? "Another account uses that email." : string.Join(" ", r.Errors.Select(e => e.Description)));
+            await activity.LogAsync(p, ActivityKind.EmailChanged);
+            return TypedResults.SignIn(await signIn.CreateUserPrincipalAsync(u), authenticationScheme: IdentityConstants.BearerScheme);
+        }).RequireRateLimiting("auth");
+
+        me.MapPost("/username", async Task<Results<SignInHttpResult, BadRequest<ProblemInfo>, UnauthorizedHttpResult>> (
+            ChangeUserNameRequest req, ClaimsPrincipal p, UserManager<AppUser> users, SignInManager<AppUser> signIn, AdminService admins, ActivityService activity) =>
+        {
+            if (await users.FindByIdAsync(p.UserId().ToString()) is not { } u) return TypedResults.Unauthorized();
+            if (!await users.CheckPasswordAsync(u, req.Password ?? "")) return Bad("That password isn't right.");
+            var name = req.NewUserName?.Trim() ?? "";
+            if (!UserNamePattern().IsMatch(name)) return Bad("Usernames are 3–32 letters, numbers, dots, dashes or underscores.");
+            if (name == u.UserName) return Bad("That's already your username.");
+            // Admins are listed by username in the server's settings: renaming would quietly drop admin access.
+            if (admins.IsAdmin(u.UserName)) return Bad("Admin usernames are set in the server's settings (ADMINS), so change it there first.");
+            var old = u.UserName;
+            var r = await users.SetUserNameAsync(u, name);
+            if (!r.Succeeded) return Bad(r.Errors.Any(e => e.Code == "DuplicateUserName") ? "That username is taken." : string.Join(" ", r.Errors.Select(e => e.Description)));
+            await activity.LogAsync(u.Id, ActivityKind.UserNameChanged, detail: $"was {old}", userName: name);
+            return TypedResults.SignIn(await signIn.CreateUserPrincipalAsync(u), authenticationScheme: IdentityConstants.BearerScheme);
         }).RequireRateLimiting("auth");
 
         me.MapGet("/invites", (ClaimsPrincipal p, InviteService invites) => invites.ListAsync(p.UserId()));

@@ -324,6 +324,8 @@ public static class UiPrefs
 }
 public record UpdateProfileRequest(string? DisplayName);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public record ChangeEmailRequest(string NewEmail, string Password);
+public record ChangeUserNameRequest(string NewUserName, string Password);
 public record ForgotPasswordRequest(string Email);
 public record ResetPasswordRequest(Guid UserId, string Token, string NewPassword);
 /// <summary>What this server can do, so clients can hide features it isn't set up for.</summary>
@@ -766,7 +768,8 @@ public record ItemStatus(
     EpisodeRef? NextEpisode = null,
     ShowTrackStatus? ShowStatus = null,
     int? Rewatch = null,
-    bool Completed = false);
+    bool Completed = false,
+    OwnedFormat? Owned = null);   // in your library, and how
 public record ShowStatusRequest(ShowTrackStatus Status);
 
 public record NotInterestedEntry(MediaSummary Media, DateTimeOffset AddedAt);
@@ -908,6 +911,7 @@ public enum ActivityKind
     GoalSet, GoalDelete, LetterboxdSync,
     ImportUndo, ImportResolve, ListReorder, ListNote, WatchOrder,
     ProfilePicture,
+    EmailChanged, UserNameChanged,
 }
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
