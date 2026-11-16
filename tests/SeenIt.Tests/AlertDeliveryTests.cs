@@ -41,8 +41,8 @@ public class AlertDeliveryTests
 
         var alerts = new ReleaseAlertService(db, null!, null!, new ConfigurationBuilder().Build(), NullLogger<ReleaseAlertService>.Instance);
         var list = await alerts.ListAsync(user, default);
-        Assert.Equal(["Episode", "RecWatched", "Recommendation"], list.Items.Select(i => i.Title).Order(StringComparer.Ordinal));   // Movie is push-only, Person off
-        Assert.Equal(3, list.Unread);
-        Assert.Equal(3, await alerts.UnreadAsync(user, default));
+        Assert.Equal(["Episode", "RecWatched", "Recommendation", "WatchedWith"], list.Items.Select(i => i.Title).Order(StringComparer.Ordinal));   // Movie is push-only, Person off
+        Assert.Equal(4, list.Unread);
+        Assert.Equal(4, await alerts.UnreadAsync(user, default));
     }
 }

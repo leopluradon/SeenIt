@@ -133,6 +133,10 @@ public class TmdbClient
     public Task<TmdbProvidersResult?> GetWatchProvidersAsync(string kind, int id, CancellationToken ct = default) =>
         GetAsync<TmdbProvidersResult>($"{kind}/{id}/watch/providers", TimeSpan.FromHours(6), ct);
 
+    /// <summary>kind: movie|tv. The streaming services TMDB knows in a country, most prominent first.</summary>
+    public Task<TmdbProviderList?> GetProviderListAsync(string kind, string region, CancellationToken ct = default) =>
+        GetAsync<TmdbProviderList>($"watch/providers/{kind}?watch_region={Uri.EscapeDataString(region)}", TimeSpan.FromDays(1), ct);
+
     public Task<TmdbRegions?> GetProviderRegionsAsync(CancellationToken ct = default) =>
         GetAsync<TmdbRegions>("watch/providers/regions", TimeSpan.FromDays(1), ct);
 

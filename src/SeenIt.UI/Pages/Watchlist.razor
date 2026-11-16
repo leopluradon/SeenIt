@@ -3,6 +3,7 @@
 @inject ApiClient Api
 @inject SessionState Session
 @inject NavigationManager Nav
+@inject Toasts Toasts
 <PageTitle>Watchlist · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -19,6 +20,12 @@
     <button class="chip @(sort == "added" ? "on" : "")" @onclick='() => SetSort("added")'>Recently added</button>
     <button class="chip @(sort == "release" ? "on" : "")" @onclick='() => SetSort("release")'>Release date</button>
     <button class="chip @(sort == "title" ? "on" : "")" @onclick='() => SetSort("title")'>Title</button>
+    @if (Fmt.Prefs.MyServices is { Count: > 0 })
+    {
+        <button class="chip chip-toggle @(onMine ? "on" : "")" aria-pressed="@onMine" @onclick="ToggleMine" title="Only what's streaming on your services now">
+            @if (onMine) { <Icon Name="check" Size="14" /> } @(onMine && available is null ? "Checking…" : "On my services")
+        </button>
+    }
     <LayoutToggle Page="watchlist" Value="layout" ValueChanged="v => layout = v" />
 </div>
 @if (items is { Count: > 8 })
@@ -97,6 +104,18 @@ else if (items is not null)
 
     protected override Task OnInitializedAsync() => Load();
 
+    private bool onMine;
+    private HashSet<MediaRef>? available;
+
+    /// <summary>Only what's streaming on your services: worked out the first time it's asked for (a lookup per title).</summary>
+    private async Task ToggleMine()
+    {
+        onMine = !onMine;
+        if (!onMine || available is not null) return;
+        try { available = (await Api.WatchlistOnMyServicesAsync()).ToHashSet(); }
+        catch (Exception ex) { onMine = false; Toasts.Error(ex); }
+    }
+
     private Task SetSort(string s)
     {
         sort = s;
@@ -129,7 +148,8 @@ else if (items is not null)
 
     private IEnumerable<WatchlistEntry> Sorted()
     {
-        var q = items!.Where(i => (filter is null || i.Media.Type == filter) && TextMatch.Contains(i.Media.Title, find));
+        var q = items!.Where(i => (filter is null || i.Media.Type == filter) && TextMatch.Contains(i.Media.Title, find)
+            && (!onMine || available is null || available.Contains(new MediaRef(i.Media.Type, i.Media.TmdbId))));
         return sort switch
         {
             "release" => q.OrderBy(i => i.ReleaseDate ?? DateOnly.MaxValue),

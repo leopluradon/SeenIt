@@ -889,6 +889,24 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Library");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.ListCollaborator", b =>
+                {
+                    b.Property<Guid>("ListId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ListId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ListCollaborators");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.ListLike", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -1482,6 +1500,9 @@ namespace SeenIt.Server.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<bool>("FriendsCanSee")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid?>("ImportJobId")
                         .HasColumnType("uuid");
 
@@ -1814,6 +1835,21 @@ namespace SeenIt.Server.Data.Migrations
 
             modelBuilder.Entity("SeenIt.Server.Data.LibraryItem", b =>
                 {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ListCollaborator", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.UserList", null)
+                        .WithMany()
+                        .HasForeignKey("ListId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")

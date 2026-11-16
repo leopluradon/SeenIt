@@ -174,15 +174,16 @@ public class PushWorker(IServiceScopeFactory scopes, ILogger<PushWorker> log) : 
             var due = g.Except(skip).ToList();
             if (due.Count == 0) continue;
 
-            foreach (var n in due.Where(n => n.RecommendationId is not null || n.WatchedRecommendationId is not null))
+            // Things people do (not releases) go out straight away.
+            foreach (var n in due.Where(n => n.RecommendationId is not null || n.WatchedRecommendationId is not null || n.Kind == AlertKind.WatchedWith))
             {
-                await push.SendAsync(g.Key, n.WatchedRecommendationId is not null
-                    ? new PushPayload(n.Title, n.Detail ?? "", Fmt(n), $"rec-watched-{n.Id:N}")
+                await push.SendAsync(g.Key, n.WatchedRecommendationId is not null || n.Kind == AlertKind.WatchedWith
+                    ? new PushPayload(n.Title, n.Detail ?? "", Fmt(n), $"{(n.Kind == AlertKind.WatchedWith ? "with" : "rec-watched")}-{n.Id:N}")
                     : new PushPayload(n.Title, n.Detail is { } note ? $"“{note}”" : "Recommended to you", "recommendations", $"rec-{n.Id:N}"), ct);
                 n.PushedAt = now;
             }
 
-            var releases = due.Where(n => n.RecommendationId is null && n.WatchedRecommendationId is null).ToList();
+            var releases = due.Where(n => n.RecommendationId is null && n.WatchedRecommendationId is null && n.Kind != AlertKind.WatchedWith).ToList();
             if (releases.Count == 0) continue;
             var zone = ReviewService.Zone(people.GetValueOrDefault(g.Key)?.TimeZone);
             var local = TimeZoneInfo.ConvertTime(now, zone);

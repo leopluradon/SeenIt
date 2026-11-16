@@ -2,6 +2,22 @@
 <Modal Open="Open && !instant" OpenChanged="OpenChanged" Title="@(Heading ?? (Through ? $"When did you watch everything up to {What}?" : $"When did you watch {What}?"))">
     <div class="stack">
         @ChildContent
+        @if (CanShare && friends is { Count: > 0 })
+        {
+            @* Watched together: it goes in their history too (they get an alert saying so). *@
+            <div class="watch-with">
+                <span class="muted small">Watched with</span>
+                <div class="chips">
+                    @foreach (var f in friends)
+                    {
+                        var on = with.Contains(f.UserName);
+                        <button type="button" class="chip @(on ? "on" : "")" aria-pressed="@on" @key="f.UserName" @onclick="() => { if (!with.Remove(f.UserName)) with.Add(f.UserName); }">
+                            <Avatar Name="@f.Name" Url="@f.Avatar" Class="avatar-xs" /> @f.Name
+                        </button>
+                    }
+                </div>
+            </div>
+        }
         @if (Through && ScopeSeason is > 1 and var sn)
         {
             <div class="segmented watch-scope" role="radiogroup" aria-label="How far back">
@@ -61,6 +77,12 @@
     /// <summary>Always show the choices, even when the user set ✓ to record straight away (the "pick a date" buttons).</summary>
     [Parameter] public bool AskWhen { get; set; }
     private bool instant;
+    [Inject] private ApiClient Api { get; set; } = default!;
+    /// <summary>Friends (following each other) to log a play for too. Loaded once per session.</summary>
+    private static List<UserCard>? friends;
+    private readonly List<string> with = [];
+    /// <summary>One movie or episode, being logged (not a bulk mark, "up to here" or an edit).</summary>
+    private bool CanShare => !Bulk && !Through && Initial is null && Heading is null;
     private string custom = "";
     private bool badDate, wasOpen, seasonOnly = true;
 
@@ -79,6 +101,12 @@
                 await Pick(new WatchChoice(Fmt.Prefs.WatchDefault == WatchDefault.ReleaseDate && released ? WatchTime.ReleaseDate : WatchTime.Now));
                 instant = false;
                 return;
+            }
+            with.Clear();
+            if (CanShare && friends is null)
+            {
+                try { friends = (await Api.FollowingAsync()).Where(u => u.Following && u.FollowsYou).OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase).ToList(); }
+                catch { /* offline: no sharing this time */ }
             }
             var start = Initial is { } i && !WatchDates.IsUnknown(i) ? i.LocalDateTime : DateTime.Now;
             custom = start.ToString("yyyy-MM-ddTHH:mm");
@@ -104,7 +132,7 @@
     {
         // Start the pick before closing: handlers read which item was pending synchronously,
         // and the parent may clear that when the dialog closes.
-        var picked = OnPick.InvokeAsync(choice with { Through = Through, SeasonOnly = Through && ScopeSeason is > 1 && seasonOnly });
+        var picked = OnPick.InvokeAsync(choice with { Through = Through, SeasonOnly = Through && ScopeSeason is > 1 && seasonOnly, With = CanShare && with.Count > 0 ? [.. with] : null });
         await OpenChanged.InvokeAsync(false);
         await picked;
     }

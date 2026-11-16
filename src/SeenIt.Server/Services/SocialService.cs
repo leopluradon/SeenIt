@@ -62,7 +62,8 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var followingCount = await db.Follows.CountAsync(f => f.FollowerId == owner.Id, ct);
 
         // Public lists are shareable by link anyway, so they show even on a private profile.
-        var publicLists = (await lists.GetMineAsync(owner.Id, ct)).Where(l => isMe || l.IsPublic).ToList();
+        // Their own lists (not ones shared with them): public ones, and friends-only ones for friends.
+        var publicLists = (await lists.GetMineAsync(owner.Id, ct)).Where(l => l.Owner is null && (isMe || l.IsPublic || (l.FriendsCanSee && mutual))).ToList();
         var layout = ProfileWidgetService.Visible(owner, viewer, mutual);
         // Banner and accent are part of how the profile looks, like the picture; the badge is a stat.
         var prefs = owner.Prefs();

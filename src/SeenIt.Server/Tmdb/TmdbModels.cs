@@ -200,6 +200,7 @@ public record TmdbProvidersResult(Dictionary<string, TmdbRegionProviders>? Resul
 public record TmdbRegionProviders(string? Link, List<TmdbProvider>? Flatrate, List<TmdbProvider>? Free, List<TmdbProvider>? Ads, List<TmdbProvider>? Rent, List<TmdbProvider>? Buy);
 public record TmdbProvider(int ProviderId, string ProviderName, string? LogoPath, int DisplayPriority);
 public record TmdbRegions(List<TmdbRegionEntry>? Results);
+public record TmdbProviderList(List<TmdbProvider>? Results);
 public record TmdbRegionEntry([property: JsonPropertyName("iso_3166_1")] string Iso31661, string EnglishName);
 
 /// <summary>Just enough of a movie, show or person to show as a search suggestion (no appended credits).</summary>

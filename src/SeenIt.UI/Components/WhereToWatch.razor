@@ -7,21 +7,21 @@
             <h2>Where to watch</h2>
             <a class="muted small" href="settings#region" title="Change country">@if (d.Region.Length == 2 && d.Region.All(char.IsAsciiLetter)) { <img class="flag" src="@($"https://flagcdn.com/{d.Region.ToLowerInvariant()}.svg")" alt="" width="20" height="15" onerror="this.remove()" /> } @d.Region</a>
         </div>
-        @foreach (var (label, items) in Groups(d))
+        @if (Fmt.Prefs.MyServices is { Count: > 0 } mine)
         {
-            <div class="provider-group">
-                <span class="provider-label">@label</span>
-                <div class="provider-logos">
-                    @foreach (var p in items)
-                    {
-                        <a href="@(d.Link ?? "#")" target="_blank" rel="noopener" title="@p.Name" @key="p.Id">
-                            @if (p.LogoPath is not null) { <img src="@Img.Poster(p.LogoPath, "w92")" alt="@p.Name" loading="lazy" /> }
-                            else { <span class="chip">@p.Name</span> }
-                        </a>
-                    }
-                </div>
+            @* You've said which services you have: those first, everything else folded away. *@
+            var yours = d.Stream.Concat(d.Free).Concat(d.Ads).Where(p => mine.Contains(p.Id)).DistinctBy(p => p.Id).ToList();
+            <div class="provider-group your-services">
+                <span class="provider-label">Yours</span>
+                @if (yours.Count > 0) { <div class="provider-logos">@Logos(d, yours)</div> }
+                else { <span class="muted small">Not on your services</span> }
             </div>
+            <details class="other-providers">
+                <summary class="muted small">All options</summary>
+                @AllGroups(d)
+            </details>
         }
+        else { @AllGroups(d) }
         <p class="muted tiny">Availability from <a href="https://www.justwatch.com" target="_blank" rel="noopener">JustWatch</a> via TMDB. Tap a service for links.</p>
     </section>
 }
@@ -44,6 +44,28 @@ else if (data is { IsEmpty: true } && ShowEmpty)
         try { data = await Api.ProvidersAsync(Type, TmdbId); }
         catch { /* optional extra; leave it out if TMDB is slow */ }
     }
+
+    private RenderFragment Logos(WatchProvidersDto d, IEnumerable<ProviderDto> items) => __builder =>
+    {
+        @foreach (var p in items)
+        {
+            <a href="@(d.Link ?? "#")" target="_blank" rel="noopener" title="@p.Name" @key="p.Id">
+                @if (p.LogoPath is not null) { <img src="@Img.Poster(p.LogoPath, "w92")" alt="@p.Name" loading="lazy" /> }
+                else { <span class="chip">@p.Name</span> }
+            </a>
+        }
+    };
+
+    private RenderFragment AllGroups(WatchProvidersDto d) => __builder =>
+    {
+        @foreach (var (label, items) in Groups(d))
+        {
+            <div class="provider-group">
+                <span class="provider-label">@label</span>
+                <div class="provider-logos">@Logos(d, items)</div>
+            </div>
+        }
+    };
 
     private static IEnumerable<(string, IReadOnlyList<ProviderDto>)> Groups(WatchProvidersDto d) =>
         new (string, IReadOnlyList<ProviderDto>)[] { ("Stream", d.Stream), ("Free", d.Free), ("With ads", d.Ads), ("Rent", d.Rent), ("Buy", d.Buy) }

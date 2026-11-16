@@ -6,10 +6,14 @@ namespace SeenIt.Server.Services;
 
 public class ListService(AppDbContext db, TrackingService tracking, SmartListService smart)
 {
+    /// <summary>Your lists, and other people's that they've shared with you (Owner set, Shared true).</summary>
     public async Task<List<ListSummary>> GetMineAsync(Guid userId, CancellationToken ct)
     {
-        var lists = await db.Lists.Where(l => l.UserId == userId).Include(l => l.Items)
+        var lists = await db.Lists.Where(l => l.UserId == userId || db.ListCollaborators.Any(c => c.ListId == l.Id && c.UserId == userId))
+            .Include(l => l.Items).Include(l => l.User)
             .OrderByDescending(l => l.UpdatedAt).ToListAsync(ct);
+        var ids = lists.Select(l => l.Id).ToList();
+        var sharedOut = (await db.ListCollaborators.Where(c => ids.Contains(c.ListId)).Select(c => c.ListId).Distinct().ToListAsync(ct)).ToHashSet();
         var (movies, shows) = await tracking.LoadMetaAsync(lists.SelectMany(l => l.Items.OrderBy(i => i.Position).Take(4)).Select(i => (i.Type, i.TmdbId)), ct);
         var result = new List<ListSummary>();
         foreach (var l in lists)
@@ -17,13 +21,15 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
             if (SmartListService.Parse(l.RulesJson) is { } rules)
             {
                 var items = await smart.EvaluateAsync(userId, rules, ct);
-                result.Add(new ListSummary(l.Id, l.Name, l.Description, l.IsPublic, items.Count, l.UpdatedAt, items.Take(4).Select(m => m.PosterPath).ToList(), Smart: true));
+                result.Add(new ListSummary(l.Id, l.Name, l.Description, l.IsPublic, items.Count, l.UpdatedAt, items.Take(4).Select(m => m.PosterPath).ToList(), Smart: true,
+                    FriendsCanSee: l.FriendsCanSee));
                 continue;
             }
+            var theirs = l.UserId != userId;
             result.Add(new ListSummary(l.Id, l.Name, l.Description, l.IsPublic, l.Items.Count, l.UpdatedAt,
                 l.Items.OrderBy(i => i.Position).Take(4)
                     .Select(i => i.Type == MediaType.Movie ? movies.GetValueOrDefault(i.TmdbId)?.PosterPath : shows.GetValueOrDefault(i.TmdbId)?.PosterPath)
-                    .ToList()));
+                    .ToList(), Owner: theirs ? l.User?.UserName : null, FriendsCanSee: l.FriendsCanSee, Shared: theirs || sharedOut.Contains(l.Id)));
         }
         return result;
     }
@@ -113,11 +119,28 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
             .Take(100).Select(h => h.Hit).ToList();
     }
 
-    /// <summary>Owner sees any of their lists; anyone (signed in or not) can see a public list.</summary>
+    /// <summary>Who may open a list: anyone if it's public; the owner and collaborators; friends when the owner allows them.</summary>
+    private async Task<bool> CanViewAsync(UserList list, Guid? viewerId, bool collaborator, CancellationToken ct) =>
+        list.IsPublic || list.UserId == viewerId || collaborator
+        || (list.FriendsCanSee && viewerId is { } v && await MutualAsync(list.UserId, v, ct));
+
+    /// <summary>Follow each other: friends.</summary>
+    private async Task<bool> MutualAsync(Guid a, Guid b, CancellationToken ct) =>
+        await db.Follows.AnyAsync(f => f.FollowerId == a && f.FolloweeId == b, ct) && await db.Follows.AnyAsync(f => f.FollowerId == b && f.FolloweeId == a, ct);
+
+    /// <summary>A list you can change the entries of: your own, or one shared with you.</summary>
+    private Task<UserList?> EditableAsync(Guid userId, Guid listId, CancellationToken ct) =>
+        db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.Id == listId && (l.UserId == userId || db.ListCollaborators.Any(c => c.ListId == l.Id && c.UserId == userId)), ct);
+
     public async Task<ListDetail?> GetAsync(Guid listId, Guid? viewerId, CancellationToken ct)
     {
         var list = await db.Lists.Include(l => l.Items).Include(l => l.User).FirstOrDefaultAsync(l => l.Id == listId, ct);
-        if (list is null || (!list.IsPublic && list.UserId != viewerId)) return null;
+        if (list is null) return null;
+        var collaborators = await db.ListCollaborators.Where(c => c.ListId == list.Id).Join(db.Users, c => c.UserId, u => u.Id, (c, u) => u).AsNoTracking().ToListAsync(ct);
+        var isCollaborator = viewerId is { } cv && collaborators.Any(u => u.Id == cv);
+        if (!await CanViewAsync(list, viewerId, isCollaborator, ct)) return null;
+        var canEdit = list.UserId == viewerId || isCollaborator;
+        var cards = collaborators.Select(u => new UserCard(u.UserName!, u.DisplayName, false, false, AvatarService.Path(u.UserName!, u.AvatarVersion))).ToList();
         var saves = await db.ListLikes.CountAsync(l => l.ListId == list.Id, ct);
         var saved = viewerId is { } v && await db.ListLikes.AnyAsync(l => l.ListId == list.Id && l.UserId == v, ct);
         if (SmartListService.Parse(list.RulesJson) is { } rules)
@@ -125,7 +148,8 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
             // Worked out from the owner's library (or TMDB) each time; the ids just need to be stable.
             var found = await smart.EvaluateAsync(list.UserId, rules, ct);
             var entries = found.Select((m, i) => new ListItemDto(SmartItemId(list.Id, m), m, list.UpdatedAt, i + 1)).ToList();
-            return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, entries, false, saves, saved, rules);
+            return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, entries, false, saves, saved, rules,
+                list.FriendsCanSee, false, cards);
         }
         var (movies, shows) = await tracking.LoadMetaAsync(list.Items.Select(i => (i.Type, i.TmdbId)), ct);
         var items = list.Items.OrderBy(i => i.Position).Select(i =>
@@ -135,7 +159,8 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
                 : shows.TryGetValue(i.TmdbId, out var s) ? CatalogService.ToSummary(s) : null;
             return media is null ? null : new ListItemDto(i.Id, media, i.AddedAt, i.Position, i.Note);
         }).OfType<ListItemDto>().ToList();
-        return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, items, list.Ranked, saves, saved);
+        return new ListDetail(list.Id, list.Name, list.Description, list.IsPublic, list.User?.UserName ?? "", list.UserId == viewerId, items, list.Ranked, saves, saved,
+            FriendsCanSee: list.FriendsCanSee, CanEdit: canEdit, Collaborators: cards);
     }
 
     public async Task<UserList> CreateAsync(Guid userId, CreateListRequest req, CancellationToken ct)
@@ -143,10 +168,12 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
         var list = new UserList
         {
             UserId = userId, Name = Validate(req.Name), Description = Trim(req.Description, 2000), IsPublic = req.IsPublic,
+            FriendsCanSee = !req.IsPublic && req.FriendsCanSee,
             Ranked = req.Rules is null && req.Ranked, RulesJson = req.Rules is { } r ? SmartListService.Serialize(r) : null,
         };
         db.Lists.Add(list);
         await db.SaveChangesAsync(ct);
+        await SetCollaboratorsAsync(list, req.Collaborators, ct);
         return list;
     }
 
@@ -157,6 +184,8 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
         list.Name = Validate(req.Name);
         list.Description = Trim(req.Description, 2000);
         list.IsPublic = req.IsPublic;
+        list.FriendsCanSee = !req.IsPublic && req.FriendsCanSee;
+        await SetCollaboratorsAsync(list, req.Collaborators, ct);
         // A smart list stays smart (its rules change); an ordinary list stays ordinary.
         if (list.RulesJson is not null && req.Rules is { } r) list.RulesJson = SmartListService.Serialize(r);
         list.Ranked = list.RulesJson is null && req.Ranked;
@@ -164,6 +193,26 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
         await db.SaveChangesAsync(ct);
         return true;
     }
+
+    /// <summary>Who can add to the list: friends of the owner only (anyone else named is ignored). Not for smart lists.</summary>
+    private async Task SetCollaboratorsAsync(UserList list, IReadOnlyList<string>? userNames, CancellationToken ct)
+    {
+        if (userNames is null) return;
+        var wanted = new List<Guid>();
+        if (list.RulesJson is null)
+            foreach (var name in userNames.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Take(20))
+                if (await db.Users.Where(u => u.NormalizedUserName == name.Trim().ToUpperInvariant()).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct) is { } id
+                    && id != list.UserId && await MutualAsync(list.UserId, id, ct))
+                    wanted.Add(id);
+        var have = await db.ListCollaborators.Where(c => c.ListId == list.Id).ToListAsync(ct);
+        db.ListCollaborators.RemoveRange(have.Where(c => !wanted.Contains(c.UserId)));
+        foreach (var id in wanted.Where(id => have.All(c => c.UserId != id))) db.ListCollaborators.Add(new ListCollaborator { ListId = list.Id, UserId = id });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>A collaborator leaving a list shared with them.</summary>
+    public async Task<bool> LeaveAsync(Guid userId, Guid listId, CancellationToken ct) =>
+        await db.ListCollaborators.Where(c => c.ListId == listId && c.UserId == userId).ExecuteDeleteAsync(ct) > 0;
 
     private static Guid SmartItemId(Guid listId, MediaSummary m)
     {
@@ -201,7 +250,7 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
     public async Task<bool> AddItemAsync(Guid userId, Guid listId, MediaType type, int tmdbId, CancellationToken ct, DateTimeOffset? addedAt = null)
     {
         if (type is not (MediaType.Movie or MediaType.Show)) throw new TrackingException("Lists hold movies and shows.");
-        var list = await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.Id == listId && l.UserId == userId, ct);
+        var list = await EditableAsync(userId, listId, ct);
         if (list is null) return false;
         if (list.RulesJson is not null) throw new TrackingException("A smart list fills itself in from its rules; edit the rules instead.");
         if (list.Items.Any(i => i.Type == type && i.TmdbId == tmdbId)) return true;
@@ -218,7 +267,7 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
 
     public async Task<bool> RemoveItemAsync(Guid userId, Guid listId, MediaType type, int tmdbId, CancellationToken ct)
     {
-        var list = await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.Id == listId && l.UserId == userId, ct);
+        var list = await EditableAsync(userId, listId, ct);
         var item = list?.Items.FirstOrDefault(i => i.Type == type && i.TmdbId == tmdbId);
         if (list is null || item is null) return false;
         db.ListItems.Remove(item);
@@ -230,7 +279,7 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
     /// <summary>Puts the list in the given order. Items missing from it keep their relative order at the end.</summary>
     public async Task<bool> ReorderAsync(Guid userId, Guid listId, IReadOnlyList<Guid> itemIds, CancellationToken ct)
     {
-        var list = await db.Lists.Include(l => l.Items).FirstOrDefaultAsync(l => l.Id == listId && l.UserId == userId, ct);
+        var list = await EditableAsync(userId, listId, ct);
         if (list is null) return false;
         if (list.RulesJson is not null) throw new TrackingException("A smart list fills itself in from its rules; edit the rules instead.");
         var rank = itemIds.Select((id, i) => (id, i)).GroupBy(x => x.id).ToDictionary(g => g.Key, g => g.First().i);
@@ -244,7 +293,7 @@ public class ListService(AppDbContext db, TrackingService tracking, SmartListSer
     public async Task<bool> SetNoteAsync(Guid userId, Guid listId, Guid itemId, string? note, CancellationToken ct)
     {
         var item = await db.ListItems.FirstOrDefaultAsync(i => i.Id == itemId && i.ListId == listId
-            && db.Lists.Any(l => l.Id == listId && l.UserId == userId), ct);
+            && db.Lists.Any(l => l.Id == listId && (l.UserId == userId || db.ListCollaborators.Any(c => c.ListId == l.Id && c.UserId == userId))), ct);
         if (item is null) return false;
         item.Note = Trim(note, 500);
         await db.SaveChangesAsync(ct);

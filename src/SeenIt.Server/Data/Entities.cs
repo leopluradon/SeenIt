@@ -235,6 +235,8 @@ public class UserList
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public bool IsPublic { get; set; }
+    /// <summary>Not public, but friends (people who follow each other with the owner) can view it.</summary>
+    public bool FriendsCanSee { get; set; }
     /// <summary>A ranking: shown numbered, in the owner's order.</summary>
     public bool Ranked { get; set; }
     /// <summary>Deleted, but restorable for a day (Undo); then removed for good. Hidden everywhere meanwhile.</summary>
@@ -246,6 +248,14 @@ public class UserList
     public Guid? ImportJobId { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<UserListItem> Items { get; set; } = [];
+}
+
+/// <summary>Someone the owner shares a list with: they see it and can add, remove, reorder and annotate entries.</summary>
+public class ListCollaborator
+{
+    public Guid ListId { get; set; }
+    public Guid UserId { get; set; }
+    public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 public class UserListItem

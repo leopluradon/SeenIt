@@ -790,6 +790,33 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
         return new WatchProvidersDto(region, r?.Link, Map(r?.Flatrate), Map(r?.Free), Map(r?.Ads), Map(r?.Rent), Map(r?.Buy));
     }
 
+    /// <summary>Streaming services in a country (movies' and shows' lists together), for picking the ones you have.</summary>
+    public async Task<List<ProviderDto>> GetServicesAsync(string region, CancellationToken ct)
+    {
+        var movies = (await tmdb.GetProviderListAsync("movie", region, ct))?.Results ?? [];
+        var shows = (await tmdb.GetProviderListAsync("tv", region, ct))?.Results ?? [];
+        return movies.Concat(shows).GroupBy(p => p.ProviderId)
+            .Select(g => g.OrderBy(p => p.DisplayPriority).First()).OrderBy(p => p.DisplayPriority)
+            .Select(p => new ProviderDto(p.ProviderId, p.ProviderName, p.LogoPath)).ToList();
+    }
+
+    /// <summary>Which of these titles are streaming (subscription, free or with ads) on any of the given services.</summary>
+    public async Task<List<MediaRef>> AvailableOnAsync(IReadOnlyList<MediaRef> titles, IReadOnlyCollection<int> services, string region, CancellationToken ct)
+    {
+        var found = new System.Collections.Concurrent.ConcurrentBag<MediaRef>();
+        await Parallel.ForEachAsync(titles, new ParallelOptions { MaxDegreeOfParallelism = 6, CancellationToken = ct }, async (t, c) =>
+        {
+            try
+            {
+                var all = await tmdb.GetWatchProvidersAsync(t.Type == MediaType.Movie ? "movie" : "tv", t.TmdbId, c);
+                var r = all?.Results?.GetValueOrDefault(region.ToUpperInvariant());
+                if ((r?.Flatrate ?? []).Concat(r?.Free ?? []).Concat(r?.Ads ?? []).Any(p => services.Contains(p.ProviderId))) found.Add(t);
+            }
+            catch (HttpRequestException) { /* unknown: leave it out */ }
+        });
+        return [.. found];
+    }
+
     public async Task<List<RegionDto>> GetRegionsAsync(CancellationToken ct) =>
         ((await tmdb.GetProviderRegionsAsync(ct))?.Results ?? [])
             .Select(r => new RegionDto(r.Iso31661, r.EnglishName)).OrderBy(r => r.Name).ToList();

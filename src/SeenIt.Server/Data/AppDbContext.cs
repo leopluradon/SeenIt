@@ -43,6 +43,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<PersonFollow> PersonFollows => Set<PersonFollow>();
     public DbSet<PersonUpcoming> PersonUpcoming => Set<PersonUpcoming>();
     public DbSet<ListLike> ListLikes => Set<ListLike>();
+    public DbSet<ListCollaborator> ListCollaborators => Set<ListCollaborator>();
     public DbSet<LibraryItem> Library => Set<LibraryItem>();
     public DbSet<TitleNote> Notes => Set<TitleNote>();
     public DbSet<RateSkip> RateSkips => Set<RateSkip>();
@@ -213,6 +214,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             e.HasKey(x => new { x.UserId, x.Type, x.TmdbId });
             e.Property(x => x.Text).HasMaxLength(2000);
+        });
+        b.Entity<ListCollaborator>(e =>
+        {
+            e.HasKey(x => new { x.ListId, x.UserId });
+            e.HasIndex(x => x.UserId);
+            e.HasOne<UserList>().WithMany().HasForeignKey(x => x.ListId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ListLike>(e =>
         {

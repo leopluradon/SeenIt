@@ -79,7 +79,7 @@ public enum ScoreSpoilers { Off, Unwatched, Always }
 public enum WatchlistOnWatch { Remove, Ask, Keep }
 /// <summary>The kinds of alert, each with its own delivery setting (UserPrefs.Alerts). Stored on each alert as a number:
 /// add new kinds at the end.</summary>
-public enum AlertKind { Episode, Movie, Person, Recommendation, RecWatched }
+public enum AlertKind { Episode, Movie, Person, Recommendation, RecWatched, WatchedWith }
 /// <summary>How an alert reaches you: in the alerts list (and bell), as a push notification, both, or not at all.</summary>
 public enum AlertDelivery { Both, Alert, Push, Off }
 /// <summary>What an open page does when something of yours changes elsewhere (another tab or device, Jellyfin...).</summary>
@@ -137,7 +137,8 @@ public record UserPrefs(
     IReadOnlyDictionary<AlertKind, AlertDelivery>? Alerts = null,   // per kind of alert; missing = Both
     IReadOnlyList<string>? ProfileBadges = null,     // badge ids shown next to your name, in order (up to MaxBadges)
     IReadOnlyList<string>? RateKinds = null,         // what "To rate" on Home offers: ScoreKinds keys; null = DefaultRateKinds
-    bool HidePlaySources = false)                    // no "Letterboxd"/"Jellyfin" tag on plays in history and on title pages
+    bool HidePlaySources = false,                    // no "Letterboxd"/"Jellyfin" tag on plays in history and on title pages
+    IReadOnlyList<int>? MyServices = null)           // streaming services you have (TMDB provider ids): Where to watch, Pick and the watchlist use them
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -188,6 +189,7 @@ public record UserPrefs(
         (AlertKind.Person, "New work from people you follow", "Their new movies and shows."),
         (AlertKind.Recommendation, "Recommendations to you", "When a friend sends you something to watch."),
         (AlertKind.RecWatched, "Someone watched your recommendation", "\"Sam watched Heat\", or started a show you sent them."),
+        (AlertKind.WatchedWith, "Logged with you", "When a friend marks something watched together with you, which adds it to your history too."),
     ];
 
     public UserPrefs Clean() => this with
@@ -214,7 +216,10 @@ public record UserPrefs(
         ProfileBanner = ProfileBanner is { Type: MediaType.Movie or MediaType.Show } ? ProfileBanner : null,
         ProfileBadge = ProfileBadge is { Length: > 0 and <= 80 } ? ProfileBadge : null,
         RateKinds = RateKinds?.Where(k => ScoreKinds.Any(x => x.Key == k)).Distinct().ToList(),
+        MyServices = MyServices?.Where(id => id > 0).Distinct().Take(40).ToList(),
     };
+    /// <summary>Whether you have this service (always true when you haven't said which you have).</summary>
+    public bool HasService(int providerId) => MyServices is not { Count: > 0 } mine || mine.Contains(providerId);
 }
 
 /// <summary>Who can see your profile, history and stats. Lists have their own public/private switch.</summary>
@@ -526,7 +531,8 @@ public enum WatchTime { Now, ReleaseDate, Custom, Unknown }
 /// <summary>What the "when did you watch it?" dialog returns.</summary>
 /// <summary>Through: also mark everything before it (when the dialog offered that).</summary>
 /// SeasonOnly: "up to here" stays within the episode's season.
-public record WatchChoice(WatchTime When, DateTimeOffset? At = null, bool Through = false, bool SeasonOnly = false);
+/// With: friends' usernames who watched it too (their play is logged as well).
+public record WatchChoice(WatchTime When, DateTimeOffset? At = null, bool Through = false, bool SeasonOnly = false, IReadOnlyList<string>? With = null);
 
 public record WatchRequest(
     MediaType Type,
@@ -534,13 +540,16 @@ public record WatchRequest(
     int? SeasonNumber = null,
     int? EpisodeNumber = null,
     DateTimeOffset? WatchedAt = null,
-    WatchTime? When = null);    // null: Custom if WatchedAt is set, otherwise Now
+    WatchTime? When = null,     // null: Custom if WatchedAt is set, otherwise Now
+    IReadOnlyList<string>? With = null);   // friends (usernames) who watched it with you: it goes in their history too
 
 /// <summary>Marks every aired episode of a show (or one season) watched.</summary>
 public record BulkWatchRequest(int ShowTmdbId, int? SeasonNumber = null, DateTimeOffset? WatchedAt = null, bool OnlyUnwatched = true, WatchTime? When = null);
 
 /// <summary>What marking something watched did, so it can be undone: the plays it added, and whether that took the title off the watchlist.</summary>
-public record WatchedResult(int Added, IReadOnlyList<Guid> PlayIds, bool LeftWatchlist = false);
+public record WatchedResult(int Added, IReadOnlyList<Guid> PlayIds, bool LeftWatchlist = false,
+    IReadOnlyList<Guid>? WithPlayIds = null,     // plays logged for friends who watched with you (undone through api/watch/with/undo)
+    IReadOnlyList<string>? WithNames = null);    // their names, for the toast; anyone left out isn't a friend
 
 /// <summary>Plays recorded with "unknown date" are stored at the Unix epoch.</summary>
 public static class WatchDates
@@ -855,9 +864,13 @@ public record DashboardDto(
 // ---------- Lists ----------
 
 public record ListSummary(Guid Id, string Name, string? Description, bool IsPublic, int ItemCount, DateTimeOffset UpdatedAt, IReadOnlyList<string?> Posters,
-    string? Owner = null, int Saves = 0, bool Smart = false);   // Owner: set when it's someone else's list
+    string? Owner = null, int Saves = 0, bool Smart = false,   // Owner: set when it's someone else's list
+    bool FriendsCanSee = false, bool Shared = false);           // Shared: someone else's list you can add to, or yours that others can
 public record ListDetail(Guid Id, string Name, string? Description, bool IsPublic, string OwnerUserName, bool IsOwner, IReadOnlyList<ListItemDto> Items,
-    bool Ranked = false, int Saves = 0, bool Saved = false, SmartRules? Rules = null);
+    bool Ranked = false, int Saves = 0, bool Saved = false, SmartRules? Rules = null,
+    bool FriendsCanSee = false,
+    bool CanEdit = false,                              // the owner or a collaborator: can add, remove, reorder and annotate
+    IReadOnlyList<UserCard>? Collaborators = null);
 
 /// <summary>Where a smart list looks: what you've watched, your watchlist, or everything on TMDB.</summary>
 public enum SmartSource { History, Watchlist, Tmdb, Library }
@@ -870,7 +883,9 @@ public record SmartRules(SmartSource Source, MediaType? Type = null, IReadOnlyLi
     int? YearFrom = null, int? YearTo = null, double? MinScore = null, double? MinMyRating = null,
     string? Language = null, bool? Watched = null, SmartSort Sort = SmartSort.Popular, int Limit = 50);
 public record ListItemDto(Guid Id, MediaSummary Media, DateTimeOffset AddedAt, int Position, string? Note = null);
-public record CreateListRequest(string Name, string? Description, bool IsPublic, bool Ranked = false, SmartRules? Rules = null);
+/// <param name="Collaborators">Usernames (friends only) who can add to the list; null leaves them as they are.</param>
+public record CreateListRequest(string Name, string? Description, bool IsPublic, bool Ranked = false, SmartRules? Rules = null,
+    bool FriendsCanSee = false, IReadOnlyList<string>? Collaborators = null);
 /// <summary>Every item id of the list, in the new order.</summary>
 public record ListOrderRequest(IReadOnlyList<Guid> ItemIds);
 public record ListNoteRequest(string? Note);

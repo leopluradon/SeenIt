@@ -10,13 +10,20 @@
 @if (list is null && error is null) { <Spinner /> }
 else if (list is not null)
 {
-    <nav class="crumbs">@if (list.IsOwner) { <a href="lists"><Icon Name="chevron-left" Size="16" /> Lists</a> }</nav>
+    <nav class="crumbs">@if (list.CanEdit) { <a href="lists"><Icon Name="chevron-left" Size="16" /> Lists</a> }</nav>
     <div class="page-head">
         <div>
             <h1>@list.Name</h1>
-            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items@(list.Rules is not null ? " · Smart list" : list.Ranked ? " · Ranked" : "") · @(list.IsPublic ? "Public" : "Private")@(list.IsOwner && list.Saves > 0 ? $" · saved by {list.Saves}" : "")</p>
+            <p class="muted small">by <a href="@Fmt.UserHref(list.OwnerUserName)">@list.OwnerUserName</a> · @list.Items.Count items@(list.Rules is not null ? " · Smart list" : list.Ranked ? " · Ranked" : "") · @(list.IsPublic ? "Public" : list.FriendsCanSee ? "Friends can see it" : "Private")@(list.IsOwner && list.Saves > 0 ? $" · saved by {list.Saves}" : "")@if (list.Collaborators is { Count: > 0 } cs) { <span> · shared with @string.Join(", ", cs.Select(c => c.Name))</span> }</p>
         </div>
-        @if (list.IsPublic && !list.IsOwner)
+        @if (list.CanEdit && !list.IsOwner)
+        {
+            <div class="inline">
+                @if (list.Items.Count > 1) { <button class="btn btn-sm @(arranging ? "btn-on" : "")" @onclick="ToggleArranging">@(arranging ? "Done" : "Reorder & notes")</button> }
+                <button class="btn btn-sm btn-ghost" @onclick="Leave">Leave</button>
+            </div>
+        }
+        else if (list.IsPublic && !list.IsOwner)
         {
             <div class="inline">
                 <AuthorizeView>
@@ -32,7 +39,7 @@ else if (list is not null)
         {
             <div class="inline">
                 @if (list.IsPublic) { <button class="btn btn-sm" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
-                else { <span class="muted small" title="Make the list public in Edit to share it">Private: only you can see it</span> }
+                else if (!list.FriendsCanSee && list.Collaborators is not { Count: > 0 }) { <span class="muted small" title="Make the list public in Edit to share it">Private: only you can see it</span> }
                 @if (list.Items.Count > 1 && list.Rules is null) { <button class="btn btn-sm @(arranging ? "btn-on" : "")" @onclick="ToggleArranging">@(arranging ? "Done" : "Reorder & notes")</button> }
                 <button class="btn btn-sm btn-ghost" @onclick="ShowFeeds">RSS</button>
                 <button class="btn btn-sm" @onclick="() => editOpen = true">Edit</button>
@@ -41,6 +48,18 @@ else if (list is not null)
         }
     </div>
     @if (list.Description is not null) { <p class="overview">@list.Description</p> }
+    @if (list.CanEdit && list.Rules is null && !arranging)
+    {
+        @* Add titles right here, rather than going to each title's page. *@
+        @if (adding)
+        {
+            <div class="panel list-add">
+                <div class="inline spread"><b>Add to this list</b><button class="icon-btn" @onclick="() => adding = false" aria-label="Done adding"><Icon Name="x" Size="16" /></button></div>
+                <TitlePicker OnPick="AddPicked" />
+            </div>
+        }
+        else { <button class="btn btn-sm list-add-btn" @onclick="() => adding = true"><Icon Name="plus" Size="16" /> Add titles</button> }
+    }
     <Modal Open="feeds is not null" OpenChanged="o => { if (!o) feeds = null; }" Title="Feeds for this list">
         @if (feeds is { } f)
         {
@@ -120,7 +139,7 @@ else if (list is not null)
                             @if (i.Note is { Length: > 0 } note) { <span class="list-note">@note</span> }
                         </span>
                     </a>
-                    @if (list.IsOwner && list.Rules is null)
+                    @if (list.CanEdit && list.Rules is null)
                     {
                         <button class="icon-btn" @onclick="() => Remove(i)" aria-label="Remove @i.Media.Title"><Icon Name="x" Size="16" /></button>
                     }
@@ -136,7 +155,7 @@ else if (list is not null)
             <div class="poster-wrap" @key="i.Id">
                 <PosterCard Media="i.Media" Badge="@(list.Ranked ? $"#{rank}" : null)" />
                 @if (i.Note is { Length: > 0 } note) { <p class="list-note">@note</p> }
-                @if (list.IsOwner && list.Rules is null)
+                @if (list.CanEdit && list.Rules is null)
                 {
                     <button class="poster-remove" @onclick="() => Remove(i)" aria-label="Remove @i.Media.Title"><Icon Name="x" Size="14" /></button>
                 }
@@ -148,7 +167,8 @@ else if (list is not null)
     }
 
     <Modal @bind-Open="editOpen" Title="Edit list">
-        <ListForm Name="@list.Name" Description="@list.Description" IsPublic="list.IsPublic" Ranked="list.Ranked" Rules="list.Rules" OnSave="Save" />
+        <ListForm Name="@list.Name" Description="@list.Description" IsPublic="list.IsPublic" Ranked="list.Ranked" Rules="list.Rules" OnSave="Save"
+                  FriendsCanSee="list.FriendsCanSee" Collaborators="@(list.Collaborators?.Select(c => c.UserName).ToList())" />
     </Modal>
 }
 <ReloadOnMenu OnChange="Load" />
@@ -314,6 +334,33 @@ else if (list is not null)
             });
             Nav.NavigateTo("lists");
         }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private bool adding;
+
+    /// <summary>A title picked in "Add titles": straight onto the list, with Undo; the search stays open for the next.</summary>
+    private async Task AddPicked(Suggestion s)
+    {
+        var type = s.Kind == "movie" ? MediaType.Movie : MediaType.Show;
+        if (list!.Items.Any(i => i.Media.Type == type && i.Media.TmdbId == s.Id)) { Toasts.Show($"{s.Title} is already on this list"); return; }
+        try
+        {
+            await Api.AddToListAsync(Id, type, s.Id);
+            Toasts.Show($"Added {s.Title}", undo: async () =>
+            {
+                await Api.RemoveFromListAsync(Id, type, s.Id);
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Leave()
+    {
+        if (!await Confirmer.AskAsync($"Leave “{list!.Name}”?", $"It stops being shared with you. {list.OwnerUserName} can add you again.", "Leave")) return;
+        try { await Api.LeaveListAsync(Id); Toasts.Show($"Left “{list.Name}”"); Nav.NavigateTo("lists"); }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

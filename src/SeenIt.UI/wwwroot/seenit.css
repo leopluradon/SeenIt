@@ -625,6 +625,18 @@ a.cast { color: var(--text); }
 .import-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .import-card ol { padding-left: 18px; color: var(--text-2); }
 .imports { display: flex; flex-direction: column; gap: 10px; }
+.list-add, .list-add-btn { margin: 0 0 16px; }
+.list-add .pw-picks { max-height: 320px; overflow-y: auto; }
+.watch-with { display: grid; gap: 6px; }
+.watch-with .chips { margin: 0; }
+.service-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 10px 0; }
+.service-option { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text-2); cursor: pointer; text-align: left; font-size: .85rem; }
+.service-option img { width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0; }
+.service-option span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.service-option.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.your-services .provider-label { color: var(--text); font-weight: 650; }
+.other-providers summary { cursor: pointer; margin: 6px 0; }
 .import-preview { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 .import-job { background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px; display: flex; flex-direction: column; gap: 6px; }
 .steps { padding-left: 20px; display: flex; flex-direction: column; gap: 10px; color: var(--text-2); }

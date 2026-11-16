@@ -45,7 +45,7 @@
         <button class="chip @(source == PickSource.Watchlist ? "on" : "")" @onclick="() => Set(() => source = PickSource.Watchlist)">Watchlist</button>
         <button class="chip @(source == PickSource.Paused ? "on" : "")" @onclick="() => Set(() => source = PickSource.Paused)">Paused shows</button>
         }
-        <label class="check small"><input type="checkbox" checked="@streaming" @onchange="e => Set(() => streaming = e.Value is true)" /> Streaming now</label>
+        <label class="check small"><input type="checkbox" checked="@streaming" @onchange="e => Set(() => streaming = e.Value is true)" /> @(Fmt.Prefs.MyServices is { Count: > 0 } ? "On my services" : "Streaming now")</label>
     </div>
 </div>
 

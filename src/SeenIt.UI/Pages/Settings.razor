@@ -360,6 +360,27 @@ else { <h1>Settings</h1> }
                 </select>
             </div>
         </section>
+        <section class="panel" id="services">
+            <h2>My streaming services</h2>
+            <p class="muted small">Tick the ones you pay for (or that are free). Where to watch shows them first, “Pick for me” and the watchlist can stick to them, and the rest are tucked away. Leave all unticked to treat every service the same.</p>
+            @if (services is null) { <Spinner /> }
+            else if (services.Count == 0) { <p class="muted small">TMDB doesn't list services for this country.</p> }
+            else
+            {
+                <div class="service-grid">
+                    @foreach (var sv in services.Take(showAllServices ? services.Count : 30))
+                    {
+                        var on = Fmt.Prefs.MyServices?.Contains(sv.Id) == true;
+                        <button type="button" class="service-option @(on ? "on" : "")" aria-pressed="@on" @key="sv.Id" @onclick="() => ToggleService(sv)">
+                            @if (sv.LogoPath is not null) { <img src="@Img.Poster(sv.LogoPath, "w92")" alt="" loading="lazy" /> }
+                            <span>@sv.Name</span>
+                            @if (on) { <Icon Name="check" Size="14" /> }
+                        </button>
+                    }
+                </div>
+                @if (!showAllServices && services.Count > 30) { <button class="btn btn-sm btn-ghost" @onclick="() => showAllServices = true">Show all @services.Count</button> }
+            }
+        </section>
         }
         @if (Shows("scores"))
         {
@@ -1024,7 +1045,7 @@ else { <h1>Settings</h1> }
     private static readonly Group[] Groups =
     [
         new("account", "Account", "users", "Profile, privacy, invites, password, email, username", ["profile", "privacy", "invites", "account", "about", "delete"]),
-        new("display", "Display", "eye", "Start page, dates, theme, layout, country", ["start", "dates", "appearance", "layout", "time", "region"]),
+        new("display", "Display", "eye", "Start page, dates, theme, layout, country, your streaming services", ["start", "dates", "appearance", "layout", "time", "region", "services"]),
         new("scores", "Ratings & scores", "star", "Your rating scale, other sites' scores, spoilers", ["ratings", "scores", "spoilers"]),
         new("tracking", "Tracking", "radio", "Time zone, marking watched, media servers", ["tracking", "marking", "jellyfin", "letterboxd", "letterboxd-sync"]),
         new("alerts", "Alerts & feeds", "bell", "Release alerts, calendar, RSS feeds", ["alerts", "push", "calendar", "feeds", "private-link"]),
@@ -1138,6 +1159,18 @@ else { <h1>Settings</h1> }
     private async Task LoadRegions()
     {
         try { regions = await Api.RegionsAsync(); } catch { regions = []; }
+        try { services = await Api.ServicesAsync(); } catch { services = []; }
+    }
+
+    private List<ProviderDto>? services;
+    private bool showAllServices;
+
+    private Task ToggleService(ProviderDto sv)
+    {
+        var mine = (Fmt.Prefs.MyServices ?? []).ToList();
+        var on = !mine.Remove(sv.Id);
+        if (on) mine.Add(sv.Id);
+        return SavePrefs(p => p with { MyServices = mine.Count == 0 ? null : mine }, on ? $"Added {sv.Name}" : $"Removed {sv.Name}");
     }
 
     private async Task SaveRegion(ChangeEventArgs e)
@@ -1148,6 +1181,8 @@ else { <h1>Settings</h1> }
             await Api.SetPreferencesAsync(new PreferencesRequest(Region: region ?? ""));
             Session.Update(me => me with { Region = region });
             Toasts.Show("Country saved");
+            services = null;
+            try { services = await Api.ServicesAsync(); } catch { services = []; }
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

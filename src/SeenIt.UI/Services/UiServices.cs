@@ -67,7 +67,7 @@ public static class Fmt
 
     /// <summary>Request body for a single play from a dialog choice.</summary>
     public static WatchRequest Watch(MediaType type, int id, WatchChoice c, int? season = null, int? episode = null) =>
-        new(type, id, season, episode, c.At, c.When);
+        new(type, id, season, episode, c.At, c.When, c.With);
 
     /// <summary>How the signed-in user gives and sees ratings (stored as 1–10 either way).</summary>
     public static RatingScale Scale { get; set; }
@@ -105,7 +105,7 @@ public static class Fmt
         WatchTime.Unknown => " (date unknown)",
         WatchTime.Custom when c.At is { } at => $" on {(at.LocalDateTime).ToString(Fmt.DateLong)}",
         _ => "",
-    };
+    } + (c.With is { Count: > 0 } w ? $" with {string.Join(" and ", w)}" : "");
 
     public static string PlayedAt(DateTimeOffset d) =>
         WatchDates.IsUnknown(d) ? "Date unknown" : d.ToLocalTime().ToString(Fmt.DateTimeLong);

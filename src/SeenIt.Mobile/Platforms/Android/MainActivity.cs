@@ -13,7 +13,8 @@ namespace SeenIt.Mobile;
 [IntentFilter([Intent.ActionView], Categories = [Intent.CategoryDefault, Intent.CategoryBrowsable], AutoVerify = true,
     DataScheme = "https", DataHost = "seenit.vohiyo.com",
     DataPathPrefixes = ["/movie/", "/show/", "/person/", "/u/", "/list/", "/lists", "/history", "/progress", "/calendar", "/watchlist",
-        "/notifications", "/recommendations", "/friends", "/people", "/discover", "/search", "/stats", "/invite/", "/pick", "/favorites", "/ratings"])]
+        "/notifications", "/recommendations", "/friends", "/people", "/discover", "/search", "/stats", "/invite/", "/pick", "/favorites", "/ratings",
+        "/review/", "/goals", "/compare/", "/library", "/for-you", "/more"])]
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop,
     ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity

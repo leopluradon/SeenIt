@@ -107,6 +107,12 @@ public static class ApiEndpoints
             return await c.GetProvidersAsync(type, id, code, ct);
         });
         g.MapGet("/regions", (CatalogService c, CancellationToken ct) => c.GetRegionsAsync(ct));
+        // Streaming services in your country (Settings → Where to watch → My services).
+        g.MapGet("/services", async (string? region, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
+        {
+            var saved = p.OptionalUserId() is { } uid ? await db.Users.Where(u => u.Id == uid).Select(u => u.Region).FirstOrDefaultAsync(ct) : null;
+            return await c.GetServicesAsync(saved ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r.ToUpperInvariant() : "US"), ct);
+        });
 
         g.MapGet("/show/{id:int}/season/{season:int}/episode/{episode:int}", async (int id, int season, int episode, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
             await c.GetEpisodeAsync(id, season, episode, p.OptionalUserId(), ct) is { } e ? Results.Ok(e) : Results.NotFound());
@@ -119,12 +125,19 @@ public static class ApiEndpoints
         g.MapPost("/watch", async (WatchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
             var before = await WatchedResults.BeforeAsync(db, p.UserId(), req.Type, req.TmdbId, ct);
-            var added = await t.WatchAsync(p.UserId(), req, WatchSource.Manual, ct);
+            var added = await t.WatchAsync(p.UserId(), req with { With = null }, WatchSource.Manual, ct);
             var what = req.EpisodeNumber is null && req.Type != MediaType.Movie ? $"{added} episode{(added == 1 ? "" : "s")}" : null;
+            var with = req.Type is MediaType.Movie or MediaType.Episode && req.With is { Count: > 0 }
+                ? await WatchedWith.LogAsync(db, t, p.UserId(), req, before.Since, ct) : ((List<Guid> Ids, List<string> Names)?)null;
             await a.LogAsync(p, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
-                string.Join(", ", new[] { what, ActivityService.When(req.When, req.WatchedAt) }.OfType<string>()) is { Length: > 0 } d ? d : null);
-            return Results.Ok(await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct));
+                string.Join(", ", new[] { what, ActivityService.When(req.When, req.WatchedAt), with is { Names.Count: > 0 } ? "with " + string.Join(", ", with.Value.Names) : null }.OfType<string>()) is { Length: > 0 } d ? d : null);
+            var result = await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct);
+            return Results.Ok(with is { } w ? result with { WithPlayIds = w.Ids, WithNames = w.Names } : result);
         });
+
+        // Undo for plays logged for friends who watched with you: only those just made, and only friends'.
+        g.MapPost("/watch/with/undo", async (List<Guid> ids, ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
+            Results.Ok(new { removed = await WatchedWith.UndoAsync(db, p.UserId(), ids, ct) }));
 
         g.MapPost("/watch/bulk", async (BulkWatchRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
@@ -204,6 +217,16 @@ public static class ApiEndpoints
         });
 
         g.MapGet("/watchlist", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetWatchlistAsync(p.UserId(), ct));
+        // What on your watchlist is streaming on your services now.
+        g.MapGet("/watchlist/on-my-services", async (string? region, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
+        {
+            var uid = p.UserId();
+            var me = await db.Users.Where(u => u.Id == uid).Select(u => new { u.Region, u.PrefsJson }).FirstAsync(ct);
+            var services = UserPrefsStore.Read(me.PrefsJson).MyServices ?? [];
+            if (services.Count == 0) return Results.Ok(new List<MediaRef>());
+            var titles = await db.Watchlist.AsNoTracking().Where(w => w.UserId == uid).Select(w => new MediaRef(w.Type, w.TmdbId)).ToListAsync(ct);
+            return Results.Ok(await c.AvailableOnAsync(titles, services.ToHashSet(), me.Region ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r : "US"), ct));
+        });
         g.MapGet("/watchlist/contains", async (MediaType type, int tmdbId, ClaimsPrincipal p, AppDbContext db, CancellationToken ct) =>
         {
             var me = p.UserId();
@@ -544,6 +567,9 @@ public static class ApiEndpoints
             await a.LogAsync(p, ActivityKind.ListDelete, detail: $"\"{name}\"");
             return Results.NoContent();
         });
+        // Someone a list was shared with taking themselves off it.
+        g.MapPost("/{id:guid}/leave", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
+            await l.LeaveAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
         g.MapPost("/{id:guid}/restore", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
             await l.RestoreAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
         g.MapPost("/{id:guid}/items", async (Guid id, ListItemRequest req, ClaimsPrincipal p, ListService l, AppDbContext db, ActivityService a, CancellationToken ct) =>
@@ -849,5 +875,66 @@ internal static class UserMarks
                 .Select(w => new { w.Type, w.TmdbId }).ToListAsync(ct))
             .Select(w => (w.Type, w.TmdbId)).ToHashSet();
         return items.Select(i => i with { Watched = seen.Contains((i.Type, i.TmdbId)), OnWatchlist = listed.Contains((i.Type, i.TmdbId)) }).ToList();
+    }
+}
+
+/// <summary>
+/// "Watched with…": one play logged for friends who watched with you (people who follow each other with you), each
+/// told with an alert (Settings → Alerts → Logged with you) so it doesn't turn up in their history unexplained.
+/// </summary>
+internal static class WatchedWith
+{
+    private static async Task<bool> MutualAsync(AppDbContext db, Guid a, Guid b, CancellationToken ct) =>
+        await db.Follows.AnyAsync(f => f.FollowerId == a && f.FolloweeId == b, ct) && await db.Follows.AnyAsync(f => f.FollowerId == b && f.FolloweeId == a, ct);
+
+    public static async Task<(List<Guid> Ids, List<string> Names)> LogAsync(AppDbContext db, TrackingService t, Guid me, WatchRequest req, DateTimeOffset since, CancellationToken ct)
+    {
+        var ids = new List<Guid>();
+        var names = new List<string>();
+        var myName = await db.Users.AsNoTracking().Where(u => u.Id == me).Select(u => u.DisplayName ?? u.UserName).FirstAsync(ct);
+        var (title, poster) = req.Type == MediaType.Movie
+            ? await db.Movies.AsNoTracking().Where(m => m.TmdbId == req.TmdbId).Select(m => new ValueTuple<string, string?>(m.Title, m.PosterPath)).FirstOrDefaultAsync(ct)
+            : await db.Shows.AsNoTracking().Where(s => s.TmdbId == req.TmdbId).Select(s => new ValueTuple<string, string?>(s.Name, s.PosterPath)).FirstOrDefaultAsync(ct);
+        foreach (var userName in req.With!.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Take(10))
+        {
+            var friend = await db.Users.AsNoTracking().Where(u => u.NormalizedUserName == userName.Trim().ToUpperInvariant())
+                .Select(u => new { u.Id, Name = u.DisplayName ?? u.UserName, u.TimeZone }).FirstOrDefaultAsync(ct);
+            if (friend is null || friend.Id == me || !await MutualAsync(db, me, friend.Id, ct)) continue;
+            await t.WatchAsync(friend.Id, req with { With = null }, WatchSource.Manual, ct);
+            ids.AddRange(await db.WatchEvents.AsNoTracking()
+                .Where(w => w.UserId == friend.Id && w.TmdbId == req.TmdbId && w.Source == WatchSource.Manual && w.CreatedAt >= since)
+                .Select(w => w.Id).ToListAsync(ct));
+            names.Add(friend.Name!);
+            var zone = ReviewService.Zone(friend.TimeZone);
+            var headline = $"{myName} logged {title ?? "something"} as watched with you";
+            db.Notifications.Add(new Notification
+            {
+                UserId = friend.Id, Type = req.Type, TmdbId = req.TmdbId, SeasonNumber = req.SeasonNumber, EpisodeNumber = req.EpisodeNumber,
+                Kind = AlertKind.WatchedWith, Title = headline.Length > 300 ? headline[..300] : headline, PosterPath = poster,
+                Detail = req.Type == MediaType.Episode ? $"S{req.SeasonNumber:00}E{req.EpisodeNumber:00} · it's in your history" : "It's in your history",
+                Day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime),
+            });
+        }
+        await db.SaveChangesAsync(ct);
+        return (ids, names);
+    }
+
+    public static async Task<int> UndoAsync(AppDbContext db, Guid me, IReadOnlyList<Guid> ids, CancellationToken ct)
+    {
+        var recent = DateTimeOffset.UtcNow.AddMinutes(-15);
+        var plays = await db.WatchEvents.Where(w => ids.Contains(w.Id) && w.CreatedAt >= recent && w.Source == WatchSource.Manual).ToListAsync(ct);
+        var removed = 0;
+        foreach (var play in plays)
+        {
+            if (!await MutualAsync(db, me, play.UserId, ct)) continue;
+            db.WatchEvents.Remove(play);
+            // …and the alert that told them about it.
+            var alert = await db.Notifications.Where(n => n.UserId == play.UserId && n.Kind == AlertKind.WatchedWith && n.TmdbId == play.TmdbId
+                && n.SeasonNumber == play.SeasonNumber && n.EpisodeNumber == play.EpisodeNumber && n.CreatedAt >= recent).ToListAsync(ct);
+            db.Notifications.RemoveRange(alert);
+            removed++;
+        }
+        await db.SaveChangesAsync(ct);
+        return removed;
     }
 }

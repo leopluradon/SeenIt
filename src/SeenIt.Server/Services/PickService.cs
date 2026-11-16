@@ -69,6 +69,8 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
 
         // Weighted shuffle (each key is u^(1/weight)): a title on three watchlists comes up three times as often as one on one.
         var shuffled = candidates.OrderByDescending(c => Math.Pow(Random.Shared.NextDouble(), 1.0 / c.Weight)).ToList();
+        // "Streaming now" means on your services when you've said which you have (Settings → Where to watch).
+        var mine = UserPrefsStore.Read(await db.Users.Where(u => u.Id == userId).Select(u => u.PrefsJson).FirstOrDefaultAsync(ct)).MyServices;
         foreach (var c in shuffled.Take(streamingOnly ? 30 : 1))
         {
             List<ProviderDto> streaming = [];
@@ -76,9 +78,10 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
             {
                 var p = await catalog.GetProvidersAsync(c.Type, c.TmdbId, region, ct);
                 streaming = p.Stream.Concat(p.Free).Concat(p.Ads).DistinctBy(x => x.Id).ToList();
+                if (mine is { Count: > 0 }) streaming = [.. streaming.OrderByDescending(x => mine.Contains(x.Id))];
             }
             catch (HttpRequestException ex) { log.LogInformation(ex, "No providers for {Type} {Id}", c.Type, c.TmdbId); }
-            if (streamingOnly && streaming.Count == 0) continue;
+            if (streamingOnly && (mine is { Count: > 0 } ? !streaming.Any(x => mine.Contains(x.Id)) : streaming.Count == 0)) continue;
 
             EpisodeRef? next = null;
             if (c.Type == MediaType.Show)

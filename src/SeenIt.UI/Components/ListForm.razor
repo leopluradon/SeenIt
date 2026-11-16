@@ -107,7 +107,30 @@
         </fieldset>
     }
 
-    <label class="check"><input type="checkbox" @bind="isPublic" /> Public: anyone with the link can view it</label>
+    <div class="field">
+        <label>Who can see it</label>
+        <div class="segmented" role="radiogroup" aria-label="Who can see it">
+            <button type="button" role="radio" aria-checked="@(Audience == 0)" class="@(Audience == 0 ? "on" : "")" @onclick="() => { isPublic = false; friendsCanSee = false; }">Only me</button>
+            <button type="button" role="radio" aria-checked="@(Audience == 1)" class="@(Audience == 1 ? "on" : "")" @onclick="() => { isPublic = false; friendsCanSee = true; }">Friends</button>
+            <button type="button" role="radio" aria-checked="@(Audience == 2)" class="@(Audience == 2 ? "on" : "")" @onclick="() => { isPublic = true; friendsCanSee = false; }">Anyone with the link</button>
+        </div>
+        <span class="muted small">@(Audience switch { 1 => "People you follow who follow you back.", 2 => "It can show on your profile and in Browse.", _ => (people.Count > 0 ? "Plus anyone you share it with below." : "") })</span>
+    </div>
+    @if (!smart && friends is { Count: > 0 })
+    {
+        <div class="field">
+            <label>Share with <span class="muted small">(they can add, remove and reorder titles)</span></label>
+            <div class="chips">
+                @foreach (var f in friends)
+                {
+                    var on = people.Contains(f.UserName);
+                    <button type="button" class="chip @(on ? "on" : "")" aria-pressed="@on" @key="f.UserName" @onclick="() => { if (!people.Remove(f.UserName)) people.Add(f.UserName); }">
+                        <Avatar Name="@f.Name" Url="@f.Avatar" Class="avatar-xs" /> @f.Name
+                    </button>
+                }
+            </div>
+        </div>
+    }
     @if (!smart) { <label class="check"><input type="checkbox" @bind="ranked" /> Ranked: number the entries in your order (a top 10, a ranking)</label> }
     <button class="btn btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(name)">Save</button>
 </form>
@@ -121,6 +144,14 @@
     /// <summary>Creating: offer the ordinary/smart choice.</summary>
     [Parameter] public bool AllowSmart { get; set; }
     [Parameter] public EventCallback<CreateListRequest> OnSave { get; set; }
+    [Parameter] public bool FriendsCanSee { get; set; }
+    /// <summary>Usernames the list is shared with now.</summary>
+    [Parameter] public IReadOnlyList<string>? Collaborators { get; set; }
+    private bool friendsCanSee;
+    private int Audience => isPublic ? 2 : friendsCanSee ? 1 : 0;
+    private readonly HashSet<string> people = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Friends (following each other): the people a list can be shared with.</summary>
+    private List<UserCard>? friends;
 
     private static readonly (string, string)[] Languages =
         [("en", "English"), ("ja", "Japanese"), ("ko", "Korean"), ("fr", "French"), ("es", "Spanish"), ("de", "German"),
@@ -143,7 +174,11 @@
         name = Name ?? "";
         description = Description;
         isPublic = IsPublic;
+        friendsCanSee = FriendsCanSee;
         ranked = Ranked;
+        foreach (var c in Collaborators ?? []) people.Add(c);
+        try { friends = (await Api.FollowingAsync()).Where(u => u.Following && u.FollowsYou).OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase).ToList(); }
+        catch { friends = []; }
         if (Rules is { } r)
         {
             smart = true;
@@ -172,6 +207,6 @@
                 source == SmartSource.History ? null : watchedKey switch { "yes" => true, "no" => false, _ => null },
                 source == SmartSource.Tmdb && sort == SmartSort.RecentlyWatched ? SmartSort.Popular : sort, limit)
             : null;
-        return OnSave.InvokeAsync(new CreateListRequest(name.Trim(), description, isPublic, !smart && ranked, rules));
+        return OnSave.InvokeAsync(new CreateListRequest(name.Trim(), description, isPublic, !smart && ranked, rules, !isPublic && friendsCanSee, smart ? [] : people.ToList()));
     }
 }

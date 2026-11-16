@@ -627,6 +627,20 @@ document.addEventListener('click', e => {
     window.addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
 })();
 
+// "/" jumps to search from anywhere (not while typing): the header box on wide screens, the Search page otherwise.
+document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+    const t = e.target;
+    if (t instanceof HTMLElement && (t.isContentEditable || t.closest('input, textarea, select'))) return;
+    if (document.querySelector('.modal, .ctx-menu')) return;
+    e.preventDefault();
+    const box = document.querySelector('.topsearch input');
+    if (box && box.offsetParent !== null) { box.focus(); box.select(); return; }
+    const page = document.querySelector('.searchbar input[type=search]');
+    if (page && location.pathname.endsWith('/search')) { page.focus(); return; }
+    if (window.Blazor) window.Blazor.navigateTo('search');
+});
+
 // Search suggestions: ↑/↓ move through the list instead of jumping the cursor to the start or end of the box.
 document.addEventListener('keydown', e => {
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target instanceof HTMLInputElement && e.target.dataset.suggestOpen) e.preventDefault();

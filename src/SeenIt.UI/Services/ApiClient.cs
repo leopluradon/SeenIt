@@ -132,12 +132,13 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     /// <summary>The Undo for a toast after marking something watched, or null when there's nothing to undo (queued offline, nothing added).</summary>
     public Func<Task>? UndoFor(WatchedResult? r, MediaType type, int tmdbId) =>
-        r is { PlayIds.Count: > 0 } or { LeftWatchlist: true } ? () => UndoWatchedAsync(r, type, tmdbId) : null;
+        r is { PlayIds.Count: > 0 } or { LeftWatchlist: true } or { WithPlayIds.Count: > 0 } ? () => UndoWatchedAsync(r, type, tmdbId) : null;
 
     /// <summary>Undo for marking something watched: removes the plays it added and puts it back on the watchlist if it left.</summary>
     public async Task UndoWatchedAsync(WatchedResult r, MediaType type, int tmdbId)
     {
         if (r.PlayIds.Count > 0) await DeleteHistoryAsync(r.PlayIds);
+        if (r.WithPlayIds is { Count: > 0 } theirs) await SendAsync(HttpMethod.Post, "api/watch/with/undo", theirs);
         if (r.LeftWatchlist) await AddToWatchlistAsync(type == MediaType.Movie ? MediaType.Movie : MediaType.Show, tmdbId);
     }
     /// <summary>After marking something watched (the watchlist "ask" prompt listens).</summary>
@@ -227,6 +228,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     public Task<WatchProvidersDto> ProvidersAsync(MediaType type, int id) => GetAsync<WatchProvidersDto>($"api/catalog/providers/{type}/{id}?region={DeviceRegion}");
     public Task<List<RegionDto>> RegionsAsync() => GetAsync<List<RegionDto>>("api/catalog/regions");
+    public Task<List<ProviderDto>> ServicesAsync() => GetAsync<List<ProviderDto>>($"api/catalog/services?region={DeviceRegion}");
+    public Task<List<MediaRef>> WatchlistOnMyServicesAsync() => GetAsync<List<MediaRef>>($"api/watchlist/on-my-services?region={DeviceRegion}");
 
     /// <summary>The device's country, used for "where to watch" until the user picks one.</summary>
     public static string DeviceRegion
@@ -342,6 +345,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public async Task<Guid> CreateListAsync(CreateListRequest r) => (await SendAsync<IdResult>(HttpMethod.Post, "api/lists", r))!.Id;
     public Task UpdateListAsync(Guid id, CreateListRequest r) => SendAsync(HttpMethod.Put, $"api/lists/{id}", r);
     public Task DeleteListAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/lists/{id}");
+    public Task LeaveListAsync(Guid id) => SendAsync(HttpMethod.Post, $"api/lists/{id}/leave");
     public Task RestoreListAsync(Guid id) => SendAsync(HttpMethod.Post, $"api/lists/{id}/restore");
     public Task AddToListAsync(Guid id, MediaType type, int tmdbId) => SendAsync(HttpMethod.Post, $"api/lists/{id}/items", new ListItemRequest(type, tmdbId));
     public Task RemoveFromListAsync(Guid id, MediaType type, int tmdbId) => SendAsync(HttpMethod.Delete, $"api/lists/{id}/items?type={type}&tmdbId={tmdbId}");
