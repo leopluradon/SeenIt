@@ -1871,3 +1871,6 @@ div.badge-pick { cursor: default; }
 .release-badge { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 999px; font-size: .8rem; font-weight: 700;
     background: var(--surface-3); color: var(--text-2); }
 .release-badge.now { background: var(--accent); color: var(--on-accent); }
+/* Settings for one layout only: the top links on wide screens, the tab bar on phones (same 900px switch as the bars). */
+@media (max-width: 900px) { .wide-only { display: none; } }
+@media (min-width: 901px) { .narrow-only { display: none; } }

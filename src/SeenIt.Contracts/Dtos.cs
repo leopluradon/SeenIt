@@ -140,7 +140,8 @@ public record UserPrefs(
     IReadOnlyList<string>? RateKinds = null,         // what "To rate" on Home offers: ScoreKinds keys; null = DefaultRateKinds
     bool HidePlaySources = false,                    // no "Letterboxd"/"Jellyfin" tag on plays in history and on title pages
     IReadOnlyList<int>? MyServices = null,           // streaming services you have (TMDB provider ids): Where to watch, Pick and the watchlist use them
-    bool HideSourcesFromOthers = false)              // privacy: others don't see where your plays came from, or "watching on Jellyfin"
+    bool HideSourcesFromOthers = false,              // privacy: others don't see where your plays came from, or "watching on Jellyfin"
+    IReadOnlyList<string>? DesktopNav = null)        // the website's links at the top after Home (UiPrefs.Tabs keys), in order; null = DefaultDesktopNav
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -218,6 +219,7 @@ public record UserPrefs(
         ProfileBanner = ProfileBanner is { Type: MediaType.Movie or MediaType.Show } ? ProfileBanner : null,
         ProfileBadge = ProfileBadge is { Length: > 0 and <= 80 } ? ProfileBadge : null,
         RateKinds = RateKinds?.Where(k => ScoreKinds.Any(x => x.Key == k)).Distinct().ToList(),
+        DesktopNav = DesktopNav?.Where(k => k != "home" && UiPrefs.Tabs.Any(t => t.Key == k)).Distinct().Take(UiPrefs.MaxDesktopNav).ToList(),
         MyServices = MyServices?.Where(id => id > 0).Distinct().Take(40).ToList(),
     };
     /// <summary>Whether you have this service (always true when you haven't said which you have).</summary>
@@ -292,7 +294,25 @@ public static class UiPrefs
         ("ratings", "Ratings", "star", "ratings"),
         ("friends", "Friends", "users", "friends"),
         ("search", "Search", "search", "search"),
+        // Everything else on the More page, so it can be a tab (app) or a link at the top (website) too.
+        ("notifications", "Alerts", "bell", "notifications"),
+        ("for-you", "For you", "eye", "for-you"),
+        ("pick", "Pick for me", "shuffle", "pick"),
+        ("favorites", "Favorites", "heart", "favorites"),
+        ("library", "Library", "download", "library"),
+        ("review-month", "This month", "clock", ReviewMonthHref),
+        ("review-year", "This year", "chart", ReviewYearHref),
+        ("goals", "Goals", "target", "goals"),
+        ("recommendations", "Recommendations", "send", "recommendations"),
+        ("people", "People", "user-plus", "people"),
+        ("duplicates", "Duplicates", "copy", "duplicates"),
+        ("settings", "Settings", "settings", "settings"),
     ];
+    /// <summary>Stand-ins for the current month's and year's review pages; the UI fills in the dates (UiLayout.Href).</summary>
+    public const string ReviewMonthHref = "review/{month}", ReviewYearHref = "review/{year}";
+    /// <summary>The website's links at the top, after Home, when you haven't picked your own (what it always had).</summary>
+    public static readonly string[] DefaultDesktopNav = ["discover", "progress", "calendar", "watchlist", "history", "lists", "stats", "friends"];
+    public const int MaxDesktopNav = 14;
 
     /// <summary>
     /// Home sections top to bottom: the saved order, then any sections it doesn't mention (added

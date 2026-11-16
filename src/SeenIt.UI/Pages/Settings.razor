@@ -305,34 +305,67 @@ else { <h1>Settings</h1> }
                 Show where each play came from (a “Letterboxd” or “Jellyfin” tag in your history and on movie and episode pages)
             </label>
             <p class="muted small">Each list can still switch between posters and rows. “Not interested” is always on a title's page.</p>
-            <h3>Tabs at the bottom of the app</h3>
-            <p class="muted small">Pick up to @UiPrefs.MaxTabs, in order. “More” is always last and links to everything else. These tabs appear on phones and narrow windows.</p>
-            <div class="tab-editor">
-                @for (var i = 0; i < tabs.Count; i++)
-                {
-                    var index = i;
-                    var t = UiPrefs.Tabs.First(x => x.Key == tabs[index]);
-                    <div class="tab-row" @key="t.Key">
-                        <Icon Name="@t.Icon" Size="18" />
-                        <span>@t.Label</span>
-                        <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveTab(index, -1)" aria-label="Move @t.Label left"><Icon Name="chevron-left" Size="16" /></button>
-                        <button class="icon-btn" disabled="@(index == tabs.Count - 1)" @onclick="() => MoveTab(index, 1)" aria-label="Move @t.Label right"><Icon Name="chevron-right" Size="16" /></button>
-                        <button class="icon-btn" disabled="@(tabs.Count == 1)" @onclick="() => RemoveTab(index)" aria-label="Remove @t.Label"><Icon Name="x" Size="16" /></button>
-                    </div>
-                }
-                <div class="tab-row fixed"><Icon Name="menu" Size="18" /><span>More</span><span class="muted small">always shown</span></div>
-            </div>
-            @if (tabs.Count < UiPrefs.MaxTabs)
-            {
-                <div class="chips">
-                    @foreach (var t in UiPrefs.Tabs.Where(x => !tabs.Contains(x.Key)))
+            @* Each bar only exists at its own width (the tab bar below 900px, the top links above), so each editor shows there. *@
+            <div class="wide-only">
+                <h3>Links at the top of the website</h3>
+                <p class="muted small">Home is always first. Pick the rest and their order; links that don't fit the window move into <b>More</b>, which also lists everything you haven't picked.</p>
+                <div class="tab-editor">
+                    <div class="tab-row fixed"><Icon Name="home" Size="18" /><span>Home</span><span class="muted small">always first</span></div>
+                    @for (var i = 0; i < topLinks.Count; i++)
                     {
-                        <button class="chip" @onclick="() => AddTab(t.Key)" @key="t.Key"><Icon Name="plus" Size="14" /> @t.Label</button>
+                        var index = i;
+                        var t = UiPrefs.Tabs.First(x => x.Key == topLinks[index]);
+                        <div class="tab-row" @key="t.Key">
+                            <Icon Name="@t.Icon" Size="18" />
+                            <span>@t.Label</span>
+                            <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveTopLink(index, -1)" aria-label="Move @t.Label left"><Icon Name="chevron-left" Size="16" /></button>
+                            <button class="icon-btn" disabled="@(index == topLinks.Count - 1)" @onclick="() => MoveTopLink(index, 1)" aria-label="Move @t.Label right"><Icon Name="chevron-right" Size="16" /></button>
+                            <button class="icon-btn" @onclick="() => RemoveTopLink(index)" aria-label="Remove @t.Label"><Icon Name="x" Size="16" /></button>
+                        </div>
                     }
                 </div>
-            }
-            else { <p class="muted small">Remove a tab to add a different one.</p> }
-            <button class="btn btn-sm btn-ghost" @onclick="ResetTabs">Reset to default</button>
+                @if (topLinks.Count < UiPrefs.MaxDesktopNav)
+                {
+                    <div class="chips">
+                        @foreach (var t in UiPrefs.Tabs.Where(x => x.Key != "home" && !topLinks.Contains(x.Key)))
+                        {
+                            <button class="chip" @onclick="() => AddTopLink(t.Key)" @key="t.Key"><Icon Name="plus" Size="14" /> @t.Label</button>
+                        }
+                    </div>
+                }
+                else { <p class="muted small">Remove a link to add a different one.</p> }
+                <button class="btn btn-sm btn-ghost" @onclick="ResetTopLinks">Reset to default</button>
+            </div>
+            <div class="narrow-only">
+                <h3>Tabs at the bottom of the app</h3>
+                <p class="muted small">Pick up to @UiPrefs.MaxTabs, in order. “More” is always last and links to everything else. These tabs appear on phones and narrow windows.</p>
+                <div class="tab-editor">
+                    @for (var i = 0; i < tabs.Count; i++)
+                    {
+                        var index = i;
+                        var t = UiPrefs.Tabs.First(x => x.Key == tabs[index]);
+                        <div class="tab-row" @key="t.Key">
+                            <Icon Name="@t.Icon" Size="18" />
+                            <span>@t.Label</span>
+                            <button class="icon-btn" disabled="@(index == 0)" @onclick="() => MoveTab(index, -1)" aria-label="Move @t.Label left"><Icon Name="chevron-left" Size="16" /></button>
+                            <button class="icon-btn" disabled="@(index == tabs.Count - 1)" @onclick="() => MoveTab(index, 1)" aria-label="Move @t.Label right"><Icon Name="chevron-right" Size="16" /></button>
+                            <button class="icon-btn" disabled="@(tabs.Count == 1)" @onclick="() => RemoveTab(index)" aria-label="Remove @t.Label"><Icon Name="x" Size="16" /></button>
+                        </div>
+                    }
+                    <div class="tab-row fixed"><Icon Name="menu" Size="18" /><span>More</span><span class="muted small">always shown</span></div>
+                </div>
+                @if (tabs.Count < UiPrefs.MaxTabs)
+                {
+                    <div class="chips">
+                        @foreach (var t in UiPrefs.Tabs.Where(x => !tabs.Contains(x.Key)))
+                        {
+                            <button class="chip" @onclick="() => AddTab(t.Key)" @key="t.Key"><Icon Name="plus" Size="14" /> @t.Label</button>
+                        }
+                    </div>
+                }
+                else { <p class="muted small">Remove a tab to add a different one.</p> }
+                <button class="btn btn-sm btn-ghost" @onclick="ResetTabs">Reset to default</button>
+            </div>
 
             <h3>Home page sections</h3>
             <p class="muted small">What shows on your home page, top to bottom.</p>
@@ -1745,6 +1778,20 @@ else { <h1>Settings</h1> }
     }
 
     private Task RemoveTab(int i) { tabs.RemoveAt(i); return SaveTabs(); }
+
+    // Links at the top of the website (UserPrefs.DesktopNav), edited like the tabs.
+    private List<string> topLinks => topLinksDraft ??= UiLayout.DesktopNav(Fmt.Prefs).Select(t => t.Key).ToList();
+    private List<string>? topLinksDraft;
+    private Task MoveTopLink(int i, int step)
+    {
+        var list = topLinks;
+        (list[i], list[i + step]) = (list[i + step], list[i]);
+        return SaveTopLinks();
+    }
+    private Task RemoveTopLink(int i) { topLinks.RemoveAt(i); return SaveTopLinks(); }
+    private Task AddTopLink(string key) { topLinks.Add(key); return SaveTopLinks(); }
+    private Task ResetTopLinks() { topLinksDraft = [.. UiPrefs.DefaultDesktopNav]; return SavePrefs(p => p with { DesktopNav = null }, "Links reset"); }
+    private Task SaveTopLinks() => SavePrefs(p => p with { DesktopNav = topLinks.ToList() }, "Links updated");
     private Task AddTab(string key) { tabs.Add(key); return SaveTabs(); }
     private Task ResetTabs() { tabs = UiPrefs.DefaultTabs.ToList(); return SaveTabs(); }
 

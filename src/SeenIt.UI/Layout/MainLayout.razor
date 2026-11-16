@@ -19,16 +19,15 @@
                 <Authorized>
                     @* Links that don't fit a narrower window drop out from the right (seenit.navFit measures; data-fit is the
                        order they go in) and reappear in the More menu, which also has the pages that never had a link up here. *@
+                    @{ var nav = UiLayout.DesktopNav(Fmt.Prefs); }
                     <nav class="topnav" aria-label="Main">
                         <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
-                        <NavLink href="discover" data-fit="8">Discover</NavLink>
-                        <NavLink href="progress" data-fit="7">Progress</NavLink>
-                        <NavLink href="calendar" data-fit="6">Calendar</NavLink>
-                        <NavLink href="watchlist" data-fit="5">Watchlist</NavLink>
-                        <NavLink href="history" data-fit="4">History</NavLink>
-                        <NavLink href="lists" data-fit="3">Lists</NavLink>
-                        <NavLink href="stats" data-fit="2">Stats</NavLink>
-                        <NavLink href="friends" data-fit="1">Friends</NavLink>
+                        @for (var n = 0; n < nav.Count; n++)
+                        {
+                            var t = nav[n];
+                            @* The rightmost link has the lowest data-fit, so it's the first to give way. *@
+                            <NavLink href="@UiLayout.Href(t)" data-fit="@(nav.Count - n)" @key="t.Key">@t.Label</NavLink>
+                        }
                     </nav>
                     <div class="navmore">
                         <button type="button" class="navmore-btn @(moreOpen ? "open" : "")" @onclick="() => moreOpen = !moreOpen" aria-expanded="@moreOpen" aria-haspopup="true">
@@ -38,21 +37,16 @@
                         {
                             <div class="menu-backdrop" @onclick="() => moreOpen = false"></div>
                             <div class="menu navmore-menu" @onclick="() => moreOpen = false">
-                                <a href="discover" data-fit-menu="8"><Icon Name="compass" Size="16" /> Discover</a>
-                                <a href="progress" data-fit-menu="7"><Icon Name="progress" Size="16" /> Progress</a>
-                                <a href="calendar" data-fit-menu="6"><Icon Name="calendar" Size="16" /> Calendar</a>
-                                <a href="watchlist" data-fit-menu="5"><Icon Name="bookmark" Size="16" /> Watchlist</a>
-                                <a href="history" data-fit-menu="4"><Icon Name="history" Size="16" /> History</a>
-                                <a href="lists" data-fit-menu="3"><Icon Name="list" Size="16" /> Lists</a>
-                                <a href="stats" data-fit-menu="2"><Icon Name="chart" Size="16" /> Stats</a>
-                                <a href="friends" data-fit-menu="1"><Icon Name="users" Size="16" /> Friends</a>
-                                <a href="for-you"><Icon Name="eye" Size="16" /> For you</a>
-                                <a href="pick"><Icon Name="shuffle" Size="16" /> Pick for me</a>
-                                <a href="@($"review/{DateTime.Today.Year}/{DateTime.Today.Month}")"><Icon Name="clock" Size="16" /> @DateTime.Today.ToString("MMMM") so far</a>
-                                <a href="@($"review/{DateTime.Today.Year}")"><Icon Name="chart" Size="16" /> @DateTime.Today.Year so far</a>
-                                <a href="goals"><Icon Name="target" Size="16" /> Goals</a>
-                                <a href="library"><Icon Name="download" Size="16" /> Library</a>
-                                <a href="duplicates"><Icon Name="copy" Size="16" /> Duplicates</a>
+                                @for (var n = 0; n < nav.Count; n++)
+                                {
+                                    var t = nav[n];
+                                    <a href="@UiLayout.Href(t)" data-fit-menu="@(nav.Count - n)" @key="@($"fit-{t.Key}")"><Icon Name="@t.Icon" Size="16" /> @t.Label</a>
+                                }
+                                @foreach (var t in UiPrefs.Tabs.Where(t => t.Key is not ("home" or "search") && nav.All(x => x.Key != t.Key)))
+                                {
+                                    <a href="@UiLayout.Href(t)" @key="t.Key"><Icon Name="@t.Icon" Size="16" /> @t.Label</a>
+                                }
+                                <a href="settings#layout"><Icon Name="edit" Size="16" /> Choose these links</a>
                                 <a href="more"><Icon Name="menu" Size="16" /> Everything</a>
                             </div>
                         }
@@ -115,7 +109,7 @@
             <nav class="tabbar" aria-label="Sections" style="grid-template-columns: repeat(@(tabs.Count + 1), 1fr)">
                 @foreach (var t in tabs)
                 {
-                    <NavLink href="@t.Href" Match="@(t.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" @key="t.Key"><Icon Name="@t.Icon" /><span>@t.Label</span></NavLink>
+                    <NavLink href="@UiLayout.Href(t)" Match="@(t.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" @key="t.Key"><Icon Name="@t.Icon" /><span>@t.Label</span></NavLink>
                 }
                 <NavLink href="more"><Icon Name="menu" /><span>More</span></NavLink>
             </nav>

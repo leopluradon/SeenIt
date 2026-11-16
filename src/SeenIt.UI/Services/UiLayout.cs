@@ -11,5 +11,17 @@ public static class UiLayout
         return keys.Select(k => UiPrefs.Tabs.FirstOrDefault(t => t.Key == k)).Where(t => t.Key is not null).ToList();
     }
 
+    /// <summary>The website's links at the top, after Home: your pick (Settings → Layout), or the usual ones.</summary>
+    public static IReadOnlyList<(string Key, string Label, string Icon, string Href)> DesktopNav(UserPrefs prefs) =>
+        (prefs.DesktopNav ?? UiPrefs.DefaultDesktopNav).Select(k => UiPrefs.Tabs.FirstOrDefault(t => t.Key == k)).Where(t => t.Key is not null).ToList();
+
+    /// <summary>Where a tab goes; the review tabs point at the current month or year.</summary>
+    public static string Href((string Key, string Label, string Icon, string Href) t) => t.Href switch
+    {
+        UiPrefs.ReviewMonthHref => $"review/{DateTime.Today.Year}/{DateTime.Today.Month}",
+        UiPrefs.ReviewYearHref => $"review/{DateTime.Today.Year}",
+        var h => h,
+    };
+
     public static bool Shows(MeDto? me, string section) => me?.HiddenHomeSections?.Contains(section) != true;
 }
