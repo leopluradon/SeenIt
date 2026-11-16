@@ -232,8 +232,8 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
     {
         TmdbPage<TmdbListItem>? res = type switch
         {
-            "movie" => await tmdb.SearchMovieAsync(query, null, ct),
-            "show" => await tmdb.SearchShowAsync(query, null, ct),
+            "movie" => await tmdb.SearchMovieAsync(query, null, ct, page),
+            "show" => await tmdb.SearchShowAsync(query, null, ct, page),
             _ => await tmdb.SearchMultiAsync(query, page, ct),
         };
         if (res is null) return new([], 1, 0, 0);

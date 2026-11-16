@@ -839,6 +839,35 @@ else { <h1>Settings</h1> }
 
             <MatchImportDialog JobId="matchJob" @bind-Item="matching" OnMatched="LoadImports" />
 
+            @* The file is read first and what it holds shown here; nothing is imported until you say so. *@
+            <Modal Open="staged is not null" OpenChanged="o => { if (!o) staged = null; }" Title="@(staged is { } sg ? $"Import from {WatchSources.Name(sg.Kind)}?" : "")">
+                @if (staged is { } st)
+                {
+                    var pv = st.Preview;
+                    <div class="stack">
+                        <p class="muted small">@st.FileName@(onlySince && sinceDate is { } sdv ? $" · only what's dated {sdv.ToString(Fmt.DateLong)} or later" : "")@(importParts != ImportParts.All ? $" · {PartsPicker.Describe(importParts)}" : "")</p>
+                        @if (pv.Total == 0) { <p>Nothing in this file matches what you chose to import.</p> }
+                        else
+                        {
+                            <ul class="import-preview">
+                                @if (pv.Plays > 0) { <li><b>@pv.Plays.ToString("N0")</b> play@(pv.Plays == 1 ? "" : "s")@(pv.From is { } f && pv.To is { } t ? $", {f.ToString(Fmt.DateLong)} to {t.ToString(Fmt.DateLong)}" : "")</li> }
+                                @if (pv.ShowsWithProgress > 0) { <li><b>@pv.ShowsWithProgress.ToString("N0")</b> show@(pv.ShowsWithProgress == 1 ? "" : "s") with progress (episodes come in without dates)</li> }
+                                @if (pv.Ratings > 0) { <li><b>@pv.Ratings.ToString("N0")</b> rating@(pv.Ratings == 1 ? "" : "s")</li> }
+                                @if (pv.Watchlist > 0) { <li><b>@pv.Watchlist.ToString("N0")</b> watchlist entr@(pv.Watchlist == 1 ? "y" : "ies")</li> }
+                                @if (pv.ListItems > 0) { <li><b>@pv.ListItems.ToString("N0")</b> entr@(pv.ListItems == 1 ? "y" : "ies") in @pv.Lists list@(pv.Lists == 1 ? "" : "s")</li> }
+                                @if (pv.Favorites > 0) { <li><b>@pv.Favorites.ToString("N0")</b> favorite@(pv.Favorites == 1 ? "" : "s")</li> }
+                                @if (pv.Library > 0) { <li><b>@pv.Library.ToString("N0")</b> librar@(pv.Library == 1 ? "y entry" : "y entries")</li> }
+                            </ul>
+                            <p class="muted small">Anything you already have is skipped. Titles are matched on TMDB as it runs, which can take a few minutes; you can undo the whole import afterwards.</p>
+                        }
+                        <div class="inline">
+                            <button class="btn btn-primary" disabled="@(uploading || pv.Total == 0)" @onclick="ConfirmImport"><Icon Name="upload" Size="16" /> @(uploading ? "Starting…" : "Import")</button>
+                            <button class="btn btn-ghost" @onclick="() => staged = null">Cancel</button>
+                        </div>
+                    </div>
+                }
+            </Modal>
+
             @if (imports is { Count: > 0 })
             {
                 <h3>Recent imports</h3>
@@ -1230,7 +1259,16 @@ else { <h1>Settings</h1> }
 
     private async Task LoadImports()
     {
-        try { imports = await Api.ImportsAsync(); }
+        try
+        {
+            var was = imports?.Where(j => j.Status is ImportStatus.Queued or ImportStatus.Running).Select(j => j.Id).ToHashSet();
+            imports = await Api.ImportsAsync();
+            // One that was running when this page last looked has finished: say so.
+            foreach (var j in imports.Where(j => was?.Contains(j.Id) == true && j.Status is ImportStatus.Completed or ImportStatus.Failed))
+                Toasts.Show(j.Status == ImportStatus.Completed
+                    ? $"{WatchSources.Name(j.Kind)} import done: {j.Imported:N0} added, {j.Skipped:N0} already there" + (j.Failed > 0 ? $", {j.Failed:N0} to match below" : "")
+                    : $"{WatchSources.Name(j.Kind)} import stopped: {j.Message}", error: j.Status == ImportStatus.Failed);
+        }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
@@ -1265,6 +1303,10 @@ else { <h1>Settings</h1> }
         if (on) sinceDate ??= LastImportDay ?? DateOnly.FromDateTime(DateTime.Today.AddDays(-30));
     }
 
+    private sealed record StagedImport(ImportKind Kind, string FileName, byte[] Content, ImportPreview Preview);
+    private StagedImport? staged;
+
+    /// <summary>A file was picked: read it and show what it holds; ConfirmImport starts it.</summary>
     private async Task Upload(ImportKind kind, InputFileChangeEventArgs e)
     {
         var file = e.File;
@@ -1276,9 +1318,24 @@ else { <h1>Settings</h1> }
             await using var stream = file.OpenReadStream(MaxUpload);
             using var buffer = new MemoryStream();
             await stream.CopyToAsync(buffer);
-            buffer.Position = 0;
-            await Api.UploadImportAsync(kind, importParts, file.Name, buffer, onlySince ? sinceDate : null);
-            Toasts.Show($"{WatchSources.Name(kind)} import started" + (onlySince && sinceDate is { } d ? $": only what's dated {d.ToString(Fmt.DateLong)} or later" : ""));
+            var bytes = buffer.ToArray();
+            var preview = await Api.PreviewImportAsync(kind, importParts, file.Name, bytes, onlySince ? sinceDate : null);
+            staged = new StagedImport(kind, file.Name, bytes, preview);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        uploading = false;
+    }
+
+    private async Task ConfirmImport()
+    {
+        if (staged is not { } st) return;
+        uploading = true;
+        try
+        {
+            using var buffer = new MemoryStream(st.Content);
+            await Api.UploadImportAsync(st.Kind, importParts, st.FileName, buffer, onlySince ? sinceDate : null);
+            staged = null;
+            Toasts.Show($"{WatchSources.Name(st.Kind)} import started. You can leave this page: it carries on, and notifications (if they're on) say when it's done.");
             await LoadImports();
         }
         catch (Exception ex) { Toasts.Error(ex); }

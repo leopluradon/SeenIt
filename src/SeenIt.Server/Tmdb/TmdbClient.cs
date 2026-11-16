@@ -96,11 +96,11 @@ public class TmdbClient
     public Task<TmdbPage<TmdbSearchPerson>?> SearchPersonAsync(string query, int page, CancellationToken ct = default) =>
         GetAsync<TmdbPage<TmdbSearchPerson>>($"search/person?query={Uri.EscapeDataString(query)}&page={page}&include_adult=false", TimeSpan.FromMinutes(30), ct);
 
-    public Task<TmdbPage<TmdbListItem>?> SearchMovieAsync(string query, int? year, CancellationToken ct = default) =>
-        GetAsync<TmdbPage<TmdbListItem>>($"search/movie?query={Uri.EscapeDataString(query)}&include_adult=false" + (year is { } y ? $"&primary_release_year={y}" : ""), TimeSpan.FromHours(6), ct);
+    public Task<TmdbPage<TmdbListItem>?> SearchMovieAsync(string query, int? year, CancellationToken ct = default, int page = 1) =>
+        GetAsync<TmdbPage<TmdbListItem>>($"search/movie?query={Uri.EscapeDataString(query)}&include_adult=false" + (year is { } y ? $"&primary_release_year={y}" : "") + (page > 1 ? $"&page={page}" : ""), TimeSpan.FromHours(6), ct);
 
-    public Task<TmdbPage<TmdbListItem>?> SearchShowAsync(string query, int? year, CancellationToken ct = default) =>
-        GetAsync<TmdbPage<TmdbListItem>>($"search/tv?query={Uri.EscapeDataString(query)}&include_adult=false" + (year is { } y ? $"&first_air_date_year={y}" : ""), TimeSpan.FromHours(6), ct);
+    public Task<TmdbPage<TmdbListItem>?> SearchShowAsync(string query, int? year, CancellationToken ct = default, int page = 1) =>
+        GetAsync<TmdbPage<TmdbListItem>>($"search/tv?query={Uri.EscapeDataString(query)}&include_adult=false" + (year is { } y ? $"&first_air_date_year={y}" : "") + (page > 1 ? $"&page={page}" : ""), TimeSpan.FromHours(6), ct);
 
     /// <summary>
     /// TMDB's own upcoming/now_playing lists overlap (both are date windows across every country), so

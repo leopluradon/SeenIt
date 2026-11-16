@@ -24,12 +24,18 @@
     {
         <button class="chip @(CurrentList == key ? "on" : "")" @onclick="() => Go(Type, key)">@label</button>
     }
+    @if (Session.Me is not null)
+    {
+        <button class="chip chip-toggle @(hideSeen ? "on" : "")" aria-pressed="@hideSeen" @onclick="() => hideSeen = !hideSeen" title="Leave out what you've seen or started">
+            @if (hideSeen) { <Icon Name="check" Size="14" /> } Hide seen
+        </button>
+    }
 </div>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items.Count == 0 && loading) { <Spinner /> }
 <div class="poster-grid">
-    @foreach (var m in items) { <PosterCard Media="m" OnDismiss="@(Session.Me is null ? default : EventCallback.Factory.Create<MediaSummary>(this, Dismiss))" @key="(m.Type, m.TmdbId)" /> }
+    @foreach (var m in items.Where(m => !hideSeen || m.Watched != true)) { <PosterCard Media="m" OnDismiss="@(Session.Me is null ? default : EventCallback.Factory.Create<MediaSummary>(this, Dismiss))" @key="(m.Type, m.TmdbId)" /> }
 </div>
 @if (page < totalPages)
 {
@@ -51,9 +57,21 @@
     private bool loading;
     private string? error;
 
+    /// <summary>What's been loaded this session, per list, so Back from a title finds the page as long as you left it
+    /// (and the browser can put you back where you were scrolled).</summary>
+    private static readonly Dictionary<string, (List<MediaSummary> Items, int Page, int TotalPages, DateTime At)> Loaded = [];
+    private static bool hideSeen;
+    private string Key => $"{Type}/{CurrentList}";
+
     protected override Task OnParametersSetAsync()
     {
         items.Clear();
+        if (Loaded.TryGetValue(Key, out var was) && DateTime.UtcNow - was.At < TimeSpan.FromMinutes(15))
+        {
+            items.AddRange(was.Items);
+            (page, totalPages) = (was.Page, was.TotalPages);
+            return Task.CompletedTask;
+        }
         page = 0;
         return Load();
     }
@@ -86,6 +104,7 @@
             items.AddRange(res.Items.Where(i => seen.Add(i.TmdbId)));
             page = res.Page;
             totalPages = Math.Min(res.TotalPages, 20);
+            Loaded[Key] = ([.. items], page, totalPages, DateTime.UtcNow);
         }
         catch (Exception ex) { error = ex.Message; }
         loading = false;
@@ -97,6 +116,7 @@
     {
         var at = items.IndexOf(m);
         items.Remove(m);
+        if (Loaded.TryGetValue(Key, out var was)) Loaded[Key] = was with { Items = [.. items] };
         try
         {
             await Api.MarkNotInterestedAsync(m.Type, m.TmdbId);

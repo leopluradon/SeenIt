@@ -108,7 +108,7 @@
     // The tab lives in the URL (?tab=), so Activity's filters, back and forward all work.
     protected override async Task OnParametersSetAsync()
     {
-        var next = Tab is "feed" or "followers" or "find" ? Tab : "following";
+        var next = Tab is "following" or "followers" or "find" ? Tab : "feed";   // Activity is the page's front
         if (next == loaded) return;   // only a filter changed: the history view reloads itself
         if (requests is null) { try { requests = await Api.FollowRequestsAsync(); } catch { requests = []; } }
         loaded = next;
@@ -133,7 +133,7 @@
         finally { answering = false; }
     }
 
-    private void Show(string t) => Nav.NavigateTo(t == "following" ? "friends" : $"friends?tab={t}");
+    private void Show(string t) => Nav.NavigateTo(t == "feed" ? "friends" : $"friends?tab={t}");
 
     private async Task Load()
     {
@@ -152,7 +152,7 @@
 
     private async Task Search()
     {
-        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2) return;
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2) { error = "Type at least two letters of a username or name."; return; }
         error = null;
         try { results = await Api.SearchUsersAsync(query); }
         catch (Exception ex) { error = ex.Message; }

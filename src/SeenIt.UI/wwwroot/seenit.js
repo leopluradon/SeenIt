@@ -192,6 +192,13 @@ window.seenit = {
         if (window.seenitCtx) { window.seenitCtx.dotnet = dotnet; return; }
         const st = window.seenitCtx = { dotnet, timer: null, x: 0, y: 0, opened: 0 };
         const find = t => t && t.closest ? t.closest('[data-ctx]') : null;
+        // A ⋯ button on a card: the same menu, under the button.
+        window.seenit.openMenuFor = button => {
+            const el = find(button);
+            if (!el) return;
+            const r = button.getBoundingClientRect();
+            open(el, r.left, r.bottom, matchMedia('(pointer: coarse)').matches);
+        };
         const open = (el, x, y, touch) =>
             st.dotnet.invokeMethodAsync('Open', el.getAttribute('data-ctx'), x, y, window.innerWidth, window.innerHeight, touch);
         const cancel = () => { if (st.timer) { clearTimeout(st.timer); st.timer = null; } };

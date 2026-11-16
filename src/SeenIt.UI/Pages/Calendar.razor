@@ -1,6 +1,7 @@
 @page "/calendar"
 @attribute [Authorize]
 @inject ApiClient Api
+@inject IJSRuntime Js
 <PageTitle>Calendar · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -17,11 +18,11 @@
     </div>
 </div>
 <div class="chips">
-    <button class="chip @(kind is null ? "on" : "")" @onclick="() => kind = null">All</button>
-    <button class="chip @(kind == MediaType.Movie ? "on" : "")" @onclick="() => kind = MediaType.Movie">Movies</button>
-    <button class="chip @(kind == MediaType.Episode ? "on" : "")" @onclick="() => kind = MediaType.Episode">Shows</button>
-    <button class="chip @(hideWatched ? "on" : "")" @onclick="() => hideWatched = !hideWatched" aria-pressed="@hideWatched">Hide watched</button>
-    <button class="chip @(hidePremieres ? "on" : "")" @onclick="() => hidePremieres = !hidePremieres" aria-pressed="@hidePremieres" title="Season premieres of shows that are only on your watchlist">Hide premieres of shows I haven't started</button>
+    <button class="chip @(kind is null ? "on" : "")" @onclick="() => SetFilter(() => kind = null)">All</button>
+    <button class="chip @(kind == MediaType.Movie ? "on" : "")" @onclick="() => SetFilter(() => kind = MediaType.Movie)">Movies</button>
+    <button class="chip @(kind == MediaType.Episode ? "on" : "")" @onclick="() => SetFilter(() => kind = MediaType.Episode)">Shows</button>
+    <button class="chip @(hideWatched ? "on" : "")" @onclick="() => SetFilter(() => hideWatched = !hideWatched)" aria-pressed="@hideWatched">Hide watched</button>
+    <button class="chip @(hidePremieres ? "on" : "")" @onclick="() => SetFilter(() => hidePremieres = !hidePremieres)" aria-pressed="@hidePremieres" title="Season premieres of shows that are only on your watchlist">Hide premieres of shows I haven't started</button>
 </div>
 <p class="muted small">@(month ? anchor.ToString("MMMM yyyy") : $"{(from).ToString(Fmt.DateShort)} – {(from.AddDays(Days - 1)).ToString(Fmt.DateLong)}")</p>
 
@@ -65,7 +66,7 @@ else if (items is not null)
         @if (shown.Count == 0) { <Empty Title="Nothing airing in this window." /> }
         @foreach (var day in shown.GroupBy(i => i.Date))
         {
-            <section class="cal-day @(day.Key == today ? "today" : "")">
+            <section class="cal-day @(day.Key == today ? "today" : "") @(day.Key >= today ? "from-today" : "")">
                 <h3 class="day-head">@Fmt.Day(day.Key) <span class="muted small">@day.Key.ToString(Fmt.DateShort)</span>@if (day.Key > today.AddDays(1) && Fmt.Countdown(day.Key) is { } cd) { <span class="countdown small"> · @cd</span> }</h3>
                 <div class="mini-list">@foreach (var c in day) { @Entry(c) }</div>
             </section>
@@ -107,7 +108,46 @@ else if (items is not null)
         && (!hideWatched || !c.Watched)
         && (!hidePremieres || c.Type != MediaType.Episode || c.Started || c.EpisodeNumber != 1);
 
-    protected override Task OnInitializedAsync() => Load();
+    /// <summary>Where you were this session (Back from an episode, or another tab, comes back to it), and the view and
+    /// filters, which this device remembers.</summary>
+    private static (DateOnly Anchor, DateOnly From, DateOnly? Picked, DateOnly Day)? Was;
+    private const string PrefsKey = "seenit.calendar";
+    private bool scrolled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (await Js.InvokeAsync<string?>("localStorage.getItem", PrefsKey) is { } saved && saved.Split('|') is [var v, var k, var w, var p])
+            {
+                month = v == "month";
+                kind = Enum.TryParse<MediaType>(k, out var mk) ? mk : null;
+                hideWatched = w == "1";
+                hidePremieres = p == "1";
+            }
+        }
+        catch (JSException) { }
+        if (Was is { } was && was.Day == DateOnly.FromDateTime(DateTime.Today)) (anchor, from, picked) = (was.Anchor, was.From, was.Picked);
+        await Load();
+    }
+
+    private async Task SetFilter(Action change)
+    {
+        change();
+        try { await Js.InvokeVoidAsync("localStorage.setItem", PrefsKey, $"{(month ? "month" : "list")}|{kind}|{(hideWatched ? 1 : 0)}|{(hidePremieres ? 1 : 0)}"); }
+        catch (JSException) { }
+    }
+
+    /// <summary>The list starts a few days back (did I catch that?); bring today to the top once it's drawn.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        Was = (anchor, from, picked, DateOnly.FromDateTime(DateTime.Today));
+        if (scrolled || month || items is null) return;
+        scrolled = true;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (from > today || from.AddDays(Days) <= today) return;
+        try { await Js.InvokeVoidAsync("seenit.scrollToFirst", ".cal-day.from-today"); } catch (JSException) { }
+    }
 
     private async Task Load()
     {
@@ -130,6 +170,7 @@ else if (items is not null)
     {
         if (m == month) return Task.CompletedTask;
         month = m;
+        _ = SetFilter(() => { });
         anchor = month ? new DateOnly(from.AddDays(3).Year, from.AddDays(3).Month, 1) : anchor;
         if (!month) from = anchor.AddDays(-3);
         return Load();
@@ -147,6 +188,7 @@ else if (items is not null)
         var today = DateOnly.FromDateTime(DateTime.Today);
         anchor = today; picked = today;
         from = today.AddDays(-3);
+        scrolled = false;   // and bring today into view again
         return Load();
     }
 

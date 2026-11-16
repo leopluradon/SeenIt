@@ -23,8 +23,14 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
 
     public async Task RunAsync(ImportJob job, CancellationToken ct)
     {
-        var files = ImportFiles.Read(job.FileName, job.Payload ?? []);
-        var parsed = job.Kind switch
+        await RunAsync(job, Parse(job.Kind, job.FileName, job.Payload ?? []), ct);
+    }
+
+    /// <summary>Reads an uploaded export into rows (no matching yet), for an import or its preview.</summary>
+    public static ParsedImport Parse(ImportKind kind, string fileName, byte[] payload)
+    {
+        var files = ImportFiles.Read(fileName, payload);
+        return kind switch
         {
             ImportKind.Trakt => TraktParser.Parse(files),
             ImportKind.Letterboxd => LetterboxdParser.Parse(files),
@@ -32,7 +38,6 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             ImportKind.TvTime => TvTimeParser.Parse(files),
             _ => SimklParser.Parse(files),
         };
-        await RunAsync(job, parsed, ct);
     }
 
     /// <summary>Imports already-parsed rows (the Letterboxd feed sync builds them itself).</summary>

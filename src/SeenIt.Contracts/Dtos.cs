@@ -225,13 +225,14 @@ public static class UiPrefs
 {
     public static readonly (string Key, string Label)[] HomeSections =
     [
+        // The default order: what you'll act on first (accounts that saved an order keep theirs).
         ("now", "Watching now"),
-        ("onthisday", "On this day"),
-        ("review", "Month / year in review banner"),
-        ("goals", "Goals"),
         ("upnext", "Up next"),
         ("torate", "To rate"),
         ("upcoming", "Coming up"),
+        ("onthisday", "On this day"),
+        ("review", "Month / year in review banner"),
+        ("goals", "Goals"),
         ("recent", "Recently watched"),
         ("foryou", "Picked for you"),
         ("friends", "Friends' activity"),
@@ -347,7 +348,9 @@ public record MediaSummary(
     string? PosterPath,
     string? BackdropPath,
     double? VoteAverage,
-    string? Overview);
+    string? Overview,
+    bool? Watched = null,       // the viewer has seen it (a movie) or started it (a show); filled on browse, search and "you might also like"
+    bool? OnWatchlist = null);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int TotalPages, int TotalResults);
 
@@ -730,6 +733,15 @@ public static class UpNextSorts
         UpNextSort.FewestLeft => items.OrderBy(p => p.NextEpisode is null ? int.MaxValue : p.Aired - p.Watched).ThenByDescending(p => p.LastWatchedAt),
         _ => items.OrderByDescending(p => p.LastWatchedAt),
     };
+    /// <summary>
+    /// Stopped partway and not touched in six months: kept out of Up next (Progress lists it separately) until you
+    /// watch another episode. A show you'd caught up on whose new season has since aired doesn't count.
+    /// </summary>
+    public static bool Stalled(ShowProgressDto p, DateTimeOffset now) =>
+        p is { NextEpisode: { } next, Status: ShowTrackStatus.Watching, Rewatch: null, LastWatchedAt: { } last }
+        && now - last > TimeSpan.FromDays(183)
+        && (next.AirDate is not { } aired || aired <= DateOnly.FromDateTime(last.UtcDateTime));
+
     public static string Label(UpNextSort s) => s switch { UpNextSort.NewestEpisode => "Newest episode", UpNextSort.FewestLeft => "Fewest left", _ => "Last watched" };
 }
 
@@ -870,6 +882,12 @@ public record JellyfinEventDto(DateTimeOffset ReceivedAt, string? ItemName, stri
 public record JellyfinThresholdRequest(int WatchedThresholdPercent);
 
 public enum ImportKind { Trakt, Letterboxd, Imdb, TvTime, Simkl }
+
+/// <summary>What an export holds, read before importing (after the parts and "only since" choices). Nothing is matched or saved yet.</summary>
+public record ImportPreview(int Plays, int Ratings, int Watchlist, int ListItems, int Lists, int Favorites, int Library, int ShowsWithProgress, DateOnly? From, DateOnly? To)
+{
+    public int Total => Plays + Ratings + Watchlist + ListItems + Favorites + Library + ShowsWithProgress;
+}
 public enum ImportStatus { Queued, Running, Completed, Failed }
 
 /// <summary>Kinds of entries in the admin activity log.</summary>

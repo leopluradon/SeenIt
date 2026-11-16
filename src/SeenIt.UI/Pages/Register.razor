@@ -105,7 +105,7 @@
         try
         {
             await Session.RegisterAsync(model.UserName.Trim(), model.Email.Trim(), model.Password, invite?.Valid == true ? code : null);
-            Nav.NavigateTo(Login.SafeReturn(ReturnUrl) is { Length: > 0 } r ? r : "settings?welcome=1");
+            Nav.NavigateTo(Login.SafeReturn(ReturnUrl) is { Length: > 0 } r ? r : "");   // Home, which shows "Get started" while you have nothing
         }
         catch (Exception ex) { error = ex.Message; }
         busy = false;

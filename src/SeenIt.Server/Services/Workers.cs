@@ -95,6 +95,19 @@ public class ImportWorker(IServiceScopeFactory scopes, ILogger<ImportWorker> log
         await scope.ServiceProvider.GetRequiredService<ActivityService>().LogAsync(job.UserId, ActivityKind.Import,
             detail: $"{job.Kind} {job.FileName} {status.ToString().ToLowerInvariant()}: {message}",
             source: WatchSources.ForImport(job.Kind));
+        // Long imports: say when it's done, on devices with notifications on (you've probably left the page).
+        if (job.StartedAt is { } started && finished - started > TimeSpan.FromSeconds(30))
+        {
+            try
+            {
+                var name = WatchSources.Name(job.Kind);
+                await scope.ServiceProvider.GetRequiredService<PushService>().SendAsync(job.UserId, new PushPayload(
+                    status == ImportStatus.Completed ? $"Your {name} import is done" : $"Your {name} import stopped",
+                    status == ImportStatus.Completed ? $"{job.Imported:N0} added, {job.Skipped:N0} already there" + (job.Failed > 0 ? $", {job.Failed:N0} to match by hand." : ".") : message ?? "",
+                    "settings?tab=data#imports", Tag: $"import-{job.Id}"), CancellationToken.None);
+            }
+            catch (Exception ex) { log.LogWarning(ex, "Couldn't send the import-finished notification"); }
+        }
         return true;
     }
 }

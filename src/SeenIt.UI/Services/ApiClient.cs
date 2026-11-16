@@ -397,6 +397,18 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         return result;
     }
     public Task<List<ImportJobDto>> ImportsAsync() => GetAsync<List<ImportJobDto>>("api/imports");
+    /// <summary>What an export holds, before importing it.</summary>
+    public async Task<ImportPreview> PreviewImportAsync(ImportKind kind, ImportParts parts, string fileName, byte[] content, DateOnly? since = null)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(content);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        form.Add(file, "file", fileName);
+        using var resp = await SendRawAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/imports/{kind}/preview?parts={(int)parts}" + (since is { } d ? $"&since={d:yyyy-MM-dd}" : "")) { Content = form }, auth: true);
+        await EnsureOkAsync(resp);
+        return (await resp.Content.ReadFromJsonAsync<ImportPreview>(Json))!;
+    }
+
     public async Task UploadImportAsync(ImportKind kind, ImportParts parts, string fileName, Stream content, DateOnly? since = null)
     {
         using var form = new MultipartFormDataContent();

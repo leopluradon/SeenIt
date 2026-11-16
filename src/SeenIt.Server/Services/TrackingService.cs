@@ -1015,7 +1015,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var progress = await GetProgressAsync(userId, ct);
         var me = await db.Users.Where(u => u.Id == userId).Select(u => new { u.UpNextSort, u.PrefsJson }).FirstOrDefaultAsync(ct);
         var prefs = UserPrefsStore.Read(me?.PrefsJson);
-        var upNext = UpNextSorts.Apply(progress.Where(p => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching), me?.UpNextSort ?? UpNextSort.LastWatched)
+        var upNext = UpNextSorts.Apply(progress.Where(p => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching && !UpNextSorts.Stalled(p, DateTimeOffset.UtcNow)), me?.UpNextSort ?? UpNextSort.LastWatched)
             .Take(prefs.Count("upnext")).ToList();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var upcoming = (await GetCalendarAsync(userId, today, prefs.ComingUpDays, ct)).Take(prefs.Count("upcoming")).ToList();

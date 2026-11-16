@@ -34,10 +34,12 @@ public static class ApiEndpoints
 
     private static void MapCatalog(RouteGroupBuilder g)
     {
-        g.MapGet("/search", (string q, string? type, int? page, CatalogService c, CancellationToken ct) =>
-            string.IsNullOrWhiteSpace(q)
-                ? Task.FromResult(new PagedResult<MediaSummary>([], 1, 0, 0))
-                : c.SearchAsync(q.Trim(), type, page ?? 1, ct));
+        g.MapGet("/search", async (string q, string? type, int? page, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(q)) return new PagedResult<MediaSummary>([], 1, 0, 0);
+            var result = await c.SearchAsync(q.Trim(), type, page ?? 1, ct);
+            return result with { Items = await UserMarks.ApplyAsync(db, p.OptionalUserId(), result.Items, ct) };
+        });
 
         // Other sites' scores (IMDb, Rotten Tomatoes, Metacritic...), loaded after the page.
         g.MapGet("/movie/{id:int}/scores", (int id, ScoreService s, CancellationToken ct) => s.GetAsync(MediaType.Movie, id, ct));
@@ -71,22 +73,25 @@ public static class ApiEndpoints
             var code = saved ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r.ToUpperInvariant() : "US");
             var result = await c.BrowseAsync(type, list, page ?? 1, ct, code);
             var hidden = await c.NotInterestedAsync(p.OptionalUserId(), ct);
-            return hidden.Count == 0 ? result : result with { Items = result.Items.Where(m => !hidden.Contains((m.Type, m.TmdbId))).ToList() };
+            var items = hidden.Count == 0 ? result.Items : result.Items.Where(m => !hidden.Contains((m.Type, m.TmdbId))).ToList();
+            return result with { Items = await UserMarks.ApplyAsync(db, p.OptionalUserId(), items, ct) };
         });
 
         // "You might also like" leaves out what you marked not interested.
-        g.MapGet("/movie/{id:int}", async (int id, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
+        g.MapGet("/movie/{id:int}", async (int id, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
         {
             if (await c.GetMovieAsync(id, p.OptionalUserId(), ct) is not { } m) return Results.NotFound();
             var hidden = await c.NotInterestedAsync(p.OptionalUserId(), ct);
-            return Results.Ok(hidden.Count == 0 ? m : m with { Recommendations = m.Recommendations.Where(r => !hidden.Contains((r.Type, r.TmdbId))).ToList() });
+            var recs = hidden.Count == 0 ? m.Recommendations : m.Recommendations.Where(r => !hidden.Contains((r.Type, r.TmdbId))).ToList();
+            return Results.Ok(m with { Recommendations = await UserMarks.ApplyAsync(db, p.OptionalUserId(), recs, ct) });
         });
 
-        g.MapGet("/show/{id:int}", async (int id, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
+        g.MapGet("/show/{id:int}", async (int id, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
         {
             if (await c.GetShowAsync(id, p.OptionalUserId(), ct) is not { } s) return Results.NotFound();
             var hidden = await c.NotInterestedAsync(p.OptionalUserId(), ct);
-            return Results.Ok(hidden.Count == 0 ? s : s with { Recommendations = s.Recommendations.Where(r => !hidden.Contains((r.Type, r.TmdbId))).ToList() });
+            var recs = hidden.Count == 0 ? s.Recommendations : s.Recommendations.Where(r => !hidden.Contains((r.Type, r.TmdbId))).ToList();
+            return Results.Ok(s with { Recommendations = await UserMarks.ApplyAsync(db, p.OptionalUserId(), recs, ct) });
         });
 
         g.MapGet("/show/{id:int}/season/{season:int}", async (int id, int season, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
@@ -667,6 +672,24 @@ public static class ApiEndpoints
             return Results.Ok(r);
         });
 
+        // Read the file and say what it holds, before anything is imported.
+        g.MapPost("/{kind}/preview", async (ImportKind kind, int? parts, DateOnly? since, IFormFile file, CancellationToken ct) =>
+        {
+            if (file.Length == 0) return Results.BadRequest(new ProblemInfo("That file is empty."));
+            if (file.Length > MaxImportBytes) return Results.BadRequest(new ProblemInfo("Exports over 50 MB aren't supported."));
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms, ct);
+            ParsedImport parsed;
+            try { parsed = ImportRunner.Parse(kind, file.FileName, ms.ToArray()); }
+            catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException) { return Results.BadRequest(new ProblemInfo(ex.Message)); }
+            parsed.Keep((ImportParts)(parts ?? (int)ImportParts.All) & ImportParts.All);
+            if (since is { } sd) parsed.KeepSince(new DateTimeOffset(sd.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero));
+            var dated = parsed.History.Where(h => !WatchDates.IsUnknown(h.WatchedAt)).Select(h => DateOnly.FromDateTime(h.WatchedAt.UtcDateTime)).ToList();
+            return Results.Ok(new ImportPreview(parsed.History.Count, parsed.Ratings.Count, parsed.Watchlist.Count,
+                parsed.Lists.Sum(l => l.Items.Count), parsed.Lists.Count, parsed.Favorites.Count, parsed.Library.Count, parsed.Progress.Count,
+                dated.Count > 0 ? dated.Min() : null, dated.Count > 0 ? dated.Max() : null));
+        }).DisableAntiforgery();
+
         g.MapPost("/{kind}", async (ImportKind kind, int? parts, DateOnly? since, IFormFile file, ClaimsPrincipal p, AppDbContext db, ActivityService a, CancellationToken ct) =>
         {
             var what = (ImportParts)(parts ?? (int)ImportParts.All) & ImportParts.All;
@@ -807,5 +830,24 @@ internal static class WatchedResults
             .Select(w => w.Id).ToListAsync(ct);
         var left = b.OnWatchlist && !await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == b.Type && w.TmdbId == b.TmdbId, ct);
         return new WatchedResult(added, ids, left);
+    }
+}
+
+/// <summary>Marks titles in a list the viewer has seen (a movie) or started (a show), or has on their watchlist.</summary>
+internal static class UserMarks
+{
+    public static async Task<IReadOnlyList<MediaSummary>> ApplyAsync(AppDbContext db, Guid? userId, IReadOnlyList<MediaSummary> items, CancellationToken ct)
+    {
+        if (userId is not { } uid || items.Count == 0) return items;
+        var ids = items.Select(i => i.TmdbId).Distinct().ToList();
+        var seen = (await db.WatchEvents.AsNoTracking()
+                .Where(w => w.UserId == uid && ids.Contains(w.TmdbId))
+                .Select(w => new { w.Type, w.TmdbId }).Distinct().ToListAsync(ct))
+            .Select(w => (w.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, w.TmdbId)).ToHashSet();
+        var listed = (await db.Watchlist.AsNoTracking()
+                .Where(w => w.UserId == uid && ids.Contains(w.TmdbId))
+                .Select(w => new { w.Type, w.TmdbId }).ToListAsync(ct))
+            .Select(w => (w.Type, w.TmdbId)).ToHashSet();
+        return items.Select(i => i with { Watched = seen.Contains((i.Type, i.TmdbId)), OnWatchlist = listed.Contains((i.Type, i.TmdbId)) }).ToList();
     }
 }

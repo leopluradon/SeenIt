@@ -126,6 +126,10 @@ else if (!string.IsNullOrWhiteSpace(Q))
             <div class="poster-grid">
                 @foreach (var m in titleItems) { <PosterCard Media="m" @key="(m.Type, m.TmdbId)" /> }
             </div>
+            @if (titles is not null && titles.Page < titles.TotalPages)
+            {
+                <div class="center"><button class="btn" disabled="@more" @onclick="MoreTitles">@(more ? "Loading…" : "Load more")</button></div>
+            }
         </section>
     }
 }
@@ -195,6 +199,19 @@ else if (!string.IsNullOrWhiteSpace(Q))
         null or "" => null,
         _ => d,
     };
+
+    private async Task MoreTitles()
+    {
+        if (titles is null || string.IsNullOrWhiteSpace(Q)) return;
+        more = true;
+        try
+        {
+            var next = await Api.SearchAsync(Q.Trim(), Type is "movie" or "show" ? Type : null, titles.Page + 1);
+            titles = next with { Items = [.. titles.Items, .. next.Items.Where(n => titles.Items.All(t => t.Type != n.Type || t.TmdbId != n.TmdbId))] };
+        }
+        catch (Exception ex) { error = ex.Message; }
+        more = false;
+    }
 
     private async Task MorePeople()
     {

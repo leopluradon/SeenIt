@@ -117,9 +117,8 @@ public class UpNextWidget : AppWidgetProvider
             {
                 try
                 {
-                    items = (await api.ProgressAsync())
-                        .Where(p => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching)
-                        .Take(Rows).ToList();
+                    // Home's Up next: your sort order, without paused, dropped or stalled shows.
+                    items = (await api.DashboardAsync()).UpNext.Take(Rows).ToList();
                     if (items.Count == 0) message = "Nothing up next. Start a show in SeenIt.";
                 }
                 catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.Unauthorized) { message = "Sign in to SeenIt to see what's next."; }

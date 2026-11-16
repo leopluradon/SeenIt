@@ -2,22 +2,26 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject SessionState Session
+@inject NavigationManager Nav
+@inject Toasts Toasts
+@inject Confirm Confirmer
 <PageTitle>Ratings · SeenIt</PageTitle>
 
 <div class="page-head">
     <h1>Ratings</h1>
+    <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
     <div class="segmented">
-        <button class="@(filter is null ? "on" : "")" @onclick="() => filter = null">All</button>
-        <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => filter = MediaType.Movie">Movies</button>
-        <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => filter = MediaType.Show">Shows</button>
-        <button class="@(filter == MediaType.Episode ? "on" : "")" @onclick="() => filter = MediaType.Episode">Episodes</button>
+        <button class="@(filter is null ? "on" : "")" @onclick="() => SetFilter(null)">All</button>
+        <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => SetFilter(MediaType.Movie)">Movies</button>
+        <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => SetFilter(MediaType.Show)">Shows</button>
+        <button class="@(filter == MediaType.Episode ? "on" : "")" @onclick="() => SetFilter(MediaType.Episode)">Episodes</button>
     </div>
 </div>
 <div class="chips">
     @for (var i = 10; i >= 1; i--)
     {
         var n = i;
-        <button class="chip @(stars == n ? "on" : "")" @onclick="() => stars = stars == n ? null : n">@(Fmt.FiveStars ? "★ " + Fmt.Stars(n) : n)</button>
+        <button class="chip @(stars == n ? "on" : "")" @onclick="() => SetStars(stars == n ? null : n)">@(Fmt.FiveStars ? "★ " + Fmt.Stars(n) : n)</button>
     }
 </div>
 <div class="chips">
@@ -31,15 +35,20 @@
 @if (items is null && error is null) { <Spinner /> }
 else if (items is not null)
 {
-    var shown = Sorted(items.Where(r => (filter is null || r.Type == filter) && (stars is null || (Fmt.FiveStars ? (int)Math.Round(r.Rating, MidpointRounding.AwayFromZero) : (int)Math.Floor(r.Rating + 1e-9)) == stars))).ToList();
+    var shown = Sorted(items.Where(Matches)).ToList();
     @if (shown.Count == 0) { <Empty Title="No ratings here." /> }
-    @if (layout == ListLayout.Rows)
+    @* Selecting shows rows with a box each, whatever the layout. *@
+    @if (layout == ListLayout.Rows || selecting)
     {
         <ol class="list-rows">
             @foreach (var r in shown)
             {
-                <li class="list-row" @key="(r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" data-ctx="@(r.Type == MediaType.Episode && r.SeasonNumber is { } cs && r.EpisodeNumber is { } ce ? Menu.Episode(r.TmdbId, cs, ce, r.Title, null, r.PosterPath) : Menu.Title(r.Type, r.TmdbId, r.Title, r.PosterPath))">
-                    <a href="@(r.Type == MediaType.Episode ? Fmt.EpisodeHref(r.TmdbId, r.SeasonNumber, r.EpisodeNumber) : Fmt.Href(r.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, r.TmdbId))" class="list-row-link">
+                var key = Key(r);
+                <li class="list-row @(selecting && selected.Contains(key) ? "picked" : "")" @key="key"
+                    @onclick="() => { if (selecting && !selected.Remove(key)) selected.Add(key); }" @onclick:preventDefault="selecting"
+                    data-ctx="@(r.Type == MediaType.Episode && r.SeasonNumber is { } cs && r.EpisodeNumber is { } ce ? Menu.Episode(r.TmdbId, cs, ce, r.Title, null, r.PosterPath) : Menu.Title(r.Type, r.TmdbId, r.Title, r.PosterPath))">
+                    @if (selecting) { <span class="pick-box"><input type="checkbox" checked="@selected.Contains(key)" tabindex="-1" aria-label="@($"Select {r.Title}")" /></span> }
+                    <a href="@(r.Type == MediaType.Episode ? Fmt.EpisodeHref(r.TmdbId, r.SeasonNumber, r.EpisodeNumber) : Fmt.Href(r.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, r.TmdbId))" class="list-row-link" @onclick:preventDefault="selecting">
                         <img src="@Img.Poster(r.PosterPath, "w92")" alt="" loading="lazy" />
                         <span class="list-row-main">
                             <b>@r.Title</b>
@@ -64,6 +73,22 @@ else if (items is not null)
     </div>
     }
 }
+@if (selecting && items is not null)
+{
+    var visible = Sorted(items.Where(Matches)).ToList();
+    <div class="bulk-bar" role="toolbar" aria-label="Selected ratings">
+        <span><b>@selected.Count</b> selected</span>
+        @if (visible.Count > 0)
+        {
+            @if (visible.All(r => selected.Contains(Key(r)))) { <button class="btn btn-sm btn-ghost" @onclick="() => selected.Clear()">Unselect all</button> }
+            else { <button class="btn btn-sm btn-ghost" @onclick="() => { foreach (var r in visible) selected.Add(Key(r)); }">Select all @visible.Count</button> }
+        }
+        <span class="bulk-actions">
+            <button class="btn btn-sm btn-danger" disabled="@(selected.Count == 0 || busy)" @onclick="RemoveSelected"><Icon Name="trash" Size="16" /> Remove ratings</button>
+        </span>
+    </div>
+    <div class="bulk-spacer" aria-hidden="true"></div>
+}
 <ReloadOnMenu OnChange="Load" />
 @code {
     private List<RatingEntry>? items;
@@ -73,6 +98,34 @@ else if (items is not null)
     private ListLayout layout = Fmt.Prefs.LayoutFor("ratings");
     private static readonly (string Key, string Label)[] Sorts = [("recent", "Recently rated"), ("high", "Highest first"), ("low", "Lowest first"), ("title", "Title")];
     private string sort = Sorts.Any(x => x.Key == Fmt.Prefs.SortFor("ratings")) ? Fmt.Prefs.SortFor("ratings")! : "recent";
+
+    private bool Matches(RatingEntry r) => (filter is null || r.Type == filter)
+        && (stars is null || (Fmt.FiveStars ? (int)Math.Round(r.Rating, MidpointRounding.AwayFromZero) : (int)Math.Floor(r.Rating + 1e-9)) == stars);
+
+    private bool selecting, busy;
+    private readonly HashSet<(MediaType, int, int?, int?)> selected = [];
+    private static (MediaType, int, int?, int?) Key(RatingEntry r) => (r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber);
+
+    /// <summary>Removes every selected rating, with Undo putting each one back as it was.</summary>
+    private async Task RemoveSelected()
+    {
+        var gone = items!.Where(r => selected.Contains(Key(r))).ToList();
+        if (gone.Count > 1 && !await Confirmer.AskAsync($"Remove {gone.Count} ratings?", "You can undo it straight after.", "Remove", danger: true)) return;
+        busy = true;
+        try
+        {
+            foreach (var r in gone) await Api.UnrateAsync(r.Type == MediaType.Show && r.SeasonNumber is null ? MediaType.Show : r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber);
+            selected.Clear();
+            Toasts.Show($"Removed {gone.Count} rating{(gone.Count == 1 ? "" : "s")}", undo: async () =>
+            {
+                foreach (var r in gone) await Api.RateAsync(new RatingRequest(r.Type, r.TmdbId, r.Rating, r.SeasonNumber, r.EpisodeNumber));
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); await Load(); }
+        finally { busy = false; }
+    }
 
     private IEnumerable<RatingEntry> Sorted(IEnumerable<RatingEntry> q) => sort switch
     {
@@ -89,6 +142,22 @@ else if (items is not null)
     }
 
     protected override Task OnInitializedAsync() => Load();
+
+    // Type and score go in the address, so Back from a title returns to the same filtered list.
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    [SupplyParameterFromQuery(Name = "score")] public int? ScoreParam { get; set; }
+    protected override void OnParametersSet()
+    {
+        filter = Enum.TryParse<MediaType>(TypeParam, true, out var t) ? t : null;
+        stars = ScoreParam is >= 1 and <= 10 ? ScoreParam : null;
+    }
+    private void SetFilter(MediaType? f) { filter = f; Remember(); }
+    private void SetStars(int? n) { stars = n; Remember(); }
+    private void Remember() => Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+    {
+        ["type"] = filter?.ToString().ToLowerInvariant(),
+        ["score"] = stars,
+    }), replace: true);
 
     private async Task Load()
     {

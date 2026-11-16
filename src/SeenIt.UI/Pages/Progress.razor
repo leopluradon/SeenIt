@@ -64,12 +64,13 @@ else
 <div class="page-head">
     <SavedViews Page="progress" Current="@ViewQuery" />
     <div class="segmented">
-        <button class="@(tab == "watching" ? "on" : "")" @onclick='() => tab = "watching"'>Watching</button>
-        <button class="@(tab == "waiting" ? "on" : "")" @onclick='() => tab = "waiting"'>Caught up</button>
-        <button class="@(tab == "paused" ? "on" : "")" @onclick='() => tab = "paused"'>Paused@(Count(ShowTrackStatus.Paused))</button>
-        <button class="@(tab == "dropped" ? "on" : "")" @onclick='() => tab = "dropped"'>Dropped@(Count(ShowTrackStatus.Dropped))</button>
-        <button class="@(tab == "all" ? "on" : "")" @onclick='() => tab = "all"'>All</button>
+        <button class="@(tab == "watching" ? "on" : "")" @onclick='() => SetTab("watching")'>Watching</button>
+        <button class="@(tab == "waiting" ? "on" : "")" @onclick='() => SetTab("waiting")'>Caught up</button>
+        <button class="@(tab == "paused" ? "on" : "")" @onclick='() => SetTab("paused")'>Paused@(Count(ShowTrackStatus.Paused))</button>
+        <button class="@(tab == "dropped" ? "on" : "")" @onclick='() => SetTab("dropped")'>Dropped@(Count(ShowTrackStatus.Dropped))</button>
+        <button class="@(tab == "all" ? "on" : "")" @onclick='() => SetTab("all")'>All</button>
     </div>
+    <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
     <label class="sort-pick">
         <span class="muted small">Sort</span>
         <select value="@Sort" @onchange="SetSort" aria-label="Sort shows">
@@ -81,14 +82,7 @@ else
 @if (items is null && error is null) { <Spinner /> }
 else if (items is not null)
 {
-    var shown = UpNextSorts.Apply(items, Sort).Where(p => tab switch
-    {
-        "watching" => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching,
-        "waiting" => p.NextEpisode is null && p.Status != ShowTrackStatus.Dropped,
-        "paused" => p.Status == ShowTrackStatus.Paused,
-        "dropped" => p.Status == ShowTrackStatus.Dropped,
-        _ => true,
-    }).ToList();
+    var shown = UpNextSorts.Apply(items, Sort).Where(InTab).ToList();
     @if (shown.Count == 0)
     {
         <Empty Title="@(tab == "watching" ? "Nothing in progress." : "Nothing here.")">
@@ -98,6 +92,7 @@ else if (items is not null)
                 "dropped" => "Shows you give up on can be dropped so they stop showing up in Up next and the calendar.",
                 _ => "Mark episodes of a show watched to start tracking your progress.",
             })
+            @if (tab == "watching") { <div><a class="btn btn-sm btn-primary" href="discover?type=Show">Find a show</a></div> }
         </Empty>
     }
     else
@@ -109,7 +104,13 @@ else if (items is not null)
         <div class="progress-list">
             @foreach (var p in group)
             {
-                <div class="progress-item" @key="p.ShowTmdbId" data-ctx="@Menu.Title(MediaType.Show, p.ShowTmdbId, p.Name, p.PosterPath)">
+                <div class="progress-item @(selecting && selected.Contains(p.ShowTmdbId) ? "picked" : "")" @key="p.ShowTmdbId" data-ctx="@(selecting ? null : Menu.Title(MediaType.Show, p.ShowTmdbId, p.Name, p.PosterPath))">
+                    @if (selecting)
+                    {
+                        <label class="pick-box" aria-label="@($"Select {p.Name}")">
+                            <input type="checkbox" checked="@selected.Contains(p.ShowTmdbId)" @onchange="() => { if (!selected.Remove(p.ShowTmdbId)) selected.Add(p.ShowTmdbId); }" />
+                        </label>
+                    }
                     <a href="@($"show/{p.ShowTmdbId}")"><img src="@Img.Poster(p.PosterPath, "w154")" alt="" loading="lazy" /></a>
                     <div class="progress-body">
                         <a href="@($"show/{p.ShowTmdbId}")" class="mini-title">@p.Name</a>
@@ -146,6 +147,24 @@ else if (items is not null)
         </div>
         }
     }
+}
+@if (selecting && !Franchises)
+{
+    var visible = ShownNow;
+    <div class="bulk-bar" role="toolbar" aria-label="Selected shows">
+        <span><b>@selected.Count</b> selected</span>
+        @if (visible.Count > 0)
+        {
+            @if (visible.All(p => selected.Contains(p.ShowTmdbId))) { <button class="btn btn-sm btn-ghost" @onclick="() => selected.Clear()">Unselect all</button> }
+            else { <button class="btn btn-sm btn-ghost" @onclick="() => { foreach (var p in visible) selected.Add(p.ShowTmdbId); }">Select all @visible.Count</button> }
+        }
+        <span class="bulk-actions">
+            <button class="btn btn-sm" disabled="@(selected.Count == 0 || bulkBusy)" @onclick="() => SetMany(ShowTrackStatus.Watching)"><Icon Name="play" Size="16" /> Resume</button>
+            <button class="btn btn-sm" disabled="@(selected.Count == 0 || bulkBusy)" @onclick="() => SetMany(ShowTrackStatus.Paused)"><Icon Name="pause" Size="16" /> Pause</button>
+            <button class="btn btn-sm btn-danger" disabled="@(selected.Count == 0 || bulkBusy)" @onclick="() => SetMany(ShowTrackStatus.Dropped)"><Icon Name="x" Size="16" /> Drop</button>
+        </span>
+    </div>
+    <div class="bulk-spacer" aria-hidden="true"></div>
 }
 @if (pending is var (ps, pe))
 {
@@ -189,6 +208,13 @@ else if (items is not null)
             ("tab", tab == "watching" ? null : tab),
             ("sort", Sort == UpNextSort.LastWatched ? null : Sort.ToString()),
         }.Where(p => p.Value is not null).Select(p => $"{p.Key}={p.Value}"));
+
+    /// <summary>The tab goes in the address, so Back from a show returns to it.</summary>
+    private void SetTab(string t)
+    {
+        tab = t;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("tab", t == "watching" ? null : t), replace: true);
+    }
 
     private async Task LoadFranchises()
     {
@@ -235,6 +261,15 @@ else if (items is not null)
     /// <summary>Caught up: airing now and coming back (soonest first), returning with no date yet, then ended or canceled. Other tabs: one plain list.</summary>
     private IEnumerable<(string? Heading, string? Hint, List<ShowProgressDto> Shows)> Groups(List<ShowProgressDto> shown)
     {
+        if (tab == "watching")
+        {
+            var now = DateTimeOffset.UtcNow;
+            yield return (null, null, shown.Where(p => !UpNextSorts.Stalled(p, now)).ToList());
+            var stalled = shown.Where(p => UpNextSorts.Stalled(p, now)).ToList();
+            if (stalled.Count > 0)
+                yield return ("Not watched in 6 months", "Kept out of Up next until you watch another episode. Tap Select to pause or drop the ones you're done with.", stalled);
+            yield break;
+        }
         if (tab != "waiting") { yield return (null, null, shown); yield break; }
         var airing = shown.Where(Airing).OrderBy(p => p.Returning!.AirDate).ToList();
         var dated = shown.Where(p => p.Returning is not null && !Airing(p)).OrderBy(p => p.Returning!.AirDate).ToList();
@@ -272,6 +307,42 @@ else if (items is not null)
     }
 
     private string Count(ShowTrackStatus st) => items?.Count(p => p.Status == st) is > 0 and var n ? $" {n}" : "";
+
+    private bool InTab(ShowProgressDto p) => tab switch
+    {
+        "watching" => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching,
+        "waiting" => p.NextEpisode is null && p.Status != ShowTrackStatus.Dropped,
+        "paused" => p.Status == ShowTrackStatus.Paused,
+        "dropped" => p.Status == ShowTrackStatus.Dropped,
+        _ => true,
+    };
+
+    private bool selecting, bulkBusy;
+    private readonly HashSet<int> selected = [];
+
+    /// <summary>The shows on the current tab (what "Select all" takes).</summary>
+    private List<ShowProgressDto> ShownNow => items is null ? [] : Groups(UpNextSorts.Apply(items, Sort).Where(InTab).ToList()).SelectMany(g => g.Shows).ToList();
+
+    /// <summary>Pause, drop or resume every selected show at once, with Undo back to each one's own status.</summary>
+    private async Task SetMany(ShowTrackStatus st)
+    {
+        var shows = items!.Where(p => selected.Contains(p.ShowTmdbId)).ToList();
+        bulkBusy = true;
+        try
+        {
+            foreach (var p in shows) await Api.SetShowStatusAsync(p.ShowTmdbId, st);
+            selected.Clear();
+            var verb = st switch { ShowTrackStatus.Paused => "Paused", ShowTrackStatus.Dropped => "Dropped", _ => "Resumed" };
+            Toasts.Show($"{verb} {shows.Count} show{(shows.Count == 1 ? "" : "s")}", undo: async () =>
+            {
+                foreach (var p in shows) await Api.SetShowStatusAsync(p.ShowTmdbId, p.Status);
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            });
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); await Load(); }
+        finally { bulkBusy = false; }
+    }
 
     private async Task SetStatus(ShowProgressDto p, ShowTrackStatus st)
     {

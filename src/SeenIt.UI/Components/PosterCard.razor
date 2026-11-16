@@ -11,6 +11,17 @@
             <div class="poster-fallback"><Icon Name="@(Media.Type == MediaType.Movie ? "film" : "tv")" Size="32" /><span>@Media.Title</span></div>
         }
         @if (Badge is not null) { <span class="poster-badge">@Badge</span> }
+        @if (Media.Watched == true || Media.OnWatchlist == true)
+        {
+            @* Seen it / on your watchlist, so lists of suggestions don't look all new. *@
+            <span class="poster-marks">
+                @if (Media.Watched == true)
+                {
+                    <span class="poster-mark-seen" title="@(Media.Type == MediaType.Movie ? "You've seen this" : "You've started this")"><Icon Name="@(Media.Type == MediaType.Movie ? "check" : "play")" Size="12" /></span>
+                }
+                @if (Media.OnWatchlist == true) { <span class="poster-mark-list" title="On your watchlist"><Icon Name="bookmark" Size="12" /></span> }
+            </span>
+        }
         @if (ShowScore && ScoreText is { } score) { <span class="poster-score" title="@ScoreSource"><ScoreSpoiler>@score</ScoreSpoiler></span> }
         @if (OnDismiss.HasDelegate && Fmt.Prefs.DismissButtons)
         {
@@ -24,6 +35,10 @@
         <div class="poster-detail" title="@(DetailSeen ? Detail : null)"><Spoiler Watched="DetailSeen">@Detail</Spoiler></div>
     }
     @if (Mark != EpisodeMark.None) { <div class="poster-mark"><EpisodeBadge Mark="Mark" /></div> }
+    @* The same menu as a long press or right-click, for people who don't know about those. Plain JS: it opens the
+       menu for this card's data-ctx without following the card's link. *@
+    <button type="button" class="poster-more" aria-label="@($"More for {Media.Title}")" title="More"
+            onclick="event.preventDefault(); event.stopPropagation(); seenit.openMenuFor(this)"><Icon Name="more" Size="16" /></button>
     <div class="poster-sub" title="@SubTitle">
         @if (Sub is not null) { @Sub }
         else { @(Media.Year?.ToString() ?? "")<span class="dot-sep">@(Media.Type == MediaType.Movie ? "Movie" : "TV")</span> }

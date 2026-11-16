@@ -2,15 +2,16 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject SessionState Session
+@inject NavigationManager Nav
 <PageTitle>Watchlist · SeenIt</PageTitle>
 
 <div class="page-head">
     <h1>Watchlist</h1>
     <a class="btn btn-sm" href="pick"><Icon Name="shuffle" Size="16" /> Pick for me</a>
     <div class="segmented">
-        <button class="@(filter is null ? "on" : "")" @onclick="() => filter = null">All</button>
-        <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => filter = MediaType.Movie">Movies</button>
-        <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => filter = MediaType.Show">Shows</button>
+        <button class="@(filter is null ? "on" : "")" @onclick="() => SetFilter(null)">All</button>
+        <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => SetFilter(MediaType.Movie)">Movies</button>
+        <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => SetFilter(MediaType.Show)">Shows</button>
     </div>
 </div>
 <SavedViews Page="watchlist" Current="@ViewQuery" />
@@ -34,7 +35,7 @@ else if (items is not null)
 {
     var shown = Sorted().ToList();
     @if (shown.Count == 0 && !string.IsNullOrWhiteSpace(find)) { <Empty Title="@($"Nothing called “{find.Trim()}” here.")" /> }
-    else if (shown.Count == 0) { <Empty Title="Your watchlist is empty.">Add movies and shows you want to watch from their pages.</Empty> }
+    else if (shown.Count == 0) { <Empty Title="Your watchlist is empty.">Add movies and shows you want to watch from their pages. <div><a class="btn btn-sm btn-primary" href="discover">Browse Discover</a></div></Empty> }
     else
     {
         @if (layout == ListLayout.Rows)
@@ -91,7 +92,7 @@ else if (items is not null)
         applied = (TypeParam, SortParam, QParam);
         filter = TypeParam switch { "movie" => MediaType.Movie, "show" => MediaType.Show, _ => null };
         sort = Sorts.Contains(SortParam) ? SortParam! : Fmt.Prefs.SortFor("watchlist") is { } s && Sorts.Contains(s) ? s : "added";
-        find = QParam ?? "";
+        if (QParam is not null) find = QParam;   // a saved view; changing type or order keeps what you typed
     }
 
     protected override Task OnInitializedAsync() => Load();
@@ -99,8 +100,18 @@ else if (items is not null)
     private Task SetSort(string s)
     {
         sort = s;
+        Remember();
         return PagePrefs.SetSortAsync(Session, Api, "watchlist", s);
     }
+
+    private void SetFilter(MediaType? f) { filter = f; Remember(); }
+
+    /// <summary>Type and order go in the address, so Back from a title returns to the same view.</summary>
+    private void Remember() => Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+    {
+        ["type"] = filter switch { MediaType.Movie => "movie", MediaType.Show => "show", _ => null },
+        ["sort"] = sort == "added" ? null : sort,
+    }), replace: true);
 
     private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
         {

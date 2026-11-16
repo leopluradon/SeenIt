@@ -10,6 +10,27 @@
         <h1 class="visually-hidden">Home</h1>
         <ErrorBox Message="@error" OnRetry="LoadDashboard" />
 
+        @if (Fresh)
+        {
+            @* A new account (or one with nothing tracked yet): three ways to get going, instead of a page of "nothing yet". *@
+            <section class="panel get-started">
+                <h2>Get started</h2>
+                <ol>
+                    <li>
+                        <b>Mark what you're watching.</b> <span class="muted">Find a show you're partway through and tap the episode you're on, or a movie you've seen.</span>
+                        <span class="inline"><a class="btn btn-sm btn-primary" href="search"><Icon Name="search" Size="14" /> Search</a><a class="btn btn-sm" href="discover?type=Show">Browse shows</a></span>
+                    </li>
+                    <li>
+                        <b>Bring your history.</b> <span class="muted">Import from Trakt, Letterboxd, IMDb, TV Time or Simkl, or connect Jellyfin, Plex or Kodi so what you watch there is tracked by itself.</span>
+                        <span class="inline"><a class="btn btn-sm" href="settings?tab=data#imports"><Icon Name="upload" Size="14" /> Import</a><a class="btn btn-sm" href="settings?tab=tracking#jellyfin">Media servers</a></span>
+                    </li>
+                    <li>
+                        <b>Follow friends.</b> <span class="muted">See what they're watching and send each other recommendations.</span>
+                        <span class="inline"><a class="btn btn-sm" href="friends?tab=find"><Icon Name="user-plus" Size="14" /> Find people</a></span>
+                    </li>
+                </ol>
+            </section>
+        }
         @* Sections in the order the user chose (Customize home); one spinner while the dashboard loads. *@
         @{ var waiting = false; }
         @foreach (var key in UiPrefs.HomeOrder(Session.Me?.HomeOrder).Where(Visible))
@@ -76,7 +97,7 @@
                     break;
                 case "upnext":
                     @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
-                    else if (dash is not null)
+                    else if (dash is not null && !Fresh)
                     {
                         <section class="row-section">
                             <div class="section-head">
@@ -162,7 +183,7 @@
                     break;
                 case "recent":
                     @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
-                    else if (dash is not null)
+                    else if (dash is not null && !Fresh)
                     {
                         <section class="row-section">
                             <div class="section-head">
@@ -266,6 +287,8 @@
         try { forYou = (await Api.ForYouAsync()).Top.Take(Fmt.Prefs.Count("foryou")).Select(i => i.Media).ToList(); }
         catch { forYou = []; }
     }
+    /// <summary>Nothing tracked yet: "Get started" stands in for the empty Up next and Recently watched.</summary>
+    private bool Fresh => dash is { UpNext.Count: 0, RecentHistory.Count: 0 } && !hidden.Contains("upnext");
     private bool signedIn, customizeOpen;
     private HashSet<string> hidden = [];
     private List<(string Href, string Text)> reviewLinks = [];
