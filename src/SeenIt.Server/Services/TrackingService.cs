@@ -307,6 +307,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         await itemsQ.Where(i => db.ListItems.Any(t => t.ListId == i.ListId && t.Type == type && t.TmdbId == to)).ExecuteDeleteAsync(ct);
         var listEntries = await itemsQ.ExecuteUpdateAsync(s => s.SetProperty(i => i.TmdbId, to), ct);
 
+        await MoveLibraryAsync(db, userId, type, from, to, ct);
+
         if (!movie)
         {
             var stateQ = db.ShowStates.Where(s => s.UserId == userId && s.ShowTmdbId == from);
@@ -1168,6 +1170,15 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
     public Task<DateOnly?> TrackingSinceAsync(Guid userId, CancellationToken ct) =>
         db.Users.Where(u => u.Id == userId).Select(u => u.TrackingSince).FirstOrDefaultAsync(ct);
+
+    /// <summary>Re-matching moves library copies too; one the right title already has (same format and season) is just dropped.</summary>
+    public static async Task MoveLibraryAsync(AppDbContext db, Guid userId, MediaType type, int from, int to, CancellationToken ct)
+    {
+        var libQ = db.Library.Where(l => l.UserId == userId && l.Type == type && l.TmdbId == from);
+        await libQ.Where(l => db.Library.Any(t => t.UserId == userId && t.Type == type && t.TmdbId == to && t.Format == l.Format
+                                                  && (t.SeasonNumber == l.SeasonNumber || (t.SeasonNumber == null && l.SeasonNumber == null)))).ExecuteDeleteAsync(ct);
+        await libQ.ExecuteUpdateAsync(s => s.SetProperty(l => l.TmdbId, to), ct);
+    }
 
     public async Task EnsureMetaAsync(MediaType type, int tmdbId, CancellationToken ct)
     {

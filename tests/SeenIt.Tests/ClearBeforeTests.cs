@@ -48,4 +48,27 @@ public class ClearBeforeTests
         Assert.True(await db.ShowStates.AnyAsync(s => s.UserId == me));
         await db.Database.EnsureDeletedAsync();
     }
+
+    [Fact]
+    public async Task Rematching_moves_library_copies_without_duplicating_them()
+    {
+        if (Environment.GetEnvironmentVariable("SEENIT_TEST_PG") is not { Length: > 0 } cs) return;
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs.Replace("Database=", "Database=lib_")).Options);
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.MigrateAsync();
+        var me = Guid.NewGuid();
+        db.Users.Add(new AppUser { Id = me, UserName = "me", NormalizedUserName = "ME" });
+        // Imported onto the obscure Under the Skin (698232) on the server and DVD; Glazer's (97370) already has the DVD.
+        db.Library.AddRange(new LibraryItem { UserId = me, Type = MediaType.Movie, TmdbId = 698232, Format = OwnedFormat.MediaServer },
+            new LibraryItem { UserId = me, Type = MediaType.Movie, TmdbId = 698232, Format = OwnedFormat.Dvd },
+            new LibraryItem { UserId = me, Type = MediaType.Movie, TmdbId = 97370, Format = OwnedFormat.Dvd });
+        await db.SaveChangesAsync();
+
+        await TrackingService.MoveLibraryAsync(db, me, MediaType.Movie, 698232, 97370, default);
+
+        db.ChangeTracker.Clear();
+        var rows = await db.Library.Where(l => l.UserId == me).OrderBy(l => l.Format).Select(l => new { l.TmdbId, l.Format }).ToListAsync();
+        Assert.Equal([(97370, OwnedFormat.Dvd), (97370, OwnedFormat.MediaServer)], rows.Select(r => (r.TmdbId, r.Format)));
+        await db.Database.EnsureDeletedAsync();
+    }
 }
