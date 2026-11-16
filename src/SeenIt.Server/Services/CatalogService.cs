@@ -396,7 +396,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
 
     // ---------- Detail pages ----------
 
-    public async Task<MovieDetail?> GetMovieAsync(int id, Guid? userId, CancellationToken ct)
+    public async Task<MovieDetail?> GetMovieAsync(int id, Guid? userId, CancellationToken ct, string region = "US")
     {
         var m = await tmdb.GetMovieAsync(id, full: true, ct);
         if (m is null) return null;
@@ -427,7 +427,20 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             PickVideos(m.Videos),
             (m.Recommendations?.Results ?? []).Take(18).Select(r => ToSummary(r, MediaType.Movie)).ToList(),
             user,
-            collection);
+            collection,
+            Release(m, region));
+    }
+
+    /// <summary>In theaters / coming to theaters in this country (or the US when TMDB has nothing for it).</summary>
+    private static ReleaseStatus? Release(TmdbMovie m, string region)
+    {
+        var countries = m.ReleaseDates?.Results ?? [];
+        var here = countries.FirstOrDefault(c => string.Equals(c.Iso31661, region, StringComparison.OrdinalIgnoreCase))
+                   ?? countries.FirstOrDefault(c => c.Iso31661 == "US");
+        if (here?.ReleaseDates is not { Count: > 0 } releases) return null;
+        var dates = releases.Select(r => (r.Type, Date: DateTimeOffset.TryParse(r.ReleaseDate, out var at) ? DateOnly.FromDateTime(at.UtcDateTime) : (DateOnly?)null))
+            .Where(r => r.Date is not null).Select(r => (r.Type, r.Date!.Value));
+        return ReleaseStatuses.For(dates, here.Iso31661 ?? region, DateOnly.FromDateTime(DateTime.UtcNow));
     }
 
     /// <summary>A franchise's movies in release order (unreleased ones last), marking which the user has seen.</summary>
@@ -745,7 +758,6 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             Last = watches.Max(w => (DateTimeOffset?)w.WatchedAt),
             Favorite = db.Favorites.Any(f => f.UserId == userId && f.Type == type && f.TmdbId == id),
             NotInterested = db.NotInterested.Any(n => n.UserId == userId && n.Type == type && n.TmdbId == id),
-            Owned = db.Library.Where(l => l.UserId == userId && l.Type == type && l.TmdbId == id).Select(l => (OwnedFormat?)l.Format).FirstOrDefault(),
             Note = db.Notes.Where(n => n.UserId == userId && n.Type == type && n.TmdbId == id).Select(n => n.Text).FirstOrDefault(),
         }).FirstOrDefaultAsync(ct);
         var lists = await db.ListItems
@@ -757,7 +769,9 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
                 ? await watches.OrderByDescending(w => w.WatchedAt).ThenByDescending(w => w.CreatedAt)
                     .Select(w => new PlayDto(w.Id, w.WatchedAt, w.Source)).ToListAsync(ct)
                 : [];
-        return new UserMediaState(state?.InWatchlist ?? false, state?.Rating, state?.Plays ?? 0, state?.Last, lists, history, state?.Favorite ?? false, state?.NotInterested ?? false, state?.Owned, state?.Note);
+        var copies = LibraryService.Copies(await db.Library.AsNoTracking().Where(l => l.UserId == userId && l.Type == type && l.TmdbId == id).ToListAsync(ct));
+        return new UserMediaState(state?.InWatchlist ?? false, state?.Rating, state?.Plays ?? 0, state?.Last, lists, history, state?.Favorite ?? false, state?.NotInterested ?? false,
+            copies.FirstOrDefault()?.Format, state?.Note, copies);
     }
 
     private static List<Video> PickVideos(TmdbVideos? v) =>

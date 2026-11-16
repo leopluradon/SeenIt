@@ -78,9 +78,12 @@ public static class ApiEndpoints
         });
 
         // "You might also like" leaves out what you marked not interested.
-        g.MapGet("/movie/{id:int}", async (int id, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
+        g.MapGet("/movie/{id:int}", async (int id, string? region, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
         {
-            if (await c.GetMovieAsync(id, p.OptionalUserId(), ct) is not { } m) return Results.NotFound();
+            // "In theaters" depends on the country, like where to watch.
+            var saved = p.OptionalUserId() is { } uid ? await db.Users.Where(u => u.Id == uid).Select(u => u.Region).FirstOrDefaultAsync(ct) : null;
+            var code = saved ?? (region is { Length: 2 } r && r.All(char.IsLetter) ? r.ToUpperInvariant() : "US");
+            if (await c.GetMovieAsync(id, p.OptionalUserId(), ct, code) is not { } m) return Results.NotFound();
             var hidden = await c.NotInterestedAsync(p.OptionalUserId(), ct);
             var recs = hidden.Count == 0 ? m.Recommendations : m.Recommendations.Where(r => !hidden.Contains((r.Type, r.TmdbId))).ToList();
             return Results.Ok(m with { Recommendations = await UserMarks.ApplyAsync(db, p.OptionalUserId(), recs, ct) });
@@ -396,12 +399,13 @@ public static class ApiEndpoints
         g.MapPost("/library", async (LibraryRequest req, ClaimsPrincipal p, LibraryService l, CancellationToken ct) =>
         {
             if (!Enum.IsDefined(req.Format)) return Results.BadRequest(new ProblemInfo("Unknown format."));
-            await l.AddAsync(p.UserId(), req.Type, req.TmdbId, req.Format, WatchSource.Manual, ct);
+            await l.AddAsync(p.UserId(), req.Type, req.TmdbId, req.Format, WatchSource.Manual, ct, req.SeasonNumber);
             return Results.NoContent();
         });
-        g.MapDelete("/library", async (MediaType type, int tmdbId, ClaimsPrincipal p, LibraryService l, CancellationToken ct) =>
+        // No format: the whole title goes. A format: that format (and its seasons); a season too: just that one.
+        g.MapDelete("/library", async (MediaType type, int tmdbId, OwnedFormat? format, int? season, ClaimsPrincipal p, LibraryService l, CancellationToken ct) =>
         {
-            await l.RemoveAsync(p.UserId(), type, tmdbId, ct);
+            await l.RemoveAsync(p.UserId(), type, tmdbId, ct, format, season);
             return Results.NoContent();
         });
         // Private notes on movies and shows.

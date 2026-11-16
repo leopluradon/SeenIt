@@ -1862,3 +1862,12 @@ div.badge-pick { cursor: default; }
 /* A show's name inside an episode card: its own link to the show. */
 .title-link { cursor: pointer; }
 .title-link:hover, .title-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+/* ---------- Own it dialog ---------- */
+.owned-formats { display: flex; flex-direction: column; gap: 10px; }
+.owned-format { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.owned-seasons { margin: 0 0 4px; gap: 6px; }
+.owned-seasons .chip { padding: 4px 10px; font-size: .8rem; }
+/* "In theaters" on movie pages */
+.release-badge { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 999px; font-size: .8rem; font-weight: 700;
+    background: var(--surface-3); color: var(--text-2); }
+.release-badge.now { background: var(--accent); color: var(--on-accent); }

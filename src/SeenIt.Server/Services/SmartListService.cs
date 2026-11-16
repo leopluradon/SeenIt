@@ -75,7 +75,8 @@ public class SmartListService(AppDbContext db, TmdbClient tmdb, TrackingService 
             keys = plays.Select(p => (p.Type, p.TmdbId, (DateTimeOffset?)null)).ToList();
         else if (rules.Source == SmartSource.Library)
             keys = (await db.Library.AsNoTracking().Where(l => l.UserId == ownerId).Select(l => new { l.Type, l.TmdbId, l.AddedAt }).ToListAsync(ct))
-                .Select(l => (l.Type, l.TmdbId, (DateTimeOffset?)l.AddedAt)).ToList();
+                .GroupBy(l => (l.Type, l.TmdbId))   // one per title, however many formats and seasons
+                .Select(g => (g.Key.Type, g.Key.TmdbId, (DateTimeOffset?)g.Min(l => l.AddedAt))).ToList();
         else
             keys = (await db.Watchlist.AsNoTracking().Where(w => w.UserId == ownerId).Select(w => new { w.Type, w.TmdbId, w.AddedAt }).ToListAsync(ct))
                 .Select(w => (w.Type, w.TmdbId, (DateTimeOffset?)w.AddedAt)).ToList();

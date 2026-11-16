@@ -993,8 +993,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 ? await db.Episodes.Where(e => e.ShowTmdbId == tmdbId && e.SeasonNumber == season && e.EpisodeNumber == episode).Select(e => e.AirDate).FirstOrDefaultAsync(ct)
                 : await db.Shows.Where(s => s.TmdbId == tmdbId).Select(s => s.FirstAirDate).FirstOrDefaultAsync(ct);
 
-        var owned = isEpisode ? null : await db.Library.Where(l => l.UserId == userId && l.Type == baseType && l.TmdbId == tmdbId).Select(l => (OwnedFormat?)l.Format).FirstOrDefaultAsync(ct);
-        var status = new ItemStatus(count, last, rating, onWatchlist, favorite, notInterested, lists, released, Owned: owned);
+        var copies = isEpisode ? [] : LibraryService.Copies(await db.Library.AsNoTracking().Where(l => l.UserId == userId && l.Type == baseType && l.TmdbId == tmdbId).ToListAsync(ct));
+        var status = new ItemStatus(count, last, rating, onWatchlist, favorite, notInterested, lists, released, Owned: copies.FirstOrDefault()?.Format, Copies: copies);
         if (baseType != MediaType.Show || isEpisode) return status;
 
         if ((await new ProgressCalculator(db).ForUserAsync(userId, [tmdbId], ct)).FirstOrDefault() is { } p)

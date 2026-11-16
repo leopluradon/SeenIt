@@ -1,18 +1,38 @@
-@* "In my library": how you own it (or take it out). *@
+@* "Do you own it?": every format you have it in, and for a show, whether that's the whole show or which seasons. *@
 @inject ApiClient Api
 @inject Toasts Toasts
-<Modal Open="Open" OpenChanged="OpenChanged" Title="@($"Do you own {Title}?")">
+<Modal Open="Open" OpenChanged="Close" Title="@($"Do you own {Title}?")">
     <div class="stack">
-        <p class="muted small">Your library is what you own, separate from what you've watched. Plex and Jellyfin can fill it in as things are added to your server (Settings → Media servers).</p>
-        <div class="format-grid">
+        <p class="muted small">Your library is what you own, separate from what you've watched. Tick every format you have it in@(Type == MediaType.Show ? ", and for a show whether it's all of it or some seasons" : ""). Plex and Jellyfin fill in what's on your server (Settings → Media servers), and you can import your Jellyfin library (Settings → Import).</p>
+        <div class="owned-formats">
             @foreach (var f in Enum.GetValues<OwnedFormat>())
             {
-                <button class="btn @(Current == f ? "btn-on" : "")" disabled="@busy" @onclick="() => Pick(f)" @key="f">
-                    @if (Current == f) { <Icon Name="check" Size="14" /> } @OwnedFormats.Label(f)
-                </button>
+                var mine = copies.Where(c => c.Format == f).ToList();
+                var on = mine.Count > 0;
+                <div class="owned-format @(on ? "on" : "")" @key="f">
+                    <button class="btn btn-sm @(on ? "btn-on" : "")" disabled="@busy" aria-pressed="@on" @onclick="() => ToggleFormat(f, on)">
+                        @if (on) { <Icon Name="check" Size="14" /> } @OwnedFormats.Label(f)
+                    </button>
+                    @if (on && Type == MediaType.Show && Seasons is { Count: > 0 } seasons)
+                    {
+                        var whole = mine.Any(c => c.SeasonNumber is null);
+                        <div class="chips owned-seasons" role="group" aria-label="@($"Seasons on {OwnedFormats.Label(f)}")">
+                            <button class="chip @(whole ? "on" : "")" disabled="@busy" aria-pressed="@whole" @onclick="() => SetWhole(f)">All seasons</button>
+                            @foreach (var n in seasons)
+                            {
+                                var has = !whole && mine.Any(c => c.SeasonNumber == n);
+                                <button class="chip @(has ? "on" : "")" disabled="@busy" aria-pressed="@has" @onclick="() => ToggleSeason(f, n, has)" @key="n">@(n == 0 ? "Specials" : $"S{n}")</button>
+                            }
+                        </div>
+                    }
+                </div>
             }
         </div>
-        @if (Current is not null) { <button class="btn btn-ghost btn-danger" disabled="@busy" @onclick="Remove">Remove from my library</button> }
+        @if (copies.Count > 0)
+        {
+            <p class="small">In your library: <b>@OwnedFormats.Describe(copies)</b></p>
+            <button class="btn btn-ghost btn-danger" disabled="@busy" @onclick="RemoveAll">Remove from my library</button>
+        }
     </div>
 </Modal>
 @code {
@@ -21,35 +41,75 @@
     [Parameter, EditorRequired] public MediaType Type { get; set; }
     [Parameter, EditorRequired] public int TmdbId { get; set; }
     [Parameter] public string Title { get; set; } = "this";
-    [Parameter] public OwnedFormat? Current { get; set; }
+    /// <summary>What you own of it now (ItemStatus/UserMediaState.Copies).</summary>
+    [Parameter] public IReadOnlyList<OwnedCopy>? Copies { get; set; }
+    /// <summary>A show's season numbers, to pick from; without them a show can only be owned whole.</summary>
+    [Parameter] public IReadOnlyList<int>? Seasons { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
-    private bool busy;
+    private List<OwnedCopy> copies = [];
+    private bool busy, wasOpen, changed;
 
-    private async Task Pick(OwnedFormat f)
+    protected override void OnParametersSet()
+    {
+        if (Open && !wasOpen) { copies = [.. Copies ?? []]; changed = false; }
+        wasOpen = Open;
+    }
+
+    private static OwnedCopy New(OwnedFormat f, int? season) => new(f, season, WatchSource.Manual, DateTimeOffset.Now);
+
+    private Task ToggleFormat(OwnedFormat f, bool on) => Act(async () =>
+    {
+        if (on) { await Api.RemoveFromLibraryAsync(Type, TmdbId, f); copies.RemoveAll(c => c.Format == f); }
+        else { await Api.AddToLibraryAsync(Type, TmdbId, f); copies.Add(New(f, null)); }
+    });
+
+    /// <summary>"All seasons": one whole-show copy instead of season ones.</summary>
+    private Task SetWhole(OwnedFormat f) => Act(async () =>
+    {
+        if (copies.Any(c => c.Format == f && c.SeasonNumber is null)) return;
+        await Api.RemoveFromLibraryAsync(Type, TmdbId, f);
+        await Api.AddToLibraryAsync(Type, TmdbId, f);
+        copies.RemoveAll(c => c.Format == f);
+        copies.Add(New(f, null));
+    });
+
+    /// <summary>One season on or off. Picking a season while "All seasons" is on narrows it to that season.</summary>
+    private Task ToggleSeason(OwnedFormat f, int season, bool has) => Act(async () =>
+    {
+        if (has)
+        {
+            await Api.RemoveFromLibraryAsync(Type, TmdbId, f, season);
+            copies.RemoveAll(c => c.Format == f && c.SeasonNumber == season);
+            if (!copies.Any(c => c.Format == f)) { await Api.AddToLibraryAsync(Type, TmdbId, f); copies.Add(New(f, null)); }   // last one off: back to the whole show
+            return;
+        }
+        if (copies.Any(c => c.Format == f && c.SeasonNumber is null))
+        {
+            await Api.RemoveFromLibraryAsync(Type, TmdbId, f);
+            copies.RemoveAll(c => c.Format == f);
+        }
+        await Api.AddToLibraryAsync(Type, TmdbId, f, season);
+        copies.Add(New(f, season));
+    });
+
+    private Task RemoveAll() => Act(async () =>
+    {
+        await Api.RemoveFromLibraryAsync(Type, TmdbId);
+        copies.Clear();
+        Toasts.Show("Removed from your library");
+    });
+
+    private async Task Act(Func<Task> work)
     {
         busy = true;
-        try
-        {
-            await Api.AddToLibraryAsync(Type, TmdbId, f);
-            Toasts.Show($"In your library ({OwnedFormats.Label(f)})");
-            await OpenChanged.InvokeAsync(false);
-            await OnChanged.InvokeAsync();
-        }
+        try { await work(); changed = true; }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { busy = false; }
     }
 
-    private async Task Remove()
+    private async Task Close(bool open)
     {
-        busy = true;
-        try
-        {
-            await Api.RemoveFromLibraryAsync(Type, TmdbId);
-            Toasts.Show("Removed from your library");
-            await OpenChanged.InvokeAsync(false);
-            await OnChanged.InvokeAsync();
-        }
-        catch (Exception ex) { Toasts.Error(ex); }
-        finally { busy = false; }
+        await OpenChanged.InvokeAsync(open);
+        if (!open && changed) { changed = false; await OnChanged.InvokeAsync(); }
     }
 }

@@ -11,7 +11,7 @@
         <button class="@(type == MediaType.Show ? "on" : "")" @onclick="() => type = MediaType.Show">Shows</button>
     </div>
 </div>
-<p class="muted small">What you own, separate from what you've watched. Add things with <b>Own it</b> on any movie or show; Plex and Jellyfin can add what lands on your server (Settings → Media servers).</p>
+<p class="muted small">What you own, separate from what you've watched, in as many formats as you have it (and for shows, which seasons). Add things with <b>Own it</b> on any movie or show; Plex and Jellyfin add what lands on your server (Settings → Media servers), and you can import what's already there (Settings → Import).</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }
@@ -24,20 +24,24 @@ else if (items is not null)
     </div>
     <div class="chips">
         <button class="chip @(format is null ? "on" : "")" @onclick="() => format = null">Any format</button>
-        @foreach (var f in items.Select(i => i.Format).Distinct().Order())
+        @foreach (var f in items.SelectMany(Formats).Distinct().Order())
         {
-            <button class="chip @(format == f ? "on" : "")" @onclick="() => format = format == f ? null : f" @key="f">@OwnedFormats.Label(f) · @items.Count(i => i.Format == f)</button>
+            <button class="chip @(format == f ? "on" : "")" @onclick="() => format = format == f ? null : f" @key="f">@OwnedFormats.Label(f) · @items.Count(i => Formats(i).Contains(f))</button>
         }
         <button class="chip @(unwatched ? "on" : "")" @onclick="() => unwatched = !unwatched">Not watched yet</button>
     </div>
-    var shown = items.Where(i => (type is null || i.Media.Type == type) && (format is null || i.Format == format) && (!unwatched || !i.Watched)
+    var shown = items.Where(i => (type is null || i.Media.Type == type) && (format is null || Formats(i).Contains(format.Value)) && (!unwatched || !i.Watched)
         && TextMatch.Contains(i.Media.Title, find)).ToList();
     <p class="muted small">@shown.Count of @items.Count</p>
     <div class="poster-grid">
         @foreach (var i in shown)
         {
-            <PosterCard Media="i.Media" Badge="@OwnedFormats.Label(i.Format)" Sub="@(i.Watched ? "Watched" : "Not watched yet")"
-                        SubTitle="@($"Added {(i.AddedAt.ToLocalTime()).ToString(Fmt.DateLong)}{(i.Source == WatchSource.Manual ? "" : $" by {WatchSources.Name(i.Source)}")}")" @key="(i.Media.Type, i.Media.TmdbId)" />
+            var copies = Copies(i);
+            var kinds = copies.Select(c => c.Format).Distinct().ToList();
+            <PosterCard Media="i.Media" Badge="@(kinds.Count == 1 ? OwnedFormats.Label(kinds[0]) : $"{OwnedFormats.Label(kinds[0])} +{kinds.Count - 1}")"
+                        Detail="@(kinds.Count > 1 || copies.Any(c => c.SeasonNumber is not null) ? OwnedFormats.Describe(copies) : null)"
+                        Sub="@(i.Watched ? "Watched" : "Not watched yet")"
+                        SubTitle="@($"{OwnedFormats.Describe(copies)} · added {(i.AddedAt.ToLocalTime()).ToString(Fmt.DateLong)}{(i.Source == WatchSource.Manual ? "" : $" by {WatchSources.Name(i.Source)}")}")" @key="(i.Media.Type, i.Media.TmdbId)" />
         }
     </div>
 }
@@ -48,6 +52,10 @@ else if (items is not null)
     private OwnedFormat? format;
     private bool unwatched;
     private string find = "";
+
+    /// <summary>Every copy; an older server sends only the one format.</summary>
+    private static IReadOnlyList<OwnedCopy> Copies(LibraryEntry i) => i.Copies is { Count: > 0 } c ? c : [new OwnedCopy(i.Format, null, i.Source, i.AddedAt)];
+    private static IEnumerable<OwnedFormat> Formats(LibraryEntry i) => Copies(i).Select(c => c.Format).Distinct();
 
     protected override Task OnInitializedAsync() => Load();
 

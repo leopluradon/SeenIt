@@ -863,14 +863,9 @@ namespace SeenIt.Server.Data.Migrations
 
             modelBuilder.Entity("SeenIt.Server.Data.LibraryItem", b =>
                 {
-                    b.Property<Guid>("UserId")
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TmdbId")
-                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("AddedAt")
                         .HasColumnType("timestamp with time zone");
@@ -881,10 +876,27 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<Guid?>("ImportJobId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("SeasonNumber")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Source")
                         .HasColumnType("integer");
 
-                    b.HasKey("UserId", "Type", "TmdbId");
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "Format")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "Type", "TmdbId", "SeasonNumber", "Format"), false);
 
                     b.ToTable("Library");
                 });

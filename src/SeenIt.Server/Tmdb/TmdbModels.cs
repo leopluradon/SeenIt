@@ -61,7 +61,13 @@ public record TmdbMovie(
     string? OriginalLanguage = null,
     List<TmdbCountry>? ProductionCountries = null,
     List<TmdbCompany>? ProductionCompanies = null,
-    TmdbCollectionRef? BelongsToCollection = null);
+    TmdbCollectionRef? BelongsToCollection = null,
+    TmdbReleaseDates? ReleaseDates = null);
+
+/// <summary>/movie/{id}?append_to_response=release_dates: each country's releases (type 3 theatrical, 4 digital…).</summary>
+public record TmdbReleaseDates(List<TmdbReleaseCountry>? Results);
+public record TmdbReleaseCountry([property: System.Text.Json.Serialization.JsonPropertyName("iso_3166_1")] string? Iso31661, List<TmdbRelease>? ReleaseDates);
+public record TmdbRelease(string? ReleaseDate, int Type, string? Certification);
 
 public record TmdbCollectionRef(int Id, string Name, string? PosterPath, string? BackdropPath);
 public record TmdbCollection(int Id, string Name, string? PosterPath, string? BackdropPath, List<TmdbListItem>? Parts);

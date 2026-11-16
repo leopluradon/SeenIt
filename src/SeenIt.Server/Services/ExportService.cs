@@ -64,7 +64,7 @@ public class ExportService(AppDbContext db, TrackingService tracking, ListServic
         var notes = await db.Notes.AsNoTracking().Where(n => n.UserId == userId)
             .Select(n => new { Type = n.Type.ToString().ToLowerInvariant(), n.TmdbId, n.Text, n.UpdatedAt }).ToListAsync(ct);
         var library = await db.Library.AsNoTracking().Where(l => l.UserId == userId)
-            .Select(l => new { Type = l.Type.ToString().ToLowerInvariant(), l.TmdbId, Format = l.Format.ToString(), l.AddedAt }).ToListAsync(ct);
+            .Select(l => new { Type = l.Type.ToString().ToLowerInvariant(), l.TmdbId, Season = l.SeasonNumber, Format = l.Format.ToString(), l.AddedAt }).ToListAsync(ct);
         var following = await db.Follows.Where(f => f.FollowerId == userId).Join(db.Users, f => f.FolloweeId, u => u.Id, (f, u) => u.UserName).ToListAsync(ct);
         var people = await db.PersonFollows.AsNoTracking().Where(f => f.UserId == userId).OrderBy(f => f.Name)
             .Select(f => new { TmdbPersonId = f.PersonId, f.Name, f.Department, Since = f.CreatedAt }).ToListAsync(ct);

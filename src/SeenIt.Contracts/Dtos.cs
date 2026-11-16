@@ -15,7 +15,8 @@ public static class WatchSources
     public static WatchSource ForImport(ImportKind k) => k switch
     {
         ImportKind.Trakt => WatchSource.TraktImport, ImportKind.Letterboxd => WatchSource.LetterboxdImport,
-        ImportKind.Imdb => WatchSource.ImdbImport, ImportKind.TvTime => WatchSource.TvTimeImport, _ => WatchSource.SimklImport,
+        ImportKind.Imdb => WatchSource.ImdbImport, ImportKind.TvTime => WatchSource.TvTimeImport,
+        ImportKind.MediaServer => WatchSource.Jellyfin, _ => WatchSource.SimklImport,
     };
 
     public static string Name(ImportKind k) => Name(ForImport(k));
@@ -393,8 +394,9 @@ public record UserMediaState(
     IReadOnlyList<PlayDto>? History = null,    // every play, newest first (movies only)
     bool IsFavorite = false,
     bool NotInterested = false,
-    OwnedFormat? Owned = null,    // in your library, and how
-    string? Note = null);         // your private note
+    OwnedFormat? Owned = null,    // in your library, and how (the first copy; Copies has them all)
+    string? Note = null,          // your private note
+    IReadOnlyList<OwnedCopy>? Copies = null);
 
 public record MovieDetail(
     int TmdbId,
@@ -415,7 +417,35 @@ public record MovieDetail(
     IReadOnlyList<Video> Videos,
     IReadOnlyList<MediaSummary> Recommendations,
     UserMediaState? User,
-    CollectionDto? Collection = null);
+    CollectionDto? Collection = null,
+    ReleaseStatus? Release = null);   // in theaters / coming to theaters, for the viewer's country
+
+/// <summary>Where a movie is in its release, for one country: TMDB's theatrical and digital dates there.</summary>
+/// <param name="Kind">InTheaters or ComingToTheaters.</param>
+public record ReleaseStatus(ReleaseKind Kind, DateOnly Theatrical, DateOnly? Digital, string Country);
+public enum ReleaseKind { InTheaters, ComingToTheaters }
+
+public static class ReleaseStatuses
+{
+    /// <summary>How long a film counts as in cinemas after it opens. TMDB has no end date, and films keep playing
+    /// for weeks after they're out on digital (Other Mommy: cinemas Oct 9, digital Nov 10, still showing).</summary>
+    public const int TheatricalRunDays = 90;
+
+    /// <summary>
+    /// From one country's release dates (TMDB types: 2 limited and 3 wide theatrical, 4 digital): coming to
+    /// theaters when the first theatrical date is ahead; in theaters for the usual run after it opens, whether or
+    /// not it's on digital yet (Digital says when). Null otherwise: long released, or straight to streaming.
+    /// </summary>
+    public static ReleaseStatus? For(IEnumerable<(int Type, DateOnly Date)> dates, string country, DateOnly today)
+    {
+        var list = dates.ToList();
+        if (list.Where(d => d.Type is 2 or 3).Select(d => (DateOnly?)d.Date).Min() is not { } theatrical) return null;
+        var digital = list.Where(d => d.Type == 4).Select(d => (DateOnly?)d.Date).Min();
+        if (theatrical > today) return new(ReleaseKind.ComingToTheaters, theatrical, digital, country);
+        if (today.DayNumber - theatrical.DayNumber > TheatricalRunDays) return null;
+        return new(ReleaseKind.InTheaters, theatrical, digital, country);
+    }
+}
 
 /// <summary>A TMDB movie collection (franchise), with which parts the user has seen.</summary>
 public record CollectionDto(int Id, string Name, string? PosterPath, string? BackdropPath, IReadOnlyList<CollectionPart> Parts)
@@ -778,7 +808,8 @@ public record ItemStatus(
     ShowTrackStatus? ShowStatus = null,
     int? Rewatch = null,
     bool Completed = false,
-    OwnedFormat? Owned = null);   // in your library, and how
+    OwnedFormat? Owned = null,    // in your library, and how (the first copy)
+    IReadOnlyList<OwnedCopy>? Copies = null);
 public record ShowStatusRequest(ShowTrackStatus Status);
 
 public record NotInterestedEntry(MediaSummary Media, DateTimeOffset AddedAt);
@@ -787,14 +818,43 @@ public record NotInterestedEntry(MediaSummary Media, DateTimeOffset AddedAt);
 public enum OwnedFormat { Digital, BluRay, Uhd, Dvd, MediaServer, Other }
 public static class OwnedFormats
 {
+    /// <summary>
+    /// What you own of a title in a few words: "DVD · Media server", or for a show "Blu-ray (S1–3) · Media server".
+    /// A format you have the whole show in doesn't list its seasons.
+    /// </summary>
+    public static string Describe(IEnumerable<OwnedCopy> copies) => string.Join(" · ", copies
+        .GroupBy(c => c.Format).OrderBy(g => g.Key)
+        .Select(g => g.Any(c => c.SeasonNumber is null) ? Label(g.Key) : $"{Label(g.Key)} ({Seasons(g.Select(c => c.SeasonNumber!.Value))})"));
+
+    /// <summary>Season numbers as ranges: 1, 2, 3, 5 → "S1–3, S5"; specials are "Specials".</summary>
+    public static string Seasons(IEnumerable<int> seasons)
+    {
+        var list = seasons.Distinct().Order().ToList();
+        var parts = new List<string>();
+        foreach (var n in list.Where(n => n > 0))
+        {
+            if (parts.Count > 0 && parts[^1] is var last && RangeEnd(last) == n - 1)
+                parts[^1] = $"{last.Split('–')[0]}–{n}";
+            else parts.Add($"S{n}");
+        }
+        if (list.Contains(0)) parts.Add("Specials");
+        return string.Join(", ", parts);
+
+        static int RangeEnd(string part) => int.Parse(part.Contains('–') ? part[(part.IndexOf('–') + 1)..] : part[1..]);
+    }
+
     public static string Label(OwnedFormat f) => f switch
     {
         OwnedFormat.BluRay => "Blu-ray", OwnedFormat.Uhd => "4K Blu-ray", OwnedFormat.Dvd => "DVD",
         OwnedFormat.MediaServer => "Media server", OwnedFormat.Digital => "Digital", _ => "Other",
     };
 }
-public record LibraryEntry(MediaSummary Media, OwnedFormat Format, DateTimeOffset AddedAt, WatchSource Source, bool Watched);
-public record LibraryRequest(MediaType Type, int TmdbId, OwnedFormat Format);
+/// <summary>One thing you own of a title: a format, and for a show either the whole show (SeasonNumber null) or one season.</summary>
+public record OwnedCopy(OwnedFormat Format, int? SeasonNumber, WatchSource Source, DateTimeOffset AddedAt);
+/// <summary>A title in your library. Format/Source are the first copy's (older apps read only those); Copies has every one.</summary>
+public record LibraryEntry(MediaSummary Media, OwnedFormat Format, DateTimeOffset AddedAt, WatchSource Source, bool Watched,
+    IReadOnlyList<OwnedCopy>? Copies = null);
+public record LibraryRequest(MediaType Type, int TmdbId, OwnedFormat Format, int? SeasonNumber = null);
 /// <summary>An empty Text removes the note.</summary>
 public record NoteRequest(MediaType Type, int TmdbId, string? Text);
 /// <summary>A recommendation and the title of yours that led to it ("Because you liked …").</summary>
@@ -899,7 +959,8 @@ public record PlexUserRequest(string? UserName);
 public record JellyfinEventDto(DateTimeOffset ReceivedAt, string? ItemName, string Outcome);
 public record JellyfinThresholdRequest(int WatchedThresholdPercent);
 
-public enum ImportKind { Trakt, Letterboxd, Imdb, TvTime, Simkl }
+/// <summary>MediaServer: a list of what's on your Jellyfin (its Reports plugin's CSV), for your library.</summary>
+public enum ImportKind { Trakt, Letterboxd, Imdb, TvTime, Simkl, MediaServer }
 
 /// <summary>What an export holds, read before importing (after the parts and "only since" choices). Nothing is matched or saved yet.</summary>
 public record ImportPreview(int Plays, int Ratings, int Watchlist, int ListItems, int Lists, int Favorites, int Library, int ShowsWithProgress, DateOnly? From, DateOnly? To)

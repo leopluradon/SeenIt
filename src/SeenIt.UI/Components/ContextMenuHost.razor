@@ -54,7 +54,7 @@
 {
     <AddToListDialog Open="listOpen" OpenChanged="ListClosed" Type="d.Type" TmdbId="d.Id" Selected="listSelected" />
     <RecommendDialog Open="recOpen" OpenChanged="o => recOpen = o" Type="d.Type" TmdbId="d.Id" Title="@(d.Title ?? "this")" />
-    <OwnedDialog Open="ownOpen" OpenChanged="o => ownOpen = o" Type="d.Type" TmdbId="d.Id" Title="@(d.Title ?? "this")" Current="actedStatus?.Owned" OnChanged="CtxMenu.RaiseChangedAsync" />
+    <OwnedDialog Open="ownOpen" OpenChanged="o => ownOpen = o" Type="d.Type" TmdbId="d.Id" Title="@(d.Title ?? "this")" Copies="actedStatus?.Copies" OnChanged="CtxMenu.RaiseChangedAsync" />
 }
 
 @code {
@@ -265,7 +265,7 @@
             </button>
             <button type="button" class="ctx-item" role="menuitem" @onclick="() => Recommend(t)"><Icon Name="send" Size="16" /> <span>Recommend to a friend…</span></button>
             <button type="button" class="ctx-item" role="menuitem" @onclick="() => Own(t)">
-                <Icon Name="download" Size="16" /> <span>@(s?.Owned is { } own ? "In your library" : "Own it…")</span><span class="ctx-hint">@(s?.Owned is { } o ? OwnedFormats.Label(o) : "your library")</span>
+                <Icon Name="download" Size="16" /> <span>@(s?.Owned is { } own ? "In your library" : "Own it…")</span><span class="ctx-hint">@(s?.Copies is { Count: > 0 } oc ? OwnedFormats.Describe(oc) : s?.Owned is { } o ? OwnedFormats.Label(o) : "your library")</span>
             </button>
         }
 

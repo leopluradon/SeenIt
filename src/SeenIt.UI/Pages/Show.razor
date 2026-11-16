@@ -44,7 +44,7 @@ else if (s is not null)
                 <button class="btn" @onclick="() => recommendOpen = true" title="Send it to friends"><Icon Name="send" Size="18" /> Recommend</button>
                 @if (u.Owned is { } own)
                 {
-                    <button class="btn btn-on" @onclick="() => ownOpen = true" title="Your library: what you own"><Icon Name="download" Size="18" /> @OwnedFormats.Label(own)</button>
+                    <button class="btn btn-on" @onclick="() => ownOpen = true" title="Your library: what you own"><Icon Name="download" Size="18" /> @(u.Copies is { Count: > 0 } sc ? OwnedFormats.Describe(sc) : OwnedFormats.Label(own))</button>
                 }
                 <button type="button" class="btn btn-more" data-ctx="@Menu.Title(MediaType.Show, Id, s.Name, s.PosterPath)" aria-label="More actions" title="More: own it, pause or drop, rewatch, not interested…"
                         onclick="seenit.openMenuFor(this)"><Icon Name="more" Size="18" /></button>
@@ -244,7 +244,7 @@ else if (s is not null)
                      What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode"  AskWhen="askWhen" />
         <WatchDialog Open="pendingSeason is not null" OpenChanged="o => { if (!o) pendingSeason = null; }" What="@(pendingSeason?.Name ?? "")" Bulk="true" OnPick="WatchSeason"
                      Through="seasonThrough" ThroughNote=" in the earlier seasons" />
-        <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Show" TmdbId="Id" Title="@s.Name" Current="s.User?.Owned" OnChanged="Reload" />
+        <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Show" TmdbId="Id" Title="@s.Name" Copies="s.User?.Copies" Seasons="@s.Seasons.Select(x => x.SeasonNumber).ToList()" OnChanged="Reload" />
         <RecommendDialog @bind-Open="recommendOpen" Type="MediaType.Show" TmdbId="Id" Title="@s.Name" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Show" TmdbId="s.TmdbId" Title="@s.Name" />

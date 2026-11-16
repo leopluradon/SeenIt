@@ -174,8 +174,20 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         if (p.NotificationType == "ItemAdded")
         {
             if (await ResolveOwnedAsync(p, ct) is not { } owned) return "Added to the server, but couldn't match it to TMDB";
-            return await library.AddAsync(user.Id, owned.Type, owned.Id, OwnedFormat.MediaServer, source, ct)
-                ? "Added to your library" : "Already in your library";
+            // An episode or season says which season you have; a series on its own only that the show is there.
+            // (Jellyfin sends the series first, then its seasons and episodes, which then replace it.)
+            int? season = p.ItemType switch
+            {
+                "Episode" => p.SeasonNumber,
+                "Season" => p.SeasonNumber ?? p.EpisodeNumber,   // a season's own number comes as its IndexNumber
+                _ => null,
+            };
+            if (owned.Type == MediaType.Show && season is null
+                && await db.Library.AnyAsync(l => l.UserId == user.Id && l.Type == MediaType.Show && l.TmdbId == owned.Id && l.Format == OwnedFormat.MediaServer && l.SeasonNumber != null, ct))
+                return "Already in your library";
+            return await library.AddAsync(user.Id, owned.Type, owned.Id, OwnedFormat.MediaServer, source, ct, season)
+                ? season is { } sn ? $"Added season {sn} to your library" : "Added to your library"
+                : "Already in your library";
         }
         if (p.NotificationType is "PlaybackStart" or "PlaybackProgress" && p.ItemType is "Movie" or "Episode")
             return await NowPlayingAsync(user, p, source, ct);

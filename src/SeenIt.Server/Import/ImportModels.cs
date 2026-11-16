@@ -18,7 +18,8 @@ public record ImportWatch(ImportRef Item, int? Season, int? Episode, DateTimeOff
 public record ImportRating(ImportRef Item, int? Season, int? Episode, int Rating, DateTimeOffset RatedAt);
 public record ImportListItem(ImportRef Item, DateTimeOffset AddedAt);
 /// <summary>Something owned (Trakt's collection), and in what format.</summary>
-public record ImportOwned(ImportRef Item, OwnedFormat Format, DateTimeOffset AddedAt);
+/// <param name="Season">For a show: the season owned; null for the whole show.</param>
+public record ImportOwned(ImportRef Item, OwnedFormat Format, DateTimeOffset AddedAt, int? Season = null);
 /// <summary>"Watched up to S02E05" (int.MaxValue for "all of it"): expanded into plays once the show's episodes are known.</summary>
 public record ImportProgress(ImportRef Show, int Season, int Episode, DateTimeOffset? LastWatchedAt);
 /// <param name="LegacyName">What an older importer called this list, so a re-import renames it instead of duplicating it.</param>
@@ -147,6 +148,9 @@ public record PendingPlay(int? Season, int? Episode, DateTimeOffset WatchedAt, b
 public record PendingRating(int? Season, int? Episode, int Value, DateTimeOffset RatedAt);
 public record PendingListEntry(string List, string? Description, DateTimeOffset AddedAt);
 
+/// <summary>A copy an unmatched import title would have added to the library.</summary>
+public record PendingOwned(OwnedFormat Format, int? Season, DateTimeOffset AddedAt);
+
 /// <summary>
 /// An unmatched title from an import with everything it would have brought in, kept so the user
 /// can pick the right title later (the uploaded file itself isn't kept).
@@ -154,7 +158,7 @@ public record PendingListEntry(string List, string? Description, DateTimeOffset 
 public record PendingImport(
     string Key, string Label, MediaType Type, string? Title, int? Year,
     List<PendingPlay> Plays, List<PendingRating> Ratings, DateTimeOffset? Watchlist,
-    List<PendingListEntry> Lists, DateTimeOffset? Favorite, ImportProgress? Progress)
+    List<PendingListEntry> Lists, DateTimeOffset? Favorite, ImportProgress? Progress, List<PendingOwned>? Library = null)
 {
     private const int Max = 500;
 
@@ -169,8 +173,9 @@ public record PendingImport(
             var lists = parsed.Lists.SelectMany(l => l.Items.Where(i => Same(i.Item)).Select(i => new PendingListEntry(l.Name, l.Description, i.AddedAt))).ToList();
             var item = new PendingImport($"p{result.Count}", r.Label, r.Type, r.Title, r.Year, plays, ratings,
                 parsed.Watchlist.FirstOrDefault(w => Same(w.Item))?.AddedAt, lists,
-                parsed.Favorites.FirstOrDefault(f => Same(f.Item))?.AddedAt, parsed.Progress.FirstOrDefault(p => Same(p.Show)));
-            if (plays.Count + ratings.Count + lists.Count > 0 || item.Watchlist is not null || item.Favorite is not null || item.Progress is not null)
+                parsed.Favorites.FirstOrDefault(f => Same(f.Item))?.AddedAt, parsed.Progress.FirstOrDefault(p => Same(p.Show)),
+                parsed.Library.Where(o => Same(o.Item)).Select(o => new PendingOwned(o.Format, o.Season, o.AddedAt)).ToList());
+            if (plays.Count + ratings.Count + lists.Count + item.Library!.Count > 0 || item.Watchlist is not null || item.Favorite is not null || item.Progress is not null)
                 result.Add(item);
         }
         return result;
@@ -192,6 +197,7 @@ public record PendingImport(
             parsed.Lists.Add(new ImportList(g.Key, g.First().Description, [.. g.Select(l => new ImportListItem(r, l.AddedAt))]));
         if (Favorite is { } f) parsed.Favorites.Add(new ImportListItem(r, f));
         if (Progress is { } p) parsed.Progress.Add(p with { Show = r });
+        parsed.Library.AddRange((Library ?? []).Select(o => new ImportOwned(r, o.Format, o.AddedAt, o.Season)));
         return parsed;
     }
 
@@ -205,6 +211,8 @@ public record PendingImport(
         if (Watchlist is not null) parts.Add("watchlist");
         if (Favorite is not null) parts.Add("favorite");
         if (Lists.Count > 0) parts.Add(Lists.Count == 1 ? $"list “{Lists[0].List}”" : $"{Lists.Count} lists");
+        if (Library is { Count: > 0 } owned)
+            parts.Add("library: " + OwnedFormats.Describe(owned.Select(o => new OwnedCopy(o.Format, o.Season, WatchSource.Manual, o.AddedAt))));
         return string.Join(" · ", parts);
     }
 }

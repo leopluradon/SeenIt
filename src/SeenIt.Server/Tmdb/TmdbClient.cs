@@ -43,7 +43,7 @@ public class TmdbClient
     }
 
     public Task<TmdbMovie?> GetMovieAsync(int id, bool full, CancellationToken ct = default) =>
-        GetAsync<TmdbMovie>($"movie/{id}?append_to_response=credits" + (full ? ",videos,recommendations" : ""),
+        GetAsync<TmdbMovie>($"movie/{id}?append_to_response=credits" + (full ? ",videos,recommendations,release_dates" : ""),
             full ? TimeSpan.FromHours(1) : TimeSpan.FromMinutes(10), ct);
 
     public Task<TmdbShow?> GetShowAsync(int id, bool full, CancellationToken ct = default) =>

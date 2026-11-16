@@ -11,6 +11,13 @@ else if (m is not null)
 {
     <MediaHero Title="@m.Title" Year="m.ReleaseDate?.Year" Tagline="@m.Tagline" Poster="@m.PosterPath" Backdrop="@m.BackdropPath" Score="m.VoteAverage" Votes="m.VoteCount" ScoresFor="(MediaType.Movie, Id)" Watched="@(m.User?.Plays > 0)">
         <Facts>
+            @if (m.Release is { } rs)
+            {
+                @* For the viewer's country: in cinemas now (until it's on digital), or coming. *@
+                <span class="release-badge @(rs.Kind == ReleaseKind.InTheaters ? "now" : "")" title="@ReleaseTip(rs)">
+                    <Icon Name="film" Size="14" /> @(rs.Kind == ReleaseKind.InTheaters ? "In theaters" : $"In theaters {rs.Theatrical.ToString(Fmt.DateShort)}")@(rs.Kind == ReleaseKind.InTheaters && rs.Digital is { } dg && dg <= DateOnly.FromDateTime(DateTime.Today) ? " · on digital" : "")
+                </span>
+            }
             @if (m.ReleaseDate is { } d) { <span>@d.ToString(Fmt.DateLong)</span> }
             @if (m.Runtime is > 0) { <span>@Fmt.Runtime(m.Runtime)</span> }
             @if (m.Genres.Count > 0) { <span>@string.Join(", ", m.Genres)</span> }
@@ -35,7 +42,7 @@ else if (m is not null)
                 @* Things few people use (owning, checking in, not interested…) are in the ⋯ menu; owning shows here once you do. *@
                 @if (u.Owned is { } own)
                 {
-                    <button class="btn btn-on" @onclick="() => ownOpen = true" title="Your library: what you own"><Icon Name="download" Size="18" /> @OwnedFormats.Label(own)</button>
+                    <button class="btn btn-on" @onclick="() => ownOpen = true" title="Your library: what you own"><Icon Name="download" Size="18" /> @(u.Copies is { Count: > 0 } mc ? OwnedFormats.Describe(mc) : OwnedFormats.Label(own))</button>
                 }
                 <button type="button" class="btn btn-more" data-ctx="@Menu.Title(MediaType.Movie, Id, m.Title, m.PosterPath)" aria-label="More actions" title="More: check in, own it, not interested…"
                         onclick="seenit.openMenuFor(this)"><Icon Name="more" Size="18" /></button>
@@ -159,7 +166,7 @@ else if (m is not null)
         <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" AskWhen="askWhen" />
         <EditPlayDialog @bind-Play="editing" What="@m.Title" ReleaseDate="m.ReleaseDate" OnSaved="Reload" />
         <RatePrompt @bind-Open="ratePrompt" Title="@m.Title" OnRate="Rate" />
-        <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" Current="m.User?.Owned" OnChanged="Reload" />
+        <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" Copies="m.User?.Copies" OnChanged="Reload" />
         <RecommendDialog @bind-Open="recommendOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Selected="user.ListIds.ToList()" />
         <FixMatchDialog @bind-Open="fixOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Title="@m.Title" />
@@ -168,6 +175,10 @@ else if (m is not null)
 
 <ReloadOnMenu OnChange="Reload" />
 @code {
+    private static string ReleaseTip(ReleaseStatus r) =>
+        (r.Kind == ReleaseKind.InTheaters ? $"In theaters since {r.Theatrical.ToString(Fmt.DateLong)}" : $"In theaters {r.Theatrical.ToString(Fmt.DateLong)}")
+        + (r.Digital is { } dg ? $" · on digital {dg.ToString(Fmt.DateLong)}" : "") + $" ({r.Country})";
+
     [Parameter] public int Id { get; set; }
     private MovieDetail? m;
     private string? error;

@@ -875,6 +875,18 @@ else { <h1>Settings</h1> }
                         <InputFile OnChange="e => Upload(ImportKind.Simkl, e)" accept=".zip,.json,.csv,application/zip,application/x-zip-compressed,application/json,text/csv" class="visually-hidden" disabled="@uploading" />
                     </label>
                 </div>
+                <div class="import-card">
+                    <h3>Jellyfin library</h3>
+                    <ol class="small">
+                        <li>In Jellyfin, add the <b>Reports</b> plugin from the plugin catalog.</li>
+                        <li>In Reports, list your movies (and for TV, your episodes or seasons) and export to CSV.</li>
+                        <li>Upload the <code>.csv</code>.</li>
+                    </ol>
+                    <p class="muted small">Fills in <a href="library">My library</a> with what's on your server, as “Media server”. It doesn't mark anything watched. A name and year is enough; a TMDb or IMDb column matches exactly, and for TV, Series and Season columns record which seasons you have.</p>
+                    <label class="btn @(uploading ? "disabled" : "")"><Icon Name="upload" Size="16" /> Upload Jellyfin report
+                        <InputFile OnChange="e => Upload(ImportKind.MediaServer, e)" accept=".csv,text/csv" class="visually-hidden" disabled="@uploading" />
+                    </label>
+                </div>
             </div>
 
             <MatchImportDialog JobId="matchJob" @bind-Item="matching" OnMatched="LoadImports" />

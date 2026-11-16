@@ -633,9 +633,13 @@ public class ListLike
 /// <summary>Something you own (disc, digital purchase, on your media server), separate from what you've watched.</summary>
 public class LibraryItem
 {
+    /// <summary>One row per title, format and (for shows) season: a movie on DVD and on your server is two rows.</summary>
+    public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
     public MediaType Type { get; set; }   // Movie or Show
     public int TmdbId { get; set; }
+    /// <summary>A show's season this copy is of; null for a movie or the whole show.</summary>
+    public int? SeasonNumber { get; set; }
     public OwnedFormat Format { get; set; }
     /// <summary>Manual, or the media server that added it (Plex, Jellyfin).</summary>
     public WatchSource Source { get; set; } = WatchSource.Manual;

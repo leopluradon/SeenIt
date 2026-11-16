@@ -36,6 +36,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
             ImportKind.Letterboxd => LetterboxdParser.Parse(files),
             ImportKind.Imdb => ImdbParser.Parse(files),
             ImportKind.TvTime => TvTimeParser.Parse(files),
+            ImportKind.MediaServer => MediaServerParser.Parse(files),
             _ => SimklParser.Parse(files),
         };
     }
@@ -66,6 +67,7 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
                 ImportKind.Letterboxd => "No Letterboxd diary, watched, ratings, watchlist or list files were found in that file.",
                 ImportKind.Imdb => "That doesn't look like an IMDb ratings, watchlist or list export (a CSV with a Const column).",
                 ImportKind.TvTime => "No seen_episode CSV was found. Upload TV Time's whole export zip.",
+                ImportKind.MediaServer => "No titles were found. Upload a CSV with a Name (or Title) column, like the Jellyfin Reports plugin's export.",
                 _ => "No movies or shows were found in that Simkl backup.",
             });
 
@@ -299,20 +301,21 @@ public class ImportRunner(AppDbContext db, TmdbClient tmdb, CatalogService catal
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>Owned titles (Trakt's collection) into the library; ones already there keep what you set.</summary>
+    /// <summary>Owned titles (Trakt's collection, a media server's list) into the library; a copy already there is skipped.</summary>
     private async Task ImportLibraryAsync(ImportJob job, List<ImportOwned> owned, CancellationToken ct)
     {
-        var existing = (await db.Library.Where(l => l.UserId == job.UserId).Select(l => new { l.Type, l.TmdbId }).ToListAsync(ct))
-            .Select(l => (l.Type, l.TmdbId)).ToHashSet();
+        var existing = (await db.Library.Where(l => l.UserId == job.UserId).Select(l => new { l.Type, l.TmdbId, l.SeasonNumber, l.Format }).ToListAsync(ct))
+            .Select(l => (l.Type, l.TmdbId, l.SeasonNumber, l.Format)).ToHashSet();
         var source = WatchSources.ForImport(job.Kind);
         foreach (var o in owned)
         {
             if (await ResolveAsync(job, o.Item, ct) is { } id)
             {
-                if (!existing.Add((o.Item.Type, id))) job.Skipped++;
+                var season = o.Item.Type == MediaType.Show ? o.Season : null;
+                if (!existing.Add((o.Item.Type, id, season, o.Format))) job.Skipped++;
                 else
                 {
-                    db.Library.Add(new LibraryItem { UserId = job.UserId, Type = o.Item.Type, TmdbId = id, Format = o.Format, Source = source,
+                    db.Library.Add(new LibraryItem { UserId = job.UserId, Type = o.Item.Type, TmdbId = id, SeasonNumber = season, Format = o.Format, Source = source,
                         AddedAt = o.AddedAt == default ? DateTimeOffset.UtcNow : o.AddedAt.ToUniversalTime(), ImportJobId = Tag(job) });
                     job.Imported++;
                 }

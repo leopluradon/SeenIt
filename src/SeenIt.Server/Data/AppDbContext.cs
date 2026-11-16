@@ -209,7 +209,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.Title).HasMaxLength(300);
             e.Property(x => x.Role).HasMaxLength(300);
         });
-        b.Entity<LibraryItem>(e => e.HasKey(x => new { x.UserId, x.Type, x.TmdbId }));
+        b.Entity<LibraryItem>(e =>
+        {
+            e.HasKey(x => x.Id);
+            // Season is null for movies and whole shows; those still count as the same copy.
+            e.HasIndex(x => new { x.UserId, x.Type, x.TmdbId, x.SeasonNumber, x.Format }).IsUnique().AreNullsDistinct(false);
+        });
         b.Entity<TitleNote>(e =>
         {
             e.HasKey(x => new { x.UserId, x.Type, x.TmdbId });

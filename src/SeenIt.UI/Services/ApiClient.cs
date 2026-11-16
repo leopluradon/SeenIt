@@ -105,7 +105,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         GetAsync<PagedResult<MediaSummary>>($"api/catalog/search?q={Uri.EscapeDataString(q)}&page={page}" + (type is null ? "" : $"&type={type}"));
     public Task<PagedResult<MediaSummary>> BrowseAsync(MediaType type, string list, int page = 1) =>
         GetAsync<PagedResult<MediaSummary>>($"api/catalog/browse/{type}/{list}?page={page}&region={DeviceRegion}");
-    public Task<MovieDetail> MovieAsync(int id) => GetAsync<MovieDetail>($"api/catalog/movie/{id}");
+    public Task<MovieDetail> MovieAsync(int id) => GetAsync<MovieDetail>($"api/catalog/movie/{id}?region={DeviceRegion}");
     public Task<ShowDetail> ShowAsync(int id) => GetAsync<ShowDetail>($"api/catalog/show/{id}");
     public Task<SeasonDetail> SeasonAsync(int id, int season) => GetAsync<SeasonDetail>($"api/catalog/show/{id}/season/{season}");
     public Task<PersonDetail> PersonAsync(int id) => GetAsync<PersonDetail>($"api/catalog/person/{id}");
@@ -272,8 +272,11 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<ListFeedsDto> ListFeedsAsync(Guid id) => GetAsync<ListFeedsDto>($"api/lists/{id}/feeds");
     public Task SaveNoteAsync(MediaType type, int id, string? text) => SendAsync(HttpMethod.Put, "api/notes", new NoteRequest(type, id, text));
     public Task<List<LibraryEntry>> LibraryAsync() => GetAsync<List<LibraryEntry>>("api/library");
-    public Task AddToLibraryAsync(MediaType type, int id, OwnedFormat format) => SendAsync(HttpMethod.Post, "api/library", new LibraryRequest(type, id, format));
-    public Task RemoveFromLibraryAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/library?type={type}&tmdbId={id}");
+    public Task AddToLibraryAsync(MediaType type, int id, OwnedFormat format, int? season = null) =>
+        SendAsync(HttpMethod.Post, "api/library", new LibraryRequest(type, id, format, season));
+    /// <summary>No format: all of it; a format: that format (and its seasons); a season too: just that season.</summary>
+    public Task RemoveFromLibraryAsync(MediaType type, int id, OwnedFormat? format = null, int? season = null) =>
+        SendAsync(HttpMethod.Delete, $"api/library?type={type}&tmdbId={id}" + (format is { } f ? $"&format={f}" : "") + (season is { } s ? $"&season={s}" : ""));
     public Task<List<string>> GenresAsync() => GetAsync<List<string>>("api/catalog/genres");
     public Task<List<ListSummary>> SavedListsAsync() => GetAsync<List<ListSummary>>("api/lists/saved");
     public Task<List<ListSummary>> BrowseListsAsync(string? q, bool recent) =>
