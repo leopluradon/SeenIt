@@ -792,8 +792,13 @@ public static class ApiEndpoints
                 string? sort, int? page, int? pageSize, string? tz, string? group, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
         {
             if (await s.ViewableAsync(name, p.OptionalUserId(), ct) is not { } owner) return Results.NotFound();
-            var history = await t.GetHistoryAsync(owner.Id, new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 5000), tz, group == "show", ShowSortOf(sort)), ct);
-            return Results.Ok(owner.Id == p.OptionalUserId() ? history : history with { Items = await t.MarkSeenByAsync(p.OptionalUserId(), history.Items, ct) });
+            var mine = owner.Id == p.OptionalUserId();
+            // Someone keeping where they watched private: no source tags, and filtering by source does nothing (it'd give it away).
+            var hidden = !mine && SocialService.HidesSources(owner);
+            var history = await t.GetHistoryAsync(owner.Id, new HistoryQuery(type, q, hidden ? null : source, genre, from, to, sort == "oldest", page ?? 1, Math.Clamp(pageSize ?? 50, 1, 5000), tz, group == "show", ShowSortOf(sort)), ct);
+            if (mine) return Results.Ok(history);
+            var items = await t.MarkSeenByAsync(p.OptionalUserId(), history.Items, ct);
+            return Results.Ok(history with { Items = hidden ? items.Select(SocialService.Unsourced).ToList() : items });
         });
         app.MapGet("/api/users/{name}/history/genres", async (string name, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
             await s.ViewableAsync(name, p.OptionalUserId(), ct) is { } owner ? Results.Ok(await t.GetHistoryGenresAsync(owner.Id, ct)) : Results.NotFound());

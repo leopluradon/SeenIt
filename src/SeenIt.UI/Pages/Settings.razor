@@ -103,6 +103,11 @@ else { <h1>Settings</h1> }
                     </select>
                 }
             </div>
+            <h3>Where you watched</h3>
+            <label class="check">
+                <input type="checkbox" checked="@Fmt.Prefs.HideSourcesFromOthers" @onchange='e => SavePrefs(p => p with { HideSourcesFromOthers = (bool)e.Value! }, (bool)e.Value! ? "Others won’t see where you watched" : "Others can see where you watched")' />
+                <span><b>Keep it private</b> <span class="muted small">Others who can see your history or what you're watching don't see where it came from: no “Jellyfin”, “Plex” or “Letterboxd” tag on your plays, no “watching on Jellyfin”, and filtering your history by source shows them nothing. You still see it yourself.</span></span>
+            </label>
             <h3>Who can follow you</h3>
             <div class="segmented" role="radiogroup" aria-label="Who can follow you">
                 <button role="radio" aria-checked="@(!Fmt.Prefs.ApproveFollowers)" class="@(Fmt.Prefs.ApproveFollowers ? "" : "on")"

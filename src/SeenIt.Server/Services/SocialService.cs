@@ -83,6 +83,11 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         recent = await tracking.MarkEpisodesAsync(recent, ct);
         var watchingNow = See(ProfilePart.WatchingNow) ? await checkIns.GetAsync(owner.Id, ct) : null;
         if (!isMe && watchingNow is not null) watchingNow = (await tracking.MarkSeenByAsync(viewer, [watchingNow], ct))[0];
+        if (!isMe && HidesSources(owner))
+        {
+            recent = recent.Select(Unsourced).ToList();
+            if (watchingNow is not null) watchingNow = Unsourced(watchingNow);
+        }
         var topRated = See(ProfilePart.Ratings) ? await tracking.TopRatedAsync(owner.Id, 18, ct) : [];
 
         return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, true, followers, followingCount,
@@ -292,13 +297,14 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var historyIds = people.Where(u => CanSee(u, me, mutualIds.Contains(u.Id), ProfilePart.History)).Select(u => u.Id).ToList();
         var live = (await db.CheckIns.AsNoTracking().Where(c => watchingIds.Contains(c.UserId)).ToListAsync(ct)).Where(CheckInService.IsLive).ToList();
         var liveDtos = await tracking.MarkSeenByAsync(me, await checkIns.ToDtosAsync(live, ct), ct);
-        var watching = live.Zip(liveDtos, (c, d) => new FriendWatching(byId[c.UserId], d)).ToList();
+        var hiding = people.Where(HidesSources).Select(u => u.Id).ToHashSet();
+        var watching = live.Zip(liveDtos, (c, d) => new FriendWatching(byId[c.UserId], hiding.Contains(c.UserId) ? Unsourced(d) : d)).ToList();
 
         var rows = await db.WatchEvents.AsNoTracking()
             .Where(w => historyIds.Contains(w.UserId) && w.WatchedAt > WatchDates.Unknown && w.WatchedAt <= DateTimeOffset.UtcNow.AddDays(1))
             .NewestFirst().Take(Math.Clamp(take, 1, 100)).ToListAsync(ct);
         var entries = await tracking.MarkEpisodesAsync(await tracking.MarkSeenByAsync(me, await tracking.ToHistoryAsync(rows, ct), ct), ct);
-        return new FeedDto(watching, rows.Zip(entries, (w, e) => new ActivityItem(byId[w.UserId], e)).ToList());
+        return new FeedDto(watching, rows.Zip(entries, (w, e) => new ActivityItem(byId[w.UserId], hiding.Contains(w.UserId) ? Unsourced(e) : e)).ToList());
     }
 
     /// <summary>The people you follow whose history you may see.</summary>
@@ -319,10 +325,14 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var people = await HistoryFolloweesAsync(me, ct);
         var cards = await CardsAsync(me, people, ct);
         var names = people.ToDictionary(u => u.Id, u => u.UserName!);
-        var ids = people.Where(u => string.IsNullOrEmpty(user) || string.Equals(u.UserName, user, StringComparison.OrdinalIgnoreCase)).Select(u => u.Id).ToList();
+        var hiding = people.Where(HidesSources).Select(u => u.UserName!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Filtering by source would give away where the people who keep that private watched things, so they're left out of it.
+        var ids = people.Where(u => (string.IsNullOrEmpty(user) || string.Equals(u.UserName, user, StringComparison.OrdinalIgnoreCase))
+                                    && !(f.Source is not null && hiding.Contains(u.UserName!))).Select(u => u.Id).ToList();
         if (ids.Count == 0) return new HistoryPage([], 1, 0, 0, 0, [], cards);
         var page = await tracking.GetHistoryAsync(ids, f, names, ct);
-        return page with { Items = await tracking.MarkSeenByAsync(me, page.Items, ct), People = cards };
+        var items = await tracking.MarkSeenByAsync(me, page.Items, ct);
+        return page with { Items = items.Select(h => h.Who is { } who && hiding.Contains(who) ? Unsourced(h) : h).ToList(), People = cards };
     }
 
     public async Task<List<string>> FriendsHistoryGenresAsync(Guid me, CancellationToken ct)
@@ -330,6 +340,12 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var ids = (await HistoryFolloweesAsync(me, ct)).Select(u => u.Id).ToList();
         return ids.Count == 0 ? [] : await tracking.GetHistoryGenresAsync(ids, ct);
     }
+
+    /// <summary>Settings → Privacy: "Keep where you watched private".</summary>
+    public static bool HidesSources(AppUser u) => u.Prefs().HideSourcesFromOthers;
+    /// <summary>A play or check-in as others see it when its owner keeps sources private: no Jellyfin/Letterboxd tag.</summary>
+    public static HistoryEntry Unsourced(HistoryEntry h) => h with { Source = WatchSource.Manual };
+    public static NowWatchingDto Unsourced(NowWatchingDto n) => n with { Source = WatchSource.Manual };
 
     /// <summary>Whether the viewer may see this person's profile (and so compare against it).</summary>
     private async Task<(bool Ok, UserCard Card)> VisibleAsync(AppUser user, Guid viewer, CancellationToken ct)

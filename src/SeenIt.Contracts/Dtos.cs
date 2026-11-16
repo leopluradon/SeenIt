@@ -139,7 +139,8 @@ public record UserPrefs(
     IReadOnlyList<string>? ProfileBadges = null,     // badge ids shown next to your name, in order (up to MaxBadges)
     IReadOnlyList<string>? RateKinds = null,         // what "To rate" on Home offers: ScoreKinds keys; null = DefaultRateKinds
     bool HidePlaySources = false,                    // no "Letterboxd"/"Jellyfin" tag on plays in history and on title pages
-    IReadOnlyList<int>? MyServices = null)           // streaming services you have (TMDB provider ids): Where to watch, Pick and the watchlist use them
+    IReadOnlyList<int>? MyServices = null,           // streaming services you have (TMDB provider ids): Where to watch, Pick and the watchlist use them
+    bool HideSourcesFromOthers = false)              // privacy: others don't see where your plays came from, or "watching on Jellyfin"
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
