@@ -180,6 +180,7 @@ public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService 
         var todo = sequence.Take(upTo + 1).Where(x => !watched.Contains(x) && airDates.ContainsKey(x) && Aired(airDates[x], today)).ToList();
 
         // One play each; with a custom date they keep the order's sequence a minute apart.
+        var latest = DateTimeOffset.MinValue;
         for (var i = 0; i < todo.Count; i++)
         {
             var (s, e) = todo[i];
@@ -189,13 +190,14 @@ public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService 
                 WatchTime.Now => DateTimeOffset.UtcNow.AddMinutes(i - todo.Count + 1),
                 _ => TrackingService.PlayTime(req.When, req.WatchedAt, airDates[(s, e)]),
             };
+            if (at > latest) latest = at;
             db.WatchEvents.Add(new WatchEvent { UserId = userId, Type = MediaType.Episode, TmdbId = showId, SeasonNumber = s, EpisodeNumber = e, WatchedAt = at, Source = WatchSource.Manual });
         }
         if (todo.Count > 0)
         {
             await db.Watchlist.Where(w => w.UserId == userId && w.Type == MediaType.Show && w.TmdbId == showId).ExecuteDeleteAsync(ct);
-            // Watching picks a paused show back up, as marking a single episode does.
-            await db.ShowStates.Where(x => x.UserId == userId && x.ShowTmdbId == showId && x.Status == ShowTrackStatus.Paused).ExecuteDeleteAsync(ct);
+            // Watching picks a paused or dropped show back up, as marking a single episode does.
+            await tracking.ResumeOnWatchAsync(userId, showId, latest, ct);
             await db.SaveChangesAsync(ct);
             await tracking.CompleteRewatchIfDoneAsync(userId, showId, ct);
         }

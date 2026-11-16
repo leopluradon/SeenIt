@@ -29,16 +29,14 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
                 if (await catalog.EnsureShowAsync(req.TmdbId, ct) is null) throw new TrackingException("Show not found.");
                 var ep = await db.Episodes.FirstOrDefaultAsync(x => x.ShowTmdbId == req.TmdbId && x.SeasonNumber == s && x.EpisodeNumber == e, ct)
                          ?? throw new TrackingException($"S{s:00}E{e:00} isn't an episode of this show.");
+                var played = PlayTime(when, req.WatchedAt, ep.AirDate);
                 db.WatchEvents.Add(new WatchEvent
                 {
                     UserId = userId, Type = MediaType.Episode, TmdbId = req.TmdbId, SeasonNumber = s, EpisodeNumber = e,
-                    WatchedAt = PlayTime(when, req.WatchedAt, ep.AirDate), Source = source,
+                    WatchedAt = played, Source = source,
                 });
                 await DropFromWatchlistAsync(userId, MediaType.Show, req.TmdbId, ct);
-                // Watching a new episode of a paused show picks it back up.
-                if ((source == WatchSource.Manual || WatchSources.IsScrobbler(source))
-                    && await db.ShowStates.FirstOrDefaultAsync(x => x.UserId == userId && x.ShowTmdbId == req.TmdbId && x.Status == ShowTrackStatus.Paused, ct) is { } paused)
-                    db.ShowStates.Remove(paused);
+                if (source == WatchSource.Manual || WatchSources.IsScrobbler(source)) await ResumeOnWatchAsync(userId, req.TmdbId, played, ct);
                 await db.SaveChangesAsync(ct);
                 await CompleteRewatchIfDoneAsync(userId, req.TmdbId, ct);
                 return 1;
@@ -84,23 +82,43 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
         var added = 0;
         var stamp = DateTimeOffset.UtcNow;
+        var latest = DateTimeOffset.MinValue;
         foreach (var e in episodes.Where(e => !watched.Contains((e.SeasonNumber, e.EpisodeNumber))))
         {
+            var played = PlayTime(when, req.WatchedAt, e.AirDate);
+            if (played > latest) latest = played;
             db.WatchEvents.Add(new WatchEvent
             {
                 UserId = userId, Type = MediaType.Episode, TmdbId = req.ShowTmdbId,
                 SeasonNumber = e.SeasonNumber, EpisodeNumber = e.EpisodeNumber,
                 // "Release date" gives every episode its own air date.
-                WatchedAt = PlayTime(when, req.WatchedAt, e.AirDate), Source = WatchSource.Manual,
+                WatchedAt = played, Source = WatchSource.Manual,
                 // Plays sharing one time sort by when they were recorded: make that the order above, explicitly.
                 CreatedAt = stamp.AddTicks(added * 10),
             });
             added++;
         }
-        if (added > 0) await DropFromWatchlistAsync(userId, MediaType.Show, req.ShowTmdbId, ct);
+        if (added > 0)
+        {
+            await DropFromWatchlistAsync(userId, MediaType.Show, req.ShowTmdbId, ct);
+            await ResumeOnWatchAsync(userId, req.ShowTmdbId, latest, ct);
+        }
         await db.SaveChangesAsync(ct);
         if (added > 0) await CompleteRewatchIfDoneAsync(userId, req.ShowTmdbId, ct);
         return added;
+    }
+
+    /// <summary>
+    /// Watching a paused or dropped show picks it back up, when the viewing is after you paused or dropped it.
+    /// Logging old viewings (catching up your history, "date unknown", release dates) leaves the status alone.
+    /// The change is saved with the caller's SaveChanges.
+    /// </summary>
+    public async Task ResumeOnWatchAsync(Guid userId, int showId, DateTimeOffset watchedAt, CancellationToken ct)
+    {
+        if (await db.ShowStates.FirstOrDefaultAsync(x => x.UserId == userId && x.ShowTmdbId == showId
+                && (x.Status == ShowTrackStatus.Paused || x.Status == ShowTrackStatus.Dropped), ct) is { } state
+            && !WatchDates.IsUnknown(watchedAt) && watchedAt > state.UpdatedAt)
+            db.ShowStates.Remove(state);
     }
 
     // ---------- Rewatches ----------
