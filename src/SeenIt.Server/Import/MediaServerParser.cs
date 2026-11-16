@@ -17,18 +17,21 @@ public static class MediaServerParser
         var now = DateTimeOffset.UtcNow;
         foreach (var (_, text) in files.Where(f => f.Key.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)))
         {
-            foreach (var row in LetterboxdParser.Rows(text.TrimStart('﻿')))
+            foreach (var row in LetterboxdParser.Rows(text.TrimStart('\uFEFF')))
             {
-                string? Get(params string[] keys) => ImportText.Get(row, keys);
+                // Column names vary by tool and version (TMDB_ID, "TMDb Id", Provider_tmdb…): compare them
+                // without case, spaces, underscores or other punctuation.
+                var columns = row.GroupBy(kv => Key(kv.Key)).ToDictionary(g => g.Key, g => g.First().Value);
+                string? Get(params string[] keys) => keys.Select(k => columns.GetValueOrDefault(Key(k))).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
                 var type = Get("Type", "Item Type", "ItemType", "Media Type")?.Trim().ToLowerInvariant();
                 var series = Get("Series", "Series Name", "SeriesName", "Show");
                 var season = ImportText.Int(Get("Season", "Season Number", "SeasonNumber", "ParentIndexNumber"));
                 var name = Get("Name", "Title");
                 var year = ImportText.Int(Get("Year", "Production Year", "ProductionYear"));
                 var added = ImportText.Date(Get("Date Added", "DateCreated", "Date Created", "Added")) ?? now;
-                int? tmdb = ImportText.Id(Get("TMDb", "Tmdb", "TMDB", "TMDb Id", "TmdbId", "Provider_tmdb"));
-                var imdb = ImportText.Imdb(Get("IMDb", "Imdb", "IMDB", "IMDb Id", "ImdbId", "Provider_imdb"));
-                int? tvdb = ImportText.Id(Get("TVDb", "Tvdb", "TVDB", "TVDb Id", "TvdbId", "Provider_tvdb"));
+                int? tmdb = ImportText.Id(Get("TMDb", "TMDb Id", "Provider_tmdb", "The Movie Database"));
+                var imdb = ImportText.Imdb(Get("IMDb", "IMDb Id", "Provider_imdb"));
+                int? tvdb = ImportText.Id(Get("TVDb", "TVDb Id", "Provider_tvdb", "TheTVDB"));
 
                 if (type is "episode" or "season" || (type is null && !string.IsNullOrWhiteSpace(series)))
                 {
@@ -61,4 +64,7 @@ public static class MediaServerParser
         result.Library.AddRange(kept);
         return result;
     }
+
+    /// <summary>"TMDB_ID", "TMDb Id" and "tmdbid" are the same column.</summary>
+    private static string Key(string name) => new(name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 }

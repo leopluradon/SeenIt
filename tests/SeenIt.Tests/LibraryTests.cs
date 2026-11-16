@@ -24,10 +24,17 @@ public class LibraryTests
         // The Reports plugin's movie export: just Name and Year (with a byte-order mark).
         var movies = MediaServerParser.Parse(new Dictionary<string, string>
         {
-            ["report.csv"] = "﻿Name,Year\n3:10 to Yuma,2007\n\"Crouching Tiger, Hidden Dragon\",2000\n,\n",
+            ["report.csv"] = "\uFEFFName,Year\n3:10 to Yuma,2007\n\"Crouching Tiger, Hidden Dragon\",2000\n,\n",
         });
         Assert.Equal(["3:10 to Yuma (2007)", "Crouching Tiger, Hidden Dragon (2000)"], movies.Library.Select(l => l.Item.Label));
         Assert.All(movies.Library, l => Assert.Equal((MediaType.Movie, OwnedFormat.MediaServer, (int?)null), (l.Item.Type, l.Format, l.Season)));
+
+        // A movie export with TMDB ids (header "TMDB_ID"): matched by id, no title search needed.
+        var withIds = MediaServerParser.Parse(new Dictionary<string, string>
+        {
+            ["movies.csv"] = "Title,Year,TMDB_ID\nUnder the Skin,2014,97370\nFantastic Mr. Fox,2009,10315\nFantastic Mr. Fox,2009,10315\n\"Good Morning, Vietnam\",1987,801\n",
+        });
+        Assert.Equal([97370, 10315, 801], withIds.Library.Select(l => l.Item.TmdbId ?? 0));   // the repeated row counts once
 
         // TV with series and season columns: a copy per season, and no separate whole-show copy.
         var tv = MediaServerParser.Parse(new Dictionary<string, string>
