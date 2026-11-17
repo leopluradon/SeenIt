@@ -1881,3 +1881,13 @@ div.badge-pick { cursor: default; }
 .rating-picker.thumbs .thumb:hover { filter: none; opacity: 1; }
 .rating-picker.thumbs .thumb.on { filter: none; opacity: 1; background: var(--accent-soft); border-color: var(--accent); }
 .rating-picker.thumbs.compact .thumb { font-size: 1rem; padding: 4px 9px; }
+
+/* A profile picture is an <img>, and rows like History, alerts and recommendations size every img in them as a
+   poster (".history-link img" and friends). These are more specific, so a picture keeps its avatar size anywhere. */
+img.avatar.avatar-img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; aspect-ratio: auto; box-shadow: none; }
+img.avatar.avatar-img.avatar-xs { width: 20px; height: 20px; }
+img.avatar.avatar-img.avatar-sm { width: 28px; height: 28px; }
+img.avatar.avatar-img.avatar-lg { width: 72px; height: 72px; }
+img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
+/* The friend's picture and name are one link (TitleLink); keep them side by side like the row they sit in. */
+.history-who .title-link { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
