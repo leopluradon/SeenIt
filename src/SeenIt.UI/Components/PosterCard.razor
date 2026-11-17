@@ -40,6 +40,7 @@
     <button type="button" class="poster-more" aria-label="@($"More for {Media.Title}")" title="More"
             onclick="event.preventDefault(); event.stopPropagation(); seenit.openMenuFor(this)"><Icon Name="more" Size="16" /></button>
     <div class="poster-sub" title="@SubTitle">
+        @if (Person is not null) { <TitleLink Href="@PersonHref" Title="@($"{Person}'s profile")">@Person</TitleLink><span> · </span> }
         @if (Sub is not null) { @Sub }
         else { @(Media.Year?.ToString() ?? "")<span class="dot-sep">@(Media.Type == MediaType.Movie ? "Movie" : "TV")</span> }
     </div>
@@ -68,6 +69,9 @@
     [Parameter] public string? Detail { get; set; }
     /// <summary>When the card links to an episode: where the show's name goes (the show page).</summary>
     [Parameter] public string? TitleHref { get; set; }
+    /// <summary>Whose play this is (friends' activity), before Sub; links to PersonHref, their profile.</summary>
+    [Parameter] public string? Person { get; set; }
+    [Parameter] public string? PersonHref { get; set; }
     /// <summary>A premiere/finale badge for an episode's card (recently watched, friends' activity).</summary>
     [Parameter] public EpisodeMark Mark { get; set; }
     /// <summary>False when Detail is an episode title the viewer hasn't seen: it's blurred if they hide spoilers.</summary>

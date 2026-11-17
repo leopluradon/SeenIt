@@ -29,7 +29,7 @@
         @if (watching is { Count: > 0 })
         {
             <div class="friends-watching">
-                @foreach (var w in watching) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
+                @foreach (var w in watching) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" WhoUser="@w.User.UserName" @key="w.User.UserName" /> }
             </div>
         }
         <History Friends="true" />

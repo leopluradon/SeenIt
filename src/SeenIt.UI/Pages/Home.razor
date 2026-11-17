@@ -167,14 +167,14 @@
                                 <h2>Friends' activity</h2>
                                 <div class="section-tools"><a href="friends?tab=feed" class="section-more">Friends <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("friends")' /></div>
                             </div>
-                            @foreach (var w in f.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" @key="w.User.UserName" /> }
+                            @foreach (var w in f.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" WhoUser="@w.User.UserName" @key="w.User.UserName" /> }
                             <div class="poster-scroller">
                                 @foreach (var a in f.Activity)
                                 {
                                     var h = a.Entry;
                                     <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
                                                 Href="@(h.Type == MediaType.Episode ? Fmt.EpisodeHref(h.TmdbId, h.SeasonNumber, h.EpisodeNumber) : null)" Detail="@h.EpisodeTitle" Mark="h.Mark" TitleHref="@(h.Type == MediaType.Episode ? $"show/{h.TmdbId}" : null)" DetailSeen="@(h.YouWatched ?? true)" Ctx="@Menu.Play(h, false)"
-                                                Sub="@($"{a.User.Name} · " + (h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))" SubTitle="@Fmt.Exact(h.WatchedAt)"
+                                                Person="@a.User.Name" PersonHref="@Fmt.UserHref(a.User.UserName)" Sub="@((h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · " : "") + Fmt.Relative(h.WatchedAt))" SubTitle="@Fmt.Exact(h.WatchedAt)"
                                                 ShowScore="false" @key="h.Id" />
                                 }
                             </div>

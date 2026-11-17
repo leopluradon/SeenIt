@@ -3,7 +3,7 @@
 <div class="now-card" data-ctx="@(Item.Type == MediaType.Episode && Item.SeasonNumber is { } cs && Item.EpisodeNumber is { } ce ? Menu.Episode(Item.TmdbId, cs, ce, Item.Title, Item.EpisodeTitle, Item.PosterPath) : Menu.Title(MediaType.Movie, Item.TmdbId, Item.Title, Item.PosterPath))">
     <a href="@Href"><img src="@Img.Poster(Item.PosterPath, "w154")" alt="" /></a>
     <div class="now-body">
-        <span class="now-kicker"><Icon Name="radio" Size="14" /> @(Who is null ? "Watching now" : $"{Who} is watching")@(WatchSources.IsScrobbler(Item.Source) ? $" on {WatchSources.Name(Item.Source)}" : "")</span>
+        <span class="now-kicker"><Icon Name="radio" Size="14" /> @if (Who is null) { <span>Watching now</span> } else { @if (WhoUser is { } wu) { <a href="@Fmt.UserHref(wu)">@Who</a> } else { @Who } <span> is watching</span> }@(WatchSources.IsScrobbler(Item.Source) ? $" on {WatchSources.Name(Item.Source)}" : "")</span>
         <a href="@(Item.Type == MediaType.Episode ? $"show/{Item.TmdbId}" : Href)" class="mini-title">@Item.Title</a>
         @if (Item.Type == MediaType.Episode)
         {
@@ -23,6 +23,8 @@
     [Parameter, EditorRequired] public NowWatchingDto Item { get; set; } = default!;
     /// <summary>Whose check-in this is, for friends'; null for your own.</summary>
     [Parameter] public string? Who { get; set; }
+    /// <summary>Their username, so their name links to their profile.</summary>
+    [Parameter] public string? WhoUser { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
     private Timer? timer;
 
