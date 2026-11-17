@@ -54,7 +54,21 @@ public record MeDto(
 public enum TimeFormat { DaysHours, Hours }
 
 /// <summary>How ratings are given and shown. They're stored as 1–10 (to one decimal) whatever the scale.</summary>
-public enum RatingScale { Ten, FiveStars, Decimal }
+public enum RatingScale { Ten, FiveStars, Decimal, Thumbs }
+
+/// <summary>
+/// "Liked / didn't like" ratings. They're stored as ordinary 1–10 ratings with values no other rating can have
+/// (others are whole or one decimal), so everything that shows a rating can tell a thumb apart and show 👍/👎
+/// to everyone, while taste match, recommendations and stats treat them as roughly 8 and 3.
+/// </summary>
+public static class RatingThumbs
+{
+    public const double Up = 8.05, Down = 3.05;
+    public static bool Is(double rating) => Math.Abs(rating - Up) < 1e-6 || Math.Abs(rating - Down) < 1e-6;
+    /// <summary>Liked: a 👍, or for someone who rates in thumbs, a number of 6 or more (imports, older ratings).</summary>
+    public static bool Liked(double rating) => Is(rating) ? rating > 5 : rating >= 6;
+    public static string Emoji(double rating) => Liked(rating) ? "👍" : "👎";
+}
 
 /// <summary>Only the fields that are set are changed.</summary>
 public record PreferencesRequest(

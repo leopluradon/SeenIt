@@ -805,7 +805,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     public async Task RateAsync(Guid userId, RatingRequest req, CancellationToken ct, DateTimeOffset? ratedAt = null)
     {
         if (double.IsNaN(req.Rating) || req.Rating is < 1 or > 10) throw new TrackingException("Ratings are 1 to 10.");
-        req = req with { Rating = Math.Round(req.Rating, 1, MidpointRounding.AwayFromZero) };
+        if (!RatingThumbs.Is(req.Rating)) req = req with { Rating = Math.Round(req.Rating, 1, MidpointRounding.AwayFromZero) };   // a thumb keeps its marker value
         int? season = null, episode = null;
         if (req.Type == MediaType.Episode)
         {

@@ -430,6 +430,7 @@ else { <h1>Settings</h1> }
                 <button class="@(Fmt.Scale == RatingScale.Ten ? "on" : "")" @onclick="() => SaveScale(RatingScale.Ten)">1–10</button>
                 <button class="@(Fmt.Scale == RatingScale.FiveStars ? "on" : "")" @onclick="() => SaveScale(RatingScale.FiveStars)">★ 5 stars, with halves</button>
                 <button class="@(Fmt.Scale == RatingScale.Decimal ? "on" : "")" @onclick="() => SaveScale(RatingScale.Decimal)">1–10 with decimals (8.1)</button>
+                <button class="@(Fmt.Scale == RatingScale.Thumbs ? "on" : "")" @onclick="() => SaveScale(RatingScale.Thumbs)">👍 Liked / 👎 Didn't like</button>
             </div>
             <h3>To rate, on Home</h3>
             <p class="muted small">What you've watched in the last @ToRateDays days and haven't rated, so you can rate it in one tap. A season shows up once you've seen every episode of it, and a show once it has ended and you've seen it all. Imports are left out. The same choice decides what the “Rate it?” prompt asks about right after you mark a movie or episode watched.</p>
@@ -1486,7 +1487,7 @@ else { <h1>Settings</h1> }
         {
             await Api.SetPreferencesAsync(new PreferencesRequest(RatingScale: scale));
             Session.Update(me => me with { RatingScale = scale });
-            Toasts.Show(scale switch { RatingScale.FiveStars => "Ratings shown as 5 stars", RatingScale.Decimal => "Ratings out of 10, with decimals", _ => "Ratings shown out of 10" });
+            Toasts.Show(scale switch { RatingScale.FiveStars => "Ratings shown as 5 stars", RatingScale.Decimal => "Ratings out of 10, with decimals", RatingScale.Thumbs => "Ratings as liked or didn't like", _ => "Ratings shown out of 10" });
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

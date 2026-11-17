@@ -18,10 +18,19 @@
     </div>
 </div>
 <div class="chips">
-    @for (var i = 10; i >= 1; i--)
+    @if (Fmt.Scale == RatingScale.Thumbs)
     {
-        var n = i;
-        <button class="chip @(stars == n ? "on" : "")" @onclick="() => SetStars(stars == n ? null : n)">@(Fmt.FiveStars ? "★ " + Fmt.Stars(n) : n)</button>
+        @* Thumbs: 10 stands for liked, 1 for didn't like (the same "score" in links and saved filters). *@
+        <button class="chip @(stars == 10 ? "on" : "")" @onclick="() => SetStars(stars == 10 ? null : 10)">👍 Liked</button>
+        <button class="chip @(stars == 1 ? "on" : "")" @onclick="() => SetStars(stars == 1 ? null : 1)">👎 Didn't like</button>
+    }
+    else
+    {
+        @for (var i = 10; i >= 1; i--)
+        {
+            var n = i;
+            <button class="chip @(stars == n ? "on" : "")" @onclick="() => SetStars(stars == n ? null : n)">@(Fmt.FiveStars ? "★ " + Fmt.Stars(n) : n)</button>
+        }
     }
 </div>
 <div class="chips">
@@ -100,7 +109,8 @@ else if (items is not null)
     private string sort = Sorts.Any(x => x.Key == Fmt.Prefs.SortFor("ratings")) ? Fmt.Prefs.SortFor("ratings")! : "recent";
 
     private bool Matches(RatingEntry r) => (filter is null || r.Type == filter)
-        && (stars is null || (Fmt.FiveStars ? (int)Math.Round(r.Rating, MidpointRounding.AwayFromZero) : (int)Math.Floor(r.Rating + 1e-9)) == stars);
+        && (stars is null || (Fmt.Scale == RatingScale.Thumbs ? RatingThumbs.Liked(r.Rating) == (stars >= 6)
+            : (Fmt.FiveStars ? (int)Math.Round(r.Rating, MidpointRounding.AwayFromZero) : (int)Math.Floor(r.Rating + 1e-9)) == stars));
 
     private bool selecting, busy;
     private readonly HashSet<(MediaType, int, int?, int?)> selected = [];

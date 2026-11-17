@@ -39,7 +39,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
     {
         var r = await reviews.BuildAsync(userId, year, month, tz, ct);
         var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.DisplayName, u.RatingScale }).FirstAsync(ct);
-        string? Caption(ReviewItem i) => i.Rating is { } r ? $"★ {Stars(r, user.RatingScale)}" : i.Type == MediaType.Show ? i.Detail : null;
+        string? Caption(ReviewItem i) => i.Rating is { } r ? Badge(r, user.RatingScale) : i.Type == MediaType.Show ? i.Detail : null;
         var pal = await PaletteAsync(userId, ct);
         var goalLines = month is null ? await GoalLinesAsync(userId, year, tz, ct) : [];
 
@@ -96,7 +96,10 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
     }
 
     /// <summary>A 1–10 rating as the viewer shows them: "8", or "4.5" in stars.</summary>
-    private static string Stars(double r, RatingScale scale) => scale switch
+    /// <summary>"★ 8", or 👍/👎 for a thumbs rating.</summary>
+    private static string Badge(double r, RatingScale scale) => RatingThumbs.Is(r) || scale == RatingScale.Thumbs ? RatingThumbs.Emoji(r) : $"★ {Stars(r, scale)}";
+
+    private static string Stars(double r, RatingScale scale) => RatingThumbs.Is(r) || scale == RatingScale.Thumbs ? RatingThumbs.Emoji(r) : scale switch
     {
         RatingScale.FiveStars => (r / 2).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture),
         RatingScale.Decimal => r.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
@@ -167,7 +170,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         {
             y += 70;
             PosterRow(c, pal, ref y, rowLabel, both.Select(x => (x.Media.Title, Poster(posters, x.Media.PosterPath),
-                x.A is { } ra && x.B is { } rb ? $"★{Stars(ra, five)} · ★{Stars(rb, five)}" : null)).ToList());
+                x.A is { } ra && x.B is { } rb ? $"{Badge(ra, five).Replace(" ", "")} · {Badge(rb, five).Replace(" ", "")}" : null)).ToList());
         }
 
         Footer(c, pal, H);
