@@ -109,7 +109,9 @@ public enum BackupEvery { Monthly, Weekly }
 /// <summary>Which files a backup holds: JSON and CSV, or just one kind.</summary>
 public enum ExportFormat { Both, Json, Csv }
 /// <summary>Parts of your profile that can have their own audience (null = same as the profile).</summary>
-public enum ProfilePart { History, Ratings, Stats, WatchingNow, Favorites }
+/// <param name="Sources">Where you watched: the Jellyfin/Plex/Letterboxd tag on your plays (and filtering by it).</param>
+/// <param name="WatchingApp">Which app you're watching on ("watching on Jellyfin"), separately from what.</param>
+public enum ProfilePart { History, Ratings, Stats, WatchingNow, Favorites, Sources, WatchingApp }
 
 /// <summary>
 /// Display, tracking, home and privacy choices, kept together. Defaults reproduce how SeenIt
@@ -154,8 +156,11 @@ public record UserPrefs(
     IReadOnlyList<string>? RateKinds = null,         // what "To rate" on Home offers: ScoreKinds keys; null = DefaultRateKinds
     bool HidePlaySources = false,                    // no "Letterboxd"/"Jellyfin" tag on plays in history and on title pages
     IReadOnlyList<int>? MyServices = null,           // streaming services you have (TMDB provider ids): Where to watch, Pick and the watchlist use them
-    bool HideSourcesFromOthers = false,              // privacy: others don't see where your plays came from, or "watching on Jellyfin"
-    IReadOnlyList<string>? DesktopNav = null)        // the website's links at the top after Home (UiPrefs.Tabs keys), in order; null = DefaultDesktopNav
+    bool HideSourcesFromOthers = false,              // older switch; SourcesVisibility/WatchingAppVisibility replace it (it still reads as Only me)
+    IReadOnlyList<string>? DesktopNav = null,
+    // Audiences for the newer profile parts. Kept out of PartVisibility, whose keys older apps can't read.
+    ProfileVisibility? SourcesVisibility = null,
+    ProfileVisibility? WatchingAppVisibility = null)        // the website's links at the top after Home (UiPrefs.Tabs keys), in order; null = DefaultDesktopNav
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -188,8 +193,32 @@ public record UserPrefs(
     public ListLayout LayoutFor(string page) => PageLayouts?.TryGetValue(page, out var l) == true ? l : ListLayout;
     public string? SortFor(string page) => PageSorts?.TryGetValue(page, out var s) == true ? s : null;
     /// <summary>Who can see this part: its own setting, or the profile's.</summary>
-    public ProfileVisibility For(ProfilePart part, ProfileVisibility profile) =>
-        PartVisibility?.TryGetValue(part, out var v) == true ? v : profile;
+    public ProfileVisibility For(ProfilePart part, ProfileVisibility profile) => part switch
+    {
+        // The older "keep where you watched private" switch meant only you, for both.
+        ProfilePart.Sources => SourcesVisibility ?? (HideSourcesFromOthers ? ProfileVisibility.Private : profile),
+        ProfilePart.WatchingApp => WatchingAppVisibility ?? (HideSourcesFromOthers ? ProfileVisibility.Private : profile),
+        _ => PartVisibility?.TryGetValue(part, out var v) == true ? v : profile,
+    };
+    /// <summary>A part's own audience, if it has one (null: same as the profile).</summary>
+    public ProfileVisibility? OwnAudience(ProfilePart part) => part switch
+    {
+        ProfilePart.Sources => SourcesVisibility ?? (HideSourcesFromOthers ? ProfileVisibility.Private : null),
+        ProfilePart.WatchingApp => WatchingAppVisibility ?? (HideSourcesFromOthers ? ProfileVisibility.Private : null),
+        _ => PartVisibility?.TryGetValue(part, out var v) == true ? v : null,
+    };
+    /// <summary>Sets (or clears, with null) a part's own audience.</summary>
+    public UserPrefs WithAudience(ProfilePart part, ProfileVisibility? who) => part switch
+    {
+        ProfilePart.Sources => this with { SourcesVisibility = who, HideSourcesFromOthers = false, WatchingAppVisibility = OwnAudience(ProfilePart.WatchingApp) },
+        ProfilePart.WatchingApp => this with { WatchingAppVisibility = who, HideSourcesFromOthers = false, SourcesVisibility = OwnAudience(ProfilePart.Sources) },
+        _ => this with
+        {
+            PartVisibility = (PartVisibility ?? new Dictionary<ProfilePart, ProfileVisibility>()).Where(kv => kv.Key != part)
+                .Concat(who is { } w ? [new KeyValuePair<ProfilePart, ProfileVisibility>(part, w)] : [])
+                .ToDictionary(kv => kv.Key, kv => kv.Value) is { Count: > 0 } d ? d : null,
+        },
+    };
 
     /// <summary>Clamps everything to allowed values.</summary>
     /// <summary>How this kind of alert reaches you.</summary>
@@ -222,7 +251,10 @@ public record UserPrefs(
         ScoreSpoilers = Enum.IsDefined(ScoreSpoilers) ? ScoreSpoilers : ScoreSpoilers.Off,
         PosterScoreMovies = PosterScoreChoices(true).Any(c => c.Key == PosterScoreMovies) ? PosterScoreMovies : "tmdb",
         PosterScoreShows = PosterScoreChoices(false).Any(c => c.Key == PosterScoreShows) ? PosterScoreShows : "tmdb",
-        PartVisibility = PartVisibility?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
+        PartVisibility = PartVisibility?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value) && kv.Key is not (ProfilePart.Sources or ProfilePart.WatchingApp))
+            .ToDictionary(kv => kv.Key, kv => kv.Value),
+        SourcesVisibility = SourcesVisibility is { } sv && Enum.IsDefined(sv) ? sv : null,
+        WatchingAppVisibility = WatchingAppVisibility is { } wv && Enum.IsDefined(wv) ? wv : null,
         Accent = UiPrefs.Accents.Any(a => a.Key == Accent) ? Accent : null,
         EpisodeStyle = Enum.IsDefined(EpisodeStyle) ? EpisodeStyle : EpisodeStyle.Code,
         PageLayouts = PageLayouts?.Where(kv => UiPrefs.LayoutPages.Contains(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),

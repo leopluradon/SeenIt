@@ -93,7 +93,7 @@ else { <h1>Settings</h1> }
             <div class="pref-rows">
                 @foreach (var (part, label) in Parts)
                 {
-                    var current = Fmt.Prefs.PartVisibility?.TryGetValue(part, out var pv) == true ? pv.ToString() : "";
+                    var current = Fmt.Prefs.OwnAudience(part)?.ToString() ?? "";
                     <span>@label</span>
                     <select value="@current" @onchange="e => SetPart(part, e.Value?.ToString())" aria-label="@($"Who can see your {label.ToLowerInvariant()}")">
                         <option value="">Same as profile (@VisibilityName(visibility))</option>
@@ -103,11 +103,6 @@ else { <h1>Settings</h1> }
                     </select>
                 }
             </div>
-            <h3>Where you watched</h3>
-            <label class="check">
-                <input type="checkbox" checked="@Fmt.Prefs.HideSourcesFromOthers" @onchange='e => SavePrefs(p => p with { HideSourcesFromOthers = (bool)e.Value! }, (bool)e.Value! ? "Others won’t see where you watched" : "Others can see where you watched")' />
-                <span><b>Keep it private</b> <span class="muted small">Others who can see your history or what you're watching don't see where it came from: no “Jellyfin”, “Plex” or “Letterboxd” tag on your plays, no “watching on Jellyfin”, and filtering your history by source shows them nothing. You still see it yourself.</span></span>
-            </label>
             <h3>Who can follow you</h3>
             <div class="segmented" role="radiogroup" aria-label="Who can follow you">
                 <button role="radio" aria-checked="@(!Fmt.Prefs.ApproveFollowers)" class="@(Fmt.Prefs.ApproveFollowers ? "" : "on")"
@@ -1684,7 +1679,8 @@ else { <h1>Settings</h1> }
     private static readonly (string, string)[] StartPages =
         [("home", "Home"), ("progress", "Progress"), ("calendar", "Calendar"), ("watchlist", "Watchlist"), ("discover", "Discover")];
     private static readonly (ProfilePart, string)[] Parts =
-        [(ProfilePart.History, "History"), (ProfilePart.Ratings, "Ratings"), (ProfilePart.Stats, "Stats"), (ProfilePart.WatchingNow, "Watching now"), (ProfilePart.Favorites, "Favorites")];
+        [(ProfilePart.History, "History"), (ProfilePart.Ratings, "Ratings"), (ProfilePart.Stats, "Stats"), (ProfilePart.WatchingNow, "Watching now"),
+         (ProfilePart.Favorites, "Favorites"), (ProfilePart.Sources, "Where you watched (Jellyfin, Plex, Letterboxd…)"), (ProfilePart.WatchingApp, "Which app you're watching on")];
     private static string VisibilityName(ProfileVisibility v) => v switch { ProfileVisibility.Public => "everyone", ProfileVisibility.Private => "only me", _ => "friends" };
 
     /// <summary>Changes the UserPrefs bundle, applies it straight away and saves it.</summary>
@@ -1722,9 +1718,8 @@ else { <h1>Settings</h1> }
 
     private Task SetPart(ProfilePart part, string? value)
     {
-        var parts = (Fmt.Prefs.PartVisibility ?? new Dictionary<ProfilePart, ProfileVisibility>()).ToDictionary(kv => kv.Key, kv => kv.Value);
-        if (Enum.TryParse<ProfileVisibility>(value, out var v)) parts[part] = v; else parts.Remove(part);
-        return SavePrefs(p => p with { PartVisibility = parts.Count == 0 ? null : parts }, "Privacy saved");
+        ProfileVisibility? who = Enum.TryParse<ProfileVisibility>(value, out var v) ? v : null;
+        return SavePrefs(p => p.WithAudience(part, who), "Privacy saved");
     }
 
     /// <summary>Every score source: the chosen ones in your order, then the rest.</summary>

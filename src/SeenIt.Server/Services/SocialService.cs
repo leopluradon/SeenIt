@@ -83,11 +83,8 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         recent = await tracking.MarkEpisodesAsync(recent, ct);
         var watchingNow = See(ProfilePart.WatchingNow) ? await checkIns.GetAsync(owner.Id, ct) : null;
         if (!isMe && watchingNow is not null) watchingNow = (await tracking.MarkSeenByAsync(viewer, [watchingNow], ct))[0];
-        if (!isMe && HidesSources(owner))
-        {
-            recent = recent.Select(Unsourced).ToList();
-            if (watchingNow is not null) watchingNow = Unsourced(watchingNow);
-        }
+        if (!See(ProfilePart.Sources)) recent = recent.Select(Unsourced).ToList();
+        if (watchingNow is not null && !See(ProfilePart.WatchingApp)) watchingNow = Unsourced(watchingNow);
         var topRated = See(ProfilePart.Ratings) ? await tracking.TopRatedAsync(owner.Id, 18, ct) : [];
 
         return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, true, followers, followingCount,
@@ -297,8 +294,9 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var historyIds = people.Where(u => CanSee(u, me, mutualIds.Contains(u.Id), ProfilePart.History)).Select(u => u.Id).ToList();
         var live = (await db.CheckIns.AsNoTracking().Where(c => watchingIds.Contains(c.UserId)).ToListAsync(ct)).Where(CheckInService.IsLive).ToList();
         var liveDtos = await tracking.MarkSeenByAsync(me, await checkIns.ToDtosAsync(live, ct), ct);
-        var hiding = people.Where(HidesSources).Select(u => u.Id).ToHashSet();
-        var watching = live.Zip(liveDtos, (c, d) => new FriendWatching(byId[c.UserId], hiding.Contains(c.UserId) ? Unsourced(d) : d)).ToList();
+        var hidingApp = people.Where(u => !CanSee(u, me, mutualIds.Contains(u.Id), ProfilePart.WatchingApp)).Select(u => u.Id).ToHashSet();
+        var hiding = people.Where(u => !CanSee(u, me, mutualIds.Contains(u.Id), ProfilePart.Sources)).Select(u => u.Id).ToHashSet();
+        var watching = live.Zip(liveDtos, (c, d) => new FriendWatching(byId[c.UserId], hidingApp.Contains(c.UserId) ? Unsourced(d) : d)).ToList();
 
         var rows = await db.WatchEvents.AsNoTracking()
             .Where(w => historyIds.Contains(w.UserId) && w.WatchedAt > WatchDates.Unknown && w.WatchedAt <= DateTimeOffset.UtcNow.AddDays(1))
@@ -325,7 +323,9 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var people = await HistoryFolloweesAsync(me, ct);
         var cards = await CardsAsync(me, people, ct);
         var names = people.ToDictionary(u => u.Id, u => u.UserName!);
-        var hiding = people.Where(HidesSources).Select(u => u.UserName!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ids0 = people.Select(u => u.Id).ToList();
+        var mutual = (await db.Follows.Where(x => x.FolloweeId == me && ids0.Contains(x.FollowerId)).Select(x => x.FollowerId).ToListAsync(ct)).ToHashSet();
+        var hiding = people.Where(u => !CanSee(u, me, mutual.Contains(u.Id), ProfilePart.Sources)).Select(u => u.UserName!).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // Filtering by source would give away where the people who keep that private watched things, so they're left out of it.
         var ids = people.Where(u => (string.IsNullOrEmpty(user) || string.Equals(u.UserName, user, StringComparison.OrdinalIgnoreCase))
                                     && !(f.Source is not null && hiding.Contains(u.UserName!))).Select(u => u.Id).ToList();
@@ -341,8 +341,13 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         return ids.Count == 0 ? [] : await tracking.GetHistoryGenresAsync(ids, ct);
     }
 
-    /// <summary>Settings → Privacy: "Keep where you watched private".</summary>
-    public static bool HidesSources(AppUser u) => u.Prefs().HideSourcesFromOthers;
+    /// <summary>Whether this viewer may see where the owner watched things (Settings → Privacy → By part → Where you watched).</summary>
+    public async Task<bool> SeesSourcesAsync(AppUser owner, Guid? viewer, CancellationToken ct)
+    {
+        if (owner.Id == viewer) return true;
+        var (following, followsYou) = await RelationAsync(viewer, owner.Id, ct);
+        return CanSee(owner, viewer, following && followsYou, ProfilePart.Sources);
+    }
     /// <summary>A play or check-in as others see it when its owner keeps sources private: no Jellyfin/Letterboxd tag.</summary>
     public static HistoryEntry Unsourced(HistoryEntry h) => h with { Source = WatchSource.Manual };
     public static NowWatchingDto Unsourced(NowWatchingDto n) => n with { Source = WatchSource.Manual };
