@@ -1,8 +1,15 @@
 @* Scores from IMDb, Rotten Tomatoes, Metacritic, Letterboxd... loaded after the page itself. *@
 @inject ApiClient Api
-@if (Shown is { Count: > 0 } shown)
+@if (Shown is { Count: > 0 } || TmdbScore is > 0)
 {
+    var shown = Shown ?? [];
     <div class="ext-scores">
+        @if (TmdbScore is > 0 and var tmdb)
+        {
+            @* TMDB first, as one of the chips (it's always there, so it never waits for the others to load). *@
+            <a class="ext-score src-tmdb" href="@TmdbUrl" target="_blank" rel="noopener noreferrer"
+               title="@($"TMDB: {tmdb:0.0} out of 10{(TmdbVotes is > 0 and var v ? $" · {v:N0} votes" : "")}{(TmdbNote is { } note ? $" · {note}" : "")}")"><b>@tmdb.ToString("0.0")</b> <span>TMDB</span></a>
+        }
         @foreach (var s in shown)
         {
             var text = s.Percent ? $"{s.Value:0}%" : s.Max == 100 ? $"{s.Value:0}" : $"{s.Value:0.0#}";
@@ -27,6 +34,15 @@
     /// <summary>A season's scores (Type = Show, TmdbId = the show, Season = its number).</summary>
     [Parameter] public bool IsSeason { get; set; }
     private List<ExternalScore>? scores;
+    /// <summary>TMDB's own score, shown as the first chip (null or 0 leaves it out).</summary>
+    [Parameter] public double? TmdbScore { get; set; }
+    [Parameter] public int? TmdbVotes { get; set; }
+    /// <summary>Extra words on hover ("average of the episodes").</summary>
+    [Parameter] public string? TmdbNote { get; set; }
+    private string TmdbUrl => Type == MediaType.Movie ? $"https://www.themoviedb.org/movie/{TmdbId}"
+        : IsSeason ? $"https://www.themoviedb.org/tv/{TmdbId}/season/{Season}"
+        : Type == MediaType.Episode ? $"https://www.themoviedb.org/tv/{TmdbId}/season/{Season}/episode/{Episode}"
+        : $"https://www.themoviedb.org/tv/{TmdbId}";
 
     /// <summary>The sites you chose for this kind of title, in your order (Settings → Display → Scores); all of them by default.</summary>
     private List<ExternalScore>? Shown => scores?.Where(s => Fmt.ShowsScore(s.Source, Type, IsSeason))
