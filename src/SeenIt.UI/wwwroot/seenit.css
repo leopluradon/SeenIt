@@ -1913,3 +1913,12 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
     background: none; border: 0; color: var(--text); font: inherit; font-weight: 650; cursor: pointer; text-align: left; }
 .more-season.open > .more-season-head { border-bottom: 1px solid var(--border); }
 .more-season > :not(.more-season-head) { padding: 6px 12px 12px; }
+/* The rating in the action bar is exactly a button's height (smaller on the season header, beside small buttons).
+   Inputs normally get a form field's 40px and padding, which made the decimal slider and number box stick out. */
+.hero-rate { height: 40px; box-sizing: border-box; padding: 0 10px; }
+.hero-rate.sm { height: 32px; padding: 0 8px; }
+.hero-rate .rating-picker.decimal input[type=range] { min-height: 0; height: 20px; padding: 0; border: 0; background: none; }
+.hero-rate .rating-picker.decimal .rating-number { min-height: 0; height: 28px; padding: 0 4px; width: 3.6em; }
+.hero-rate.sm .rating-picker.decimal .rating-number { height: 24px; }
+.hero-rate .rating-picker.decimal .icon-btn { padding: 2px; }
+.hero-rate .rating-picker.thumbs .thumb { padding: 2px 9px; }

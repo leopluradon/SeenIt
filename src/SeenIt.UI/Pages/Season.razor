@@ -32,7 +32,7 @@ else if (season is not null)
                 {
                     <SplitButton Class="btn-watched btn-sm" Disabled="busy" OpensMenu="true" Menu="SeasonMenu"><Icon Name="check" Size="16" /> Season watched</SplitButton>
                 }
-                <div class="hero-rate">
+                <div class="hero-rate sm">
                     <span>Rate</span><RatingPicker Compact="true" Value="season.Rating" ValueChanged="RateSeason" />
                     @if (season.Episodes.Where(x => x.Rating is not null).Select(x => x.Rating!.Value).ToList() is { Count: > 0 } epRatings)
                     {
