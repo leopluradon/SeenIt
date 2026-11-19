@@ -1911,10 +1911,3 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
     background: none; border: 0; color: var(--text); font: inherit; font-weight: 650; cursor: pointer; text-align: left; }
 .more-season.open > .more-season-head { border-bottom: 1px solid var(--border); }
 .more-season > :not(.more-season-head) { padding: 6px 12px 12px; }
-/* Episode page: your plays as a line under the action bar, opening to the list. */
-.hero-plays { margin-top: 10px; font-size: .9rem; }
-.hero-plays > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
-.hero-plays > summary::-webkit-details-marker { display: none; }
-.hero-plays > summary .muted { text-decoration: underline; text-underline-offset: 2px; }
-.hero-plays[open] > summary .muted { visibility: hidden; }
-.hero-plays .plays { margin-top: 6px; }

@@ -73,43 +73,51 @@ else if (e is not null)
                     <a class="btn btn-primary" href="@($"login?returnUrl={Fmt.EpisodeHref(Id, Season, Number)}")">Sign in to track</a>
                 }
             </div>
-            @if (e.Plays is { Count: > 0 } myPlays)
-            {
-                @* Your plays as one line under the bar ("Watched 2× · last Nov 14"); open it to change or remove one. *@
-                <details class="hero-plays">
-                    <summary>
-                        <Icon Name="check" Size="14" Class="ok" />
-                        @(myPlays.Count == 1 ? "Watched" : $"Watched {myPlays.Count}×") · @(myPlays.Count == 1 ? "" : "last ")@Fmt.PlayedAt(myPlays[0].WatchedAt)
-                        <span class="muted small">Edit</span>
-                    </summary>
-                    <div class="plays">
-                        @foreach (var p in myPlays)
-                        {
-                            <div class="play" @key="p.Id">
-                                <span>@Fmt.PlayedAt(p.WatchedAt)</span>
-                                @if (Fmt.ShowsSource(p.Source)) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
-                                <button class="icon-btn" @onclick="() => editing = p" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
-                                <button class="icon-btn" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
-                            </div>
-                        }
-                    </div>
-                </details>
-            }
         </div>
     </div>
 
-    <div class="detail-body">
-        @if (e.Overview is not null) { <Spoiler Watched="Seen" Block="true"><p class="overview">@e.Overview</p></Spoiler> }
-        @if (e.Crew.Count > 0)
-        {
-            <dl class="crew">
-                @foreach (var g in e.Crew.GroupBy(c => c.Job))
+    @* Laid out like the movie page: your plays and friends on one side, what it's about on the other. *@
+    <div class="detail-body detail-wide">
+        <div class="detail-cols">
+            @if (e.Plays is { } myPlays)
+            {
+                <div class="detail-you">
+                <div class="panel you-panel">
+                @if (myPlays.Count > 0)
                 {
-                    <div><dt>@g.Key</dt><dd>@{ var first = true; foreach (var c in g.DistinctBy(c => c.Id)) { if (!first) { <span>, </span> } first = false; <a href="@($"person/{c.Id}")">@c.Name</a> } }</dd></div>
+                    <div class="you-plays">
+                        <div class="panel-head"><h2>Your plays <span class="muted small">@myPlays.Count</span></h2></div>
+                        <div class="plays">
+                            @foreach (var p in myPlays)
+                            {
+                                <div class="play" @key="p.Id">
+                                    <Icon Name="check" Size="16" Class="ok" />
+                                    <span>@Fmt.PlayedAt(p.WatchedAt)</span>
+                                    @if (Fmt.ShowsSource(p.Source)) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
+                                    <button class="icon-btn" @onclick="() => editing = p" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
+                                    <button class="icon-btn" @onclick="() => RemovePlay(p)" aria-label="Remove this play"><Icon Name="trash" Size="16" /></button>
+                                </div>
+                            }
+                        </div>
+                    </div>
                 }
-            </dl>
-        }
-        @if (e.Plays is not null) { <FriendsSeen Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" Watched="Seen" /> }
+                </div>
+                <FriendsSeen Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" Watched="Seen" />
+                </div>
+            }
+            <div class="detail-info">
+            @if (e.Overview is not null) { <Spoiler Watched="Seen" Block="true"><p class="overview">@e.Overview</p></Spoiler> }
+            @if (e.Crew.Count > 0)
+            {
+                <dl class="crew">
+                    @foreach (var g in e.Crew.GroupBy(c => c.Job))
+                    {
+                        <div><dt>@g.Key</dt><dd>@{ var first = true; foreach (var c in g.DistinctBy(c => c.Id)) { if (!first) { <span>, </span> } first = false; <a href="@($"person/{c.Id}")">@c.Name</a> } }</dd></div>
+                    }
+                </dl>
+            }
+            </div>
+        </div>
     </div>
 
     @* Previous is in the links at the top; only what comes next gets a card. *@
