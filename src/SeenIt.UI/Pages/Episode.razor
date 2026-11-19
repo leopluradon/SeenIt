@@ -2,6 +2,7 @@
 @inject ApiClient Api
 @inject Toasts Toasts
 @inject NavigationManager Nav
+@inject IJSRuntime Js
 <PageTitle>@(e is null ? "Episode" : $"{e.ShowName} {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
@@ -72,23 +73,19 @@ else if (e is not null)
                     <a class="btn btn-primary" href="@($"login?returnUrl={Fmt.EpisodeHref(Id, Season, Number)}")">Sign in to track</a>
                 }
             </div>
-        </div>
-    </div>
-
-    <div class="detail-body">
-        @if (e.Plays is { } myPlays)
-        {
-            <div class="you-split">
-            <div class="panel you-panel">
-            @if (myPlays.Count > 0)
+            @if (e.Plays is { Count: > 0 } myPlays)
             {
-                <div class="you-plays">
-                    <div class="panel-head"><h2>Your plays</h2></div>
+                @* Your plays as one line under the bar ("Watched 2× · last Nov 14"); open it to change or remove one. *@
+                <details class="hero-plays">
+                    <summary>
+                        <Icon Name="check" Size="14" Class="ok" />
+                        @(myPlays.Count == 1 ? "Watched" : $"Watched {myPlays.Count}×") · @(myPlays.Count == 1 ? "" : "last ")@Fmt.PlayedAt(myPlays[0].WatchedAt)
+                        <span class="muted small">Edit</span>
+                    </summary>
                     <div class="plays">
                         @foreach (var p in myPlays)
                         {
                             <div class="play" @key="p.Id">
-                                <Icon Name="check" Size="16" Class="ok" />
                                 <span>@Fmt.PlayedAt(p.WatchedAt)</span>
                                 @if (Fmt.ShowsSource(p.Source)) { <span class="pill pill-sm">@Fmt.Source(p.Source)</span> }
                                 <button class="icon-btn" @onclick="() => editing = p" aria-label="Change this play's date"><Icon Name="edit" Size="16" /></button>
@@ -96,12 +93,12 @@ else if (e is not null)
                             </div>
                         }
                     </div>
-                </div>
+                </details>
             }
-            </div>
-            <FriendsSeen Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" Watched="Seen" />
-            </div>
-        }
+        </div>
+    </div>
+
+    <div class="detail-body">
         @if (e.Overview is not null) { <Spoiler Watched="Seen" Block="true"><p class="overview">@e.Overview</p></Spoiler> }
         @if (e.Crew.Count > 0)
         {
@@ -112,6 +109,7 @@ else if (e is not null)
                 }
             </dl>
         }
+        @if (e.Plays is not null) { <FriendsSeen Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" Watched="Seen" /> }
     </div>
 
     @* Previous is in the links at the top; only what comes next gets a card. *@
@@ -125,10 +123,15 @@ else if (e is not null)
         }
     </nav>
 
-    <details class="more-season">
-        <summary>More from @(Season == 0 ? "Specials" : $"Season {Season}")</summary>
-    <SeasonEpisodes ShowId="Id" ShowName="@e.ShowName" ShowPoster="@e.ShowPosterPath" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" OnChanged="Reload" CanWatch="e.Plays is not null" />
-    </details>
+    <section class="more-season @(seasonCollapsed ? "" : "open")">
+        <button type="button" class="more-season-head" aria-expanded="@(!seasonCollapsed)" @onclick="ToggleSeasonList">
+            @(Season == 0 ? "Specials" : $"Season {Season}") episodes <Icon Name="@(seasonCollapsed ? "chevron-down" : "chevron-up")" Size="16" />
+        </button>
+        @if (!seasonCollapsed)
+        {
+            <SeasonEpisodes ShowId="Id" ShowName="@e.ShowName" ShowPoster="@e.ShowPosterPath" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" OnChanged="Reload" CanWatch="e.Plays is not null" />
+        }
+    </section>
 
     <CastRow Cast="@(e.Cast ?? [])" Title="Cast" />
     @if (Fmt.Prefs.HideGuestStars && !Seen && !showGuests && e.GuestStars.Count > 0)
@@ -155,6 +158,31 @@ else if (e is not null)
     private string? error;
     private bool notFound;
     private bool busy, watchOpen, through, ratePrompt, askWhen, recommendOpen;
+
+    // The season's episodes show by default; collapsing them is remembered on this device for every episode page.
+    private const string SeasonListKey = "seenit.episodeSeasonCollapsed";
+    private bool seasonCollapsed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            if (await Js.InvokeAsync<string?>("localStorage.getItem", SeasonListKey) == "1") { seasonCollapsed = true; StateHasChanged(); }
+        }
+        catch (JSException) { }
+    }
+
+    private async Task ToggleSeasonList()
+    {
+        seasonCollapsed = !seasonCollapsed;
+        try
+        {
+            if (seasonCollapsed) await Js.InvokeVoidAsync("localStorage.setItem", SeasonListKey, "1");
+            else await Js.InvokeVoidAsync("localStorage.removeItem", SeasonListKey);
+        }
+        catch (JSException) { }
+    }
     private PlayDto? editing;
 
     private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); StateHasChanged(); }
