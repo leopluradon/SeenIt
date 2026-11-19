@@ -120,8 +120,15 @@ else if (e is not null)
         </div>
     </div>
 
-    @* Previous is in the links at the top; only what comes next gets a card. *@
     <nav class="episode-nav">
+        @if (e.Previous is { } prev)
+        {
+            <a class="episode-nav-link" href="@Fmt.EpisodeHref(Id, prev.SeasonNumber, prev.EpisodeNumber)">
+                <Icon Name="chevron-left" Size="18" />
+                <span><span class="muted small">Previous · @Fmt.Ep(prev.SeasonNumber, prev.EpisodeNumber)</span> <EpisodeBadge Mark="prev.Mark" /><br /><Spoiler Watched="prev.Watched">@prev.Name</Spoiler></span>
+            </a>
+        }
+        else { <span></span> }
         @if (e.Next is { } next)
         {
             <a class="episode-nav-link next" href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)">
