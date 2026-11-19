@@ -45,6 +45,13 @@
                         </section>
                     }
                     break;
+                case "now-cast":
+                    @* Who's in what you're watching right now (Jellyfin or a check-in): the episode's guests first. *@
+                    @if (now is not null && nowCast is { Count: > 0 } castNow)
+                    {
+                        <CastRow Cast="castNow" Title="@($"In {(now.Type == MediaType.Episode ? $"{now.Title} {Fmt.Ep(now.SeasonNumber, now.EpisodeNumber)}" : now.Title)}")" />
+                    }
+                    break;
                 case "onthisday":
                     @if (onThisDay is { Count: > 0 })
                     {
@@ -279,6 +286,27 @@
     private string? error;
     private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows, forYou;
     private List<ToRateItem>? toRate;
+    /// <summary>The cast of what's playing now, for the "now-cast" section; nowCastFor is what it's the cast of.</summary>
+    private IReadOnlyList<CastMember>? nowCast;
+    private (MediaType, int, int?, int?)? nowCastFor;
+
+    private async Task LoadNowCast()
+    {
+        if (hidden.Contains("now-cast") || now is not { } n) { nowCast = null; nowCastFor = null; return; }
+        var key = (n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber);
+        if (nowCastFor == key) return;
+        nowCastFor = key;
+        try
+        {
+            if (n.Type == MediaType.Episode && n.SeasonNumber is { } s && n.EpisodeNumber is { } e)
+            {
+                var ep = await Api.EpisodeAsync(n.TmdbId, s, e);
+                nowCast = [.. ep.GuestStars, .. (ep.Cast ?? []).Where(c => ep.GuestStars.All(g => g.Id != c.Id))];
+            }
+            else nowCast = (await Api.MovieAsync(n.TmdbId)).Cast;
+        }
+        catch { nowCast = null; nowCastFor = null; }
+    }
     /// <summary>A To rate card's "Recommend": a movie, or the show an episode or season is of.</summary>
     private ToRateItem? recommending;
 
@@ -346,7 +374,8 @@
         var rate = LoadToRate();
         await LoadDashboard();
         await rate;
-        try { if (!hidden.Contains("now")) now = await Api.CheckInAsync(); } catch { }
+        try { if (!hidden.Contains("now") || !hidden.Contains("now-cast")) now = await Api.CheckInAsync(); } catch { }
+        await LoadNowCast();
         try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); } catch { }
         await widgets;
     }
@@ -431,7 +460,8 @@
 
     private async Task LoadExtras()
     {
-        try { if (!hidden.Contains("now")) now = await Api.CheckInAsync(); } catch { }
+        try { if (!hidden.Contains("now") || !hidden.Contains("now-cast")) now = await Api.CheckInAsync(); } catch { }
+        await LoadNowCast();
         try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); } catch { }
         try { if (!hidden.Contains("onthisday")) onThisDay = await Api.OnThisDayAsync(); } catch { }
         try { if (!hidden.Contains("goals")) goals = await Api.GoalsAsync(DateTime.Today.Year); } catch { }
@@ -511,7 +541,7 @@
         if (shown.Any(k => k.StartsWith("trending")) && trendingMovies is null) await LoadTrending();
         if (shown.Contains("foryou") && forYou is null) await LoadForYou();
         if (shown.Contains("review") && reviewLinks.Count == 0) await LoadReviewLinks();
-        if (shown.Any(k => k is "now" or "friends" or "onthisday" or "goals")) await LoadExtras();
+        if (shown.Any(k => k is "now" or "now-cast" or "friends" or "onthisday" or "goals")) await LoadExtras();
         if (shown.Any(k => k.StartsWith("w-"))) await LoadWidgets();
         if (shown.Contains("torate") && toRate is null) await LoadToRate();
     }
@@ -528,7 +558,7 @@
             if (visible && key.StartsWith("trending") && trendingMovies is null) await LoadTrending();
             if (visible && key == "foryou" && forYou is null) await LoadForYou();
             if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
-            if (visible && key is "now" or "friends" or "goals") await LoadExtras();
+            if (visible && key is "now" or "now-cast" or "friends" or "goals") await LoadExtras();
             if (visible && key.StartsWith("w-")) await LoadWidgets();
             if (visible && key == "torate" && toRate is null) await LoadToRate();
         }

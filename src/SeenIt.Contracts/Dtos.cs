@@ -283,6 +283,7 @@ public static class UiPrefs
     [
         // The default order: what you'll act on first (accounts that saved an order keep theirs).
         ("now", "Watching now"),
+        ("now-cast", "Cast of what you're watching"),
         ("upnext", "Up next"),
         ("torate", "To rate"),
         ("upcoming", "Coming up"),
@@ -302,7 +303,7 @@ public static class UiPrefs
     ];
 
     /// <summary>Home sections that start switched off (new accounts, and existing ones when they were added).</summary>
-    public static readonly string[] HiddenByDefault = ["w-month", "w-heatmap", "w-genres", "w-records"];
+    public static readonly string[] HiddenByDefault = ["w-month", "w-heatmap", "w-genres", "w-records", "now-cast"];
 
     /// <summary>Pages with their own posters/rows choice, sort memory and saved views.</summary>
     public static readonly string[] LayoutPages = ["watchlist", "ratings", "list"];

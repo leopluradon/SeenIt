@@ -706,8 +706,10 @@ a.cast { color: var(--text); }
     .episode { gap: 12px; padding: 10px; }
     .episode-overview { -webkit-line-clamp: 2; font-size: .85rem; }
     .episode-hero { grid-template-columns: 1fr; gap: 16px; }
-    .episode-nav { grid-template-columns: 1fr; }
-    .episode-nav-link.next { grid-column: 1; }
+    /* Side by side on phones too, half each; tighter so the names fit. */
+    .episode-nav { gap: 8px; }
+    .episode-nav-link { padding: 10px; gap: 6px; font-size: .88rem; }
+    .episode-nav-link > svg { flex: none; }
     .episode-still { width: 112px; align-self: flex-start; }
     .progress-list, .mini-list { grid-template-columns: minmax(0, 1fr); }
     .stat-panels { grid-template-columns: 1fr; }
