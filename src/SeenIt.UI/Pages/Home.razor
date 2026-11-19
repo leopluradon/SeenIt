@@ -46,10 +46,23 @@
                     }
                     break;
                 case "now-cast":
-                    @* Who's in what you're watching right now (Jellyfin or a check-in): the episode's guests first. *@
-                    @if (now is not null && nowCast is { Count: > 0 } castNow)
+                    @* Who's in what you're watching right now (Jellyfin or a check-in). Guest stars follow the spoiler
+                       setting like on the episode page: hidden behind a button for an episode you haven't seen before. *@
+                    @if (now is not null)
                     {
-                        <CastRow Cast="castNow" Title="@($"In {(now.Type == MediaType.Episode ? $"{now.Title} {Fmt.Ep(now.SeasonNumber, now.EpisodeNumber)}" : now.Title)}")" />
+                        var what = now.Type == MediaType.Episode ? $"{now.Title} {Fmt.Ep(now.SeasonNumber, now.EpisodeNumber)}" : now.Title;
+                        @if (nowCast is { Count: > 0 } castNow) { <CastRow Cast="castNow" Title="@($"In {what}")" /> }
+                        @if (nowGuests is { Count: > 0 } guests)
+                        {
+                            @if (Fmt.Prefs.HideGuestStars && !nowSeen && !showNowGuests)
+                            {
+                                <section class="row-section">
+                                    <div class="section-head"><h2>Guest stars in @what <span class="muted small">@guests.Count</span></h2></div>
+                                    <button class="btn btn-sm hidden-guests" @onclick="() => showNowGuests = true"><Icon Name="eye" Size="14" /> Hidden to avoid spoilers. Show guest stars</button>
+                                </section>
+                            }
+                            else { <CastRow Cast="guests" Title="@($"Guest stars in {what}")" /> }
+                        }
                     }
                     break;
                 case "onthisday":
@@ -287,25 +300,30 @@
     private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows, forYou;
     private List<ToRateItem>? toRate;
     /// <summary>The cast of what's playing now, for the "now-cast" section; nowCastFor is what it's the cast of.</summary>
-    private IReadOnlyList<CastMember>? nowCast;
+    private IReadOnlyList<CastMember>? nowCast, nowGuests;
     private (MediaType, int, int?, int?)? nowCastFor;
+    /// <summary>You'd seen this episode before (so guest stars aren't spoilers), and whether you asked to see them anyway.</summary>
+    private bool nowSeen, showNowGuests;
 
     private async Task LoadNowCast()
     {
-        if (hidden.Contains("now-cast") || now is not { } n) { nowCast = null; nowCastFor = null; return; }
+        if (hidden.Contains("now-cast") || now is not { } n) { nowCast = nowGuests = null; nowCastFor = null; return; }
         var key = (n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber);
         if (nowCastFor == key) return;
         nowCastFor = key;
+        showNowGuests = false;   // a new episode starts hidden again
         try
         {
             if (n.Type == MediaType.Episode && n.SeasonNumber is { } s && n.EpisodeNumber is { } e)
             {
                 var ep = await Api.EpisodeAsync(n.TmdbId, s, e);
-                nowCast = [.. ep.GuestStars, .. (ep.Cast ?? []).Where(c => ep.GuestStars.All(g => g.Id != c.Id))];
+                nowGuests = ep.GuestStars;
+                nowCast = (ep.Cast ?? []).Where(c => ep.GuestStars.All(g => g.Id != c.Id)).ToList();
+                nowSeen = ep.Plays is { Count: > 0 };
             }
-            else nowCast = (await Api.MovieAsync(n.TmdbId)).Cast;
+            else { nowCast = (await Api.MovieAsync(n.TmdbId)).Cast; nowGuests = null; nowSeen = true; }
         }
-        catch { nowCast = null; nowCastFor = null; }
+        catch { nowCast = nowGuests = null; nowCastFor = null; }
     }
     /// <summary>A To rate card's "Recommend": a movie, or the show an episode or season is of.</summary>
     private ToRateItem? recommending;
