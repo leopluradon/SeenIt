@@ -160,7 +160,8 @@ public record UserPrefs(
     IReadOnlyList<string>? DesktopNav = null,
     // Audiences for the newer profile parts. Kept out of PartVisibility, whose keys older apps can't read.
     ProfileVisibility? SourcesVisibility = null,
-    ProfileVisibility? WatchingAppVisibility = null)        // the website's links at the top after Home (UiPrefs.Tabs keys), in order; null = DefaultDesktopNav
+    ProfileVisibility? WatchingAppVisibility = null,
+    bool HideWhereToWatch = false)                   // no "Where to watch" section on movie and show pages        // the website's links at the top after Home (UiPrefs.Tabs keys), in order; null = DefaultDesktopNav
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];

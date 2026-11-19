@@ -384,6 +384,10 @@ else { <h1>Settings</h1> }
         </section>
         <section class="panel" id="region">
             <h2>Where to watch</h2>
+            <label class="check">
+                <input type="checkbox" checked="@(!Fmt.Prefs.HideWhereToWatch)" @onchange='e => SavePrefs(p => p with { HideWhereToWatch = !(bool)e.Value! }, (bool)e.Value! ? "Where to watch is back on title pages" : "Where to watch hidden")' />
+                Show “Where to watch” on movie and show pages
+            </label>
             <p class="muted small">Streaming, rental and purchase options on movie and show pages are for this country.</p>
             <div class="field inline">
                 <label for="region">Country</label>

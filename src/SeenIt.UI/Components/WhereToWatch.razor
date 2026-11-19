@@ -1,6 +1,6 @@
 @* Streaming / rent / buy options for the viewer's country, from TMDB (data by JustWatch). *@
 @inject ApiClient Api
-@if (data is { IsEmpty: false } d)
+@if (data is { IsEmpty: false } d && !Fmt.Prefs.HideWhereToWatch)
 {
     <section class="panel where-to-watch">
         <div class="section-head">
@@ -38,6 +38,7 @@ else if (data is { IsEmpty: true } && ShowEmpty)
 
     protected override async Task OnParametersSetAsync()
     {
+        if (Fmt.Prefs.HideWhereToWatch) return;   // turned off in Settings: don't even ask
         if (loaded == (Type, TmdbId)) return;
         loaded = (Type, TmdbId);
         data = null;
