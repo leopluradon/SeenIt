@@ -1,0 +1,72 @@
+@* "Rate it?" for what Jellyfin, Plex or Kodi just recorded (marking by hand already asks on the page). It offers the
+   newest unrated thing from To rate (so the kinds picked in Settings → Ratings) that finished in the last few
+   hours, once each: what's been offered is remembered on this device. *@
+@implements IDisposable
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject ContextMenu CtxMenu
+@inject IJSRuntime Js
+@if (item is { } i)
+{
+    <RatePrompt Open="true" OpenChanged="o => { if (!o) item = null; }" Title="@ToRateCard.NameOf(i)" OnRate="Rate"
+                RecommendType="@(i.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show)" RecommendId="i.TmdbId" RecommendTitle="@i.Title" />
+}
+@code {
+    private const string Key = "seenit.ratePrompted";
+    private static readonly TimeSpan Recent = TimeSpan.FromHours(6);
+    private ToRateItem? item;
+    /// <summary>What was offered: RatePrompt closes (clearing item) before it hands over the rating.</summary>
+    private ToRateItem? offered;
+    private bool checking;
+
+    protected override void OnInitialized() => CtxMenu.Changed += Changed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await CheckAsync();   // e.g. the app opened after the movie ended
+    }
+
+    // The server pushes a change when a play is recorded (LiveConnection → ContextMenu.Changed).
+    private Task Changed() => InvokeAsync(CheckAsync);
+
+    private static string KeyOf(ToRateItem i) => $"{i.Kind}:{i.TmdbId}:{i.SeasonNumber}:{i.EpisodeNumber}";
+
+    private async Task CheckAsync()
+    {
+        if (checking || item is not null) return;
+        checking = true;
+        try
+        {
+            var asked = await AskedAsync();
+            var next = (await Api.ToRateAsync(10)).FirstOrDefault(i => WatchSources.IsScrobbler(i.Source)
+                && DateTimeOffset.UtcNow - i.FinishedAt < Recent && !asked.Contains(KeyOf(i)));
+            if (next is null) return;
+            asked.Add(KeyOf(next));
+            await Js.InvokeVoidAsync("localStorage.setItem", Key, string.Join('\n', asked.TakeLast(100)));
+            item = offered = next;
+            StateHasChanged();
+        }
+        catch { /* offline or a hiccup: ask next time */ }
+        finally { checking = false; }
+    }
+
+    private async Task<List<string>> AskedAsync()
+    {
+        try { return (await Js.InvokeAsync<string?>("localStorage.getItem", Key))?.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList() ?? []; }
+        catch (JSException) { return []; }
+    }
+
+    private async Task Rate(double? rating)
+    {
+        if (offered is not { } i || rating is not { } r) return;
+        try
+        {
+            await Api.RateAsync(new RatingRequest(i.Type, i.TmdbId, r, i.SeasonNumber, i.EpisodeNumber));
+            Toasts.Show($"Rated {ToRateCard.NameOf(i)} {Fmt.Rating(r)}");
+            await CtxMenu.RaiseChangedAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    public void Dispose() => CtxMenu.Changed -= Changed;
+}

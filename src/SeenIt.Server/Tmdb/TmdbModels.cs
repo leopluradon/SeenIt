@@ -35,7 +35,9 @@ public record TmdbCast(int Id, string Name, string? Character, string? ProfilePa
 {
     public string? AnyCharacter => Character ?? Roles?.FirstOrDefault()?.Character;
 }
-public record TmdbCrew(int Id, string Name, string Job, string? Department, string? ProfilePath);
+/// <summary>Movie and episode credits carry Job; a show's aggregate credits carry Jobs, each with how many episodes.</summary>
+public record TmdbCrew(int Id, string Name, string Job, string? Department, string? ProfilePath, List<TmdbCrewJob>? Jobs = null);
+public record TmdbCrewJob(string? Job, int EpisodeCount);
 public record TmdbCredits(List<TmdbCast>? Cast, List<TmdbCrew>? Crew);
 public record TmdbVideo(string Key, string Name, string Site, string Type, bool Official);
 public record TmdbVideos(List<TmdbVideo>? Results);

@@ -165,7 +165,7 @@ else if (m is not null)
     {
         <WatchDialog @bind-Open="watchOpen" What="@m.Title" ReleaseDate="m.ReleaseDate" OnPick="Watch" AskWhen="askWhen" />
         <EditPlayDialog @bind-Play="editing" What="@m.Title" ReleaseDate="m.ReleaseDate" OnSaved="Reload" />
-        <RatePrompt @bind-Open="ratePrompt" Title="@m.Title" OnRate="Rate" />
+        <RatePrompt @bind-Open="ratePrompt" Title="@m.Title" OnRate="Rate" RecommendType="MediaType.Movie" RecommendId="Id" />
         <OwnedDialog @bind-Open="ownOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" Copies="m.User?.Copies" OnChanged="Reload" />
         <RecommendDialog @bind-Open="recommendOpen" Type="MediaType.Movie" TmdbId="Id" Title="@m.Title" />
         <AddToListDialog @bind-Open="listOpen" Type="MediaType.Movie" TmdbId="m.TmdbId" Selected="user.ListIds.ToList()" />

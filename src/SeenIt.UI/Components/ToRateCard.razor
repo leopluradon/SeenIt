@@ -10,6 +10,10 @@
         </span>
     </a>
     <button class="icon-btn torate-skip" disabled="@Busy" @onclick="() => OnSkip.InvokeAsync(Item)" title="Don't ask about this one" aria-label="@($"Don't ask me to rate {Name}")"><Icon Name="x" Size="16" /></button>
+    @if (OnRecommend.HasDelegate)
+    {
+        <button class="icon-btn torate-recommend" @onclick="() => OnRecommend.InvokeAsync(Item)" title="Recommend to a friend" aria-label="@($"Recommend {Item.Title} to a friend")"><Icon Name="send" Size="16" /></button>
+    }
     <div class="torate-rate">
         <RatingPicker Value="null" ValueChanged="v => v is { } r ? OnRate.InvokeAsync((Item, r)) : Task.CompletedTask" />
     </div>
@@ -18,6 +22,7 @@
     [Parameter, EditorRequired] public ToRateItem Item { get; set; } = default!;
     [Parameter] public EventCallback<(ToRateItem Item, double Rating)> OnRate { get; set; }
     [Parameter] public EventCallback<ToRateItem> OnSkip { get; set; }
+    [Parameter] public EventCallback<ToRateItem> OnRecommend { get; set; }
     [Parameter] public bool Busy { get; set; }
 
     private string KindLabel => Item.Kind switch { "movie" => "Movie", "episode" => "Episode", "season" => "Season", _ => "Show" };

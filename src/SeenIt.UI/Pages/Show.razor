@@ -168,6 +168,15 @@ else if (s is not null)
         }
         <div class="detail-info">
             @if (s.Overview is not null) { <p class="overview">@s.Overview</p> }
+            @if (s.Crew is { Count: > 0 } crew)
+            {
+                <dl class="crew">
+                    @foreach (var g in crew.GroupBy(c => c.Job))
+                    {
+                        <div><dt>@g.Key</dt><dd>@{ var first = true; foreach (var c in g.DistinctBy(c => c.Id)) { if (!first) { <span>, </span> } first = false; <a href="@($"person/{c.Id}")">@c.Name</a> } }</dd></div>
+                    }
+                </dl>
+            }
             @if (s.NextEpisodeToAir is { } next)
             {
                 <p class="next-airing"><Icon Name="calendar" Size="16" /> <span>Next episode: <a href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)"><b>@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)</b> <Spoiler>@next.Name</Spoiler></a> <EpisodeBadge Mark="next.Mark" /> @if (next.AirDate is { } ad) { <span>· @Fmt.Day(ad)</span> }

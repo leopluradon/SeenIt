@@ -5,14 +5,31 @@
     <div class="rate-prompt" role="dialog" aria-label="@($"Rate {Title}")">
         <span class="rate-prompt-title">Rate <b>@Title</b>?</span>
         <RatingPicker Value="null" ValueChanged="Pick" Compact="true" />
+        @if (RecommendType is not null)
+        {
+            <button class="icon-btn" @onclick="Recommend" title="Recommend to a friend" aria-label="@($"Recommend {RecommendTitle ?? Title} to a friend")"><Icon Name="send" Size="16" /></button>
+        }
         <button class="icon-btn" @onclick="Close" aria-label="Not now"><Icon Name="x" Size="16" /></button>
     </div>
+}
+@if (RecommendType is { } rt)
+{
+    <RecommendDialog Open="recommending" OpenChanged="RecommendClosed" Type="rt" TmdbId="RecommendId" Title="@(RecommendTitle ?? Title)" />
 }
 @code {
     [Parameter] public bool Open { get; set; }
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
     [Parameter] public string Title { get; set; } = "";
     [Parameter] public EventCallback<double?> OnRate { get; set; }
+    /// <summary>Offer "Recommend to a friend" for this (a movie, or the show an episode or season is of).</summary>
+    [Parameter] public MediaType? RecommendType { get; set; }
+    [Parameter] public int RecommendId { get; set; }
+    [Parameter] public string? RecommendTitle { get; set; }
+    private bool recommending;
+
+    /// <summary>The strip stays while the dialog is open; it closes once you're done recommending.</summary>
+    private void Recommend() { timer?.Cancel(); recommending = true; }
+    private async Task RecommendClosed(bool open) { recommending = open; if (!open) await Close(); }
     private CancellationTokenSource? timer;
     private bool wasOpen;
 

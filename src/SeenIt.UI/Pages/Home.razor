@@ -126,7 +126,7 @@
                                 <div class="section-tools"><a href="settings#ratings" class="section-more" title="Choose what shows up here">Choose <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("torate")' /></div>
                             </div>
                             <div class="card-scroller torate-scroller">
-                                @foreach (var r in toRate) { <ToRateCard Item="r" OnRate="RateSuggestion" OnSkip="SkipSuggestion" @key="(r.Kind, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" /> }
+                                @foreach (var r in toRate) { <ToRateCard Item="r" OnRate="RateSuggestion" OnSkip="SkipSuggestion" OnRecommend="i => recommending = i" @key="(r.Kind, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" /> }
                             </div>
                         </section>
                     }
@@ -264,6 +264,10 @@
     </Modal>
 }
 
+@if (recommending is { } rec)
+{
+    <RecommendDialog Open="true" OpenChanged="o => { if (!o) recommending = null; }" Type="@(rec.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show)" TmdbId="rec.TmdbId" Title="@rec.Title" />
+}
 <ReloadOnMenu OnChange="Refresh" />
 @code {
     /// <summary>Once per app launch, not every time Home is opened.</summary>
@@ -275,6 +279,8 @@
     private string? error;
     private IReadOnlyList<MediaSummary>? trendingMovies, trendingShows, forYou;
     private List<ToRateItem>? toRate;
+    /// <summary>A To rate card's "Recommend": a movie, or the show an episode or season is of.</summary>
+    private ToRateItem? recommending;
 
     /// <summary>"in 5 hours" close to an exact air time; "in 3 days" further out; nothing for today/tomorrow.</summary>
     private static string? Soon(CalendarEntry c) =>

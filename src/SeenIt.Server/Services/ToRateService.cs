@@ -29,7 +29,7 @@ public class ToRateService(AppDbContext db)
         var recent = await db.WatchEvents.AsNoTracking()
             .Where(w => w.UserId == userId && w.ImportJobId == null && w.WatchedAt >= since && w.WatchedAt <= now
                         && ((w.Type == MediaType.Movie && moviesWanted) || (w.Type == MediaType.Episode && episodesWanted)))
-            .Select(w => new { w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt })
+            .Select(w => new { w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source })
             .ToListAsync(ct);
         if (recent.Count == 0) return [];
 
@@ -119,6 +119,14 @@ public class ToRateService(AppDbContext db)
                 }
             }
         }
+
+        // Where the latest play of each came from (a Jellyfin play gets a "Rate it?" prompt in the app).
+        items = items.Select(i => i with
+        {
+            Source = recent.Where(w => w.TmdbId == i.TmdbId && (i.Kind == "movie" ? w.Type == MediaType.Movie : w.Type == MediaType.Episode)
+                                       && (i.SeasonNumber is null || w.SeasonNumber == i.SeasonNumber) && (i.EpisodeNumber is null || w.EpisodeNumber == i.EpisodeNumber))
+                .OrderByDescending(w => w.WatchedAt).Select(w => w.Source).FirstOrDefault(),
+        }).ToList();
 
         // Newest first; finishing a show's last episode puts the show before its season before the episode.
         static int Rank(string kind) => kind switch { "show" => 0, "season" => 1, _ => 2 };

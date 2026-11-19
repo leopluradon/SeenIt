@@ -1891,3 +1891,5 @@ img.avatar.avatar-img.avatar-lg { width: 72px; height: 72px; }
 img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 /* The friend's picture and name are one link (TitleLink); keep them side by side like the row they sit in. */
 .history-who .title-link { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.torate-recommend { position: absolute; top: 6px; right: 36px; }
+.torate-card .torate-link { padding-right: 60px; }

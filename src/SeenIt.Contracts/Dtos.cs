@@ -553,7 +553,8 @@ public record ShowDetail(
     int AiredEpisodes = 0,
     long WatchedMinutes = 0,
     long RemainingMinutes = 0,    // aired episodes you haven't watched
-    ShowTrackStatus TrackStatus = ShowTrackStatus.Watching);
+    ShowTrackStatus TrackStatus = ShowTrackStatus.Watching,
+    IReadOnlyList<CrewMember>? Crew = null);   // created by, and who directed, wrote and scored the most episodes
 
 /// <summary>A milestone episode, shown as a badge: S01E01, a season's first or last, or the very last.</summary>
 public enum EpisodeMark { None, SeriesPremiere, SeasonPremiere, SeasonFinale, SeriesFinale }
@@ -808,7 +809,8 @@ public record RatingRequest(MediaType Type, int TmdbId, double Rating, int? Seas
 /// (ended) show you've just finished. A season is Type Show with SeasonNumber set, as in RatingRequest.
 /// </summary>
 public record ToRateItem(string Kind, MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber,
-    string Title, string? Detail, string? PosterPath, DateTimeOffset FinishedAt);
+    string Title, string? Detail, string? PosterPath, DateTimeOffset FinishedAt,
+    WatchSource Source = WatchSource.Manual);   // where the last play came from: Jellyfin & co. get a "Rate it?" prompt
 /// <summary>"Not this one" on a To rate card (or undoing that).</summary>
 public record ToRateSkip(MediaType Type, int TmdbId, int? SeasonNumber = null, int? EpisodeNumber = null);
 public record RatingEntry(MediaType Type, int TmdbId, string Title, int? SeasonNumber, int? EpisodeNumber, string? PosterPath, double Rating, DateTimeOffset RatedAt);

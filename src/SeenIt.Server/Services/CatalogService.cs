@@ -443,6 +443,26 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
         return ReleaseStatuses.For(dates, here.Iso31661 ?? region, DateOnly.FromDateTime(DateTime.UtcNow));
     }
 
+    /// <summary>
+    /// Who made a show: its creators, then whoever directed, wrote and scored the most episodes (TMDB's aggregate
+    /// credits count each job's episodes). Like a movie's crew, grouped by job on the page.
+    /// </summary>
+    private static List<CrewMember> ShowCrew(TmdbShow s)
+    {
+        var crew = (s.CreatedBy ?? []).Select(c => new CrewMember(c.Id, c.Name, "Created by", c.ProfilePath)).ToList();
+        var all = s.AggregateCredits?.Crew ?? [];
+        void Most(string label, Func<string, bool> job, int take)
+        {
+            crew.AddRange(all.Select(c => (c, Episodes: c.Jobs?.Where(j => j.Job is { } name && job(name)).Sum(j => j.EpisodeCount) ?? 0))
+                .Where(x => x.Episodes > 0).OrderByDescending(x => x.Episodes).Take(take)
+                .Select(x => new CrewMember(x.c.Id, x.c.Name, label, x.c.ProfilePath)));
+        }
+        Most("Directed most", j => j == "Director", 3);
+        Most("Written most", j => j is "Writer" or "Teleplay" or "Screenplay" or "Story", 3);
+        Most("Music", j => j is "Original Music Composer" or "Music" or "Main Title Theme Composer", 2);
+        return crew;
+    }
+
     /// <summary>A franchise's movies in release order (unreleased ones last), marking which the user has seen.</summary>
     public async Task<CollectionDto?> GetCollectionAsync(int id, Guid? userId, CancellationToken ct)
     {
@@ -560,7 +580,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             s.NextEpisodeToAir is { } n ? marker.Mark(id, new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, nextDay ?? TmdbDates.Parse(n.AirDate), AirsAt: nextAt, Network: nextNetwork)) : null,
             user,
             progress,
-            totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus);
+            totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus, ShowCrew(s));
     }
 
     /// <summary>Running time of the whole show from the cached episode list (regular seasons only).</summary>

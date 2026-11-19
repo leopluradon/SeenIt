@@ -88,6 +88,17 @@ public class ToRateTests
     }
 
     [Fact]
+    public async Task Items_say_where_the_last_play_came_from()
+    {
+        var db = await Setup("movie", "show");
+        db.WatchEvents.Add(new WatchEvent { UserId = Me, Type = MediaType.Movie, TmdbId = Heat, WatchedAt = Now.AddMinutes(-5), Source = WatchSource.Jellyfin });
+        await db.SaveChangesAsync();
+        var items = await new ToRateService(db).GetAsync(Me, 40, default);
+        Assert.Equal(WatchSource.Jellyfin, items.Single(i => i.Kind == "movie").Source);   // the newer play, from Jellyfin
+        Assert.Equal(WatchSource.Manual, items.Single(i => i.Kind == "show").Source);
+    }
+
+    [Fact]
     public async Task Nothing_picked_means_nothing_offered()
     {
         var db = await Setup();
