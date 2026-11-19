@@ -24,13 +24,23 @@ else if (season is not null)
                 <span class="muted">@Watched/@Aired @(Rewatching ? "rewatched" : "watched")</span>
                 @if (Watched < Aired)
                 {
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => { seasonThrough = false; watchAllOpen = true; }"><Icon Name="check" Size="16" /> Mark season @(Rewatching ? "rewatched" : "watched")</button>
-                    @if (Number > 1) { <button class="btn btn-sm" disabled="@busy" @onclick="() => { seasonThrough = true; watchAllOpen = true; }" title="Mark this season and every earlier one watched">Up to here</button> }
+                    <SplitButton Class="btn-primary btn-sm" Disabled="busy" OnClick="() => { seasonThrough = false; watchAllOpen = true; }" Menu="@(Number > 1 || Watched > 0 ? SeasonMenu : null)">
+                        <Icon Name="check" Size="16" /> Mark season @(Rewatching ? "rewatched" : "watched")
+                    </SplitButton>
                 }
                 else if (Watched > 0 && !Rewatching)
                 {
-                    <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="UnwatchSeason">Unwatch season</button>
+                    <SplitButton Class="btn-watched btn-sm" Disabled="busy" OpensMenu="true" Menu="SeasonMenu"><Icon Name="check" Size="16" /> Season watched</SplitButton>
                 }
+                <div class="hero-rate">
+                    <span>Rate</span><RatingPicker Compact="true" Value="season.Rating" ValueChanged="RateSeason" />
+                    @if (season.Episodes.Where(x => x.Rating is not null).Select(x => x.Rating!.Value).ToList() is { Count: > 0 } epRatings)
+                    {
+                        <span class="muted small" title="@Fmt.Rating(epRatings.Average())">episodes avg <b>@Fmt.Stars(Math.Round(epRatings.Average(), 1))</b></span>
+                    }
+                </div>
+                <button class="btn btn-sm" @onclick="() => recommendOpen = true" title="Recommend the show to friends"><Icon Name="send" Size="16" /> Recommend</button>
+                <RecommendDialog @bind-Open="recommendOpen" Type="MediaType.Show" TmdbId="Id" Title="@season.ShowName" />
             </div>
         </AuthorizeView>
     </div>
@@ -68,14 +78,7 @@ else if (season is not null)
     ])" />
     <AuthorizeView>
         <div class="you-split">
-            <div class="panel rate-panel season-rate">
-                <span>Your rating for @season.Name</span>
-                <RatingPicker Value="season.Rating" ValueChanged="RateSeason" />
-                @if (rated.Count > 0)
-                {
-                    <span class="muted small season-ep-avg" title="@Fmt.Rating(rated.Average(x => x.Rating!.Value))">Your episode average: <b>@Fmt.Stars(Math.Round(rated.Average(x => x.Rating!.Value), 1))</b> from @rated.Count rated</span>
-                }
-            </div>
+
             <FriendsSeen Type="MediaType.Show" TmdbId="Id" Season="Number" Total="airedCount" Watched="seasonSeen" />
         </div>
     </AuthorizeView>
@@ -166,7 +169,20 @@ else if (season is not null)
     private SeasonDetail? season;
     private string? error;
     private bool notFound;
-    private bool busy, watchAllOpen;
+    private bool busy, watchAllOpen, recommendOpen;
+
+    /// <summary>The season's ▾: earlier seasons too, or taking it back.</summary>
+    private RenderFragment SeasonMenu => __builder =>
+    {
+        @if (Number > 1 && Watched < Aired)
+        {
+            <button type="button" role="menuitem" @onclick="() => { seasonThrough = true; watchAllOpen = true; }"><Icon Name="check" Size="16" /> Mark seasons 1–@Number watched…</button>
+        }
+        @if (Watched > 0 && !Rewatching)
+        {
+            <button type="button" role="menuitem" @onclick="UnwatchSeason"><Icon Name="x" Size="16" /> Unwatch season</button>
+        }
+    };
     private EpisodeDto? pending;
     private bool pendingThrough, seasonThrough;
     private void Open(EpisodeDto e, bool through, bool ask = false) { pending = e; pendingThrough = through; askWhen = ask; }

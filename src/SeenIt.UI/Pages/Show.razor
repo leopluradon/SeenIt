@@ -17,28 +17,30 @@ else if (s is not null)
         <Actions>
             @if (s.User is { } u)
             {
-                @* The everyday action leads: the next episode (S01E01 for a show you haven't started). Marking the whole show is secondary. *@
+                @* The everyday action leads: the next episode (S01E01 for a show you haven't started); the rest is under ▾. *@
                 @if (NextUp is { } up)
                 {
-                    <button class="btn btn-primary" disabled="@busy" @onclick="() => { askWhen = false; pendingEpisode = up; }">
-                        <Icon Name="check" Size="18" /> Watched @(up.SeasonNumber == 0 ? $"Special {up.EpisodeNumber}" : Fmt.Ep(up.SeasonNumber, up.EpisodeNumber))
-                    </button>
-                    <WhenButton Disabled="busy" What="@Fmt.Ep(up.SeasonNumber, up.EpisodeNumber)" OnClick="() => { askWhen = true; pendingEpisode = up; }" />
+                    <SplitButton Class="btn-primary" Disabled="busy" OnClick="() => { askWhen = false; pendingEpisode = up; }">
+                        <ChildContent><Icon Name="check" Size="18" /> Watched @(up.SeasonNumber == 0 ? $"Special {up.EpisodeNumber}" : Fmt.Ep(up.SeasonNumber, up.EpisodeNumber))</ChildContent>
+                        <Menu>
+                            <button type="button" role="menuitem" @onclick="() => { askWhen = true; pendingEpisode = up; }"><Icon Name="calendar" Size="16" /> Watched @Fmt.Ep(up.SeasonNumber, up.EpisodeNumber) on another day…</button>
+                            <button type="button" role="menuitem" @onclick="() => watchAllOpen = true"><Icon Name="check" Size="16" /> Mark the whole show watched…</button>
+                            @if (u.Plays > 0) { <button type="button" role="menuitem" @onclick="() => unwatchOpen = true"><Icon Name="x" Size="16" /> Mark unwatched…</button> }
+                        </Menu>
+                    </SplitButton>
                 }
-                <button class="btn @(s.Progress?.Completed == true ? "btn-watched" : NextUp is null ? "btn-primary" : "")" disabled="@busy" @onclick="() => watchAllOpen = true">
-                    <Icon Name="check" Size="18" /> @(s.Progress?.Completed == true ? "All caught up" : "Mark all watched")
-                </button>
-                @if (u.Plays > 0)
+                else
                 {
-                    <button class="btn btn-ghost" disabled="@busy" @onclick="() => unwatchOpen = true" title="Remove every episode play of this show from your history">
-                        <Icon Name="x" Size="18" /> Mark unwatched
-                    </button>
+                    <SplitButton Class="@(s.Progress?.Completed == true ? "btn-watched" : "btn-primary")" Disabled="busy" OnClick="() => watchAllOpen = true" OpensMenu="@(s.Progress?.Completed == true)">
+                        <ChildContent><Icon Name="check" Size="18" /> @(s.Progress?.Completed == true ? "All caught up" : "Mark all watched")</ChildContent>
+                        <Menu>
+                            @if (u.Plays > 0) { <button type="button" role="menuitem" @onclick="() => unwatchOpen = true"><Icon Name="x" Size="16" /> Mark unwatched…</button> }
+                        </Menu>
+                    </SplitButton>
                 }
+                <div class="hero-rate"><span>Rate</span><RatingPicker Compact="true" Value="u.Rating" ValueChanged="Rate" /></div>
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
                     <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
-                </button>
-                <button class="btn @(u.IsFavorite ? "btn-on fav-on" : "")" disabled="@busy" @onclick="ToggleFavorite" aria-pressed="@u.IsFavorite">
-                    <Icon Name="heart" Size="18" Class="@(u.IsFavorite ? "filled" : null)" /> Favorite
                 </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
                 <button class="btn" @onclick="() => recommendOpen = true" title="Send it to friends"><Icon Name="send" Size="18" /> Recommend</button>
@@ -103,10 +105,6 @@ else if (s is not null)
         {
         <div class="detail-you">
             <div class="panel you-panel">
-                <div class="rate-panel">
-                    <span>Your rating</span>
-                    <RatingPicker Value="u.Rating" ValueChanged="Rate" />
-                </div>
             @* Nothing to pause or drop once an ended show is finished (unless it's mid-rewatch, or already paused/dropped and needs undoing). *@
             @if (s.User is not null && (s.Progress is not null || s.TrackStatus != ShowTrackStatus.Watching)
                  && !(s.Status is "Ended" or "Canceled" && s.Progress is { Completed: true, Rewatch: null } && s.TrackStatus == ShowTrackStatus.Watching))
@@ -153,10 +151,6 @@ else if (s is not null)
                     {
                         <div class="inline spread next-ep">
                             <span>Next@(p.WatchOrder is { } won ? $" ({won})" : ""): <a href="@Fmt.EpisodeHref(Id, n.SeasonNumber, n.EpisodeNumber)"><b>@(n.SeasonNumber == 0 ? $"Special {n.EpisodeNumber}" : Fmt.Ep(n.SeasonNumber, n.EpisodeNumber))</b> <Spoiler>@n.Name</Spoiler></a> <EpisodeBadge Mark="n.Mark" /></span>
-                            <span class="inline">
-                                <WhenButton Small="true" Disabled="busy" What="@Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)" OnClick="() => { askWhen = true; pendingEpisode = n; }" />
-                                <button class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => { askWhen = false; pendingEpisode = n; }"><Icon Name="check" Size="14" /> Watched</button>
-                            </span>
                         </div>
                     }
                 </div>
@@ -442,13 +436,6 @@ else if (s is not null)
         ? Act(() => Api.UndoNotInterestedAsync(MediaType.Show, Id), "It can be suggested again")
         : Act(() => Api.MarkNotInterestedAsync(MediaType.Show, Id), "You won't see it suggested (and it's off your watchlist)");
 
-    private Task ToggleFavorite() => s!.User!.IsFavorite
-        ? Act(async () =>
-        {
-            await Api.RemoveFavoriteAsync(MediaType.Show, Id);
-            undo = () => Api.AddFavoriteAsync(MediaType.Show, Id);
-        }, "Removed from favorites")
-        : Act(() => Api.AddFavoriteAsync(MediaType.Show, Id), "Added to favorites");
 
     private Task ToggleWatchlist() => s!.User!.InWatchlist
         ? Act(async () =>

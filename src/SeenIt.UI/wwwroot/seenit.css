@@ -1893,3 +1893,23 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .history-who .title-link { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .torate-recommend { position: absolute; top: 6px; right: 36px; }
 .torate-card .torate-link { padding-right: 60px; }
+
+/* ---------- Action bar: the same on movie, show, season and episode pages ---------- */
+.split-btn { position: relative; display: inline-flex; }
+.split-btn > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split-btn > .split-caret { border-top-left-radius: 0; border-bottom-left-radius: 0; padding-left: 8px; padding-right: 8px; margin-left: 1px; }
+.split-menu { left: 0; right: auto; top: calc(100% + 6px); min-width: 230px; }
+.hero-rate { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); }
+.hero-rate > span { font-size: .8rem; font-weight: 600; color: var(--muted); }
+/* Ratings moved up to the action bar, so a "You" panel with nothing in it (not watched yet) isn't drawn. */
+.you-panel:not(:has(*)) { display: none; }
+/* Episode page: scores on one line, and the rest of the season folded away. */
+.score-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 6px 0 2px; }
+.score-line .score { margin: 0; }
+.more-season { margin: 18px 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.more-season > summary { cursor: pointer; padding: 12px 14px; font-weight: 650; list-style: none; display: flex; align-items: center; gap: 8px; }
+.more-season > summary::-webkit-details-marker { display: none; }
+.more-season > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.more-season[open] > summary::after { transform: rotate(180deg); }
+.more-season[open] > summary { border-bottom: 1px solid var(--border); }
+.more-season > :not(summary) { padding: 6px 12px 12px; }

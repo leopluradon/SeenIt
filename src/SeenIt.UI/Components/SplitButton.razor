@@ -1,0 +1,32 @@
+@* The main action with a ▾ beside it for the less common ways to do it: "Mark watched" plus pick a date, up to
+   here, watched and go to next… The same on movie, show, season and episode pages. *@
+<div class="split-btn">
+    <button type="button" class="btn @Class" disabled="@Disabled" @onclick="Primary">@ChildContent</button>
+    @if (Menu is not null)
+    {
+        <button type="button" class="btn split-caret @Class" disabled="@Disabled" aria-haspopup="true" aria-expanded="@open"
+                aria-label="@MenuLabel" title="@MenuLabel" @onclick="() => open = !open"><Icon Name="chevron-down" Size="16" /></button>
+        @if (open)
+        {
+            <div class="menu-backdrop" @onclick="() => open = false"></div>
+            <div class="menu split-menu" role="menu" @onclick="() => open = false">@Menu</div>
+        }
+    }
+</div>
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    /// <summary>Buttons for the ▾ menu; none means a plain button.</summary>
+    [Parameter] public RenderFragment? Menu { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string MenuLabel { get; set; } = "More ways to mark it";
+    /// <summary>A state rather than an action ("Season watched"): the button opens the menu instead.</summary>
+    [Parameter] public bool OpensMenu { get; set; }
+    private bool open;
+    private Task Primary()
+    {
+        if (OpensMenu) { open = !open; return Task.CompletedTask; }
+        return OnClick.InvokeAsync();
+    }
+}

@@ -37,28 +37,33 @@ else if (e is not null)
                 @if (e.Runtime is > 0) { <span>@Fmt.Runtime(e.Runtime)</span> }
                 @if (!aired) { <span class="pill">Not aired yet</span> }
             </div>
-            <ScoreSpoiler Watched="Seen" Block="true">
+            <ScoreSpoiler Watched="Seen" Block="true"><div class="score-line">
             @if (e.VoteAverage is > 0 && Fmt.ShowsScore("tmdb", MediaType.Episode))
             {
                 <div class="score"><Icon Name="star" Size="16" /> <b>@e.VoteAverage.Value.ToString("0.0")</b> <span class="muted small">TMDB · @e.VoteCount?.ToString("N0") votes</span></div>
             }
             <ExternalScores Type="MediaType.Episode" TmdbId="Id" Season="Season" Episode="Number" />
-            </ScoreSpoiler>
+            </div></ScoreSpoiler>
             <div class="actions">
                 @if (e.Plays is { } plays)
                 {
-                    <button class="btn @(plays.Count > 0 ? "btn-watched" : "btn-primary")" disabled="@(busy || !aired)" @onclick="() => { through = false; askWhen = false; watchOpen = true; }">
-                        <Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })
-                    </button>
-                    <WhenButton Disabled="@(busy || !aired)" What="@Fmt.Ep(Season, Number)" OnClick="() => { through = false; askWhen = true; watchOpen = true; }" />
-                    @if (plays.Count == 0 && aired && e.Next is { } nx)
-                    {
-                        <button class="btn" disabled="@busy" @onclick="WatchAndNext" title="@($"Mark watched now and go to {Fmt.Ep(nx.SeasonNumber, nx.EpisodeNumber)}")">Watched, next episode <Icon Name="chevron-right" Size="16" /></button>
-                    }
-                    @if (plays.Count == 0 && aired && Fmt.CanThrough(Season, Number))
-                    {
-                        <button class="btn" disabled="@busy" @onclick="() => { through = true; watchOpen = true; }" title="Mark this and every earlier episode watched">Mark up to here</button>
-                    }
+                    <SplitButton Class="@(plays.Count > 0 ? "btn-watched" : "btn-primary")" Disabled="@(busy || !aired)" OnClick="() => { through = false; askWhen = false; watchOpen = true; }">
+                        <ChildContent><Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })</ChildContent>
+                        <Menu>
+                            <button type="button" role="menuitem" @onclick="() => { through = false; askWhen = true; watchOpen = true; }"><Icon Name="calendar" Size="16" /> Watched on another day…</button>
+                            @if (plays.Count == 0 && e.Next is { } nx)
+                            {
+                                <button type="button" role="menuitem" @onclick="WatchAndNext"><Icon Name="chevron-right" Size="16" /> Watched, go to @Fmt.Ep(nx.SeasonNumber, nx.EpisodeNumber)</button>
+                            }
+                            @if (plays.Count == 0 && Fmt.CanThrough(Season, Number))
+                            {
+                                <button type="button" role="menuitem" @onclick="() => { through = true; watchOpen = true; }"><Icon Name="check" Size="16" /> Mark up to here…</button>
+                            }
+                        </Menu>
+                    </SplitButton>
+                    <div class="hero-rate"><span>Rate</span><RatingPicker Compact="true" Value="e.Rating" ValueChanged="Rate" /></div>
+                    <button class="btn" @onclick="() => recommendOpen = true" title="Recommend the show to friends"><Icon Name="send" Size="18" /> Recommend</button>
+                    <RecommendDialog @bind-Open="recommendOpen" Type="MediaType.Show" TmdbId="Id" Title="@e.ShowName" />
                     <button type="button" class="btn btn-more" data-ctx="@Menu.Episode(Id, Season, Number, e.ShowName, e.Name, e.ShowPosterPath)" aria-label="More actions" title="More: check in, rate, go to season…"
                             onclick="seenit.openMenuFor(this)"><Icon Name="more" Size="18" /></button>
                 }
@@ -75,10 +80,6 @@ else if (e is not null)
         {
             <div class="you-split">
             <div class="panel you-panel">
-            <div class="rate-panel">
-                <span>Your rating</span>
-                <RatingPicker Value="e.Rating" ValueChanged="Rate" />
-            </div>
             @if (myPlays.Count > 0)
             {
                 <div class="you-plays">
@@ -113,15 +114,8 @@ else if (e is not null)
         }
     </div>
 
+    @* Previous is in the links at the top; only what comes next gets a card. *@
     <nav class="episode-nav">
-        @if (e.Previous is { } prev)
-        {
-            <a class="episode-nav-link" href="@Fmt.EpisodeHref(Id, prev.SeasonNumber, prev.EpisodeNumber)">
-                <Icon Name="chevron-left" Size="18" />
-                <span><span class="muted small">Previous · @Fmt.Ep(prev.SeasonNumber, prev.EpisodeNumber)</span> <EpisodeBadge Mark="prev.Mark" /><br /><Spoiler Watched="prev.Watched">@prev.Name</Spoiler></span>
-            </a>
-        }
-        else { <span></span> }
         @if (e.Next is { } next)
         {
             <a class="episode-nav-link next" href="@Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber)">
@@ -131,7 +125,10 @@ else if (e is not null)
         }
     </nav>
 
+    <details class="more-season">
+        <summary>More from @(Season == 0 ? "Specials" : $"Season {Season}")</summary>
     <SeasonEpisodes ShowId="Id" ShowName="@e.ShowName" ShowPoster="@e.ShowPosterPath" CurrentSeason="Season" CurrentEpisode="Number" Seasons="@(e.Seasons ?? [])" OnChanged="Reload" CanWatch="e.Plays is not null" />
+    </details>
 
     <CastRow Cast="@(e.Cast ?? [])" Title="Cast" />
     @if (Fmt.Prefs.HideGuestStars && !Seen && !showGuests && e.GuestStars.Count > 0)
@@ -157,7 +154,7 @@ else if (e is not null)
     private EpisodeDetail? e;
     private string? error;
     private bool notFound;
-    private bool busy, watchOpen, through, ratePrompt, askWhen;
+    private bool busy, watchOpen, through, ratePrompt, askWhen, recommendOpen;
     private PlayDto? editing;
 
     private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); StateHasChanged(); }

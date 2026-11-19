@@ -27,15 +27,16 @@ else if (m is not null)
         <Actions>
             @if (m.User is { } u)
             {
-                <button class="btn @(u.Plays > 0 ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="() => { askWhen = false; watchOpen = true; }">
-                    <Icon Name="check" Size="18" /> @* Seen already: tapping it logs another viewing, so say so. *@@(u.Plays switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })
-                </button>
-                <WhenButton Disabled="busy" What="@m.Title" OnClick="() => { askWhen = true; watchOpen = true; }" />
+                <SplitButton Class="@(u.Plays > 0 ? "btn-watched" : "btn-primary")" Disabled="busy" OnClick="() => { askWhen = false; watchOpen = true; }">
+                    <ChildContent><Icon Name="check" Size="18" /> @* Seen already: tapping it logs another viewing, so say so. *@@(u.Plays switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })</ChildContent>
+                    <Menu>
+                        <button type="button" role="menuitem" @onclick="() => { askWhen = true; watchOpen = true; }"><Icon Name="calendar" Size="16" /> Watched on another day…</button>
+                        @if (u.Plays > 0) { <button type="button" role="menuitem" @onclick="UnwatchAll"><Icon Name="x" Size="16" /> Mark unwatched (remove @(u.Plays == 1 ? "the play" : $"all {u.Plays} plays"))</button> }
+                    </Menu>
+                </SplitButton>
+                <div class="hero-rate"><span>Rate</span><RatingPicker Compact="true" Value="u.Rating" ValueChanged="Rate" /></div>
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
                     <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")
-                </button>
-                <button class="btn @(u.IsFavorite ? "btn-on fav-on" : "")" disabled="@busy" @onclick="ToggleFavorite" aria-pressed="@u.IsFavorite">
-                    <Icon Name="heart" Size="18" Class="@(u.IsFavorite ? "filled" : null)" /> Favorite
                 </button>
                 <button class="btn" @onclick="() => listOpen = true"><Icon Name="list" Size="18" /> Lists</button>
                 <button class="btn" @onclick="() => recommendOpen = true" title="Send it to friends"><Icon Name="send" Size="18" /> Recommend</button>
@@ -61,10 +62,6 @@ else if (m is not null)
             {
                 <div class="detail-you">
                 <div class="panel you-panel">
-                <div class="rate-panel">
-                    <span>Your rating</span>
-                    <RatingPicker Value="u.Rating" ValueChanged="Rate" />
-                </div>
                 @if (u.History is { Count: > 0 } plays)
                 {
                     <div class="you-plays">
@@ -236,13 +233,6 @@ else if (m is not null)
         ? Act(() => Api.UndoNotInterestedAsync(MediaType.Movie, Id), "It can be suggested again")
         : Act(() => Api.MarkNotInterestedAsync(MediaType.Movie, Id), "You won't see it suggested (and it's off your watchlist)");
 
-    private Task ToggleFavorite() => m!.User!.IsFavorite
-        ? Act(async () =>
-        {
-            await Api.RemoveFavoriteAsync(MediaType.Movie, Id);
-            undo = () => Api.AddFavoriteAsync(MediaType.Movie, Id);
-        }, "Removed from favorites")
-        : Act(() => Api.AddFavoriteAsync(MediaType.Movie, Id), "Added to favorites");
 
     private Task ToggleWatchlist() => m!.User!.InWatchlist
         ? Act(async () =>
