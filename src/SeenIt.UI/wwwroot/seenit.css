@@ -326,9 +326,11 @@ html.has-ptr, html.has-ptr body { overscroll-behavior-y: contain; }
 .cal-day.today .day-head { color: var(--accent-hover); }
 
 /* ---------- Detail pages ---------- */
-.hero-detail { position: relative; margin: -28px calc(-1 * var(--gutter)) 0; padding: 48px var(--gutter) 32px; overflow: hidden; border-radius: 0 0 var(--radius) var(--radius); }
-.hero-bg { position: absolute; inset: 0; background: center 20%/cover; opacity: .45; }
-.hero-shade { position: absolute; inset: 0; background: linear-gradient(90deg, var(--bg) 0%, rgba(var(--bg-rgb), .75) 50%, rgba(var(--bg-rgb), .35)), linear-gradient(0deg, var(--bg), transparent 60%); }
+/* No overflow: hidden here: it cut off the ▾ menus of the action bar where the hero ends. The backdrop
+   layers round their own corners instead. */
+.hero-detail { position: relative; margin: -28px calc(-1 * var(--gutter)) 0; padding: 48px var(--gutter) 32px; border-radius: 0 0 var(--radius) var(--radius); }
+.hero-bg { position: absolute; inset: 0; border-radius: inherit; background: center 20%/cover; opacity: .45; }
+.hero-shade { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(90deg, var(--bg) 0%, rgba(var(--bg-rgb), .75) 50%, rgba(var(--bg-rgb), .35)), linear-gradient(0deg, var(--bg), transparent 60%); }
 .hero-content { position: relative; display: flex; gap: 32px; align-items: flex-end; }
 .hero-poster { width: 230px; flex-shrink: 0; }
 .hero-poster img { border-radius: var(--radius); box-shadow: var(--shadow); }

@@ -38,6 +38,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         var seenShows = watched?.Where(w => w.Type == MediaType.Show).Select(w => w.TmdbId).ToHashSet() ?? [];
         bool Watched(MediaType t, int tmdbId) => t == MediaType.Movie ? watchedMovies.ContainsKey(tmdbId) : seenShows.Contains(tmdbId);
         bool Partly(MediaType t, int tmdbId) => t == MediaType.Show && !seenShows.Contains(tmdbId) && watchedEpisodes.ContainsKey(tmdbId);
+        var watching = await WatchingAsync(db, castCredits.Concat(crewCredits).Where(c => c.MediaType == "tv").Select(c => c.Id), watchedEpisodes, ct);
 
         // One row per title: TV people often have several credits on the same show.
         var cast = castCredits.GroupBy(c => (c.MediaType, c.Id)).Select(g =>
@@ -52,7 +53,8 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 TmdbDates.Parse(type == MediaType.Movie ? c.ReleaseDate : c.FirstAirDate),
                 string.IsNullOrEmpty(roles) ? null : roles,
                 type == MediaType.Show ? g.Sum(x => x.EpisodeCount ?? 0) : null,
-                c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id), appearance, PartlySeen: Partly(type, c.Id));
+                c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id), appearance, PartlySeen: Partly(type, c.Id),
+                Watching: type == MediaType.Show && watching.Contains(c.Id));
         }).OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
 
         var crew = (p.CombinedCredits?.Crew ?? []).Where(c => c.MediaType is "movie" or "tv")
@@ -66,7 +68,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                     type == MediaType.Show ? g.Sum(x => x.EpisodeCount ?? 0) : null,
                     c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id),
                     Jobs: g.Where(x => !string.IsNullOrWhiteSpace(x.Job)).Select(x => new CrewJob(x.Job!, x.Department)).Distinct().ToList(),
-                    PartlySeen: Partly(type, c.Id));
+                    PartlySeen: Partly(type, c.Id), Watching: type == MediaType.Show && watching.Contains(c.Id));
             }).OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
 
         var following = false;
@@ -95,6 +97,22 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
             watched?.Count(w => w.Type == MediaType.Show) ?? 0,
             watched?.Sum(w => w.Minutes) ?? 0,
             following, avg, rated);
+    }
+
+    /// <summary>
+    /// Their shows you're partway through: you've seen an episode, and there's an aired regular episode you haven't.
+    /// A show whose episodes aren't cached yet counts too (better to hide a count than give something away).
+    /// </summary>
+    internal static async Task<HashSet<int>> WatchingAsync(AppDbContext db, IEnumerable<int> showIds, Dictionary<int, Dictionary<(int, int), int>> seen, CancellationToken ct)
+    {
+        var started = showIds.Where(seen.ContainsKey).Distinct().ToList();
+        if (started.Count == 0) return [];
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var aired = (await db.Episodes.AsNoTracking()
+                .Where(e => started.Contains(e.ShowTmdbId) && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today)
+                .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber }).ToListAsync(ct))
+            .GroupBy(e => e.ShowTmdbId).ToDictionary(g => g.Key, g => g.Select(e => (e.SeasonNumber, e.EpisodeNumber)).ToList());
+        return started.Where(id => !aired.TryGetValue(id, out var eps) || eps.Any(e => !seen[id].ContainsKey(e))).ToHashSet();
     }
 
     // ---------- Following people ----------

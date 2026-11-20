@@ -699,7 +699,9 @@ public record PersonCreditDto(
     bool Watched,
     bool Appearance = false,    // talk shows, news, "Self" roles: listed separately
     IReadOnlyList<CrewJob>? Jobs = null,    // crew only: each job with its TMDB department, to split directing/writing/other
-    bool PartlySeen = false);               // a show you've watched some of, but not their episode(s): Watched is false
+    bool PartlySeen = false,                // a show you've watched some of, but not their episode(s): Watched is false
+    bool Watching = false);                 // a show you've started and haven't seen every aired episode of: with the
+                                            // guest-star spoiler setting on, its episode count is hidden (it gives away who stays)
 
 public record CrewJob(string Job, string? Department);
 
