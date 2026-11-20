@@ -422,8 +422,9 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             m.Genres?.Select(g => g.Name).ToList() ?? [],
             m.PosterPath, m.BackdropPath, m.VoteAverage, m.VoteCount, m.ImdbId, m.Status,
             Cast(m.Credits?.Cast),
-            (m.Credits?.Crew ?? []).Where(c => c.Job is "Director" or "Screenplay" or "Writer" or "Original Music Composer" or "Director of Photography")
-                .Take(12).Select(c => new CrewMember(c.Id, c.Name, c.Job, c.ProfilePath)).ToList(),
+            // TMDB files a director of photography under either name; show them as one job.
+            (m.Credits?.Crew ?? []).Where(c => c.Job is "Director" or "Screenplay" or "Writer" or "Original Music Composer" or "Director of Photography" or "Cinematography")
+                .Take(12).Select(c => new CrewMember(c.Id, c.Name, c.Job == "Cinematography" ? "Director of Photography" : c.Job, c.ProfilePath)).ToList(),
             PickVideos(m.Videos),
             (m.Recommendations?.Results ?? []).Take(18).Select(r => ToSummary(r, MediaType.Movie)).ToList(),
             user,
