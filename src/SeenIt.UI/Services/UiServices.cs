@@ -146,32 +146,44 @@ public static class Fmt
     public static IReadOnlyList<CountBucket> WeekOrder(IReadOnlyList<CountBucket> days) =>
         Prefs.WeekStartsMonday && days.Count == 7 && days[0].Label.StartsWith("Sun") ? [.. days.Skip(1), days[0]] : days;
 
-    /// <summary>The user's choice for long durations: days and hours, or hours.</summary>
+    /// <summary>The user's choice for long durations: days and hours, or hours, either with minutes or without.</summary>
     public static TimeFormat Time { get; set; }
 
-    /// <summary>"48d 7h" or "1,159h" (the user's choice) from a day up; "5h 12m" below that.</summary>
+    /// <summary>"48d 7h", "1,159h", "48d 7h 23m" or "1,159h 23m" (the user's choice) from a day up; "5h 12m" below that.</summary>
     public static string Duration(long minutes) => minutes >= 1440 ? Long(minutes, Time) : Short(minutes);
+    private static bool InHours(TimeFormat f) => f is TimeFormat.Hours or TimeFormat.HoursMinutes;
 
     private static string Short(long minutes) => minutes >= 60 ? $"{minutes / 60}h {minutes % 60}m" : $"{minutes}m";
-    private static string Long(long minutes, TimeFormat f) =>
-        f == TimeFormat.Hours ? $"{minutes / 60:N0}h" : $"{minutes / 1440}d {minutes % 1440 / 60}h";
+    private static string Long(long minutes, TimeFormat f) => f switch
+        {
+            TimeFormat.Hours => $"{minutes / 60:N0}h",
+            TimeFormat.HoursMinutes => $"{minutes / 60:N0}h {minutes % 60}m",
+            TimeFormat.DaysHoursMinutes => $"{minutes / 1440:N0}d {minutes % 1440 / 60}h {minutes % 60}m",
+            _ => $"{minutes / 1440:N0}d {minutes % 1440 / 60}h",
+        };
 
     /// <summary>
     /// Hover text for a duration of a day or more, in the other format: "2d 1h" → "49 hours",
     /// "49h" → "2 days 1 hour". Null below a day.
     /// </summary>
-    public static string? HoursTip(long minutes) => minutes < 1440 ? null
-        : Time == TimeFormat.Hours ? $"{minutes / 1440:N0} day{(minutes / 1440 == 1 ? "" : "s")} {minutes % 1440 / 60} hour{(minutes % 1440 / 60 == 1 ? "" : "s")}"
-        : $"{minutes / 60:N0} hours";
+    public static string? HoursTip(long minutes)
+    {
+        if (minutes < 1440) return null;
+        var tip = InHours(Time) ? $"{minutes / 1440:N0} day{(minutes / 1440 == 1 ? "" : "s")} {minutes % 1440 / 60} hour{(minutes % 1440 / 60 == 1 ? "" : "s")}"
+            : $"{minutes / 60:N0} hours";
+        return Time is TimeFormat.HoursMinutes or TimeFormat.DaysHoursMinutes ? $"{tip} {minutes % 60} minute{(minutes % 60 == 1 ? "" : "s")}" : tip;
+    }
 
-    private static readonly System.Text.RegularExpressions.Regex DaysRe = new(@"(\d+)d (\d+)h");
-    private static readonly System.Text.RegularExpressions.Regex HoursRe = new(@"^~?([\d,]+)h$");
+    private static readonly System.Text.RegularExpressions.Regex DaysRe = new(@"([\d,]+)d (\d+)h(?: (\d+)m)?");
+    private static readonly System.Text.RegularExpressions.Regex HoursRe = new(@"^~?([\d,]+)h(?: (\d+)m)?$");
     /// <summary>The same, for text holding a duration (stat boxes, table cells).</summary>
     public static string? HoursTip(string? text)
     {
         if (text is null) return null;
-        if (DaysRe.Match(text) is { Success: true } d) return HoursTip((long.Parse(d.Groups[1].Value) * 24 + long.Parse(d.Groups[2].Value)) * 60);
-        if (HoursRe.Match(text.Trim()) is { Success: true } h && long.TryParse(h.Groups[1].Value.Replace(",", ""), out var hours)) return HoursTip(hours * 60);
+        if (DaysRe.Match(text) is { Success: true } d) return HoursTip((long.Parse(d.Groups[1].Value.Replace(",", "")) * 24 + long.Parse(d.Groups[2].Value)) * 60
+                                                                     + (d.Groups[3].Success ? long.Parse(d.Groups[3].Value) : 0));
+        if (HoursRe.Match(text.Trim()) is { Success: true } h && long.TryParse(h.Groups[1].Value.Replace(",", ""), out var hours))
+            return HoursTip(hours * 60 + (h.Groups[2].Success ? long.Parse(h.Groups[2].Value) : 0));
         return null;
     }
 

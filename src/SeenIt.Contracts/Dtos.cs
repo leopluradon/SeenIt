@@ -50,8 +50,8 @@ public record MeDto(
     UpNextSort UpNextSort = UpNextSort.LastWatched,
     UserPrefs? Prefs = null);
 
-/// <summary>How long stretches of time read: "48d 7h" or "1,159h". Under a day both read "5h 12m".</summary>
-public enum TimeFormat { DaysHours, Hours }
+/// <summary>How long stretches of time read: "48d 7h", "1,159h", "48d 7h 23m" or "1,159h 23m". Under a day all read "5h 12m".</summary>
+public enum TimeFormat { DaysHours, Hours, DaysHoursMinutes, HoursMinutes }
 
 /// <summary>How ratings are given and shown. They're stored as 1–10 (to one decimal) whatever the scale.</summary>
 public enum RatingScale { Ten, FiveStars, Decimal, Thumbs }

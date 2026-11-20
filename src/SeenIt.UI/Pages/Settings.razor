@@ -376,6 +376,8 @@ else { <h1>Settings</h1> }
             <div class="segmented">
                 <button class="@(Fmt.Time == TimeFormat.DaysHours ? "on" : "")" @onclick="() => SaveTime(TimeFormat.DaysHours)">Days and hours (48d 7h)</button>
                 <button class="@(Fmt.Time == TimeFormat.Hours ? "on" : "")" @onclick="() => SaveTime(TimeFormat.Hours)">Hours (1,159h)</button>
+                <button class="@(Fmt.Time == TimeFormat.DaysHoursMinutes ? "on" : "")" @onclick="() => SaveTime(TimeFormat.DaysHoursMinutes)">Days, hours and minutes (48d 7h 23m)</button>
+                <button class="@(Fmt.Time == TimeFormat.HoursMinutes ? "on" : "")" @onclick="() => SaveTime(TimeFormat.HoursMinutes)">Hours and minutes (1,159h 23m)</button>
             </div>
         </section>
         <section class="panel" id="region">
@@ -1765,7 +1767,13 @@ else { <h1>Settings</h1> }
         {
             await Api.SetPreferencesAsync(new PreferencesRequest(TimeFormat: f));
             Session.Update(me => me with { TimeFormat = f });
-            Toasts.Show(f == TimeFormat.Hours ? "Times shown in hours" : "Times shown in days and hours");
+            Toasts.Show(f switch
+            {
+                TimeFormat.Hours => "Times shown in hours",
+                TimeFormat.HoursMinutes => "Times shown in hours and minutes",
+                TimeFormat.DaysHoursMinutes => "Times shown in days, hours and minutes",
+                _ => "Times shown in days and hours",
+            });
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }
