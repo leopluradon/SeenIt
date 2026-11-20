@@ -18,6 +18,8 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
 
     private sealed class Ctx
     {
+        /// <summary>Just movies or just TV (MediaFilter); null for everything.</summary>
+        public MediaType? Kind { get; init; }
         public required TimeZoneInfo Tz;
         public required DateOnly? Since;
         public required DateOnly Today;
@@ -31,7 +33,8 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
         public DateTime Local(DateTimeOffset at) => TimeZoneInfo.ConvertTime(at, Tz).DateTime;
     }
 
-    public async Task<MoreStatsDto> GetAsync(Guid userId, string? tzId, CancellationToken ct)
+    /// <param name="kind">Just movies or just TV (MediaFilter); null for everything.</param>
+    public async Task<MoreStatsDto> GetAsync(Guid userId, string? tzId, CancellationToken ct, MediaType? kind = null)
     {
         var tz = ReviewService.Zone(await tracking.ZoneIdAsync(userId, tzId, ct));
         var since = await tracking.TrackingSinceAsync(userId, ct);
@@ -39,6 +42,7 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
 
         var all = (await db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId)
                 .Select(w => new { w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, w.Source }).ToListAsync(ct))
+            .Where(w => MediaFilter.Keeps(kind, w.Type))
             .Select(w => new P(w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt, Local(w.WatchedAt), w.Source)).ToList();
         var dated = all.Where(p => !WatchDates.IsUnknown(p.At)).OrderBy(p => p.At).ToList();
         var movieIds = all.Where(p => p.Type == MediaType.Movie).Select(p => p.TmdbId).Distinct().ToList();
@@ -46,7 +50,7 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
 
         var c = new Ctx
         {
-            Tz = tz, Since = since, Today = DateOnly.FromDateTime(Local(DateTimeOffset.UtcNow)),
+            Tz = tz, Since = since, Today = DateOnly.FromDateTime(Local(DateTimeOffset.UtcNow)), Kind = kind,
             All = all, Dated = dated, Tracked = dated.Where(p => since is null || DateOnly.FromDateTime(p.Local) >= since).ToList(),
             // Everything but cast and crew, which are large JSON columns nothing here reads.
             Movies = await db.Movies.AsNoTracking().Where(m => movieIds.Contains(m.TmdbId))
@@ -80,7 +84,7 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
             Studios(c),
             await FranchisesAsync(c, ct),
             await BacklogAsync(userId, c, progress, ct),
-            await RatingsVsTmdbAsync(userId, ct),
+            await RatingsVsTmdbAsync(userId, kind, ct),
             await FriendsAsync(userId, c, ct),
             await MilestonesAsync(userId, c, ct));
     }
@@ -281,10 +285,11 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
 
     // ----- Your ratings vs TMDB's -----
 
-    private async Task<RatingsVsTmdb> RatingsVsTmdbAsync(Guid userId, CancellationToken ct)
+    private async Task<RatingsVsTmdb> RatingsVsTmdbAsync(Guid userId, MediaType? kind, CancellationToken ct)
     {
-        var ratings = await db.Ratings.AsNoTracking()
-            .Where(r => r.UserId == userId && r.SeasonNumber == null && (r.Type == MediaType.Movie || r.Type == MediaType.Show)).ToListAsync(ct);
+        var ratings = (await db.Ratings.AsNoTracking()
+            .Where(r => r.UserId == userId && r.SeasonNumber == null && (r.Type == MediaType.Movie || r.Type == MediaType.Show)).ToListAsync(ct))
+            .Where(r => MediaFilter.Keeps(kind, r.Type)).ToList();
         var (movies, shows) = await tracking.LoadMetaAsync(ratings.Select(r => (r.Type, r.TmdbId)), ct);
         var rows = ratings.Select(r => r.Type == MediaType.Movie
                 ? movies.TryGetValue(r.TmdbId, out var m) && m.VoteAverage is > 0 ? (Media: CatalogService.ToSummary(m), You: r.Value, Tmdb: m.VoteAverage.Value) : default
@@ -379,7 +384,10 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
             }
         }
 
-        var firstTen = await db.Ratings.AsNoTracking().Where(r => r.UserId == userId && r.Value == 10 && r.SeasonNumber == null)
+        var movieOnly = c.Kind == MediaType.Movie;
+        var tvOnly = c.Kind == MediaType.Show;
+        var firstTen = await db.Ratings.AsNoTracking().Where(r => r.UserId == userId && r.Value == 10 && r.SeasonNumber == null
+                && (!movieOnly || r.Type == MediaType.Movie) && (!tvOnly || r.Type != MediaType.Movie))
             .OrderBy(r => r.RatedAt).FirstOrDefaultAsync(ct);
         if (firstTen is not null)
         {

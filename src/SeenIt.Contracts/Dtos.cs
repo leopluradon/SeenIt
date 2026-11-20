@@ -1139,12 +1139,27 @@ public class ReviewCardOptions
     public string? Theme { get; set; }                                   // a theme key; null = yours
     public string? Accent { get; set; }                                  // an accent key; null = the theme's
     public bool NewOnly { get; set; }                                    // only titles new to you in the period
+    public string? Type { get; set; }                                    // "movie" or "tv" for just those (MediaFilter)
 
     public IReadOnlyList<string> TileKeys() => Keys(Tiles, ReviewCardChoices.Tiles).Take(4).ToList();
     public IReadOnlyList<string> FactKeys() => Keys(Facts, ReviewCardChoices.Facts).ToList();
     private static IEnumerable<string> Keys(string? list, (string Key, string Label)[] allowed) =>
         (list ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(k => allowed.Any(a => a.Key == k)).Distinct();
+}
+
+/// <summary>Stats and reviews for just movies or just TV ("?type=movie" / "?type=tv"); null is everything.</summary>
+public static class MediaFilter
+{
+    public static MediaType? Parse(string? type) => type?.ToLowerInvariant() switch
+    {
+        "movie" or "movies" => MediaType.Movie,
+        "tv" or "show" or "shows" => MediaType.Show,
+        _ => null,
+    };
+    public static string? Key(MediaType? kind) => kind switch { MediaType.Movie => "movie", MediaType.Show => "tv", _ => null };
+    /// <summary>Whether a play or rating of this type counts: TV takes shows, seasons and episodes alike.</summary>
+    public static bool Keeps(MediaType? kind, MediaType type) => kind is null || (kind == MediaType.Movie ? type == MediaType.Movie : type != MediaType.Movie);
 }
 
 public static class ReviewCardChoices

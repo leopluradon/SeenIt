@@ -129,4 +129,27 @@ public class ReviewTests
         // February compared the same way: Heat and Andor were new then.
         Assert.Equal((1, 1), (fresh.Previous.Movies, fresh.Previous.Shows));
     }
+
+    [Fact]
+    public async Task Movies_or_tv_only()
+    {
+        using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        db.Movies.Add(new MovieMeta { TmdbId = 1, Title = "Heat", Runtime = 170 });
+        db.Shows.Add(new ShowMeta { TmdbId = 2, Name = "Severance", EpisodeRuntime = 50 });
+        db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Movie, TmdbId = 1, WatchedAt = new(2026, 3, 2, 20, 0, 0, TimeSpan.Zero) });
+        db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Episode, TmdbId = 2, SeasonNumber = 1, EpisodeNumber = 1, WatchedAt = new(2026, 3, 3, 20, 0, 0, TimeSpan.Zero) });
+        db.Ratings.Add(new Rating { UserId = User, Type = MediaType.Movie, TmdbId = 1, Value = 8, RatedAt = new(2026, 3, 2, 22, 0, 0, TimeSpan.Zero) });
+        db.Ratings.Add(new Rating { UserId = User, Type = MediaType.Episode, TmdbId = 2, SeasonNumber = 1, EpisodeNumber = 1, Value = 6, RatedAt = new(2026, 3, 3, 22, 0, 0, TimeSpan.Zero) });
+        await db.SaveChangesAsync();
+        var svc = new ReviewService(db, new TrackingService(db, null!));
+
+        var movies = await svc.BuildAsync(User, 2026, 3, "UTC", default, kind: MediaFilter.Parse("movie"));
+        Assert.Equal((1, 0, 1, 8.0), (movies.Totals.Movies, movies.Totals.Shows, movies.Totals.Ratings, movies.AverageRating!.Value));
+        var tv = await svc.BuildAsync(User, 2026, 3, "UTC", default, kind: MediaFilter.Parse("tv"));
+        Assert.Equal((0, 1, 1, 6.0), (tv.Totals.Movies, tv.Totals.Shows, tv.Totals.Ratings, tv.AverageRating!.Value));
+
+        var stats = await new TrackingService(db, null!).GetStatsAsync(User, "UTC", default, MediaType.Show);
+        Assert.Equal((0, 1, 1), (stats.MoviesWatched, stats.ShowsWatched, stats.Ratings));
+        Assert.Null(MediaFilter.Parse("everything"));
+    }
 }

@@ -1052,7 +1052,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     public async Task<bool> FirstWatchesOnlyAsync(Guid userId, CancellationToken ct) =>
         !UserPrefsStore.Read(await db.Users.Where(u => u.Id == userId).Select(u => u.PrefsJson).FirstOrDefaultAsync(ct)).CountRewatches;
 
-    public async Task<StatsDto> GetStatsAsync(Guid userId, string? tzId, CancellationToken ct)
+    /// <param name="kind">Just movies or just TV (MediaFilter); null for everything.</param>
+    public async Task<StatsDto> GetStatsAsync(Guid userId, string? tzId, CancellationToken ct, MediaType? kind = null)
     {
         var tz = ReviewService.Zone(await ZoneIdAsync(userId, tzId, ct));
         var since = await TrackingSinceAsync(userId, ct);
@@ -1061,6 +1062,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         // "Don't count rewatches": each movie and episode counts once, at its first play.
         if (await FirstWatchesOnlyAsync(userId, ct))
             watches = watches.GroupBy(w => (w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber)).Select(g => g.MinBy(w => w.WatchedAt)!).ToList();
+        watches = watches.Where(w => MediaFilter.Keeps(kind, w.Type)).ToList();
 
         var movieIds = watches.Where(w => w.Type == MediaType.Movie).Select(w => w.TmdbId).Distinct().ToList();
         var showIds = watches.Where(w => w.Type == MediaType.Episode).Select(w => w.TmdbId).Distinct().ToList();
@@ -1098,7 +1100,8 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             .ToList();
         var byMonth = tracked.GroupBy(l => (l.Year, l.Month)).ToDictionary(g => g.Key, g => g.Count());
 
-        var ratings = await db.Ratings.Where(r => r.UserId == userId).Select(r => r.Value).ToListAsync(ct);
+        var ratings = (await db.Ratings.Where(r => r.UserId == userId).Select(r => new { r.Type, r.Value }).ToListAsync(ct))
+            .Where(r => MediaFilter.Keeps(kind, r.Type)).Select(r => r.Value).ToList();
         var weekdays = tracked.GroupBy(l => l.DayOfWeek).ToDictionary(g => g.Key, g => g.Count());
 
         return new StatsDto(

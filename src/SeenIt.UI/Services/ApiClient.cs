@@ -332,11 +332,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     }
     public Task<CompareDto> CompareAsync(string a, string b) =>
         GetAsync<CompareDto>($"api/social/compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}");
-    public Task<MoreStatsDto> MoreStatsAsync() => GetAsync<MoreStatsDto>($"api/stats/more?tz={Tz}");
-    public Task<StatsDto> StatsAsync() => GetAsync<StatsDto>($"api/stats?tz={Tz}");
+    public Task<MoreStatsDto> MoreStatsAsync(MediaType? kind = null) => GetAsync<MoreStatsDto>($"api/stats/more?tz={Tz}" + TypeParam(kind));
+    public Task<StatsDto> StatsAsync(MediaType? kind = null) => GetAsync<StatsDto>($"api/stats?tz={Tz}" + TypeParam(kind));
+    private static string TypeParam(MediaType? kind) => MediaFilter.Key(kind) is { } k ? $"&type={k}" : "";
     public Task<List<ReviewYear>> ReviewPeriodsAsync() => GetAsync<List<ReviewYear>>($"api/review/periods?tz={Tz}");
-    public Task<ReviewDto> ReviewAsync(int year, int? month, bool newOnly = false) =>
-        GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}" + (newOnly ? "&newOnly=true" : ""));
+    public Task<ReviewDto> ReviewAsync(int year, int? month, bool newOnly = false, MediaType? kind = null) =>
+        GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}" + (newOnly ? "&newOnly=true" : "") + TypeParam(kind));
 
     /// <summary>The device's IANA time zone, so reviews use the viewer's own calendar days.</summary>
     private static string Tz => Uri.EscapeDataString(TimeZoneInfo.Local.Id);
@@ -379,7 +380,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         return BytesAsync($"api/share/review/{year}?{(month is { } m ? $"month={m}&" : "")}tz={Tz}"
             + $"&tiles={E(o.Tiles)}&shows={o.Shows}&movies={o.Movies}&ratings={(o.Ratings ? "true" : "false")}&facts={E(o.Facts)}"
             + $"&name={(o.Name ? "true" : "false")}&newOnly={(o.NewOnly ? "true" : "false")}"
-            + (o.Theme is { } t ? $"&theme={E(t)}" : "") + (o.Accent is { } a ? $"&accent={E(a)}" : ""));
+            + (o.Theme is { } t ? $"&theme={E(t)}" : "") + (o.Accent is { } a ? $"&accent={E(a)}" : "") + (o.Type is { } ty ? $"&type={E(ty)}" : ""));
     }
     public Task<byte[]> CompareCardAsync(string a, string b) => BytesAsync($"api/share/compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}");
     public Task<byte[]> KodiAddonAsync() => BytesAsync("api/jellyfin/kodi-addon");

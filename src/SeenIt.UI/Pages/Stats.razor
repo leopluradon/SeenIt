@@ -5,9 +5,10 @@
 
 <div class="page-head">
     <h1>Stats</h1>
+    <MediaFilterSwitch Value="Kind" />
     <div class="inline">
-        <a class="btn btn-sm btn-primary" href="@($"review/{DateTime.Today.Year}/{DateTime.Today.Month}")"><Icon Name="chart" Size="16" /> Month in review</a>
-        <a class="btn btn-sm" href="@($"review/{DateTime.Today.Year}")">Year in review</a>
+        <a class="btn btn-sm btn-primary" href="@($"review/{DateTime.Today.Year}/{DateTime.Today.Month}{TypeQuery}")"><Icon Name="chart" Size="16" /> Month in review</a>
+        <a class="btn btn-sm" href="@($"review/{DateTime.Today.Year}{TypeQuery}")">Year in review</a>
     </div>
 </div>
 <ErrorBox Message="@error" />
@@ -262,13 +263,24 @@ else if (s is not null)
     private static string Pct(int part, int whole) => whole == 0 ? "–" : $"{Math.Round(100.0 * part / whole)}%";
     private string? error;
 
-    protected override async Task OnInitializedAsync()
+    // Just movies or just TV (?type=movie / ?type=tv), from the switch at the top.
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    private MediaType? Kind => MediaFilter.Parse(TypeParam);
+    private string TypeQuery => MediaFilter.Key(Kind) is { } k ? $"?type={k}" : "";
+    private MediaType? loadedKind;
+    private bool loadedOnce;
+
+    protected override async Task OnParametersSetAsync()
     {
-        try { periods = await Api.ReviewPeriodsAsync(); } catch { periods = []; }
-        try { s = await Api.StatsAsync(); }
+        if (loadedOnce && loadedKind == Kind) return;
+        loadedOnce = true;
+        loadedKind = Kind;
+        s = null; more = null; error = null;
+        if (periods is null) { try { periods = await Api.ReviewPeriodsAsync(); } catch { periods = []; } }
+        try { s = await Api.StatsAsync(Kind); }
         catch (Exception ex) { error = ex.Message; }
         StateHasChanged();
-        try { more = await Api.MoreStatsAsync(); }
+        try { more = await Api.MoreStatsAsync(Kind); }
         catch (Exception ex) { error ??= ex.Message; }
     }
 }

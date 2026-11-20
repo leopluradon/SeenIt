@@ -16,19 +16,20 @@
     <button class="icon-btn" @onclick="() => Go(1)" disabled="@IsCurrentOrFuture" aria-label="Next @(Month is null ? "year" : "month")"><Icon Name="chevron-right" /></button>
 </div>
 <div class="chips center-chips">
-    @if (Month is not null) { <a class="chip" href="@($"review/{Year}")">See all of @Year</a> }
+    @if (Month is not null) { <a class="chip" href="@($"review/{Year}{Keep}")">See all of @Year</a> }
     else if (periods?.FirstOrDefault(p => p.Year == Year) is { } py)
     {
         @foreach (var m in py.Months)
         {
-            <a class="chip" href="@($"review/{Year}/{m.Month}")" @key="m.Month">@(new DateTime(Year, m.Month, 1).ToString("MMM"))</a>
+            <a class="chip" href="@($"review/{Year}/{m.Month}{Keep}")" @key="m.Month">@(new DateTime(Year, m.Month, 1).ToString("MMM"))</a>
         }
     }
-    <a class="chip" href="stats">All-time stats</a>
+    <a class="chip" href="@($"stats{(MediaFilter.Key(Kind) is { } sk ? $"?type={sk}" : "")}")">All-time stats</a>
     @if (r is { Totals.Plays: > 0 }) { <button class="chip" @onclick="OpenShare"><Icon Name="share" Size="14" /> Share image</button> }
 </div>
 @* The whole page from just what you'd never watched before this period (the first play of the movie or show is in it). *@
 <div class="center review-new">
+    <MediaFilterSwitch Value="Kind" />
     <label class="check small">
         <input type="checkbox" checked="@NewOnly" @onchange="e => SetNewOnly(e.Value is true)" />
         <span><b>Only what's new to me</b> <span class="muted">movies and shows I first watched in @Label</span></span>
@@ -237,7 +238,12 @@ else if (r is not null)
     [SupplyParameterFromQuery(Name = "new")] public int? NewParam { get; set; }
     private bool NewOnly => NewParam == 1;
     private string Period => Month is null ? "year" : "month";
-    private void SetNewOnly(bool on) => Nav.NavigateTo((Month is { } m ? $"review/{Year}/{m}" : $"review/{Year}") + (on ? "?new=1" : ""));
+    private void SetNewOnly(bool on) => Nav.NavigateTo(Nav.GetUriWithQueryParameter("new", on ? 1 : null));
+    // Just movies or just TV (?type=movie / ?type=tv).
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    private MediaType? Kind => MediaFilter.Parse(TypeParam);
+    /// <summary>The filters, carried to the previous/next period and the month links.</summary>
+    private string Keep => string.Join('&', new[] { MediaFilter.Key(Kind) is { } k ? $"type={k}" : null, NewOnly ? "new=1" : null }.OfType<string>()) is { Length: > 0 } q ? "?" + q : "";
 
     // The share image's choices, remembered on this device.
     private const string CardKey = "seenit.reviewCard";
@@ -258,6 +264,7 @@ else if (r is not null)
             catch { card = new(); }
         }
         card.NewOnly = NewOnly;   // starts the way the page is
+        card.Type = MediaFilter.Key(Kind);
         shareOpen = true;
     }
 
@@ -313,7 +320,7 @@ else if (r is not null)
     private async Task Load()
     {
         error = null;
-        try { r = await Api.ReviewAsync(Year, Month, NewOnly); }
+        try { r = await Api.ReviewAsync(Year, Month, NewOnly, Kind); }
         catch (Exception ex) { error = ex.Message; }
         goals = null;
         if (Month is null) { try { goals = await Api.GoalsAsync(Year); } catch { } }
@@ -324,9 +331,9 @@ else if (r is not null)
         if (Month is { } m)
         {
             var d = new DateTime(Year, m, 1).AddMonths(step);
-            Nav.NavigateTo($"review/{d.Year}/{d.Month}");
+            Nav.NavigateTo($"review/{d.Year}/{d.Month}{Keep}");
         }
-        else Nav.NavigateTo($"review/{Year + step}");
+        else Nav.NavigateTo($"review/{Year + step}{Keep}");
     }
 
     private static string HourLabel(int h) => Fmt.Prefs.Clock24 ? $"{h:00}:00" : new DateTime(2000, 1, 1, h, 0, 0).ToString("h tt").ToLowerInvariant();

@@ -1,0 +1,13 @@
+@* All · Movies · TV for Stats and reviews: it sets "?type=" on the page's address, so Back and links keep it. *@
+@inject NavigationManager Nav
+<div class="segmented media-filter" role="radiogroup" aria-label="Movies, TV or both">
+    @foreach (var (kind, label) in Choices)
+    {
+        <button type="button" role="radio" aria-checked="@(Value == kind)" class="@(Value == kind ? "on" : "")" @onclick="() => Go(kind)">@label</button>
+    }
+</div>
+@code {
+    [Parameter] public MediaType? Value { get; set; }
+    private static readonly (MediaType? Kind, string Label)[] Choices = [(null, "All"), (MediaType.Movie, "Movies"), (MediaType.Show, "TV")];
+    private void Go(MediaType? kind) => Nav.NavigateTo(Nav.GetUriWithQueryParameter("type", MediaFilter.Key(kind)));
+}

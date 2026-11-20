@@ -34,7 +34,8 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
     }
 
     /// <param name="newOnly">Only titles new to you in the period: movies and shows whose first-ever play is in it.</param>
-    public async Task<ReviewDto> BuildAsync(Guid userId, int year, int? month, string? tzId, CancellationToken ct, bool newOnly = false)
+    /// <param name="kind">Just movies or just TV (MediaFilter); null for everything.</param>
+    public async Task<ReviewDto> BuildAsync(Guid userId, int year, int? month, string? tzId, CancellationToken ct, bool newOnly = false, MediaType? kind = null)
     {
         if (year is < 1900 or > 2200 || month is < 1 or > 12) throw new TrackingException("That isn't a valid period.");
         var tz = Zone(await tracking.ZoneIdAsync(userId, tzId, ct));
@@ -69,6 +70,11 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             inPeriod = inPeriod.Where(p => IsNew(p.Type, p.TmdbId)).ToList();
             previous = previous.Where(p => NewIn(p.Type, p.TmdbId, prevStart, prevEnd)).ToList();
         }
+        if (kind is not null)
+        {
+            inPeriod = inPeriod.Where(p => MediaFilter.Keeps(kind, p.Type)).ToList();
+            previous = previous.Where(p => MediaFilter.Keeps(kind, p.Type)).ToList();
+        }
 
         // Full metadata (cast, crew, countries) only for what was watched in this period; the
         // previous period just needs runtimes for its totals.
@@ -80,7 +86,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
 
         var ratings = await db.Ratings.AsNoTracking().Where(r => r.UserId == userId).ToListAsync(ct);
         var ratingsInPeriod = ratings.Where(r => Local(r.RatedAt, tz) is var l && l >= start && l < end && Tracked(l)
-            && (!newOnly || IsNew(r.Type, r.TmdbId))).ToList();
+            && (!newOnly || IsNew(r.Type, r.TmdbId)) && MediaFilter.Keeps(kind, r.Type)).ToList();
         var titleRating = ratings.Where(r => r.SeasonNumber == null)
             .ToDictionary(r => (r.Type, r.TmdbId), r => r.Value);
 
@@ -95,7 +101,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
             ratingCount);
 
         var prevRatings = ratings.Count(r => Local(r.RatedAt, tz) is var l && l >= prevStart && l < prevEnd && Tracked(l)
-            && (!newOnly || NewIn(r.Type, r.TmdbId, prevStart, prevEnd)));
+            && (!newOnly || NewIn(r.Type, r.TmdbId, prevStart, prevEnd)) && MediaFilter.Keeps(kind, r.Type));
 
         // ----- Days, streaks, habits -----
         var habit = inPeriod;
@@ -213,7 +219,7 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var firstEver = history.GroupBy(p => (p.Type, p.TmdbId, p.Season, p.Episode)).ToDictionary(g => g.Key, g => g.Min(p => p.At));
         var rewatches = inPeriod.Count(p => p.At > firstEver[(p.Type, p.TmdbId, p.Season, p.Episode)]);
         var firstShowWatch = history.Where(p => p.Type == MediaType.Episode).GroupBy(p => p.TmdbId).ToDictionary(g => g.Key, g => g.Min(p => p.Local));
-        var showsStarted = firstShowWatch.Count(kv => kv.Value >= start && kv.Value < end);
+        var showsStarted = kind == MediaType.Movie ? 0 : firstShowWatch.Count(kv => kv.Value >= start && kv.Value < end);
 
         var periodShows = inPeriod.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
         var progress = periodShows.Count == 0 ? [] : await new ProgressCalculator(db).ForUserAsync(userId, periodShows, ct);
