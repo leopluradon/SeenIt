@@ -17,9 +17,11 @@ else if (s is not null)
 {
     <div class="stat-tiles">
         <div class="stat"><span class="stat-value"><Dur Minutes="s.MinutesMovies + s.MinutesEpisodes" /></span><span class="stat-label">Total time watched</span></div>
-        <div class="stat"><span class="stat-value">@s.MoviesWatched.ToString("N0")</span><span class="stat-label">Movies (@s.MoviePlays.ToString("N0") plays · <Dur Minutes="s.MinutesMovies" />)</span></div>
+        @if (Kind != MediaType.Show) {
+        <div class="stat"><span class="stat-value">@s.MoviesWatched.ToString("N0")</span><span class="stat-label">Movies (@s.MoviePlays.ToString("N0") plays · <Dur Minutes="s.MinutesMovies" />)</span></div> }
+        @if (Kind != MediaType.Movie) {
         <div class="stat"><span class="stat-value">@s.EpisodesWatched.ToString("N0")</span><span class="stat-label">Episodes (@s.EpisodePlays.ToString("N0") plays · <Dur Minutes="s.MinutesEpisodes" />)</span></div>
-        <div class="stat"><span class="stat-value">@s.ShowsWatched.ToString("N0")</span><span class="stat-label">Shows</span></div>
+        <div class="stat"><span class="stat-value">@s.ShowsWatched.ToString("N0")</span><span class="stat-label">Shows</span></div> }
         <div class="stat"><span class="stat-value">@s.Ratings.ToString("N0")</span><span class="stat-label">Ratings @if (s.AverageRating is { } avg) { <span>· avg @Fmt.Avg(avg)</span> }</span></div>
     </div>
 
@@ -77,6 +79,8 @@ else if (s is not null)
                 }
             </section>
 
+            @if (Kind != MediaType.Movie)
+            {
             <section class="panel">
                 <h2>Finishing shows</h2>
                 @{ var cs = m.Completion; var started = cs.Finished + cs.Caught + cs.Watching + cs.Paused + cs.Dropped + cs.Stalled; }
@@ -109,7 +113,10 @@ else if (s is not null)
                     }
                 }
             </section>
+            }
 
+            @if (Kind != MediaType.Movie)
+            {
             <section class="panel">
                 <h2>Episodes left</h2>
                 <p class="muted small">In shows you've watched in the last 6 months.</p>
@@ -127,7 +134,10 @@ else if (s is not null)
                     </p>
                 }
             </section>
+            }
 
+            @if (Kind != MediaType.Show)
+            {
             <section class="panel">
                 <h2>Movie length</h2>
                 @{ var rt = m.Runtime; }
@@ -142,7 +152,10 @@ else if (s is not null)
                     @if (rt.AverageByYear.Count > 1) { <BarChart Data="rt.AverageByYear" Vertical="true" Label="Average movie length (minutes) by the year you watched" /> }
                 }
             </section>
+            }
 
+            @if (Kind != MediaType.Show)
+            {
             <section class="panel">
                 <h2>Movie eras</h2>
                 @if (m.Era.AverageYear is { } ay)
@@ -155,15 +168,19 @@ else if (s is not null)
                 }
                 else { <p class="muted small">Watch a movie first.</p> }
             </section>
+            }
 
+            @if (Kind != MediaType.Show)
+            {
             <section class="panel">
                 <h2>Studios</h2>
                 @if (m.Studios.Count == 0) { <p class="muted small">Nothing yet. Movie details are still being filled in.</p> }
                 <BarChart Data="m.Studios" Label="Movie plays by studio" />
             </section>
+            }
         </div>
 
-        @if (m.Franchises.Items.Count > 0)
+        @if (m.Franchises.Items.Count > 0 && Kind != MediaType.Show)
         {
             <section class="panel">
                 <h2>Franchises <span class="muted small">@m.Franchises.Completed of @m.Franchises.Started complete</span></h2>

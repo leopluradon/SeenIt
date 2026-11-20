@@ -320,6 +320,7 @@ public class MoreStatsService(AppDbContext db, TrackingService tracking)
         var recent = await db.WatchEvents.AsNoTracking()
             .Where(w => ids.Contains(w.UserId) && w.WatchedAt >= (monthStart < weekAgo ? monthStart : weekAgo))
             .Select(w => new { w.UserId, w.Type, w.TmdbId, w.SeasonNumber, w.EpisodeNumber, w.WatchedAt }).ToListAsync(ct);
+        recent = recent.Where(w => MediaFilter.Keeps(c.Kind, w.Type)).ToList();   // Movies / TV on the Stats page
         var (movies, shows) = await tracking.LoadMetaAsync(recent.Select(w => (w.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, w.TmdbId)), ct);
         var epIds = recent.Where(w => w.Type == MediaType.Episode).Select(w => w.TmdbId).Distinct().ToList();
         var epRuntimes = (await db.Episodes.AsNoTracking().Where(e => epIds.Contains(e.ShowTmdbId))

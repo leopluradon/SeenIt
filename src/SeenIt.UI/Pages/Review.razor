@@ -106,8 +106,12 @@ else if (r is not null)
         <section class="stat-tiles review-tiles">
             <div class="stat big"><span class="stat-value"><Dur Minutes="t.Minutes" /></span><span class="stat-label">watched <Delta Now="t.Minutes" Then="p.Minutes" /></span></div>
             <div class="stat"><span class="stat-value">@t.Plays.ToString("N0")</span><span class="stat-label">plays <Delta Now="t.Plays" Then="p.Plays" /></span></div>
+            @if (Kind != MediaType.Show) {
             <div class="stat"><span class="stat-value">@t.Movies.ToString("N0")</span><span class="stat-label">movies@(t.MoviePlays > t.Movies ? $" · {t.MoviePlays} plays" : "") <Delta Now="t.Movies" Then="p.Movies" /></span></div>
+            }
+            @if (Kind != MediaType.Movie) {
             <div class="stat"><span class="stat-value">@t.Episodes.ToString("N0")</span><span class="stat-label">episodes of @t.Shows show@(t.Shows == 1 ? "" : "s") <Delta Now="t.Episodes" Then="p.Episodes" /></span></div>
+            }
             <div class="stat"><span class="stat-value">@t.Ratings.ToString("N0")</span><span class="stat-label">ratings@(r.AverageRating is { } avg ? $" · avg {Fmt.Avg(avg)}" : "")</span></div>
         </section>
         <p class="muted small center-text">Compared with @r.PreviousLabel · times in @r.TimeZone</p>
@@ -128,8 +132,11 @@ else if (r is not null)
             <div class="fact"><b>@r.AveragePlaysPerActiveDay</b><span>plays per active day</span></div>
             @if (r.FavoriteWeekday is { } fw) { <div class="fact"><b>@(fw)s</b><span>favorite day to watch</span></div> }
             @if (r.PeakHour is { } ph) { <div class="fact"><b>@HourLabel(ph)</b><span>peak viewing hour</span></div> }
-            <div class="fact"><b>@r.ShowsStarted</b><span>new show@(r.ShowsStarted == 1 ? "" : "s") started</span></div>
-            <div class="fact"><b>@r.ShowsCompleted</b><span>show@(r.ShowsCompleted == 1 ? "" : "s") caught up on</span></div>
+            @if (Kind != MediaType.Movie)
+            {
+                <div class="fact"><b>@r.ShowsStarted</b><span>new show@(r.ShowsStarted == 1 ? "" : "s") started</span></div>
+                <div class="fact"><b>@r.ShowsCompleted</b><span>show@(r.ShowsCompleted == 1 ? "" : "s") caught up on</span></div>
+            }
             <div class="fact"><b>@r.FirstTimeWatches</b><span>first-time watches</span></div>
             <div class="fact"><b>@r.Rewatches</b><span>rewatches</span></div>
         </section>
