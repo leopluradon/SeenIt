@@ -8,6 +8,7 @@ services:
         SEENIT_COMMIT: "${SEENIT_COMMIT:-dev}"
         SEENIT_BUILT_AT: "${SEENIT_BUILT_AT:-}"
         SEENIT_SUBJECT_B64: "${SEENIT_SUBJECT_B64:-}"
+        OUTDATED_WEEK: "${SEENIT_OUTDATED_WEEK:-}"
     image: seenit:latest
     container_name: seenit
     restart: unless-stopped

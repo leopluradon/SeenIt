@@ -10,6 +10,7 @@ cd "$(dirname "$0")/.."
 . ./.deployed-version
 export SEENIT_VERSION SEENIT_COMMIT
 export SEENIT_BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+export SEENIT_OUTDATED_WEEK="$(date +%G-W%V)"   # refresh the admin page's outdated-package list
 export SEENIT_SUBJECT_B64="$(printf 'Weekly rebuild with security updates' | base64 -w0)"
 
 echo "$(date -Iseconds) weekly rebuild of $SEENIT_VERSION ($SEENIT_COMMIT)"
