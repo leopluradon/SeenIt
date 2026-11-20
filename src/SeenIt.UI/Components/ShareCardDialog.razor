@@ -3,6 +3,13 @@
 @inject Toasts Toasts
 
 <Modal Open="Open" OpenChanged="OpenChanged" Title="@Title">
+    @if (Options is not null)
+    {
+        <details class="share-options">
+            <summary><Icon Name="edit" Size="14" /> Customize</summary>
+            @Options
+        </details>
+    }
     <div class="share-card">
         @if (error is not null) { <ErrorBox Message="@error" OnRetry="Generate" /> }
         else if (image is null) { <div class="share-wait"><Spinner /><span class="muted small">Drawing your image…</span></div> }
@@ -23,6 +30,11 @@
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string FileName { get; set; } = "seenit.png";
     [Parameter, EditorRequired] public Func<Task<byte[]>> Load { get; set; } = default!;
+    /// <summary>Controls for what's on the image, shown under "Customize".</summary>
+    [Parameter] public RenderFragment? Options { get; set; }
+    /// <summary>Changes when the options do, so the image is drawn again.</summary>
+    [Parameter] public string? Version { get; set; }
+    private string Drawn => FileName + "|" + Version;
 
     private byte[]? image;
     private string? error;
@@ -32,15 +44,16 @@
     protected override async Task OnParametersSetAsync()
     {
         // Draw when opened (and again if it's opened for something else).
-        if (Open && (!wasOpen || loadedFor != FileName)) { wasOpen = true; await Generate(); }
+        if (Open && (!wasOpen || loadedFor != Drawn)) { wasOpen = true; await Generate(); }
         if (!Open) wasOpen = false;
     }
 
     private async Task Generate()
     {
         error = null;
-        if (loadedFor != FileName) image = null;
-        try { image = await Load(); loadedFor = FileName; }
+        if (loadedFor?.Split('|')[0] != FileName) image = null;   // a different image: blank it; new options: keep the old one until the new one's drawn
+        var drawing = Drawn;
+        try { var png = await Load(); if (drawing == Drawn) { image = png; loadedFor = drawing; } }
         catch (Exception ex) { error = ex is ApiException ? ex.Message : "Couldn't draw the image."; }
     }
 

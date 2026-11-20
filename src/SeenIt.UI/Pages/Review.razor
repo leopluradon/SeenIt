@@ -4,6 +4,7 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @inject SessionState Session
+@inject IJSRuntime Js
 <PageTitle>@(r?.Label ?? "Review") in review · SeenIt</PageTitle>
 
 <div class="review-head">
@@ -24,10 +25,61 @@
         }
     }
     <a class="chip" href="stats">All-time stats</a>
-    @if (r is { Totals.Plays: > 0 }) { <button class="chip" @onclick="() => shareOpen = true"><Icon Name="share" Size="14" /> Share image</button> }
+    @if (r is { Totals.Plays: > 0 }) { <button class="chip" @onclick="OpenShare"><Icon Name="share" Size="14" /> Share image</button> }
+</div>
+@* The whole page from just what you'd never watched before this period (the first play of the movie or show is in it). *@
+<div class="center review-new">
+    <label class="check small">
+        <input type="checkbox" checked="@NewOnly" @onchange="e => SetNewOnly(e.Value is true)" />
+        <span><b>Only what's new to me</b> <span class="muted">movies and shows I first watched in @Label</span></span>
+    </label>
 </div>
 <ShareCardDialog @bind-Open="shareOpen" Title="@($"{Label} in review")" FileName="@($"seenit-{Year}{(Month is { } sm ? $"-{sm:00}" : "")}.png")"
-                 Load="() => Api.ReviewCardAsync(Year, Month)" />
+                 Load="() => Api.ReviewCardAsync(Year, Month, card)" Version="@CardVersion">
+    <Options>
+        <div class="card-options">
+            <h4>Numbers <span class="muted small">up to 4, in the order you pick them</span></h4>
+            <div class="chips">
+                @foreach (var (key, label) in ReviewCardChoices.Tiles)
+                {
+                    var on = card.TileKeys().Contains(key);
+                    <button class="chip @(on ? "on" : "")" aria-pressed="@on" disabled="@(!on && card.TileKeys().Count >= 4)" @onclick="() => ToggleCard(key, true)" @key="key">
+                        @if (on) { <b>@(card.TileKeys().ToList().IndexOf(key) + 1)</b> } @label
+                    </button>
+                }
+            </div>
+            <div class="pref-rows">
+                <span>Top shows</span>
+                <select value="@card.Shows" @onchange="e => SetCard(o => o.Shows = int.Parse(e.Value!.ToString()!))">@for (var i = 0; i <= 5; i++) { <option value="@i">@(i == 0 ? "None" : i)</option> }</select>
+                <span>Top movies</span>
+                <select value="@card.Movies" @onchange="e => SetCard(o => o.Movies = int.Parse(e.Value!.ToString()!))">@for (var i = 0; i <= 5; i++) { <option value="@i">@(i == 0 ? "None" : i)</option> }</select>
+                <span>Colors</span>
+                <span class="inline">
+                    <select value="@(card.Theme ?? "")" @onchange='e => SetCard(o => o.Theme = e.Value?.ToString() is { Length: > 0 } t ? t : null)' aria-label="Theme">
+                        <option value="">My theme</option>
+                        @foreach (var t in UiPrefs.Themes) { <option value="@t.Key">@t.Name</option> }
+                    </select>
+                    <select value="@(card.Accent ?? "")" @onchange='e => SetCard(o => o.Accent = e.Value?.ToString() is { Length: > 0 } a ? a : null)' aria-label="Accent color">
+                        <option value="">Theme's accent</option>
+                        @foreach (var a in UiPrefs.Accents) { <option value="@a.Key">@a.Name</option> }
+                    </select>
+                </span>
+            </div>
+            <label class="check small"><input type="checkbox" checked="@card.Ratings" @onchange="e => SetCard(o => o.Ratings = e.Value is true)" /> My ratings under the posters</label>
+            <label class="check small"><input type="checkbox" checked="@card.Name" @onchange="e => SetCard(o => o.Name = e.Value is true)" /> My @@username at the top</label>
+            <label class="check small"><input type="checkbox" checked="@card.NewOnly" @onchange="e => SetCard(o => o.NewOnly = e.Value is true)" /> Only what's new to me</label>
+            <h4>Lines at the bottom <span class="muted small">as many as fit</span></h4>
+            <div class="chips">
+                @foreach (var (key, label) in ReviewCardChoices.Facts)
+                {
+                    var on = card.FactKeys().Contains(key);
+                    <button class="chip @(on ? "on" : "")" aria-pressed="@on" @onclick="() => ToggleCard(key, false)" @key="key">@if (on) { <Icon Name="check" Size="12" /> }@label</button>
+                }
+            </div>
+            <button class="btn btn-sm btn-ghost" @onclick="ResetCard">Back to the usual</button>
+        </div>
+    </Options>
+</ShareCardDialog>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (r is null && error is null) { <Spinner /> }
@@ -88,18 +140,21 @@ else if (r is not null)
 
         @if (r.TopShows.Count > 0)
         {
-            var allShows = r.AllShows ?? r.TopShows;
+            var allShows = (r.AllShows ?? r.TopShows).Where(x => !newShows || x.New).ToList();
+            var topShows = allShows.Take(10).ToList();
             <section class="row-section">
                 <div class="section-head">
                     <h2>@(showAllShows ? $"All shows · {allShows.Count}" : "Top shows")</h2>
-                    @if (allShows.Count > r.TopShows.Count)
+                    @if (!r.NewOnly) { <label class="check small review-new-filter"><input type="checkbox" checked="@newShows" @onchange="e => newShows = e.Value is true" /> New this @Period</label> }
+                    @if (allShows.Count > topShows.Count)
                     {
                         <button class="section-more link-btn" @onclick="() => showAllShows = !showAllShows">@(showAllShows ? "Show top 10" : $"See all {allShows.Count}") <Icon Name="@(showAllShows ? "chevron-up" : "chevron-down")" Size="16" /></button>
                     }
                 </div>
                 <div class="@(showAllShows ? "poster-grid" : "poster-scroller")">
                     @{ var rank = 0; }
-                    @foreach (var s in showAllShows ? allShows : r.TopShows)
+                    @if (allShows.Count == 0) { <p class="muted small">No shows new to you this @Period.</p> }
+                    @foreach (var s in showAllShows ? allShows : topShows)
                     {
                         rank++;
                         <PosterCard Media="@(new MediaSummary(MediaType.Show, s.TmdbId, s.Title, null, s.PosterPath, null, null, null))"
@@ -110,17 +165,20 @@ else if (r is not null)
         }
         @if (r.TopMovies.Count > 0)
         {
-            var allMovies = r.AllMovies ?? r.TopMovies;
+            var allMovies = (r.AllMovies ?? r.TopMovies).Where(x => !newMovies || x.New).ToList();
+            var topMovies = allMovies.Take(10).ToList();
             <section class="row-section">
                 <div class="section-head">
                     <h2>@(showAllMovies ? $"All movies · {allMovies.Count}" : "Movies")</h2>
-                    @if (allMovies.Count > r.TopMovies.Count)
+                    @if (!r.NewOnly) { <label class="check small review-new-filter"><input type="checkbox" checked="@newMovies" @onchange="e => newMovies = e.Value is true" /> New this @Period</label> }
+                    @if (allMovies.Count > topMovies.Count)
                     {
                         <button class="section-more link-btn" @onclick="() => showAllMovies = !showAllMovies">@(showAllMovies ? "Show top 10" : $"See all {allMovies.Count}") <Icon Name="@(showAllMovies ? "chevron-up" : "chevron-down")" Size="16" /></button>
                     }
                 </div>
                 <div class="@(showAllMovies ? "poster-grid" : "poster-scroller")">
-                    @foreach (var m in showAllMovies ? allMovies : r.TopMovies)
+                    @if (allMovies.Count == 0) { <p class="muted small">No movies new to you this @Period.</p> }
+                    @foreach (var m in showAllMovies ? allMovies : topMovies)
                     {
                         <PosterCard Media="@(new MediaSummary(MediaType.Movie, m.TmdbId, m.Title, null, m.PosterPath, null, null, null))"
                                     Badge="@(m.Rating is { } mr ? Fmt.RatingBadge(mr) : null)" ShowScore="false"
@@ -174,6 +232,55 @@ else if (r is not null)
 
 @code {
     private bool showAllShows, showAllMovies;
+    // "New this year" on the two lists, and the whole page's "only what's new to me" (in the address: ?new=1).
+    private bool newShows, newMovies;
+    [SupplyParameterFromQuery(Name = "new")] public int? NewParam { get; set; }
+    private bool NewOnly => NewParam == 1;
+    private string Period => Month is null ? "year" : "month";
+    private void SetNewOnly(bool on) => Nav.NavigateTo((Month is { } m ? $"review/{Year}/{m}" : $"review/{Year}") + (on ? "?new=1" : ""));
+
+    // The share image's choices, remembered on this device.
+    private const string CardKey = "seenit.reviewCard";
+    private ReviewCardOptions card = new();
+    private bool cardLoaded;
+    private string CardVersion => System.Text.Json.JsonSerializer.Serialize(card);
+
+    private async Task OpenShare()
+    {
+        if (!cardLoaded)
+        {
+            cardLoaded = true;
+            try
+            {
+                if (await Js.InvokeAsync<string?>("localStorage.getItem", CardKey) is { Length: > 0 } json)
+                    card = System.Text.Json.JsonSerializer.Deserialize<ReviewCardOptions>(json) ?? new();
+            }
+            catch { card = new(); }
+        }
+        card.NewOnly = NewOnly;   // starts the way the page is
+        shareOpen = true;
+    }
+
+    private async Task SetCard(Action<ReviewCardOptions> change)
+    {
+        var next = System.Text.Json.JsonSerializer.Deserialize<ReviewCardOptions>(CardVersion)!;   // a copy, so the version changes
+        change(next);
+        card = next;
+        try { await Js.InvokeVoidAsync("localStorage.setItem", CardKey, CardVersion); } catch { }
+    }
+
+    private Task ToggleCard(string key, bool tile) => SetCard(o =>
+    {
+        var keys = (tile ? o.TileKeys() : o.FactKeys()).ToList();
+        if (!keys.Remove(key)) keys.Add(key);
+        if (tile) o.Tiles = string.Join(',', keys); else o.Facts = string.Join(',', keys);
+    });
+
+    private Task ResetCard() => SetCard(o =>
+    {
+        var d = new ReviewCardOptions();
+        (o.Tiles, o.Shows, o.Movies, o.Ratings, o.Facts, o.Name, o.Theme, o.Accent) = (d.Tiles, d.Shows, d.Movies, d.Ratings, d.Facts, d.Name, d.Theme, d.Accent);
+    });
     [Parameter] public int Year { get; set; }
     [Parameter] public int? Month { get; set; }
     private ReviewDto? r;
@@ -206,7 +313,7 @@ else if (r is not null)
     private async Task Load()
     {
         error = null;
-        try { r = await Api.ReviewAsync(Year, Month); }
+        try { r = await Api.ReviewAsync(Year, Month, NewOnly); }
         catch (Exception ex) { error = ex.Message; }
         goals = null;
         if (Month is null) { try { goals = await Api.GoalsAsync(Year); } catch { } }

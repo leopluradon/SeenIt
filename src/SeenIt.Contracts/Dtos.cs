@@ -1124,6 +1124,45 @@ public record PeriodTotals(
     long Minutes,
     int Ratings);
 
+/// <summary>
+/// What goes on a month/year in review image. Lists are comma-separated keys, in the order they're drawn
+/// (ReviewCardChoices names them). Settable properties so they bind from the image's query string.
+/// </summary>
+public class ReviewCardOptions
+{
+    public string Tiles { get; set; } = "hours,days,movies,episodes";   // up to 4 big numbers
+    public int Shows { get; set; } = 5;                                  // top shows' posters, 0–5
+    public int Movies { get; set; } = 5;                                 // top movies' posters, 0–5
+    public bool Ratings { get; set; } = true;                            // your rating under each poster
+    public string Facts { get; set; } = "genre,streak,actor,rating,goals";
+    public bool Name { get; set; } = true;                               // @username at the top
+    public string? Theme { get; set; }                                   // a theme key; null = yours
+    public string? Accent { get; set; }                                  // an accent key; null = the theme's
+    public bool NewOnly { get; set; }                                    // only titles new to you in the period
+
+    public IReadOnlyList<string> TileKeys() => Keys(Tiles, ReviewCardChoices.Tiles).Take(4).ToList();
+    public IReadOnlyList<string> FactKeys() => Keys(Facts, ReviewCardChoices.Facts).ToList();
+    private static IEnumerable<string> Keys(string? list, (string Key, string Label)[] allowed) =>
+        (list ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(k => allowed.Any(a => a.Key == k)).Distinct();
+}
+
+public static class ReviewCardChoices
+{
+    public static readonly (string Key, string Label)[] Tiles =
+    [
+        ("hours", "Hours watched"), ("days", "Days with a play"), ("movies", "Movies"), ("episodes", "Episodes"), ("shows", "Shows"),
+        ("plays", "Plays"), ("ratings", "Ratings given"), ("streak", "Longest streak"), ("new", "New to you"),
+        ("started", "Shows started"), ("finished", "Shows finished"),
+    ];
+    public static readonly (string Key, string Label)[] Facts =
+    [
+        ("genre", "Top genre"), ("streak", "Longest streak"), ("actor", "Most-watched actor"), ("director", "Most-watched director or creator"),
+        ("rating", "Average rating"), ("goals", "Goals (year)"), ("busiest", "Busiest day"), ("weekday", "Favorite weekday"),
+        ("network", "Top network"), ("finished", "Shows finished"), ("new", "Titles new to you"),
+    ];
+}
+
 public record ReviewItem(
     MediaType Type,
     int TmdbId,
@@ -1132,7 +1171,8 @@ public record ReviewItem(
     int Plays,
     long Minutes,
     double? Rating,
-    string? Detail);
+    string? Detail,
+    bool New = false);   // your first-ever play of it is in this period
 
 public record ReviewPerson(int Id, string Name, string? ProfilePath, int Titles, int Plays);
 
@@ -1183,7 +1223,8 @@ public record ReviewDto(
     ReviewItem? MostRewatched,
     DateOnly? TrackingSince = null,    // reviews only count from here (see Settings → Stats)
     IReadOnlyList<ReviewItem>? AllShows = null,     // every show / movie in the period, same order as the top lists
-    IReadOnlyList<ReviewItem>? AllMovies = null);
+    IReadOnlyList<ReviewItem>? AllMovies = null,
+    bool NewOnly = false);                          // built from only titles new to you in the period
 
 public record ReviewMonth(int Month, int Plays, long Minutes);
 public record ReviewYear(int Year, int Plays, long Minutes, IReadOnlyList<ReviewMonth> Months);

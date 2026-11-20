@@ -72,8 +72,8 @@ public static class FeatureEndpoints
 
         // ----- Share images -----
         var share = api.MapGroup("/share");
-        share.MapGet("/review/{year:int}", async (int year, int? month, string? tz, ClaimsPrincipal p, ShareCardService s, CancellationToken ct) =>
-            Results.File(await s.ReviewAsync(p.UserId(), year, month, tz, ct), "image/png",
+        share.MapGet("/review/{year:int}", async (int year, int? month, string? tz, [AsParameters] ReviewCardOptions options, ClaimsPrincipal p, ShareCardService s, CancellationToken ct) =>
+            Results.File(await s.ReviewAsync(p.UserId(), year, month, tz, ct, options), "image/png",
                 month is null ? $"seenit-{year}.png" : $"seenit-{year}-{month:00}.png"));
         share.MapGet("/compare/{a}/{b}", async (string a, string b, ClaimsPrincipal p, ShareCardService s, CancellationToken ct) =>
             await s.CompareAsync(p.UserId(), a, b, ct) is { } png

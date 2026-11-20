@@ -335,8 +335,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<MoreStatsDto> MoreStatsAsync() => GetAsync<MoreStatsDto>($"api/stats/more?tz={Tz}");
     public Task<StatsDto> StatsAsync() => GetAsync<StatsDto>($"api/stats?tz={Tz}");
     public Task<List<ReviewYear>> ReviewPeriodsAsync() => GetAsync<List<ReviewYear>>($"api/review/periods?tz={Tz}");
-    public Task<ReviewDto> ReviewAsync(int year, int? month) =>
-        GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}");
+    public Task<ReviewDto> ReviewAsync(int year, int? month, bool newOnly = false) =>
+        GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}" + (newOnly ? "&newOnly=true" : ""));
 
     /// <summary>The device's IANA time zone, so reviews use the viewer's own calendar days.</summary>
     private static string Tz => Uri.EscapeDataString(TimeZoneInfo.Local.Id);
@@ -372,8 +372,15 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     // ---------- Share images ----------
 
-    public Task<byte[]> ReviewCardAsync(int year, int? month) =>
-        BytesAsync($"api/share/review/{year}?{(month is { } m ? $"month={m}&" : "")}tz={Tz}");
+    public Task<byte[]> ReviewCardAsync(int year, int? month, ReviewCardOptions? o = null)
+    {
+        o ??= new ReviewCardOptions();
+        string E(string? s) => Uri.EscapeDataString(s ?? "");
+        return BytesAsync($"api/share/review/{year}?{(month is { } m ? $"month={m}&" : "")}tz={Tz}"
+            + $"&tiles={E(o.Tiles)}&shows={o.Shows}&movies={o.Movies}&ratings={(o.Ratings ? "true" : "false")}&facts={E(o.Facts)}"
+            + $"&name={(o.Name ? "true" : "false")}&newOnly={(o.NewOnly ? "true" : "false")}"
+            + (o.Theme is { } t ? $"&theme={E(t)}" : "") + (o.Accent is { } a ? $"&accent={E(a)}" : ""));
+    }
     public Task<byte[]> CompareCardAsync(string a, string b) => BytesAsync($"api/share/compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}");
     public Task<byte[]> KodiAddonAsync() => BytesAsync("api/jellyfin/kodi-addon");
 

@@ -91,4 +91,42 @@ public class ReviewTests
         Assert.Equal(new DateOnly(2026, 3, 10), march.TrackingSince);
         Assert.Equal(0, (await reviews.BuildAsync(User, 2019, null, "UTC", default)).Totals.Plays);
     }
+
+    [Fact]
+    public async Task New_to_me_keeps_only_titles_first_watched_in_the_period()
+    {
+        using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        db.Movies.Add(new MovieMeta { TmdbId = 1, Title = "Heat", Runtime = 170 });
+        db.Movies.Add(new MovieMeta { TmdbId = 3, Title = "Arrival", Runtime = 116 });
+        db.Movies.Add(new MovieMeta { TmdbId = 5, Title = "Alien", Runtime = 117 });
+        db.Shows.Add(new ShowMeta { TmdbId = 2, Name = "Severance", EpisodeRuntime = 50 });
+        db.Shows.Add(new ShowMeta { TmdbId = 4, Name = "Andor", EpisodeRuntime = 45 });
+        void Watch(MediaType t, int id, DateTimeOffset at, int? s = null, int? e = null) =>
+            db.WatchEvents.Add(new WatchEvent { UserId = User, Type = t, TmdbId = id, SeasonNumber = s, EpisodeNumber = e, WatchedAt = at });
+        Watch(MediaType.Movie, 1, new(2026, 2, 10, 20, 0, 0, TimeSpan.Zero));           // Heat: seen in February…
+        Watch(MediaType.Movie, 1, new(2026, 3, 2, 20, 0, 0, TimeSpan.Zero));            // …so March is a rewatch
+        Watch(MediaType.Movie, 3, new(2026, 3, 5, 20, 0, 0, TimeSpan.Zero));            // Arrival: new in March
+        Watch(MediaType.Movie, 5, WatchDates.Unknown);                                   // Alien: seen at some point
+        Watch(MediaType.Movie, 5, new(2026, 3, 6, 20, 0, 0, TimeSpan.Zero));            // so not new in March
+        Watch(MediaType.Episode, 2, new(2026, 3, 3, 20, 0, 0, TimeSpan.Zero), 1, 1);    // Severance: started in March
+        Watch(MediaType.Episode, 4, new(2026, 2, 3, 20, 0, 0, TimeSpan.Zero), 1, 1);    // Andor: started in February
+        Watch(MediaType.Episode, 4, new(2026, 3, 3, 21, 0, 0, TimeSpan.Zero), 1, 2);
+        db.Ratings.Add(new Rating { UserId = User, Type = MediaType.Movie, TmdbId = 3, Value = 9, RatedAt = new(2026, 3, 5, 22, 0, 0, TimeSpan.Zero) });
+        db.Ratings.Add(new Rating { UserId = User, Type = MediaType.Movie, TmdbId = 1, Value = 7, RatedAt = new(2026, 3, 2, 22, 0, 0, TimeSpan.Zero) });
+        await db.SaveChangesAsync();
+        var svc = new ReviewService(db, new TrackingService(db, null!));
+
+        var all = await svc.BuildAsync(User, 2026, 3, "UTC", default);
+        Assert.Equal(3, all.Totals.Movies);
+        Assert.Equal(["Arrival"], (all.AllMovies ?? []).Where(m => m.New).Select(m => m.Title));
+        Assert.Equal(["Severance"], (all.AllShows ?? []).Where(m => m.New).Select(m => m.Title));
+
+        var fresh = await svc.BuildAsync(User, 2026, 3, "UTC", default, newOnly: true);
+        Assert.True(fresh.NewOnly);
+        Assert.Equal((1, 1, 1), (fresh.Totals.Movies, fresh.Totals.Shows, fresh.Totals.Ratings));   // Arrival, Severance, Arrival's rating
+        Assert.Equal(9, fresh.AverageRating);
+        Assert.Equal(116 + 50, fresh.Totals.Minutes);
+        // February compared the same way: Heat and Andor were new then.
+        Assert.Equal((1, 1), (fresh.Previous.Movies, fresh.Previous.Shows));
+    }
 }

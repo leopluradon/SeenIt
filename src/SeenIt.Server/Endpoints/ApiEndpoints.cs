@@ -516,10 +516,11 @@ public static class ApiEndpoints
 
         g.MapGet("/review/periods", (string? tz, ClaimsPrincipal p, ReviewService r, UserDataCache c, CancellationToken ct) =>
             c.GetAsync(p.UserId(), $"periods:{tz}", () => r.GetPeriodsAsync(p.UserId(), tz, ct), ct));
-        g.MapGet("/review/{year:int}", (int year, string? tz, ClaimsPrincipal p, ReviewService r, UserDataCache c, CancellationToken ct) =>
-            c.GetAsync(p.UserId(), $"review:{year}:{tz}", () => r.BuildAsync(p.UserId(), year, null, tz, ct), ct));
-        g.MapGet("/review/{year:int}/{month:int}", (int year, int month, string? tz, ClaimsPrincipal p, ReviewService r, UserDataCache c, CancellationToken ct) =>
-            c.GetAsync(p.UserId(), $"review:{year}:{month}:{tz}", () => r.BuildAsync(p.UserId(), year, month, tz, ct), ct));
+        // newOnly: just titles new to you in the period (Review → "Only what's new to me").
+        g.MapGet("/review/{year:int}", (int year, string? tz, bool? newOnly, ClaimsPrincipal p, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            c.GetAsync(p.UserId(), $"review:{year}:{tz}:{newOnly == true}", () => r.BuildAsync(p.UserId(), year, null, tz, ct, newOnly == true), ct));
+        g.MapGet("/review/{year:int}/{month:int}", (int year, int month, string? tz, bool? newOnly, ClaimsPrincipal p, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            c.GetAsync(p.UserId(), $"review:{year}:{month}:{tz}:{newOnly == true}", () => r.BuildAsync(p.UserId(), year, month, tz, ct, newOnly == true), ct));
     }
 
     // ---------- Lists ----------

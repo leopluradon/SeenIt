@@ -25,26 +25,29 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
 
     private sealed record Palette(SKColor Bg, SKColor Surface, SKColor Accent, SKColor Text, SKColor Muted);
 
-    private async Task<Palette> PaletteAsync(Guid userId, CancellationToken ct)
+    /// <summary>The user's theme (or the one picked for this image), with an accent color in place of the theme's if picked.</summary>
+    private async Task<Palette> PaletteAsync(Guid userId, CancellationToken ct, string? theme = null, string? accent = null)
     {
-        var key = await db.Users.Where(u => u.Id == userId).Select(u => u.Theme).FirstOrDefaultAsync(ct);
+        var key = theme ?? await db.Users.Where(u => u.Id == userId).Select(u => u.Theme).FirstOrDefaultAsync(ct);
         var t = UiPrefs.Themes.FirstOrDefault(x => x.Key == key);
         if (t.Key is null) t = UiPrefs.Themes[0];
-        return new Palette(SKColor.Parse(t.Bg), SKColor.Parse(t.Surface), SKColor.Parse(t.Accent), new SKColor(0xF2, 0xF3, 0xF5), new SKColor(0x9A, 0xA1, 0xAD));
+        var hex = UiPrefs.Accents.FirstOrDefault(a => a.Key == accent) is { Key: not null } a ? a.Hex : t.Accent;
+        return new Palette(SKColor.Parse(t.Bg), SKColor.Parse(t.Surface), SKColor.Parse(hex), new SKColor(0xF2, 0xF3, 0xF5), new SKColor(0x9A, 0xA1, 0xAD));
     }
 
     // ---------- Month / year in review (1080×1920, story-sized) ----------
 
-    public async Task<byte[]> ReviewAsync(Guid userId, int year, int? month, string? tz, CancellationToken ct)
+    public async Task<byte[]> ReviewAsync(Guid userId, int year, int? month, string? tz, CancellationToken ct, ReviewCardOptions? options = null)
     {
-        var r = await reviews.BuildAsync(userId, year, month, tz, ct);
+        var o = options ?? new ReviewCardOptions();
+        var r = await reviews.BuildAsync(userId, year, month, tz, ct, o.NewOnly);
         var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.DisplayName, u.RatingScale }).FirstAsync(ct);
-        string? Caption(ReviewItem i) => i.Rating is { } r ? Badge(r, user.RatingScale) : i.Type == MediaType.Show ? i.Detail : null;
-        var pal = await PaletteAsync(userId, ct);
-        var goalLines = month is null ? await GoalLinesAsync(userId, year, tz, ct) : [];
+        string? Caption(ReviewItem i) => o.Ratings && i.Rating is { } r ? Badge(r, user.RatingScale) : i.Type == MediaType.Show ? i.Detail : null;
+        var pal = await PaletteAsync(userId, ct, o.Theme, o.Accent);
+        var goalLines = month is null && o.FactKeys().Contains("goals") ? await GoalLinesAsync(userId, year, tz, ct) : [];
 
-        var shows = r.TopShows.Take(5).ToList();
-        var movies = r.TopMovies.Take(5).ToList();
+        var shows = r.TopShows.Take(Math.Clamp(o.Shows, 0, 5)).ToList();
+        var movies = r.TopMovies.Take(Math.Clamp(o.Movies, 0, 5)).ToList();
         var posters = await PostersAsync(shows.Select(s => s.PosterPath).Concat(movies.Select(m => m.PosterPath)), ct);
 
         const int H = 1920;
@@ -53,34 +56,55 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         Background(c, pal, H);
 
         var y = Pad + 20;
-        Brand(c, pal, ref y, "@" + user.UserName);
+        Brand(c, pal, ref y, o.Name ? "@" + user.UserName : "");
 
         y += month is null ? 185 : 140;
         Text(c, r.Label, Pad, y, Fonts.Value.Bold, month is null ? 170 : 104, pal.Text);
         y += 70;
-        Text(c, month is null ? "Year in review" : "Month in review", Pad, y, Fonts.Value.Semi, 46, pal.Accent);
+        Text(c, (month is null ? "Year in review" : "Month in review") + (o.NewOnly ? " · new to me" : ""), Pad, y, Fonts.Value.Semi, 46, pal.Accent);
 
-        y += 60;
         var t = r.Totals;
         var hours = t.Minutes / 60.0;
-        Tiles(c, pal, ref y,
-        [
-            (hours >= 100 ? hours.ToString("N0") : hours.ToString("0.#"), hours == 1 ? "hour watched" : "hours watched"),
-            (r.DaysActive.ToString("N0"), r.DaysActive == 1 ? "day with a play" : "days with a play"),
-            (t.Movies.ToString("N0"), t.Movies == 1 ? "movie" : "movies"),
-            (t.Episodes.ToString("N0"), $"episode{(t.Episodes == 1 ? "" : "s")} of {t.Shows:N0} show{(t.Shows == 1 ? "" : "s")}"),
-        ]);
+        var newTitles = (r.AllShows ?? []).Count(i => i.New) + (r.AllMovies ?? []).Count(i => i.New);
+        static string S(int n, string one, string many) => n == 1 ? one : many;
+        (string, string) Tile(string key) => key switch
+        {
+            "hours" => (hours >= 100 ? hours.ToString("N0") : hours.ToString("0.#"), hours == 1 ? "hour watched" : "hours watched"),
+            "days" => (r.DaysActive.ToString("N0"), S(r.DaysActive, "day with a play", "days with a play")),
+            "movies" => (t.Movies.ToString("N0"), S(t.Movies, "movie", "movies")),
+            "episodes" => (t.Episodes.ToString("N0"), $"episode{(t.Episodes == 1 ? "" : "s")} of {t.Shows:N0} show{(t.Shows == 1 ? "" : "s")}"),
+            "shows" => (t.Shows.ToString("N0"), S(t.Shows, "show", "shows")),
+            "plays" => (t.Plays.ToString("N0"), S(t.Plays, "play", "plays")),
+            "ratings" => (t.Ratings.ToString("N0"), S(t.Ratings, "rating given", "ratings given")),
+            "streak" => (r.LongestStreak.Days.ToString("N0"), "day streak"),
+            "new" => (newTitles.ToString("N0"), S(newTitles, "title new to me", "titles new to me")),
+            "started" => (r.ShowsStarted.ToString("N0"), S(r.ShowsStarted, "show started", "shows started")),
+            _ => (r.ShowsCompleted.ToString("N0"), S(r.ShowsCompleted, "show finished", "shows finished")),
+        };
+        if (o.TileKeys().Count > 0) { y += 60; Tiles(c, pal, ref y, o.TileKeys().Select(Tile).ToArray()); }
 
         if (shows.Count > 0) { y += 70; PosterRow(c, pal, ref y, "Top shows", shows.Select(s => (s.Title, Poster(posters, s.PosterPath), Caption(s))).ToList()); }
         if (movies.Count > 0) { y += 70; PosterRow(c, pal, ref y, "Top movies", movies.Select(m => (m.Title, Poster(posters, m.PosterPath), Caption(m))).ToList()); }
 
-        // A few more lines, as many as fit above the footer.
+        // The chosen facts, as many as fit above the footer.
         var facts = new List<string>();
-        if (r.Genres.FirstOrDefault() is { } g) facts.Add($"Top genre: {g.Label}");
-        if (r.LongestStreak.Days > 1) facts.Add($"Longest streak: {r.LongestStreak.Days} days in a row");
-        if (r.TopActors.FirstOrDefault() is { } actor) facts.Add($"Most-watched actor: {actor.Name}");
-        if (r.AverageRating is { } avg) facts.Add($"Average rating: {avg:0.0} / 10");
-        facts.AddRange(goalLines);
+        foreach (var key in o.FactKeys())
+        {
+            switch (key)
+            {
+                case "genre" when r.Genres.FirstOrDefault() is { } g: facts.Add($"Top genre: {g.Label}"); break;
+                case "streak" when r.LongestStreak.Days > 1: facts.Add($"Longest streak: {r.LongestStreak.Days} days in a row"); break;
+                case "actor" when r.TopActors.FirstOrDefault() is { } actor: facts.Add($"Most-watched actor: {actor.Name}"); break;
+                case "director" when r.TopDirectors.FirstOrDefault() is { } d: facts.Add($"Most-watched director or creator: {d.Name}"); break;
+                case "rating" when r.AverageRating is { } avg: facts.Add(user.RatingScale == RatingScale.Thumbs ? $"Liked {r.RatingDistribution.Where(b => int.Parse(b.Label) >= 6).Sum(b => b.Count)} of {t.Ratings} rated" : $"Average rating: {avg:0.0} / 10"); break;
+                case "goals": facts.AddRange(goalLines); break;
+                case "busiest" when r.BusiestDay is { } bd: facts.Add($"Busiest day: {bd.Date:MMMM d} ({bd.Plays} plays)"); break;
+                case "weekday" when r.FavoriteWeekday is { } wd: facts.Add($"Favorite day to watch: {wd}"); break;
+                case "network" when r.Networks.FirstOrDefault() is { } n: facts.Add($"Top network: {n.Label}"); break;
+                case "finished" when r.ShowsCompleted > 0: facts.Add($"Finished {r.ShowsCompleted} show{(r.ShowsCompleted == 1 ? "" : "s")}"); break;
+                case "new" when newTitles > 0: facts.Add($"{newTitles} title{(newTitles == 1 ? "" : "s")} new to me"); break;
+            }
+        }
         y += 80;
         foreach (var f in facts)
         {
@@ -89,7 +113,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
             Text(c, Fit(f, Fonts.Value.Semi, 36, W - Pad * 2 - 40), Pad + 36, y, Fonts.Value.Semi, 36, pal.Text);
             y += 58;
         }
-        if (t.Plays == 0) Text(c, "Nothing watched yet.", Pad, y, Fonts.Value.Semi, 40, pal.Muted);
+        if (t.Plays == 0) Text(c, o.NewOnly ? "Nothing new watched yet." : "Nothing watched yet.", Pad, y, Fonts.Value.Semi, 40, pal.Muted);
 
         Footer(c, pal, H);
         return Encode(surface, posters);
