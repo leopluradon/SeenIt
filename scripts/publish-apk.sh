@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds the Android app and publishes it:
 #   - to the NAS (/mnt/nas/SeenIt.apk), as before (with --on-server, through scripts/apk-to-nas.sh);
-#   - to the server's downloads folder, where /download/SeenIt.apk serves it and the app shows
-#     "SeenIt x.y is available" to anyone on an older version.
+#   - to the server's downloads folder, a staging spot for the NAS copy. It isn't served: the website
+#     stopped offering the APK (a public executable download got the site flagged by corporate filters).
 # The version matches the server's numbering: 1.<number of commits>, with the commit count as
 # Android's versionCode (it must go up for an update to install over the old app).
 #

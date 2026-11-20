@@ -182,10 +182,6 @@ else { <h1>Settings</h1> }
             {
                 <p class="muted small">SeenIt v@(version)@(Platform.AppVersion is { } av ? $" · app v{av}" : "")</p>
             }
-            @if (Platform.AppVersion is null && android is { } apk)
-            {
-                <p class="small"><a href="@apk.Url" download>Get the Android app</a> <span class="muted">(v@(apk.Version), @(apk.Size / 1024 / 1024) MB)</span></p>
-            }
         </section>
         <section class="panel danger-zone" id="delete">
             <h2>Delete account</h2>
@@ -1175,7 +1171,6 @@ else { <h1>Settings</h1> }
     private string? displayName, currentPassword, newPassword, deletePassword, clearPassword, trackingSince;
     private ImportParts importParts = ImportParts.All, clearParts = ImportParts.All;
     private string? timeZone;
-    private AppRelease? android;
     private List<TimeZoneOption>? timeZones;
     private bool clearing;
     private bool hideSpoilers, blurImages;
@@ -1922,7 +1917,6 @@ else { <h1>Settings</h1> }
 
     private async Task LoadAndroid()
     {
-        try { android = await Api.AndroidReleaseAsync(); } catch { android = null; }
     }
 
     private async Task LoadTimeZones()

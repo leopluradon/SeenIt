@@ -2,7 +2,8 @@
 
 The app's version is `1.<commit count>`, and the commit count is also Android's versionCode, so
 every new commit makes a newer build. The APK ends up at `homelab:~/seenit/downloads/SeenIt.apk`
-(served at `/download/SeenIt.apk`; the app's update banner reads `version.txt` next to it).
+(a staging folder only: the website no longer serves the APK or shows an update banner, since a public
+APK download got the site flagged by a corporate filter; installs come from the NAS copy).
 
 **Always `git pull` first.** The version comes from the local commit count, so a stale checkout
 publishes an older APK over a newer one.

@@ -232,19 +232,6 @@ app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache",
 });
-// The Android app, published by scripts/publish-apk.sh into the downloads folder.
-if (config["SeenIt:DownloadsDir"] is { Length: > 0 } downloads && Directory.Exists(downloads))
-{
-    var types = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
-    types.Mappings[".apk"] = "application/vnd.android.package-archive";
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(downloads),
-        RequestPath = "/download",
-        ContentTypeProvider = types,
-        OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache",
-    });
-}
 
 app.UseRateLimiter();
 app.Use(EndpointTimings.Middleware);
@@ -273,7 +260,6 @@ app.MapGet("/.well-known/assetlinks.json", (IConfiguration config) => Results.Js
 app.MapAuth();
 app.MapApi();
 app.MapAdmin();
-app.MapAppRelease();
 app.MapFallback("/api/{**rest}", () => Results.NotFound());
 // Every page is index.html (the app draws it), but with that page's link-preview tags in its head, so a link pasted
 // into Discord, Slack, iMessage... shows the movie, show, person, profile or list (EmbedService).

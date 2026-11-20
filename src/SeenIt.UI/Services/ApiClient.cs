@@ -66,7 +66,6 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<ClearDataResult?> ClearDataAsync(ClearDataRequest r) => SendAsync<ClearDataResult>(HttpMethod.Post, "api/auth/clear", r);
 
     public Task<List<TimeZoneOption>> TimeZonesAsync() => GetAsync<List<TimeZoneOption>>("api/auth/timezones");
-    public Task<AppRelease?> AndroidReleaseAsync() => SendAsync<AppRelease>(HttpMethod.Get, "api/app/android", null, auth: false);
 
     // ---------- Admin ----------
 

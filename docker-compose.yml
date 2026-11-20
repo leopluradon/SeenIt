@@ -28,8 +28,6 @@ services:
       SeenIt__Admins: "${ADMINS:-leopluradon}"
       # Backup results written by seenit-backup (for the admin page and alert emails).
       SeenIt__StatusDir: /status
-      # The Android app, put there by scripts/publish-apk.sh, served at /download/SeenIt.apk.
-      SeenIt__DownloadsDir: /downloads
       # Rebuildable data kept across restarts (the search-suggestion index).
       SeenIt__CacheDir: /cache
       # Optional: leave SMTP_HOST empty to turn off email (password reset).
@@ -46,7 +44,6 @@ services:
     volumes:
       - seenit-keys:/keys
       - seenit-status:/status:ro
-      - ./downloads:/downloads:ro
       - seenit-cache:/cache
 
   seenit-db:

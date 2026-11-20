@@ -1416,7 +1416,6 @@ public record DuplicatePlay(Guid Id, DateTimeOffset WatchedAt, WatchSource Sourc
 public record TimeZoneOption(string Id, string Label);
 
 /// <summary>The newest Android app on this server, for "update available" in the app.</summary>
-public record AppRelease(string Version, string Url, long Size, DateTimeOffset PublishedAt);
 public record AdminEndpointTiming(string Route, long Count, double AvgMs, double P95Ms, double MaxMs);
 
 // ---------- More stats (Stats page, below the totals) ----------
