@@ -161,7 +161,8 @@ public record UserPrefs(
     // Audiences for the newer profile parts. Kept out of PartVisibility, whose keys older apps can't read.
     ProfileVisibility? SourcesVisibility = null,
     ProfileVisibility? WatchingAppVisibility = null,
-    bool HideWhereToWatch = false)                   // no "Where to watch" section on movie and show pages        // the website's links at the top after Home (UiPrefs.Tabs keys), in order; null = DefaultDesktopNav
+    bool HideWhereToWatch = false,                   // no "Where to watch" section on movie and show pages
+    bool BlurEpisodeCounts = false)                  // spoilers: blur how many episodes someone is in, for shows you're partway through
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -701,7 +702,7 @@ public record PersonCreditDto(
     IReadOnlyList<CrewJob>? Jobs = null,    // crew only: each job with its TMDB department, to split directing/writing/other
     bool PartlySeen = false,                // a show you've watched some of, but not their episode(s): Watched is false
     bool Watching = false);                 // a show you've started and haven't seen every aired episode of: with the
-                                            // guest-star spoiler setting on, its episode count is hidden (it gives away who stays)
+                                            // BlurEpisodeCounts setting on, its episode count is blurred (it gives away who stays)
 
 public record CrewJob(string Job, string? Department);
 

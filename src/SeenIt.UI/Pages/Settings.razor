@@ -516,6 +516,10 @@ else { <h1>Settings</h1> }
                     <input type="checkbox" checked="@Fmt.Prefs.HideGuestStars" @onchange='e => SavePrefs(p => p with { HideGuestStars = (bool)e.Value! }, "Saved")' />
                     Hide guest stars of episodes I haven't watched
                 </label>
+                <label class="check">
+                    <input type="checkbox" checked="@Fmt.Prefs.BlurEpisodeCounts" @onchange='e => SavePrefs(p => p with { BlurEpisodeCounts = (bool)e.Value! }, "Saved")' />
+                    Blur how many episodes someone is in, for shows I'm partway through
+                </label>
             </div>
         </section>
 

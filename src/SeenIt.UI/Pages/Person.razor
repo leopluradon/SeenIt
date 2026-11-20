@@ -154,7 +154,7 @@ else if (p is not null)
                         <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
                         <span class="film-main">
                             <b>@c.Title</b>
-                            <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")@(c.Role is { Length: > 0 } r ? " · " + r : "")@(c.EpisodeCount is > 0 && !HideCount(c) ? $" · {Plural(c.EpisodeCount.Value, "episode")}" : "")</span>
+                            <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")@(c.Role is { Length: > 0 } r ? " · " + r : "")@if (c.EpisodeCount is > 0) { <text> · </text><Spoiler Force="HideCount(c)">@Plural(c.EpisodeCount.Value, "episode")</Spoiler> }</span>
                         </span>
                         @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
                         else if (c.PartlySeen) { <span class="ep-partly" title="@($"You've watched some of {c.Title}, but not the episodes {p.Name} is in")" aria-label="Partly seen: not their episodes">◐</span> }
@@ -173,7 +173,7 @@ else if (p is not null)
                         <li @key="(c.Type, c.TmdbId)">
                             <a class="film-row" href="@Fmt.Href(c.Type, c.TmdbId)">
                                 <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
-                                <span class="film-main"><b>@c.Title</b><span class="muted small">@c.Role@(c.EpisodeCount is > 0 && !HideCount(c) ? $" · {Plural(c.EpisodeCount.Value, "episode")}" : "")</span></span>
+                                <span class="film-main"><b>@c.Title</b><span class="muted small">@c.Role@if (c.EpisodeCount is > 0) { <text> · </text><Spoiler Force="HideCount(c)">@Plural(c.EpisodeCount.Value, "episode")</Spoiler> }</span></span>
                             </a>
                         </li>
                     }
@@ -246,9 +246,9 @@ else if (p is not null)
         return rows.Values.OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
     }
 
-    /// <summary>How many episodes someone is in gives away who sticks around: hidden for a show you're partway through
-    /// when guest stars of unwatched episodes are hidden too (Settings → Spoilers).</summary>
-    private static bool HideCount(PersonCreditDto c) => c.Watching && Fmt.Prefs.HideGuestStars;
+    /// <summary>How many episodes someone is in gives away who sticks around: blurred until tapped for a show you're partway through
+    /// when that spoiler setting is on (Settings → Spoilers).</summary>
+    private static bool HideCount(PersonCreditDto c) => c.Watching && Fmt.Prefs.BlurEpisodeCounts;
 
     /// <summary>Their most popular work on TMDB in what they're known for (a director's films before their cameos), then the rest.</summary>
     private List<PersonCreditDto> KnownFor

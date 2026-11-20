@@ -145,7 +145,7 @@ else if (e is not null)
         }
     </section>
 
-    <CastRow Cast="@(e.Cast ?? [])" Title="Cast" HideEpisodeCounts="@(Fmt.Prefs.HideGuestStars && Partway(e))" />
+    <CastRow Cast="@(e.Cast ?? [])" Title="Cast" BlurEpisodeCounts="@(Fmt.Prefs.BlurEpisodeCounts && Partway(e))" />
     @if (Fmt.Prefs.HideGuestStars && !Seen && !showGuests && e.GuestStars.Count > 0)
     {
         <section class="row-section">
@@ -153,7 +153,7 @@ else if (e is not null)
             <button class="btn btn-sm hidden-guests" @onclick="() => showGuests = true"><Icon Name="eye" Size="14" /> Hidden to avoid spoilers. Show guest stars</button>
         </section>
     }
-    else { <CastRow Cast="e.GuestStars" Title="Guest stars" HideEpisodeCounts="@(Fmt.Prefs.HideGuestStars && Partway(e))" /> }
+    else { <CastRow Cast="e.GuestStars" Title="Guest stars" BlurEpisodeCounts="@(Fmt.Prefs.BlurEpisodeCounts && Partway(e))" /> }
 
     <RatePrompt @bind-Open="ratePrompt" Title="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" OnRate="Rate" RecommendType="MediaType.Show" RecommendId="Id" RecommendTitle="@e.ShowName" />
     <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch" AskWhen="askWhen"
@@ -200,7 +200,7 @@ else if (e is not null)
     private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); StateHasChanged(); }
     private bool Seen => e?.Plays is { Count: > 0 };
     /// <summary>The show is started and not finished (a season still airing counts as unfinished): episode counts in
-    /// the cast would give away who stays, so the spoiler setting hides them.</summary>
+    /// the cast would give away who stays, so the spoiler setting blurs them.</summary>
     private static bool Partway(EpisodeDetail e) => e.Seasons is { } ss && ss.Any(x => x.SeasonNumber > 0 && x.Watched > 0)
         && ss.Any(x => x.SeasonNumber > 0 && x.EpisodeCount > x.Watched && x.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today));
     private bool showGuests;

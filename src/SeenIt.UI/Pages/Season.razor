@@ -150,7 +150,7 @@ else if (season is not null)
             </a>
         }
     </nav>
-    <CastRow Cast="@(season.Cast ?? [])" Title="Cast this season" HideEpisodeCounts="@(Fmt.Prefs.HideGuestStars && Partway(season))" />
+    <CastRow Cast="@(season.Cast ?? [])" Title="Cast this season" BlurEpisodeCounts="@(Fmt.Prefs.BlurEpisodeCounts && Partway(season))" />
 
     <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason" Through="seasonThrough" ThroughNote=" in the earlier seasons" />
     <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
@@ -160,7 +160,7 @@ else if (season is not null)
 
 <ReloadOnMenu OnChange="Load" />
 @code {
-    /// <summary>You've seen some of this season's aired episodes but not all: the spoiler setting hides episode counts in its cast.</summary>
+    /// <summary>You've seen some of this season's aired episodes but not all: the spoiler setting blurs episode counts in its cast.</summary>
     private static bool Partway(SeasonDetail s)
     {
         var aired = s.Episodes.Where(x => x.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today)).ToList();

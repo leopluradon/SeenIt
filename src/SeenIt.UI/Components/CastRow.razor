@@ -10,7 +10,7 @@
                     else { <div class="cast-fallback">@c.Name[..1]</div> }
                     <div class="cast-name">@c.Name</div>
                     <div class="cast-role muted small">@c.Character</div>
-                    @if (c.EpisodeCount is > 0 && !HideEpisodeCounts) { <div class="cast-role muted small">@c.EpisodeCount episode@(c.EpisodeCount == 1 ? "" : "s")</div> }
+                    @if (c.EpisodeCount is > 0) { <div class="cast-role muted small"><Spoiler Force="BlurEpisodeCounts">@c.EpisodeCount episode@(c.EpisodeCount == 1 ? "" : "s")</Spoiler></div> }
                 </a>
             }
         </div>
@@ -19,6 +19,6 @@
 @code {
     [Parameter] public IReadOnlyList<CastMember> Cast { get; set; } = [];
     [Parameter] public string Title { get; set; } = "Cast";
-    /// <summary>For a show you're partway through with guest-star spoilers hidden: how many episodes someone is in gives away who stays.</summary>
-    [Parameter] public bool HideEpisodeCounts { get; set; }
+    /// <summary>For a show you're partway through, with Settings → Spoilers → episode counts on: how many episodes someone is in gives away who stays, so it's blurred until tapped.</summary>
+    [Parameter] public bool BlurEpisodeCounts { get; set; }
 }

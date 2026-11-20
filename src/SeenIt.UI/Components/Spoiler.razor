@@ -30,9 +30,12 @@ else
     /// <summary>An image: only blurred when the "also blur images" setting is on.</summary>
     [Parameter] public bool Image { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+    /// <summary>Blur whatever the episode spoiler setting says: the caller has applied its own rule (episode counts
+    /// for shows you're partway through). Null leaves it to the setting.</summary>
+    [Parameter] public bool? Force { get; set; }
     private bool revealed;
 
-    private bool Hidden => !revealed && !Watched && Session.Me is { HideSpoilers: true } me && (!Image || me.BlurSpoilerImages);
+    private bool Hidden => !revealed && (Force ?? (!Watched && Session.Me is { HideSpoilers: true } me && (!Image || me.BlurSpoilerImages)));
 
     private void Reveal() => revealed = true;
     private void Key(KeyboardEventArgs e) { if (e.Key is "Enter" or " ") revealed = true; }
