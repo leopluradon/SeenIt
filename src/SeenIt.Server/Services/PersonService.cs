@@ -96,7 +96,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
             watched?.Where(w => w.Type == MediaType.Show).Sum(w => w.Episodes.Count > 0 ? w.Episodes.Count : w.Plays) ?? 0,
             watched?.Count(w => w.Type == MediaType.Show) ?? 0,
             watched?.Sum(w => w.Minutes) ?? 0,
-            following, avg, rated);
+            following, avg, rated, p.ExternalIds?.WikidataId);
     }
 
     /// <summary>

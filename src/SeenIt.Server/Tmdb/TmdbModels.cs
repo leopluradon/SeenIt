@@ -162,7 +162,7 @@ public record TmdbPersonCredit(
     List<int>? GenreIds = null);
 
 public record TmdbPersonCredits(List<TmdbPersonCredit>? Cast, List<TmdbPersonCredit>? Crew);
-public record TmdbExternalIds(string? ImdbId, int? TvdbId = null);
+public record TmdbExternalIds(string? ImdbId, int? TvdbId = null, string? WikidataId = null);
 
 public record TmdbPerson(
     int Id,

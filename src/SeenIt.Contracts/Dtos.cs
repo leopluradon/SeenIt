@@ -738,7 +738,8 @@ public record PersonDetail(
     long WatchedMinutes,
     bool Following = false,      // you follow this person (their new work goes on your calendar)
     double? AvgRating = null,    // your average rating of their movies and shows
-    int Rated = 0);
+    int Rated = 0,
+    string? WikidataId = null);  // e.g. Q23547: Wikidata redirects that to their Wikipedia article
 
 /// <summary>Someone you follow on the People page, with what they have coming.</summary>
 public record FollowedPerson(int Id, string Name, string? ProfilePath, string? Department, DateTimeOffset Since, IReadOnlyList<UpcomingWork> Upcoming);

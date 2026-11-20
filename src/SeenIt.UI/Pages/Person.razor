@@ -42,6 +42,8 @@ else if (p is not null)
             <div class="links">
                 @if (p.ImdbId is not null) { <a href="@($"https://www.imdb.com/name/{p.ImdbId}")" target="_blank" rel="noopener">IMDb</a> }
                 <a href="@($"https://www.themoviedb.org/person/{p.Id}")" target="_blank" rel="noopener">TMDB</a>
+                @* Wikidata sends this to their English Wikipedia article (or the Wikidata page when there isn't one). *@
+                @if (p.WikidataId is { Length: > 0 } wd) { <a href="@($"https://www.wikidata.org/wiki/Special:GoToLinkedPage/enwiki/{Uri.EscapeDataString(wd)}")" target="_blank" rel="noopener">Wikipedia</a> }
             </div>
         </div>
     </div>
