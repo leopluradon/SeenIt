@@ -62,6 +62,8 @@
     /// <summary>The item a dialog is acting on (the menu itself is closed by then).</summary>
     private MenuTarget? acted;
     private ItemStatus? status, actedStatus;
+    /// <summary>On an episode's menu: your rating of the show itself (the menu rates both, labelled apart).</summary>
+    private double? showRating;
     private bool sheet, busy, showAll, pickDate, pickThrough, listOpen, recOpen, ownOpen, dialogBulk;
     private string position = "";
     private string? expanded;   // "watch" or "friends"
@@ -129,6 +131,7 @@
     {
         target = t;
         status = null;
+        showRating = null;
         friends = null;
         expanded = null;
         showAll = false;
@@ -146,8 +149,11 @@
         if (t.Kind == MenuKind.User || !signedIn) return;
         try
         {
-            var st = await Api.ItemStatusAsync(t.Type, t.Id, t.S, t.E);
-            if (mine == generation && target == t) { status = st; StateHasChanged(); }
+            var st = Api.ItemStatusAsync(t.Type, t.Id, t.S, t.E);
+            var show = t.Kind == MenuKind.Episode ? Api.ItemStatusAsync(MediaType.Show, t.Id, null, null) : null;
+            var result = await st;
+            var showResult = show is null ? null : await show;
+            if (mine == generation && target == t) { status = result; showRating = showResult?.Rating; StateHasChanged(); }
         }
         catch (Exception) { /* the menu still works; toggles just don't know their state */ }
     }
@@ -194,8 +200,17 @@
         var s = status;
         var isShow = t.Kind == MenuKind.Title && t.Type == MediaType.Show;
         var isEpisode = t.Kind == MenuKind.Episode;
+        @* An episode's menu (Up next cards, episode lists) rates the show and the episode on separate, labelled rows:
+           a lone "Rate" there read as the show but rated the episode. *@
+        @if (isEpisode)
+        {
+            <div class="ctx-rate">
+                <span class="small muted">Rate show</span>
+                <RatingPicker Compact="true" Value="showRating" ValueChanged="v => RateShow(t, v)" />
+            </div>
+        }
         <div class="ctx-rate">
-            <span class="small muted">Rate</span>
+            <span class="small muted">@(isEpisode ? $"Rate {Fmt.Ep(t.S, t.E)}" : "Rate")</span>
             <RatingPicker Compact="true" Value="s?.Rating" ValueChanged="v => Rate(t, v)" />
         </div>
 
@@ -389,6 +404,18 @@
         }
         await Api.UnrateAsync(type, t.Id, t.S, t.E);
         return ($"Cleared your rating of {Name(t)}", null);
+    });
+
+    private Task RateShow(MenuTarget t, double? v) => Do(async () =>
+    {
+        showRating = v;
+        if (v is { } r)
+        {
+            await Api.RateAsync(new RatingRequest(MediaType.Show, t.Id, r));
+            return ($"Rated {t.Title} {Fmt.Rating(r)}", null);
+        }
+        await Api.UnrateAsync(MediaType.Show, t.Id, null, null);
+        return ($"Cleared your rating of {t.Title}", null);
     });
 
     private static string Name(MenuTarget t) => t.Kind == MenuKind.Episode ? $"{t.Title} {Fmt.Ep(t.S, t.E)}" : t.Title ?? "it";
