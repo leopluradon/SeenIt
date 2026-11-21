@@ -17,8 +17,9 @@
         {
             <img src="@($"data:image/png;base64,{Convert.ToBase64String(image)}")" alt="@Title" />
             <div class="inline center">
-                <button class="btn btn-primary" @onclick="Share"><Icon Name="share" Size="16" /> Share</button>
-                <button class="btn" @onclick="Save"><Icon Name="download" Size="16" /> Save image</button>
+                @* Share only where it opens a share sheet; a browser that can't share files would just download it too. *@
+                @if (canShare) { <button class="btn btn-primary" @onclick="Share"><Icon Name="share" Size="16" /> Share</button> }
+                <button class="btn @(canShare ? "" : "btn-primary")" @onclick="Save"><Icon Name="download" Size="16" /> Save image</button>
             </div>
         }
     </div>
@@ -39,11 +40,14 @@
     private byte[]? image;
     private string? error;
     private bool wasOpen;
+    private bool canShare;
+    private bool shareChecked;
     private string? loadedFor;
 
     protected override async Task OnParametersSetAsync()
     {
         // Draw when opened (and again if it's opened for something else).
+        if (Open && !shareChecked) { shareChecked = true; canShare = await Platform.CanShareFilesAsync("image/png"); }
         if (Open && (!wasOpen || loadedFor != Drawn)) { wasOpen = true; await Generate(); }
         if (!Open) wasOpen = false;
     }

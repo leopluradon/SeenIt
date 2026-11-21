@@ -183,6 +183,8 @@ public class MobilePlatform(IServerConfig server) : IPlatform
         return null;
     }
 
+    public Task<bool> CanShareFilesAsync(string contentType) => Task.FromResult(true);
+
     public async Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title)
     {
         var path = Path.Combine(FileSystem.CacheDirectory, fileName);

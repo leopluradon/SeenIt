@@ -485,6 +485,11 @@ window.seenit = {
         setTimeout(() => URL.revokeObjectURL(url), 10000);
     },
     /** Shares a file through the system share sheet where the browser can; otherwise downloads it. */
+    /** Whether this browser's share sheet takes files (phones mostly do; many desktop browsers don't). */
+    canShareFiles(contentType) {
+        try { return !!(navigator.canShare && navigator.canShare({ files: [new File([new Uint8Array(1)], 'x', { type: contentType })] })); }
+        catch { return false; }
+    },
     async shareFile(fileName, contentType, base64, title) {
         const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
         const file = new File([bytes], fileName, { type: contentType });

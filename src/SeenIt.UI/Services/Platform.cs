@@ -13,6 +13,8 @@ public interface IPlatform
     /// shows its own download).
     /// </summary>
     Task<string?> SaveFileAsync(string fileName, string contentType, byte[] data);
+    /// <summary>Whether ShareFileAsync opens a share sheet (the app, most phone browsers) rather than just downloading.</summary>
+    Task<bool> CanShareFilesAsync(string contentType);
     /// <summary>Opens the share sheet for a file (an image to post). Returns "shared", "downloaded" or "canceled".</summary>
     Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title);
     /// <summary>Returns "shared", "copied" or "failed".</summary>
@@ -48,6 +50,12 @@ public class BrowserPlatform(IJSRuntime js, NavigationManager nav) : IPlatform
     {
         await js.InvokeVoidAsync("seenit.download", fileName, contentType, Convert.ToBase64String(data));
         return null;
+    }
+
+    public async Task<bool> CanShareFilesAsync(string contentType)
+    {
+        try { return await js.InvokeAsync<bool>("seenit.canShareFiles", contentType); }
+        catch (JSException) { return false; }
     }
 
     public async Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title)
