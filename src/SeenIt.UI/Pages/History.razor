@@ -268,11 +268,7 @@ else if (data is not null)
                 What="@(editing is null ? "this" : editing.Type == MediaType.Episode ? $"{editing.Title} {Fmt.Ep(editing.SeasonNumber, editing.EpisodeNumber)}" : editing.Title)"
                 OnSaved="async () => { editing = null; await Load(); StateHasChanged(); }" />
 
-<ShareCardDialog @bind-Open="shareOpen" Title="@ShareLabel" FileName="@($"seenit-history-{shareStart:yyyy-MM-dd}.png")" Load="LoadShare" Version="@(shareSpoilers ? "spoilers" : "spoiler-free")">
-    <Options>
-        <label class="check small"><input type="checkbox" checked="@shareSpoilers" @onchange="e => shareSpoilers = e.Value is true" /> Show spoilers (episode titles, premieres and finales)</label>
-    </Options>
-</ShareCardDialog>
+<ShareCardDialog @bind-Open="shareOpen" Title="@ShareLabel" FileName="@($"seenit-history-{shareStart:yyyy-MM-dd}.png")" Load="LoadShare" />
 
 <ReloadOnMenu OnChange="Load" />
 @code {
@@ -305,11 +301,11 @@ else if (data is not null)
     private DateOnly NextBucket(DateOnly d) => Unit switch { HistoryUnit.Month => d.AddMonths(1), HistoryUnit.Year => d.AddYears(1), _ => d.AddDays(1) };
     private string GroupLabel(DateOnly d) => Unit switch { HistoryUnit.Month => d.ToString("MMMM yyyy"), HistoryUnit.Year => d.Year.ToString(), _ => Fmt.Day(d) };
 
-    // Sharing one day / month / year as an image, spoiler-free unless asked.
-    private bool shareOpen, shareSpoilers;
+    // Sharing one day / month / year as an image (spoiler-free: no episode titles).
+    private bool shareOpen;
     private DateOnly shareStart;
     private string ShareLabel => Unit == HistoryUnit.Day ? shareStart.ToDateTime(TimeOnly.MinValue).ToString(Fmt.DayLongYear) : GroupLabel(shareStart);
-    private void OpenShare(DateOnly start) { shareStart = start; shareSpoilers = false; shareOpen = true; }
+    private void OpenShare(DateOnly start) { shareStart = start; shareOpen = true; }
     private Task<byte[]> LoadShare()
     {
         // That stretch, narrowed by the page's own "when" filter if it's tighter.
@@ -318,7 +314,7 @@ else if (data is not null)
         var start = At(shareStart);
         var end = At(NextBucket(shareStart));
         var f = new HistoryQuery(Type, Q, Source, Genre, from is { } fr && fr > start ? fr : start, to is { } t && t < end ? t : end);
-        return Api.HistoryCardAsync(f, ShareLabel, shareSpoilers);
+        return Api.HistoryCardAsync(f, ShareLabel);
     }
     [SupplyParameterFromQuery(Name = "all")] public string? AllParam { get; set; }
 

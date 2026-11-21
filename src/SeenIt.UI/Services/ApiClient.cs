@@ -181,10 +181,10 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         if (friends) return GetAsync<HistoryPage>("api/social/history?" + string.Join('&', qs));
         return GetAsync<HistoryPage>((userName is null ? "api/history?" : $"api/users/{Uri.EscapeDataString(userName)}/history?") + string.Join('&', qs));
     }
-    /// <summary>An image of one stretch of your history (f's From/To), with History's filters.</summary>
-    public Task<byte[]> HistoryCardAsync(HistoryQuery f, string label, bool spoilers)
+    /// <summary>A spoiler-free image of one stretch of your history (f's From/To), with History's filters.</summary>
+    public Task<byte[]> HistoryCardAsync(HistoryQuery f, string label)
     {
-        var qs = new List<string> { $"tz={Tz}", $"label={Uri.EscapeDataString(label)}", $"spoilers={(spoilers ? "true" : "false")}" };
+        var qs = new List<string> { $"tz={Tz}", $"label={Uri.EscapeDataString(label)}" };
         if (f.Type is { } t) qs.Add($"type={t}");
         if (!string.IsNullOrWhiteSpace(f.Q)) qs.Add($"q={Uri.EscapeDataString(f.Q)}");
         if (f.Source is { } s) qs.Add($"source={s}");

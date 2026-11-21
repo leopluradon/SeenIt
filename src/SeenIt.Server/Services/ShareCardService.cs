@@ -210,21 +210,16 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
 
     /// <summary>
     /// What you watched in one stretch of your history (f's From/To), with the History page's filters: one row per
-    /// movie and per show, newest first for a day and most watched first for longer. Spoiler-free unless asked:
-    /// no episode titles and no premiere/finale marks.
+    /// movie and per show, newest first for a day and most watched first for longer. Spoiler-free: episode numbers,
+    /// never their titles or premiere/finale marks.
     /// </summary>
-    public async Task<byte[]> HistoryAsync(Guid userId, HistoryQuery f, string label, bool spoilers, CancellationToken ct)
+    public async Task<byte[]> HistoryAsync(Guid userId, HistoryQuery f, string label, CancellationToken ct)
     {
         var plays = (await tracking.HistoryPlaysAsync(userId, f, ct)).Where(p => !WatchDates.IsUnknown(p.WatchedAt)).ToList();
         var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.TimeFormat }).FirstAsync(ct);
         var pal = await PaletteAsync(userId, ct);
 
         static string Code(int? s, int? e) => s is 0 ? $"Special {e}" : $"S{s:00}E{e:00}";
-        static string MarkText(EpisodeMark m) => m switch
-        {
-            EpisodeMark.SeriesPremiere => "Series premiere", EpisodeMark.SeasonPremiere => "Season premiere",
-            EpisodeMark.SeasonFinale => "Season finale", EpisodeMark.SeriesFinale => "Series finale", _ => "",
-        };
         var rows = plays.GroupBy(p => (Movie: p.Type == MediaType.Movie, p.TmdbId)).Select(g =>
         {
             var latest = g.Max(p => p.WatchedAt);
@@ -235,21 +230,9 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
                 return new HistoryRow(first.Title, g.Count() == 1 ? "Movie" + runtime : $"Movie · watched {g.Count()}×", first.PosterPath, g.Count(), latest);
             }
             var eps = g.Select(p => (S: p.SeasonNumber ?? 0, E: p.EpisodeNumber ?? 0)).Distinct().Order().ToList();
-            string detail;
-            if (eps.Count == 1)
-            {
-                var ep = g.First();
-                detail = Code(ep.SeasonNumber, ep.EpisodeNumber)
-                         + (spoilers && !string.IsNullOrWhiteSpace(ep.EpisodeTitle) ? $" · {ep.EpisodeTitle}" : "")
-                         + (spoilers && ep.Mark != EpisodeMark.None ? $" · {MarkText(ep.Mark)}" : "")
-                         + (g.Count() > 1 ? $" · watched {g.Count()}×" : "");
-            }
-            else
-            {
-                detail = $"{eps.Count} episodes · {Code(eps[0].S, eps[0].E)}–{Code(eps[^1].S, eps[^1].E)}";
-                if (spoilers && g.Select(p => p.Mark).Where(m => m is EpisodeMark.SeasonFinale or EpisodeMark.SeriesFinale).OrderByDescending(m => m).FirstOrDefault() is var fin && fin != EpisodeMark.None)
-                    detail += $" · {MarkText(fin).ToLowerInvariant()}";
-            }
+            var detail = eps.Count == 1
+                ? Code(eps[0].S, eps[0].E) + (g.Count() > 1 ? $" · watched {g.Count()}×" : "")
+                : $"{eps.Count} episodes · {Code(eps[0].S, eps[0].E)}–{Code(eps[^1].S, eps[^1].E)}";
             return new HistoryRow(first.Title, detail, first.PosterPath, g.Count(), latest);
         });
         var oneDay = f.From is { } from && f.To is { } to && to - from <= TimeSpan.FromHours(26);

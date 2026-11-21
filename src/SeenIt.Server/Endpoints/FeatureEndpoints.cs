@@ -75,11 +75,10 @@ public static class FeatureEndpoints
         share.MapGet("/review/{year:int}", async (int year, int? month, string? tz, [AsParameters] ReviewCardOptions options, ClaimsPrincipal p, ShareCardService s, CancellationToken ct) =>
             Results.File(await s.ReviewAsync(p.UserId(), year, month, tz, ct, options), "image/png",
                 month is null ? $"seenit-{year}.png" : $"seenit-{year}-{month:00}.png"));
-        // One day, month or year of your history (the History page's filters, From/To narrowed to that stretch).
-        // Spoiler-free unless spoilers=true: no episode titles or premiere/finale marks.
+        // One day, month or year of your history (the History page's filters, From/To narrowed to that stretch), spoiler-free.
         share.MapGet("/history", async (MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,
-                string? tz, string? label, bool? spoilers, ClaimsPrincipal p, ShareCardService s, CancellationToken ct) =>
-            Results.File(await s.HistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, TimeZone: tz), label ?? "History", spoilers == true, ct),
+                string? tz, string? label, ClaimsPrincipal p, ShareCardService s, CancellationToken ct) =>
+            Results.File(await s.HistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, TimeZone: tz), label ?? "History", ct),
                 "image/png", "seenit-history.png"));
         share.MapGet("/compare/{a}/{b}", async (string a, string b, ClaimsPrincipal p, ShareCardService s, CancellationToken ct) =>
             await s.CompareAsync(p.UserId(), a, b, ct) is { } png

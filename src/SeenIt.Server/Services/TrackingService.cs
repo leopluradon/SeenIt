@@ -418,8 +418,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
     }
 
     /// <summary>
-    /// Every play matching the filters (newest first, at most 5,000), with premiere/finale marks: what a history
-    /// share image is drawn from. The Shows view's filter means episodes here.
+    /// Every play matching the filters (newest first, at most 5,000): what a history share image is drawn from. The Shows view's filter means episodes here.
     /// </summary>
     public async Task<List<HistoryEntry>> HistoryPlaysAsync(Guid userId, HistoryQuery f, CancellationToken ct)
     {
@@ -430,9 +429,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
             var ids = await SearchPlaysAsync([userId], f.Q, ct);
             q = q.Where(w => ids.Contains(w.Id));
         }
-        var entries = await ToHistoryAsync(await q.NewestFirst().Take(5000).ToListAsync(ct), ct);
-        var marker = await EpisodeMarker.LoadAsync(db, entries.Where(i => i.Type == MediaType.Episode).Select(i => i.TmdbId), ct);
-        return entries.Select(marker.Mark).ToList();
+        return await ToHistoryAsync(await q.NewestFirst().Take(5000).ToListAsync(ct), ct);
     }
 
     private async Task<HistoryPage> GetHistoryCoreAsync(IReadOnlyCollection<Guid> userIds, HistoryQuery f, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
