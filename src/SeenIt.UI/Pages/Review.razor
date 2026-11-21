@@ -140,7 +140,7 @@ else if (r is not null)
         <section class="review-facts">
             <div class="fact"><b>@r.DaysActive</b><span>of @r.DaysInPeriod days with something watched</span></div>
             <div class="fact"><b>@r.LongestStreak.Days day@(r.LongestStreak.Days == 1 ? "" : "s")</b><span>longest streak@(r.LongestStreak.Start is { } ss && r.LongestStreak.Days > 1 ? $" ({(ss).ToString(Fmt.DateShort)} – {r.LongestStreak.End?.ToString(Fmt.DateShort)})" : "")</span></div>
-            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString(Fmt.DayShort)</b><span>busiest day: @bd.Plays plays, <Dur Minutes="bd.Minutes" /></span></div> }
+            @if (r.BusiestDay is { } bd) { <div class="fact"><b>@bd.Date.ToString(Fmt.DayShort)</b><span>busiest day: <Dur Minutes="bd.Minutes" />, @bd.Plays play@(bd.Plays == 1 ? "" : "s")</span></div> }
             <div class="fact"><b>@r.AveragePlaysPerActiveDay</b><span>plays per active day</span></div>
             @if (r.FavoriteWeekday is { } fw) { <div class="fact"><b>@(fw)s</b><span>favorite day to watch</span></div> }
             @if (r.PeakHour is { } ph) { <div class="fact"><b>@HourLabel(ph)</b><span>peak viewing hour</span></div> }

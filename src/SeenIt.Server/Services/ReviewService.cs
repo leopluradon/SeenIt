@@ -130,7 +130,8 @@ public class ReviewService(AppDbContext db, TrackingService tracking)
         var byHabitDay = byDay;
         var habitDays = byHabitDay.Keys.OrderBy(d => d).ToList();
         var streak = LongestStreak(habitDays);
-        var busiest = byHabitDay.OrderByDescending(d => d.Value.Count).ThenByDescending(d => d.Value.Sum(p => minutes(p)))
+        // Busiest by time watched (a day of one long movie can beat a few short episodes); plays break ties.
+        var busiest = byHabitDay.OrderByDescending(d => d.Value.Sum(p => minutes(p))).ThenByDescending(d => d.Value.Count)
             .Select(d => new ReviewDay(d.Key, d.Value.Count, d.Value.Sum(p => minutes(p)))).FirstOrDefault();
         var weekdays = Enum.GetValues<DayOfWeek>().Select(d => (d, n: habit.Count(p => p.Local.DayOfWeek == d))).ToList();
         // Letterboxd only records the day, so its plays have no real time of day.

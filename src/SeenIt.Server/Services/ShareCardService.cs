@@ -42,7 +42,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         var o = options ?? new ReviewCardOptions();
         var kind = MediaFilter.Parse(o.Type);
         var r = await reviews.BuildAsync(userId, year, month, tz, ct, o.New, kind);
-        var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.DisplayName, u.RatingScale }).FirstAsync(ct);
+        var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.DisplayName, u.RatingScale, u.TimeFormat }).FirstAsync(ct);
         string? Caption(ReviewItem i) => o.Ratings && i.Rating is { } r ? Badge(r, user.RatingScale) : i.Type == MediaType.Show ? i.Detail : null;
         var pal = await PaletteAsync(userId, ct, o.Theme, o.Accent);
         var goalLines = month is null && o.FactKeys().Contains("goals") ? await GoalLinesAsync(userId, year, tz, ct) : [];
@@ -100,7 +100,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
                 case "director" when r.TopDirectors.FirstOrDefault() is { } d: facts.Add($"Most-watched director or creator: {d.Name}"); break;
                 case "rating" when r.AverageRating is { } avg: facts.Add(user.RatingScale == RatingScale.Thumbs ? $"Liked {r.RatingDistribution.Where(b => int.Parse(b.Label) >= 6).Sum(b => b.Count)} of {t.Ratings} rated" : $"Average rating: {avg:0.0} / 10"); break;
                 case "goals": facts.AddRange(goalLines); break;
-                case "busiest" when r.BusiestDay is { } bd: facts.Add($"Busiest day: {bd.Date:MMMM d} ({bd.Plays} plays)"); break;
+                case "busiest" when r.BusiestDay is { } bd: facts.Add($"Busiest day: {bd.Date:MMMM d} ({Duration(bd.Minutes, user.TimeFormat)})"); break;
                 case "weekday" when r.FavoriteWeekday is { } wd: facts.Add($"Favorite day to watch: {wd}"); break;
                 case "network" when r.Networks.FirstOrDefault() is { } n: facts.Add($"Top network: {n.Label}"); break;
                 case "finished" when r.ShowsCompleted > 0: facts.Add($"Finished {r.ShowsCompleted} show{(r.ShowsCompleted == 1 ? "" : "s")}"); break;

@@ -93,6 +93,22 @@ public class ReviewTests
     }
 
     [Fact]
+    public async Task Busiest_day_is_the_one_with_the_most_time_watched()
+    {
+        using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        db.Movies.Add(new MovieMeta { TmdbId = 1, Title = "Heat", Runtime = 170 });
+        db.Shows.Add(new ShowMeta { TmdbId = 2, Name = "Parks and Recreation", EpisodeRuntime = 22 });
+        // March 4: three 22-minute episodes (more plays). March 5: one 170-minute movie (more time).
+        for (var e = 1; e <= 3; e++)
+            db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Episode, TmdbId = 2, SeasonNumber = 1, EpisodeNumber = e, WatchedAt = new(2026, 3, 4, 18 + e, 0, 0, TimeSpan.Zero) });
+        db.WatchEvents.Add(new WatchEvent { UserId = User, Type = MediaType.Movie, TmdbId = 1, WatchedAt = new(2026, 3, 5, 20, 0, 0, TimeSpan.Zero) });
+        await db.SaveChangesAsync();
+
+        var r = await new ReviewService(db, new TrackingService(db, null!)).BuildAsync(User, 2026, null, "UTC", default);
+        Assert.Equal(new ReviewDay(new DateOnly(2026, 3, 5), 1, 170), r.BusiestDay);
+    }
+
+    [Fact]
     public async Task New_to_me_keeps_only_titles_first_watched_in_the_period()
     {
         using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);

@@ -180,7 +180,7 @@
                     }
                     @if (r.BusiestDay is { } bd)
                     {
-                        <div><b>@bd.Plays plays</b><span>busiest day, @bd.Date.ToString(Fmt.DayShort) · <Dur Minutes="bd.Minutes" /></span></div>
+                        <div><b><Dur Minutes="bd.Minutes" /></b><span>busiest day, @bd.Date.ToString(Fmt.DayShort) · @bd.Plays play@(bd.Plays == 1 ? "" : "s")</span></div>
                     }
                     @if (r.MostRewatched is { } mr)
                     {
