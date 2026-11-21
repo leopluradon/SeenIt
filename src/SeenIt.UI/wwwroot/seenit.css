@@ -445,10 +445,11 @@ a.cast { color: var(--text); }
 
 /* ---------- Spoilers ---------- */
 .spoiler { cursor: pointer; }
-.spoiler-inline.is-hidden { color: transparent !important; text-shadow: 0 0 9px rgba(var(--text-rgb), .75); user-select: none; border-radius: 4px; }
-.spoiler-inline.is-hidden:hover { text-shadow: 0 0 7px rgba(var(--text-rgb), .9); }
+/* The blur scales with the text (em): a fixed 9px left big headings, like an episode page's title, readable. */
+.spoiler-inline.is-hidden { color: transparent !important; text-shadow: 0 0 .55em rgba(var(--text-rgb), .6); user-select: none; border-radius: 4px; }
+.spoiler-inline.is-hidden:hover { text-shadow: 0 0 .45em rgba(var(--text-rgb), .75); }
 .spoiler-block, .spoiler-img { position: relative; }
-.spoiler-block.is-hidden .spoiler-content { color: transparent; text-shadow: 0 0 10px rgba(var(--text-rgb), .6); user-select: none; }
+.spoiler-block.is-hidden .spoiler-content { color: transparent; text-shadow: 0 0 .6em rgba(var(--text-rgb), .5); user-select: none; }
 .spoiler-block.is-hidden .spoiler-content * { color: transparent !important; }
 .spoiler-img.is-hidden { overflow: hidden; height: 100%; }
 .spoiler-img.is-hidden .spoiler-content { filter: blur(18px); transform: scale(1.1); height: 100%; }
