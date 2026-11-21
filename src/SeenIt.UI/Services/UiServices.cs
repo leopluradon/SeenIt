@@ -187,6 +187,25 @@ public static class Fmt
         return null;
     }
 
+    /// <summary>
+    /// When something that long would be over if started now, in local time: "9:40 PM" today, "tomorrow 1:15 AM",
+    /// a weekday within the week, a date after that.
+    /// </summary>
+    public static string FinishAt(long minutes)
+    {
+        var now = DateTime.Now;
+        var end = now.AddMinutes(minutes);
+        var time = end.ToString(TimeOnly);
+        var days = (end.Date - now.Date).Days;
+        return days switch
+        {
+            0 => time,
+            1 => $"tomorrow {time}",
+            < 7 => $"{end:dddd} {time}",
+            _ => $"{end.ToString(DateShort)}, {time}",
+        };
+    }
+
     /// <summary>The full date and time, for hovering over a relative one ("3d ago").</summary>
     public static string Exact(DateTimeOffset when) =>
         WatchDates.IsUnknown(when) ? "Date unknown" : when.ToLocalTime().ToString($"{DayLongYear}, {TimeOnly}");

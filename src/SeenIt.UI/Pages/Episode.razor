@@ -73,7 +73,7 @@ else if (e is not null)
             @if (catchUp is { Episodes: > 1 } cu)
             {
                 <p class="muted small catch-up" title="Aired episodes you haven't seen, up to and including this one">
-                    <Icon Name="clock" Size="14" /> Catch up to here: @cu.Episodes episodes · <Dur Minutes="cu.Minutes" />
+                    <Icon Name="clock" Size="14" /> Catch up to here: @cu.Episodes episodes · <Dur Minutes="cu.Minutes" /> · done @Fmt.FinishAt(cu.Minutes) if you start now
                 </p>
             }
         </div>
