@@ -57,7 +57,7 @@ else if (items is not null)
                     @onclick="() => { if (selecting && !selected.Remove(key)) selected.Add(key); }" @onclick:preventDefault="selecting"
                     data-ctx="@(r.Type == MediaType.Episode && r.SeasonNumber is { } cs && r.EpisodeNumber is { } ce ? Menu.Episode(r.TmdbId, cs, ce, r.Title, null, r.PosterPath) : Menu.Title(r.Type, r.TmdbId, r.Title, r.PosterPath))">
                     @if (selecting) { <span class="pick-box"><input type="checkbox" checked="@selected.Contains(key)" tabindex="-1" aria-label="@($"Select {r.Title}")" /></span> }
-                    <a href="@(r.Type == MediaType.Episode ? Fmt.EpisodeHref(r.TmdbId, r.SeasonNumber, r.EpisodeNumber) : Fmt.Href(r.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, r.TmdbId))" class="list-row-link" @onclick:preventDefault="selecting">
+                    <a href="@RatedHref(r)" class="list-row-link" @onclick:preventDefault="selecting">
                         <img src="@Img.Poster(r.PosterPath, "w92")" alt="" loading="lazy" />
                         <span class="list-row-main">
                             <b>@r.Title</b>
@@ -76,6 +76,8 @@ else if (items is not null)
         {
             <PosterCard Media="@(new MediaSummary(r.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, r.TmdbId, r.Title, null, r.PosterPath, null, null, null))"
                         Badge="@Fmt.RatingBadge(r.Rating)" ShowScore="false"
+                        Href="@RatedHref(r)" TitleHref="@(r.Type == MediaType.Movie || (r.SeasonNumber is null && r.EpisodeNumber is null) ? null : $"show/{r.TmdbId}")"
+                        Ctx="@(r.Type == MediaType.Episode && r.SeasonNumber is { } cs && r.EpisodeNumber is { } ce ? Menu.Episode(r.TmdbId, cs, ce, r.Title, null, r.PosterPath) : null)"
                         Sub="@(r.Type == MediaType.Episode ? Fmt.Ep(r.SeasonNumber, r.EpisodeNumber) : r.SeasonNumber is { } rs ? (rs == 0 ? "Specials" : $"Season {rs}") : r.RatedAt.ToLocalTime().ToString(Fmt.DateLong))"
                         @key="(r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" />
         }
@@ -114,6 +116,12 @@ else if (items is not null)
 
     private bool selecting, busy;
     private readonly HashSet<(MediaType, int, int?, int?)> selected = [];
+    /// <summary>Where a rating leads: the episode or season that was rated, not just its show.</summary>
+    private static string RatedHref(RatingEntry r) =>
+        r.Type == MediaType.Episode ? Fmt.EpisodeHref(r.TmdbId, r.SeasonNumber, r.EpisodeNumber)
+        : r.Type != MediaType.Movie && r.SeasonNumber is { } s ? $"show/{r.TmdbId}/season/{s}"
+        : Fmt.Href(r.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, r.TmdbId);
+
     private static (MediaType, int, int?, int?) Key(RatingEntry r) => (r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber);
 
     /// <summary>Removes every selected rating, with Undo putting each one back as it was.</summary>
