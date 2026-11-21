@@ -27,13 +27,19 @@
     <a class="chip" href="@($"stats{(MediaFilter.Key(Kind) is { } sk ? $"?type={sk}" : "")}")">All-time stats</a>
     @if (r is { Totals.Plays: > 0 }) { <button class="chip" @onclick="OpenShare"><Icon Name="share" Size="14" /> Share image</button> }
 </div>
-@* The whole page from just what you'd never watched before this period (the first play of the movie or show is in it). *@
+@* The whole page from everything, from first-time watches of movies and episodes (a show started earlier still
+   counts for its new episodes), or from just the movies and shows first watched in this period. *@
 <div class="center review-new">
     <MediaFilterSwitch Value="Kind" />
-    <label class="check small">
-        <input type="checkbox" checked="@NewOnly" @onchange="e => SetNewOnly(e.Value is true)" />
-        <span><b>Only what's new to me</b> <span class="muted">movies and shows I first watched in @Label</span></span>
-    </label>
+    <select class="fit-select" aria-label="What to count" value="@Mode" @onchange="e => SetMode(e.Value as string)">
+        <option value="@ReviewNew.All">Everything I watched</option>
+        <option value="@ReviewNew.Firsts">First watches (no rewatches)</option>
+        <option value="@ReviewNew.Titles">Only titles new to me</option>
+    </select>
+    @if (Mode != ReviewNew.All)
+    {
+        <span class="muted small">@(Mode == ReviewNew.Firsts ? "Movies and episodes I saw for the first time" : $"Movies and shows I first watched in {Label}")</span>
+    }
 </div>
 <ShareCardDialog @bind-Open="shareOpen" Title="@($"{Label} in review")" FileName="@($"seenit-{Year}{(Month is { } sm ? $"-{sm:00}" : "")}.png")"
                  Load="() => Api.ReviewCardAsync(Year, Month, card)" Version="@CardVersion">
@@ -68,7 +74,13 @@
             </div>
             <label class="check small"><input type="checkbox" checked="@card.Ratings" @onchange="e => SetCard(o => o.Ratings = e.Value is true)" /> My ratings under the posters</label>
             <label class="check small"><input type="checkbox" checked="@card.Name" @onchange="e => SetCard(o => o.Name = e.Value is true)" /> My @@username at the top</label>
-            <label class="check small"><input type="checkbox" checked="@card.NewOnly" @onchange="e => SetCard(o => o.NewOnly = e.Value is true)" /> Only what's new to me</label>
+            <label class="small">Count
+                <select class="fit-select" value="@card.New" @onchange="e => SetCard(o => o.New = Enum.TryParse<ReviewNew>(e.Value as string, out var m) ? m : ReviewNew.All)">
+                    <option value="@ReviewNew.All">everything</option>
+                    <option value="@ReviewNew.Firsts">first watches</option>
+                    <option value="@ReviewNew.Titles">only titles new to me</option>
+                </select>
+            </label>
             <h4>Lines at the bottom <span class="muted small">as many as fit</span></h4>
             <div class="chips">
                 @foreach (var (key, label) in ReviewCardChoices.Facts)
@@ -153,7 +165,7 @@ else if (r is not null)
             <section class="row-section">
                 <div class="section-head">
                     <h2>@(showAllShows ? $"All shows · {allShows.Count}" : "Top shows")</h2>
-                    @if (!r.NewOnly) { <label class="check small review-new-filter"><input type="checkbox" checked="@newShows" @onchange="e => newShows = e.Value is true" /> New this @Period</label> }
+                    @if (r.New != ReviewNew.Titles) { <label class="check small review-new-filter"><input type="checkbox" checked="@newShows" @onchange="e => newShows = e.Value is true" /> New this @Period</label> }
                     @if (allShows.Count > topShows.Count)
                     {
                         <button class="section-more link-btn" @onclick="() => showAllShows = !showAllShows">@(showAllShows ? "Show top 10" : $"See all {allShows.Count}") <Icon Name="@(showAllShows ? "chevron-up" : "chevron-down")" Size="16" /></button>
@@ -178,7 +190,7 @@ else if (r is not null)
             <section class="row-section">
                 <div class="section-head">
                     <h2>@(showAllMovies ? $"All movies · {allMovies.Count}" : "Movies")</h2>
-                    @if (!r.NewOnly) { <label class="check small review-new-filter"><input type="checkbox" checked="@newMovies" @onchange="e => newMovies = e.Value is true" /> New this @Period</label> }
+                    @if (r.New != ReviewNew.Titles) { <label class="check small review-new-filter"><input type="checkbox" checked="@newMovies" @onchange="e => newMovies = e.Value is true" /> New this @Period</label> }
                     @if (allMovies.Count > topMovies.Count)
                     {
                         <button class="section-more link-btn" @onclick="() => showAllMovies = !showAllMovies">@(showAllMovies ? "Show top 10" : $"See all {allMovies.Count}") <Icon Name="@(showAllMovies ? "chevron-up" : "chevron-down")" Size="16" /></button>
@@ -240,17 +252,20 @@ else if (r is not null)
 
 @code {
     private bool showAllShows, showAllMovies;
-    // "New this year" on the two lists, and the whole page's "only what's new to me" (in the address: ?new=1).
+    // "New this year" on the two lists, and what the whole page counts (in the address: ?new=firsts or ?new=titles;
+    // ?new=1 from before the dropdown means titles).
     private bool newShows, newMovies;
-    [SupplyParameterFromQuery(Name = "new")] public int? NewParam { get; set; }
-    private bool NewOnly => NewParam == 1;
+    [SupplyParameterFromQuery(Name = "new")] public string? NewParam { get; set; }
+    private ReviewNew Mode => NewParam?.ToLowerInvariant() switch { "firsts" => ReviewNew.Firsts, "titles" or "1" => ReviewNew.Titles, _ => ReviewNew.All };
+    private static string? ModeKey(ReviewNew m) => m == ReviewNew.All ? null : m.ToString().ToLowerInvariant();
     private string Period => Month is null ? "year" : "month";
-    private void SetNewOnly(bool on) => Nav.NavigateTo(Nav.GetUriWithQueryParameter("new", on ? 1 : null));
+    private void SetMode(string? value) =>
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("new", ModeKey(Enum.TryParse<ReviewNew>(value, out var m) ? m : ReviewNew.All)));
     // Just movies or just TV (?type=movie / ?type=tv).
     [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
     private MediaType? Kind => MediaFilter.Parse(TypeParam);
     /// <summary>The filters, carried to the previous/next period and the month links.</summary>
-    private string Keep => string.Join('&', new[] { MediaFilter.Key(Kind) is { } k ? $"type={k}" : null, NewOnly ? "new=1" : null }.OfType<string>()) is { Length: > 0 } q ? "?" + q : "";
+    private string Keep => string.Join('&', new[] { MediaFilter.Key(Kind) is { } k ? $"type={k}" : null, ModeKey(Mode) is { } nk ? $"new={nk}" : null }.OfType<string>()) is { Length: > 0 } q ? "?" + q : "";
 
     // The share image's choices, remembered on this device.
     private const string CardKey = "seenit.reviewCard";
@@ -270,7 +285,7 @@ else if (r is not null)
             }
             catch { card = new(); }
         }
-        card.NewOnly = NewOnly;   // starts the way the page is
+        card.New = Mode;   // starts the way the page is
         card.Type = MediaFilter.Key(Kind);
         shareOpen = true;
     }
@@ -327,7 +342,7 @@ else if (r is not null)
     private async Task Load()
     {
         error = null;
-        try { r = await Api.ReviewAsync(Year, Month, NewOnly, Kind); }
+        try { r = await Api.ReviewAsync(Year, Month, Mode, Kind); }
         catch (Exception ex) { error = ex.Message; }
         goals = null;
         if (Month is null) { try { goals = await Api.GoalsAsync(Year); } catch { } }

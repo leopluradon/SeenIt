@@ -41,7 +41,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
     {
         var o = options ?? new ReviewCardOptions();
         var kind = MediaFilter.Parse(o.Type);
-        var r = await reviews.BuildAsync(userId, year, month, tz, ct, o.NewOnly, kind);
+        var r = await reviews.BuildAsync(userId, year, month, tz, ct, o.New, kind);
         var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.DisplayName, u.RatingScale }).FirstAsync(ct);
         string? Caption(ReviewItem i) => o.Ratings && i.Rating is { } r ? Badge(r, user.RatingScale) : i.Type == MediaType.Show ? i.Detail : null;
         var pal = await PaletteAsync(userId, ct, o.Theme, o.Accent);
@@ -63,7 +63,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
         Text(c, r.Label, Pad, y, Fonts.Value.Bold, month is null ? 170 : 104, pal.Text);
         y += 70;
         Text(c, (month is null ? "Year in review" : "Month in review") + kind switch { MediaType.Movie => " · movies", MediaType.Show => " · TV", _ => "" }
-            + (o.NewOnly ? " · new to me" : ""), Pad, y, Fonts.Value.Semi, 46, pal.Accent);
+            + o.New switch { ReviewNew.Titles => " · new to me", ReviewNew.Firsts => " · first watches", _ => "" }, Pad, y, Fonts.Value.Semi, 46, pal.Accent);
 
         var t = r.Totals;
         var hours = t.Minutes / 60.0;
@@ -115,7 +115,7 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
             Text(c, Fit(f, Fonts.Value.Semi, 36, W - Pad * 2 - 40), Pad + 36, y, Fonts.Value.Semi, 36, pal.Text);
             y += 58;
         }
-        if (t.Plays == 0) Text(c, o.NewOnly ? "Nothing new watched yet." : "Nothing watched yet.", Pad, y, Fonts.Value.Semi, 40, pal.Muted);
+        if (t.Plays == 0) Text(c, o.New != ReviewNew.All ? "Nothing new watched yet." : "Nothing watched yet.", Pad, y, Fonts.Value.Semi, 40, pal.Muted);
 
         Footer(c, pal, H);
         return Encode(surface, posters);

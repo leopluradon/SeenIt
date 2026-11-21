@@ -1142,7 +1142,7 @@ public class ReviewCardOptions
     public bool Name { get; set; } = true;                               // @username at the top
     public string? Theme { get; set; }                                   // a theme key; null = yours
     public string? Accent { get; set; }                                  // an accent key; null = the theme's
-    public bool NewOnly { get; set; }                                    // only titles new to you in the period
+    public ReviewNew New { get; set; }                                   // everything, first watches, or titles new to you
     public string? Type { get; set; }                                    // "movie" or "tv" for just those (MediaFilter)
 
     public IReadOnlyList<string> TileKeys() => Keys(Tiles, ReviewCardChoices.Tiles).Take(4).ToList();
@@ -1243,7 +1243,14 @@ public record ReviewDto(
     DateOnly? TrackingSince = null,    // reviews only count from here (see Settings → Stats)
     IReadOnlyList<ReviewItem>? AllShows = null,     // every show / movie in the period, same order as the top lists
     IReadOnlyList<ReviewItem>? AllMovies = null,
-    bool NewOnly = false);                          // built from only titles new to you in the period
+    ReviewNew New = ReviewNew.All);                 // what it was built from (see ReviewNew)
+
+/// <summary>
+/// What a review counts. Firsts: movies and episodes watched for the first time in the period, so a show
+/// you started earlier still counts for its new episodes, and rewatches don't. Titles: only movies and
+/// shows whose very first play is in the period.
+/// </summary>
+public enum ReviewNew { All, Firsts, Titles }
 
 public record ReviewMonth(int Month, int Plays, long Minutes);
 public record ReviewYear(int Year, int Plays, long Minutes, IReadOnlyList<ReviewMonth> Months);

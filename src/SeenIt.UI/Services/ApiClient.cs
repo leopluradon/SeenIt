@@ -335,8 +335,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<StatsDto> StatsAsync(MediaType? kind = null) => GetAsync<StatsDto>($"api/stats?tz={Tz}" + TypeParam(kind));
     private static string TypeParam(MediaType? kind) => MediaFilter.Key(kind) is { } k ? $"&type={k}" : "";
     public Task<List<ReviewYear>> ReviewPeriodsAsync() => GetAsync<List<ReviewYear>>($"api/review/periods?tz={Tz}");
-    public Task<ReviewDto> ReviewAsync(int year, int? month, bool newOnly = false, MediaType? kind = null) =>
-        GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}" + (newOnly ? "&newOnly=true" : "") + TypeParam(kind));
+    public Task<ReviewDto> ReviewAsync(int year, int? month, ReviewNew mode = ReviewNew.All, MediaType? kind = null) =>
+        GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}" + (mode == ReviewNew.All ? "" : $"&new={mode}") + TypeParam(kind));
 
     /// <summary>The device's IANA time zone, so reviews use the viewer's own calendar days.</summary>
     private static string Tz => Uri.EscapeDataString(TimeZoneInfo.Local.Id);
@@ -378,7 +378,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         string E(string? s) => Uri.EscapeDataString(s ?? "");
         return BytesAsync($"api/share/review/{year}?{(month is { } m ? $"month={m}&" : "")}tz={Tz}"
             + $"&tiles={E(o.Tiles)}&shows={o.Shows}&movies={o.Movies}&ratings={(o.Ratings ? "true" : "false")}&facts={E(o.Facts)}"
-            + $"&name={(o.Name ? "true" : "false")}&newOnly={(o.NewOnly ? "true" : "false")}"
+            + $"&name={(o.Name ? "true" : "false")}&new={o.New}"
             + (o.Theme is { } t ? $"&theme={E(t)}" : "") + (o.Accent is { } a ? $"&accent={E(a)}" : "") + (o.Type is { } ty ? $"&type={E(ty)}" : ""));
     }
     public Task<byte[]> CompareCardAsync(string a, string b) => BytesAsync($"api/share/compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}");

@@ -121,13 +121,22 @@ public class ReviewTests
         Assert.Equal(["Arrival"], (all.AllMovies ?? []).Where(m => m.New).Select(m => m.Title));
         Assert.Equal(["Severance"], (all.AllShows ?? []).Where(m => m.New).Select(m => m.Title));
 
-        var fresh = await svc.BuildAsync(User, 2026, 3, "UTC", default, newOnly: true);
-        Assert.True(fresh.NewOnly);
+        var fresh = await svc.BuildAsync(User, 2026, 3, "UTC", default, ReviewNew.Titles);
+        Assert.Equal(ReviewNew.Titles, fresh.New);
         Assert.Equal((1, 1, 1), (fresh.Totals.Movies, fresh.Totals.Shows, fresh.Totals.Ratings));   // Arrival, Severance, Arrival's rating
         Assert.Equal(9, fresh.AverageRating);
         Assert.Equal(116 + 50, fresh.Totals.Minutes);
         // February compared the same way: Heat and Andor were new then.
         Assert.Equal((1, 1), (fresh.Previous.Movies, fresh.Previous.Shows));
+
+        // First watches: Andor counts for its new episode though it started in February; Heat's rewatch and Alien
+        // (first seen on an unknown date) don't, nor does Heat's rating.
+        var firsts = await svc.BuildAsync(User, 2026, 3, "UTC", default, ReviewNew.Firsts);
+        Assert.Equal(ReviewNew.Firsts, firsts.New);
+        Assert.Equal((1, 2, 2, 1), (firsts.Totals.Movies, firsts.Totals.Shows, firsts.Totals.Episodes, firsts.Totals.Ratings));
+        Assert.Equal(["Andor", "Severance"], (firsts.AllShows ?? []).Select(x => x.Title).Order());
+        Assert.Equal(116 + 50 + 45, firsts.Totals.Minutes);
+        Assert.Equal((1, 1), (firsts.Previous.Movies, firsts.Previous.Shows));
     }
 
     [Fact]
