@@ -176,9 +176,22 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
         if (f.Oldest) qs.Add("sort=oldest");
         else if (f.ShowSort is { Length: > 0 } ss) qs.Add($"sort={ss}");
         if (f.PerShow) qs.Add("group=show");
+        if (f.Unit != HistoryUnit.Day) qs.Add($"by={f.Unit.ToString().ToLowerInvariant()}");
         if (friends && !string.IsNullOrWhiteSpace(user)) qs.Add($"user={Uri.EscapeDataString(user)}");
         if (friends) return GetAsync<HistoryPage>("api/social/history?" + string.Join('&', qs));
         return GetAsync<HistoryPage>((userName is null ? "api/history?" : $"api/users/{Uri.EscapeDataString(userName)}/history?") + string.Join('&', qs));
+    }
+    /// <summary>An image of one stretch of your history (f's From/To), with History's filters.</summary>
+    public Task<byte[]> HistoryCardAsync(HistoryQuery f, string label, bool spoilers)
+    {
+        var qs = new List<string> { $"tz={Tz}", $"label={Uri.EscapeDataString(label)}", $"spoilers={(spoilers ? "true" : "false")}" };
+        if (f.Type is { } t) qs.Add($"type={t}");
+        if (!string.IsNullOrWhiteSpace(f.Q)) qs.Add($"q={Uri.EscapeDataString(f.Q)}");
+        if (f.Source is { } s) qs.Add($"source={s}");
+        if (!string.IsNullOrWhiteSpace(f.Genre)) qs.Add($"genre={Uri.EscapeDataString(f.Genre)}");
+        if (f.From is { } from) qs.Add($"from={Uri.EscapeDataString(from.ToString("O"))}");
+        if (f.To is { } to) qs.Add($"to={Uri.EscapeDataString(to.ToString("O"))}");
+        return BytesAsync("api/share/history?" + string.Join('&', qs));
     }
     public Task<List<string>> HistoryGenresAsync(string? userName = null, bool friends = false) =>
         GetAsync<List<string>>(friends ? "api/social/history/genres" : userName is null ? "api/history/genres" : $"api/users/{Uri.EscapeDataString(userName)}/history/genres");

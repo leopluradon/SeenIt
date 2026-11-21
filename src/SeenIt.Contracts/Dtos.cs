@@ -797,9 +797,14 @@ public record HistoryQuery(
     int PageSize = 50,
     string? TimeZone = null,    // IANA id; decides where one day ends and the next begins
     bool PerShow = false,       // with Type = Show: one row per show for the whole matched period, not per day
-    string? ShowSort = null);   // one-per-show order: null (last watched), "title" or "episodes"; Oldest = first watched
+    string? ShowSort = null,    // one-per-show order: null (last watched), "title" or "episodes"; Oldest = first watched
+    HistoryUnit Unit = HistoryUnit.Day);   // what the page is grouped by: totals per day, month or year (and the Shows view's rows)
 
-/// <summary>Totals for one day (null = unknown date) across every matching play, not just the visible page.</summary>
+/// <summary>How History is grouped. Totals (HistoryDay) are then per month or year, dated the 1st of it.</summary>
+public enum HistoryUnit { Day, Month, Year }
+
+/// <summary>Totals for one day (null = unknown date) across every matching play, not just the visible page. Grouped by
+/// month or year (HistoryQuery.Unit), Date is the first day of it.</summary>
 public record HistoryDay(DateOnly? Date, int Plays, long Minutes);
 
 /// <summary>People: on friends' history, everyone whose history you can see (for the filter and each row's name).</summary>

@@ -24,9 +24,25 @@
     @if (Type == MediaType.Show)
     {
         <div class="segmented segmented-sm" role="radiogroup" aria-label="Group shows">
-            <button role="radio" aria-checked="@PerShow" class="@(PerShow ? "on" : "")" @onclick='() => Go(group: "", sort: SortFor(true))'>By show</button>
-            <button role="radio" aria-checked="@(!PerShow)" class="@(PerShow ? "" : "on")" @onclick='() => Go(group: "day", sort: SortFor(false))'>By day</button>
+            <button role="radio" aria-checked="@PerShow" class="@(PerShow ? "on" : "")" @onclick='() => Go(group: "", by: "", sort: SortFor(true))'>By show</button>
+            @foreach (var (u, name) in Units)
+            {
+                var on = !PerShow && Unit == u;
+                <button role="radio" aria-checked="@on" class="@(on ? "on" : "")" @onclick='() => Go(group: "day", by: ByKey(u) ?? "", sort: SortFor(false))'>By @name</button>
+            }
         </div>
+    }
+    else
+    {
+        <div class="segmented segmented-sm" role="radiogroup" aria-label="Group by">
+            @foreach (var (u, name) in Units)
+            {
+                <button role="radio" aria-checked="@(Unit == u)" class="@(Unit == u ? "on" : "")" @onclick='() => Go(by: ByKey(u) ?? "")'>@(char.ToUpperInvariant(name[0]) + name[1..])</button>
+            }
+        </div>
+    }
+    @if (Type == MediaType.Show)
+    {
         @if (PerShow)
         {
             <label class="check small no-pages" title="Every show on one page, as a wrapping grid of posters">
@@ -164,16 +180,20 @@ else if (data is not null)
         else
         {
         <div class="history">
-            @foreach (var day in PerShow ? data.Items.GroupBy(_ => (DateOnly?)null) : data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date)))
+            @foreach (var day in PerShow ? data.Items.GroupBy(_ => (DateOnly?)null) : data.Items.GroupBy(h => WatchDates.IsUnknown(h.WatchedAt) ? (DateOnly?)null : Bucket(DateOnly.FromDateTime(h.WatchedAt.ToLocalTime().Date))))
             {
                 var totals = data.Days?.FirstOrDefault(d => d.Date == day.Key)
                              ?? new HistoryDay(day.Key, day.Count(), day.Sum(e => (long)(e.Runtime ?? 0)));
                 @if (!PerShow)
                 {
                 <div class="day-divider">
-                    <h3>@(day.Key is { } dk ? Fmt.Day(dk) : "Date unknown")</h3>
+                    <h3>@(day.Key is { } dk ? GroupLabel(dk) : "Date unknown")</h3>
                     <span class="day-line" aria-hidden="true"></span>
                     <span class="day-total" title="@Fmt.HoursTip(totals.Minutes)">@totals.Plays play@(totals.Plays == 1 ? "" : "s")@(totals.Minutes > 0 ? " · " + Fmt.Duration(totals.Minutes) : "")</span>
+                    @if (Mine && day.Key is { } sk)
+                    {
+                        <button class="icon-btn day-share" @onclick="() => OpenShare(sk)" aria-label="@($"Share {GroupLabel(sk)} as an image")" title="Share as an image"><Icon Name="share" Size="16" /></button>
+                    }
                 </div>
                 }
                 @foreach (var h in day)
@@ -206,7 +226,7 @@ else if (data is not null)
                                 {
                                 @if (h.Type == MediaType.Show) { <div class="small">@(h.Episodes == 1 ? "1 episode" : $"{h.Episodes} episodes") · @h.Range</div> }
                                 <div class="muted small">
-                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString(Fmt.TimeOnly))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
+                                    @(WatchDates.IsUnknown(h.WatchedAt) ? "" : h.WatchedAt.ToLocalTime().ToString(Unit == HistoryUnit.Day ? Fmt.TimeOnly : $"{Fmt.DateShort}, {Fmt.TimeOnly}"))@(h.Runtime is > 0 ? (WatchDates.IsUnknown(h.WatchedAt) ? "" : " · ") + Fmt.Runtime(h.Runtime) : "")
                                     @if (Fmt.ShowsSource(h.Source)) { <span class="pill pill-sm">@Fmt.Source(h.Source)</span> }
                                 </div>
                                 }
@@ -248,6 +268,12 @@ else if (data is not null)
                 What="@(editing is null ? "this" : editing.Type == MediaType.Episode ? $"{editing.Title} {Fmt.Ep(editing.SeasonNumber, editing.EpisodeNumber)}" : editing.Title)"
                 OnSaved="async () => { editing = null; await Load(); StateHasChanged(); }" />
 
+<ShareCardDialog @bind-Open="shareOpen" Title="@ShareLabel" FileName="@($"seenit-history-{shareStart:yyyy-MM-dd}.png")" Load="LoadShare" Version="@(shareSpoilers ? "spoilers" : "spoiler-free")">
+    <Options>
+        <label class="check small"><input type="checkbox" checked="@shareSpoilers" @onchange="e => shareSpoilers = e.Value is true" /> Show spoilers (episode titles, premieres and finales)</label>
+    </Options>
+</ShareCardDialog>
+
 <ReloadOnMenu OnChange="Load" />
 @code {
     private HistoryEntry? editing;
@@ -270,6 +296,30 @@ else if (data is not null)
     [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
     [SupplyParameterFromQuery(Name = "page")] public int? PageParam { get; set; }
     [SupplyParameterFromQuery(Name = "group")] public string? GroupParam { get; set; }
+    /// <summary>Group by day (the default), ?by=month or ?by=year: headers, totals, and in the Shows view the rows.</summary>
+    [SupplyParameterFromQuery(Name = "by")] public string? ByParam { get; set; }
+    private HistoryUnit Unit => ByParam switch { "month" => HistoryUnit.Month, "year" => HistoryUnit.Year, _ => HistoryUnit.Day };
+    private static readonly (HistoryUnit Unit, string Name)[] Units = [(HistoryUnit.Day, "day"), (HistoryUnit.Month, "month"), (HistoryUnit.Year, "year")];
+    private static string? ByKey(HistoryUnit u) => u == HistoryUnit.Day ? null : u.ToString().ToLowerInvariant();
+    private DateOnly Bucket(DateOnly d) => Unit switch { HistoryUnit.Month => new(d.Year, d.Month, 1), HistoryUnit.Year => new(d.Year, 1, 1), _ => d };
+    private DateOnly NextBucket(DateOnly d) => Unit switch { HistoryUnit.Month => d.AddMonths(1), HistoryUnit.Year => d.AddYears(1), _ => d.AddDays(1) };
+    private string GroupLabel(DateOnly d) => Unit switch { HistoryUnit.Month => d.ToString("MMMM yyyy"), HistoryUnit.Year => d.Year.ToString(), _ => Fmt.Day(d) };
+
+    // Sharing one day / month / year as an image, spoiler-free unless asked.
+    private bool shareOpen, shareSpoilers;
+    private DateOnly shareStart;
+    private string ShareLabel => Unit == HistoryUnit.Day ? shareStart.ToDateTime(TimeOnly.MinValue).ToString(Fmt.DayLongYear) : GroupLabel(shareStart);
+    private void OpenShare(DateOnly start) { shareStart = start; shareSpoilers = false; shareOpen = true; }
+    private Task<byte[]> LoadShare()
+    {
+        // That stretch, narrowed by the page's own "when" filter if it's tighter.
+        DateTimeOffset At(DateOnly d) { var local = d.ToDateTime(TimeOnly.MinValue); return new(local, TimeZoneInfo.Local.GetUtcOffset(local)); }
+        var (from, to) = Range();
+        var start = At(shareStart);
+        var end = At(NextBucket(shareStart));
+        var f = new HistoryQuery(Type, Q, Source, Genre, from is { } fr && fr > start ? fr : start, to is { } t && t < end ? t : end);
+        return Api.HistoryCardAsync(f, ShareLabel, shareSpoilers);
+    }
     [SupplyParameterFromQuery(Name = "all")] public string? AllParam { get; set; }
 
     /// <summary>By show, with every show on one page as a wrapping grid (the default for By show).</summary>
@@ -336,7 +386,7 @@ else if (data is not null)
         var perShow = PerShow;
         try
         {
-            data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", AllOnOnePage ? 1 : PageParam ?? 1, AllOnOnePage ? 5000 : 50, PerShow: perShow, ShowSort: perShow ? Sort : null), Other, Friends, UserParam);
+            data = await Api.HistoryAsync(new HistoryQuery(Type, Q, Source, Genre, from, to, Sort == "oldest", AllOnOnePage ? 1 : PageParam ?? 1, AllOnOnePage ? 5000 : 50, PerShow: perShow, ShowSort: perShow ? Sort : null, Unit: perShow ? HistoryUnit.Day : Unit), Other, Friends, UserParam);
             loadedPerShow = perShow;
         }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s history is private, or there's no such member."; }
@@ -371,7 +421,7 @@ else if (data is not null)
 
     /// <summary>Updates one or more filters in the URL; any change goes back to page 1.</summary>
     private void Go(string? type = null, string? q = null, string? source = null, string? genre = null,
-        string? period = null, string? from = null, string? to = null, string? sort = null, int? page = null, string? user = null, string? group = null, string? all = null)
+        string? period = null, string? from = null, string? to = null, string? sort = null, int? page = null, string? user = null, string? group = null, string? all = null, string? by = null)
     {
         var p = new Dictionary<string, object?>
         {
@@ -388,7 +438,9 @@ else if (data is not null)
             ["page"] = page is > 1 ? page : null,
             ["group"] = (type ?? TypeParam) == "Show" ? Blank(group ?? GroupParam) : null,
             ["all"] = Blank(all ?? AllParam),
+            ["by"] = Blank(by ?? ByParam),
         };
+        if ((type ?? TypeParam) == "Show" && p["group"] is not "day") p["by"] = null;   // one row per show: no grouping
         if ((type ?? TypeParam) != "Show" || p["group"] is "day") p["all"] = null;   // only By show has it
         // Title and most-episodes orders only exist one-per-show.
         if (((type ?? TypeParam) != "Show" || p["group"] is "day") && p["sort"] is "title" or "episodes") p["sort"] = null;
@@ -402,7 +454,7 @@ else if (data is not null)
     private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
         {
             ("type", TypeParam), ("q", Q), ("source", SourceParam), ("genre", Genre), ("period", Period),
-            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort), ("group", Type == MediaType.Show && !PerShow ? "day" : null), ("all", PerShow && !AllOnOnePage ? "0" : null),
+            ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort), ("group", Type == MediaType.Show && !PerShow ? "day" : null), ("by", PerShow ? null : ByKey(Unit)), ("all", PerShow && !AllOnOnePage ? "0" : null),
         }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private void Submit() => Go(q: search.Trim() is { Length: > 0 } t ? t : "");

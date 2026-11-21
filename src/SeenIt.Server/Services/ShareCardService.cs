@@ -9,7 +9,7 @@ namespace SeenIt.Server.Services;
 /// Draws shareable images (a month/year in review, a comparison) as PNGs in the user's theme, for
 /// posting elsewhere. Drawn on the server so the website and the app get the same picture.
 /// </summary>
-public class ShareCardService(AppDbContext db, ReviewService reviews, SocialService social, GoalService goals,
+public class ShareCardService(AppDbContext db, ReviewService reviews, SocialService social, GoalService goals, TrackingService tracking,
     IHttpClientFactory http, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, ILogger<ShareCardService> log)
 {
     private const int W = 1080;
@@ -201,6 +201,129 @@ public class ShareCardService(AppDbContext db, ReviewService reviews, SocialServ
 
         Footer(c, pal, H);
         return Encode(surface, posters);
+    }
+
+    // ---------- A day, month or year of history ----------
+
+    /// <summary>One row on a history image: a movie, or a show with the episodes of it watched.</summary>
+    private sealed record HistoryRow(string Title, string Detail, string? PosterPath, int Plays, DateTimeOffset Latest);
+
+    /// <summary>
+    /// What you watched in one stretch of your history (f's From/To), with the History page's filters: one row per
+    /// movie and per show, newest first for a day and most watched first for longer. Spoiler-free unless asked:
+    /// no episode titles and no premiere/finale marks.
+    /// </summary>
+    public async Task<byte[]> HistoryAsync(Guid userId, HistoryQuery f, string label, bool spoilers, CancellationToken ct)
+    {
+        var plays = (await tracking.HistoryPlaysAsync(userId, f, ct)).Where(p => !WatchDates.IsUnknown(p.WatchedAt)).ToList();
+        var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.UserName, u.TimeFormat }).FirstAsync(ct);
+        var pal = await PaletteAsync(userId, ct);
+
+        static string Code(int? s, int? e) => s is 0 ? $"Special {e}" : $"S{s:00}E{e:00}";
+        static string MarkText(EpisodeMark m) => m switch
+        {
+            EpisodeMark.SeriesPremiere => "Series premiere", EpisodeMark.SeasonPremiere => "Season premiere",
+            EpisodeMark.SeasonFinale => "Season finale", EpisodeMark.SeriesFinale => "Series finale", _ => "",
+        };
+        var rows = plays.GroupBy(p => (Movie: p.Type == MediaType.Movie, p.TmdbId)).Select(g =>
+        {
+            var latest = g.Max(p => p.WatchedAt);
+            var first = g.First();
+            if (g.Key.Movie)
+            {
+                var runtime = first.Runtime is > 0 && g.Count() == 1 ? $" · {Duration(first.Runtime.Value, user.TimeFormat)}" : "";
+                return new HistoryRow(first.Title, g.Count() == 1 ? "Movie" + runtime : $"Movie · watched {g.Count()}×", first.PosterPath, g.Count(), latest);
+            }
+            var eps = g.Select(p => (S: p.SeasonNumber ?? 0, E: p.EpisodeNumber ?? 0)).Distinct().Order().ToList();
+            string detail;
+            if (eps.Count == 1)
+            {
+                var ep = g.First();
+                detail = Code(ep.SeasonNumber, ep.EpisodeNumber)
+                         + (spoilers && !string.IsNullOrWhiteSpace(ep.EpisodeTitle) ? $" · {ep.EpisodeTitle}" : "")
+                         + (spoilers && ep.Mark != EpisodeMark.None ? $" · {MarkText(ep.Mark)}" : "")
+                         + (g.Count() > 1 ? $" · watched {g.Count()}×" : "");
+            }
+            else
+            {
+                detail = $"{eps.Count} episodes · {Code(eps[0].S, eps[0].E)}–{Code(eps[^1].S, eps[^1].E)}";
+                if (spoilers && g.Select(p => p.Mark).Where(m => m is EpisodeMark.SeasonFinale or EpisodeMark.SeriesFinale).OrderByDescending(m => m).FirstOrDefault() is var fin && fin != EpisodeMark.None)
+                    detail += $" · {MarkText(fin).ToLowerInvariant()}";
+            }
+            return new HistoryRow(first.Title, detail, first.PosterPath, g.Count(), latest);
+        });
+        var oneDay = f.From is { } from && f.To is { } to && to - from <= TimeSpan.FromHours(26);
+        var ordered = (oneDay ? rows.OrderByDescending(r => r.Latest) : rows.OrderByDescending(r => r.Plays).ThenByDescending(r => r.Latest)).ToList();
+        const int MaxRows = 10;
+        var shown = ordered.Take(MaxRows).ToList();
+        var posters = await PostersAsync(shown.Select(r => r.PosterPath), ct);
+
+        var minutes = plays.Sum(p => (long)(p.Runtime ?? 0));
+        var movies = plays.Count(p => p.Type == MediaType.Movie);
+        var episodes = plays.Count - movies;
+        var parts = new List<string>();
+        if (movies > 0) parts.Add(movies == 1 ? "1 movie" : $"{movies:N0} movies");
+        if (episodes > 0) parts.Add(episodes == 1 ? "1 episode" : $"{episodes:N0} episodes");
+        if (minutes > 0) parts.Add(Duration(minutes, user.TimeFormat));
+        var summary = parts.Count > 0 ? string.Join(" · ", parts) : "Nothing watched";
+
+        const float RowH = 168, PosterW = 96, PosterH = 144;
+        var more = ordered.Count - shown.Count;
+        var h = (int)Math.Max(1080, Pad + 20 + 150 + 70 + 70 + shown.Count * RowH + (more > 0 ? 70 : 0) + 150);
+        using var surface = SKSurface.Create(new SKImageInfo(W, h));
+        var c = surface.Canvas;
+        Background(c, pal, h);
+
+        var y = Pad + 20;
+        Brand(c, pal, ref y, "@" + user.UserName);
+        y += 150;
+        var size = 88f;
+        while (size > 48 && Measure(label, Fonts.Value.Bold, size) > W - Pad * 2) size -= 4;
+        Text(c, Fit(label, Fonts.Value.Bold, size, W - Pad * 2), Pad, y, Fonts.Value.Bold, size, pal.Text);
+        y += 70;
+        Text(c, Fit(summary, Fonts.Value.Semi, 40, W - Pad * 2), Pad, y, Fonts.Value.Semi, 40, pal.Accent);
+        y += 70;
+
+        using var placeholder = new SKPaint { IsAntialias = true, Color = pal.Surface };
+        foreach (var r in shown)
+        {
+            var rect = new SKRect(Pad, y, Pad + PosterW, y + PosterH);
+            var rr = new SKRoundRect(rect, 12);
+            c.DrawRoundRect(rr, placeholder);
+            if (Poster(posters, r.PosterPath) is { } img)
+            {
+                c.Save();
+                c.ClipRoundRect(rr, antialias: true);
+                c.DrawImage(img, rect, new SKSamplingOptions(SKCubicResampler.Mitchell));
+                c.Restore();
+            }
+            var tx = Pad + PosterW + 32;
+            var max = W - Pad - tx;
+            Text(c, Fit(r.Title, Fonts.Value.Bold, 42, max), tx, y + 62, Fonts.Value.Bold, 42, pal.Text);
+            Text(c, Fit(r.Detail, Fonts.Value.Semi, 32, max), tx, y + 110, Fonts.Value.Semi, 32, pal.Muted);
+            y += RowH;
+        }
+        if (more > 0)
+        {
+            y += 20;
+            Text(c, more == 1 ? "and 1 more" : $"and {more:N0} more", Pad, y, Fonts.Value.Semi, 34, pal.Muted);
+        }
+
+        Footer(c, pal, h);
+        return Encode(surface, posters);
+    }
+
+    /// <summary>A length of time in the user's chosen style (Settings → Time).</summary>
+    private static string Duration(long minutes, TimeFormat f)
+    {
+        if (minutes < 1440) return minutes >= 60 ? $"{minutes / 60}h {minutes % 60}m" : $"{minutes}m";
+        return f switch
+        {
+            TimeFormat.Hours => $"{minutes / 60:N0}h",
+            TimeFormat.HoursMinutes => $"{minutes / 60:N0}h {minutes % 60}m",
+            TimeFormat.DaysHoursMinutes => $"{minutes / 1440:N0}d {minutes % 1440 / 60}h {minutes % 60}m",
+            _ => $"{minutes / 1440:N0}d {minutes % 1440 / 60}h",
+        };
     }
 
     // ---------- Drawing ----------

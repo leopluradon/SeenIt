@@ -88,6 +88,35 @@ public class HistoryFilterTests
     }
 
     [Fact]
+    public async Task Grouped_by_month_or_year_totals_and_show_rows_follow()
+    {
+        var t = await Setup();
+        // Plain view by month: March's four plays together, December 2025 on its own (dated the 1st).
+        var months = await t.GetHistoryAsync(User, new HistoryQuery(TimeZone: "UTC", Unit: HistoryUnit.Month), default);
+        var march = months.Days!.Single(d => d.Date == new DateOnly(2026, 3, 1));
+        Assert.Equal((4, 104 + 57 + 55 + 104L), (march.Plays, march.Minutes));
+        Assert.Equal(1, months.Days!.Single(d => d.Date == new DateOnly(2025, 12, 1)).Plays);
+
+        // Shows view by month: both Severance episodes in one row.
+        var shows = await t.GetHistoryAsync(User, new HistoryQuery(Type: MediaType.Show, TimeZone: "UTC", Unit: HistoryUnit.Month), default);
+        Assert.Equal((1, 2, "S01E01–S01E02"), (shows.TotalResults, shows.Items[0].Episodes!.Value, shows.Items[0].Range));
+
+        var years = await t.GetHistoryAsync(User, new HistoryQuery(TimeZone: "UTC", Unit: HistoryUnit.Year), default);
+        Assert.Equal(4, years.Days!.Single(d => d.Date == new DateOnly(2026, 1, 1)).Plays);
+    }
+
+    [Fact]
+    public async Task Plays_for_a_share_image_follow_the_filters()
+    {
+        var t = await Setup();
+        var march3 = await t.HistoryPlaysAsync(User, new HistoryQuery(From: DateTimeOffset.Parse("2026-03-03T00:00:00Z"), To: DateTimeOffset.Parse("2026-03-04T00:00:00Z")), default);
+        Assert.Equal(["Paddington 2", "Severance"], march3.Select(p => p.Title));   // newest first
+        var episodes = await t.HistoryPlaysAsync(User, new HistoryQuery(Type: MediaType.Show), default);   // the Shows view means episodes
+        Assert.Equal(2, episodes.Count);
+        Assert.Equal("Half Loop", episodes[0].EpisodeTitle);
+    }
+
+    [Fact]
     public async Task By_show_lists_each_show_once_with_aired_counts_and_sorts()
     {
         var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);

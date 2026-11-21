@@ -417,6 +417,24 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         return page with { Items = page.Items.Select(i => i.Episodes is null or 1 ? marker.Mark(i) : i).ToList() };
     }
 
+    /// <summary>
+    /// Every play matching the filters (newest first, at most 5,000), with premiere/finale marks: what a history
+    /// share image is drawn from. The Shows view's filter means episodes here.
+    /// </summary>
+    public async Task<List<HistoryEntry>> HistoryPlaysAsync(Guid userId, HistoryQuery f, CancellationToken ct)
+    {
+        if (f.Type == MediaType.Show) f = f with { Type = MediaType.Episode };
+        var q = FilterHistory(db.WatchEvents.Where(w => w.UserId == userId), f);
+        if (!string.IsNullOrWhiteSpace(f.Q))
+        {
+            var ids = await SearchPlaysAsync([userId], f.Q, ct);
+            q = q.Where(w => ids.Contains(w.Id));
+        }
+        var entries = await ToHistoryAsync(await q.NewestFirst().Take(5000).ToListAsync(ct), ct);
+        var marker = await EpisodeMarker.LoadAsync(db, entries.Where(i => i.Type == MediaType.Episode).Select(i => i.TmdbId), ct);
+        return entries.Select(marker.Mark).ToList();
+    }
+
     private async Task<HistoryPage> GetHistoryCoreAsync(IReadOnlyCollection<Guid> userIds, HistoryQuery f, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
     {
         // One per show can list everything on one page (a few hundred rows); plays stay at 100 a page.
@@ -443,11 +461,11 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var minutes = total > 0 ? await MinutesAsync(q, ct) : 0;
         var entries = await ToHistoryAsync(rows, ct);
         if (names is not null) entries = rows.Zip(entries, (r, e) => e with { Who = names.GetValueOrDefault(r.UserId) }).ToList();
-        return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct));
+        return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct, f.Unit));
     }
 
     /// <summary>
-    /// The Shows view: one row per show per day (unknown dates count as one "day"), newest first,
+    /// The Shows view: one row per show per day, month or year (HistoryQuery.Unit; unknown dates count as one), newest first,
     /// with how many episodes and which. Paged by rows, so a day's group is never split.
     /// </summary>
     private async Task<HistoryPage> ShowHistoryAsync(IQueryable<WatchEvent> q, HistoryQuery f, int page, int pageSize, IReadOnlyDictionary<Guid, string>? names, CancellationToken ct)
@@ -455,7 +473,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         var tz = ReviewService.Zone(f.TimeZone);
         var plays = await q.Select(w => new { w.Id, w.UserId, w.TmdbId, S = w.SeasonNumber ?? 0, E = w.EpisodeNumber ?? 0, w.WatchedAt, w.CreatedAt }).ToListAsync(ct);
         var groups = plays
-            .GroupBy(p => (Day: f.PerShow || WatchDates.IsUnknown(p.WatchedAt) ? (DateOnly?)null : DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(p.WatchedAt, tz).DateTime), p.TmdbId, p.UserId))
+            .GroupBy(p => (Day: f.PerShow || WatchDates.IsUnknown(p.WatchedAt) ? (DateOnly?)null : Bucket(DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(p.WatchedAt, tz).DateTime), f.Unit), p.TmdbId, p.UserId))
             .Select(g => (Key: g.Key, Plays: g.OrderBy(p => p.WatchedAt).ThenBy(p => p.CreatedAt).ToList()))
             .ToList();
         if (f.PerShow) return await PerShowHistoryAsync(groups.Select(g => (g.Key.TmdbId, g.Key.UserId, g.Plays.Select(p => (p.Id, p.S, p.E, p.WatchedAt, p.CreatedAt)).ToList())).ToList(),
@@ -483,7 +501,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         }).ToList();
 
         var minutes = total > 0 ? await MinutesAsync(q, ct) : 0;
-        return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct));
+        return new(entries, page, (total + pageSize - 1) / pageSize, total, minutes, await DayTotalsAsync(q, entries, f.TimeZone, ct, f.Unit));
     }
 
     /// <summary>
@@ -563,15 +581,30 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         return minutes;
     }
 
+    /// <summary>The day itself, or the first day of its month or year.</summary>
+    public static DateOnly Bucket(DateOnly d, HistoryUnit unit) => unit switch
+    {
+        HistoryUnit.Month => new DateOnly(d.Year, d.Month, 1),
+        HistoryUnit.Year => new DateOnly(d.Year, 1, 1),
+        _ => d,
+    };
+
+    private static DateOnly NextBucket(DateOnly start, HistoryUnit unit) => unit switch
+    {
+        HistoryUnit.Month => start.AddMonths(1),
+        HistoryUnit.Year => start.AddYears(1),
+        _ => start.AddDays(1),
+    };
+
     /// <summary>
-    /// Totals for each day shown on this page, counting every matching play that day, so a day
+    /// Totals for each day (or month, or year) shown on this page, counting every matching play in it, so one
     /// split across two pages still shows its full total.
     /// </summary>
-    private async Task<List<HistoryDay>> DayTotalsAsync(IQueryable<WatchEvent> q, List<HistoryEntry> page, string? tzId, CancellationToken ct)
+    private async Task<List<HistoryDay>> DayTotalsAsync(IQueryable<WatchEvent> q, List<HistoryEntry> page, string? tzId, CancellationToken ct, HistoryUnit unit = HistoryUnit.Day)
     {
         if (page.Count == 0) return [];
         var tz = ReviewService.Zone(tzId);
-        DateOnly LocalDay(DateTimeOffset at) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, tz).DateTime);
+        DateOnly LocalDay(DateTimeOffset at) => Bucket(DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, tz).DateTime), unit);
         DateTimeOffset Start(DateOnly d) { var local = d.ToDateTime(TimeOnly.MinValue); return new DateTimeOffset(local, tz.GetUtcOffset(local)); }
 
         var days = page.Where(e => !WatchDates.IsUnknown(e.WatchedAt)).Select(e => LocalDay(e.WatchedAt)).Distinct().ToList();
@@ -579,7 +612,7 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         if (days.Count > 0)
         {
             var from = Start(days.Min()).ToUniversalTime();
-            var to = Start(days.Max().AddDays(1)).ToUniversalTime();
+            var to = Start(NextBucket(days.Max(), unit)).ToUniversalTime();
             var plays = await q.Where(w => w.WatchedAt >= from && w.WatchedAt < to).ToListAsync(ct);
             var withRuntime = await ToHistoryAsync(plays, ct);
             var wanted = days.ToHashSet();
