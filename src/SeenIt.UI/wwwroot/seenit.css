@@ -105,7 +105,13 @@ p.center { display: block; }
 .navmore-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 11px; border-radius: var(--radius-sm); border: 0; background: none;
     color: var(--text-2); font-weight: 550; font-size: .92rem; cursor: pointer; white-space: nowrap; }
 .navmore-btn:hover, .navmore-btn.open { color: var(--text); background: var(--surface-2); }
-.navmore-menu { right: 0; left: auto; top: 42px; max-height: calc(100vh - 80px); overflow-y: auto; }
+.navmore-menu { right: 0; left: auto; top: 42px; max-height: calc(100vh - 80px); overflow-y: auto; padding-top: 0; padding-bottom: 0; }
+/* Right after the last link, spaced like the links themselves (the header's 20px gap is for the logo and search). */
+.topnav + .navmore { margin-left: -18px; }
+/* Categories with a line between: each group's border sits 1px above it, so the first one's is clipped off the top. */
+.navmore-group { display: flex; flex-direction: column; padding: 6px 0; margin-top: -1px; border-top: 1px solid var(--border); }
+/* A group of only links still up top has nothing to show. */
+.navmore-group:not(:has(> a:not([data-fit-menu]), > a.nav-in)) { display: none; }
 /* seenit.navFit hides nav links that don't fit ([hidden]) and shows their copies in More (.nav-in). */
 .topnav a[hidden] { display: none; }
 .navmore-menu a[data-fit-menu]:not(.nav-in) { display: none; }

@@ -357,6 +357,16 @@ public static class UiPrefs
         ("duplicates", "Duplicates", "copy", "duplicates"),
         ("settings", "Settings", "settings", "settings"),
     ];
+    /// <summary>The Tabs (all but Home) by category, in order: the website's More menu, like the app's More page.</summary>
+    public static readonly (string Title, string[] Keys)[] TabGroups =
+    [
+        ("Watching", ["progress", "calendar", "watchlist", "history", "notifications"]),
+        ("Find something", ["search", "discover", "for-you", "pick"]),
+        ("Your collection", ["lists", "ratings", "favorites", "library"]),
+        ("Stats", ["stats", "review-month", "review-year", "goals"]),
+        ("Friends", ["friends", "recommendations", "people"]),
+        ("Settings", ["settings", "duplicates"]),
+    ];
     /// <summary>Stand-ins for the current month's and year's review pages; the UI fills in the dates (UiLayout.Href).</summary>
     public const string ReviewMonthHref = "review/{month}", ReviewYearHref = "review/{year}";
     /// <summary>The website's links at the top, after Home, when you haven't picked your own (what it always had).</summary>

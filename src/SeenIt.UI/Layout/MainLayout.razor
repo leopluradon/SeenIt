@@ -37,17 +37,25 @@
                         {
                             <div class="menu-backdrop" @onclick="() => moreOpen = false"></div>
                             <div class="menu navmore-menu" @onclick="() => moreOpen = false">
-                                @for (var n = 0; n < nav.Count; n++)
+                                @* By category (UiPrefs.TabGroups), a line between them. Links up top are here too, shown only
+                                   once they've dropped out of a narrow window (data-fit-menu, see seenit.navFit). *@
+                                @{ var fit = nav.Select((t, n) => (t.Key, Fit: nav.Count - n)).ToDictionary(x => x.Key, x => x.Fit); }
+                                @foreach (var (title, keys) in UiPrefs.TabGroups)
                                 {
-                                    var t = nav[n];
-                                    <a href="@UiLayout.Href(t)" data-fit-menu="@(nav.Count - n)" @key="@($"fit-{t.Key}")"><Icon Name="@t.Icon" Size="16" /> @t.Label</a>
+                                    var items = keys.Select(k => UiPrefs.Tabs.FirstOrDefault(t => t.Key == k)).Where(t => t.Key is not null && (fit.ContainsKey(t.Key) || t.Key != "search")).ToList();
+                                    if (items.Count == 0) continue;
+                                    <div class="navmore-group" role="group" aria-label="@title" @key="title">
+                                        @foreach (var t in items)
+                                        {
+                                            @if (fit.TryGetValue(t.Key, out var f)) { <a href="@UiLayout.Href(t)" data-fit-menu="@f" @key="@($"fit-{t.Key}")"><Icon Name="@t.Icon" Size="16" /> @t.Label</a> }
+                                            else { <a href="@UiLayout.Href(t)" @key="t.Key"><Icon Name="@t.Icon" Size="16" /> @t.Label</a> }
+                                        }
+                                    </div>
                                 }
-                                @foreach (var t in UiPrefs.Tabs.Where(t => t.Key is not ("home" or "search") && nav.All(x => x.Key != t.Key)))
-                                {
-                                    <a href="@UiLayout.Href(t)" @key="t.Key"><Icon Name="@t.Icon" Size="16" /> @t.Label</a>
-                                }
-                                <a href="settings#layout"><Icon Name="edit" Size="16" /> Choose these links</a>
-                                <a href="more"><Icon Name="menu" Size="16" /> Everything</a>
+                                <div class="navmore-group" @key="@("\u0001more")">
+                                    <a href="settings#layout"><Icon Name="edit" Size="16" /> Choose these links</a>
+                                    <a href="more"><Icon Name="menu" Size="16" /> Everything</a>
+                                </div>
                             </div>
                         }
                     </div>
