@@ -137,14 +137,50 @@ public class FileOfflineStore : IOfflineStore
     }
 }
 
-/// <summary>Phone versions of saving files and sharing links: both go through the system share sheet.</summary>
+/// <summary>Phone versions of saving files (to the phone's own folders) and sharing (the system share sheet).</summary>
 public class MobilePlatform(IServerConfig server) : IPlatform
 {
-    public async Task SaveFileAsync(string fileName, string contentType, byte[] data)
+    public async Task<string?> SaveFileAsync(string fileName, string contentType, byte[] data)
     {
+#if ANDROID
+        // Android 10+: straight into the shared folders through MediaStore, no permission needed. Images go to
+        // Pictures/SeenIt (so they're in the gallery), anything else to Downloads/SeenIt. A name that's taken
+        // gets " (1)" added by Android.
+        if (OperatingSystem.IsAndroidVersionAtLeast(29))
+        {
+            var image = contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+            var folder = (image ? Android.OS.Environment.DirectoryPictures : Android.OS.Environment.DirectoryDownloads) + "/SeenIt";
+            var resolver = Android.App.Application.Context.ContentResolver ?? throw new IOException("Couldn't save the file.");
+            var values = new Android.Content.ContentValues();
+            values.Put(Android.Provider.MediaStore.IMediaColumns.DisplayName, fileName);
+            values.Put(Android.Provider.MediaStore.IMediaColumns.MimeType, contentType);
+            values.Put(Android.Provider.MediaStore.IMediaColumns.RelativePath, folder);
+            values.Put(Android.Provider.MediaStore.IMediaColumns.IsPending, 1);
+            var collection = image
+                ? Android.Provider.MediaStore.Images.Media.GetContentUri(Android.Provider.MediaStore.VolumeExternalPrimary)
+                : Android.Provider.MediaStore.Downloads.GetContentUri(Android.Provider.MediaStore.VolumeExternalPrimary);
+            var uri = resolver.Insert(collection!, values) ?? throw new IOException("Couldn't save the file.");
+            try
+            {
+                await using (var stream = resolver.OpenOutputStream(uri) ?? throw new IOException("Couldn't save the file."))
+                    await stream.WriteAsync(data);
+                values.Clear();
+                values.Put(Android.Provider.MediaStore.IMediaColumns.IsPending, 0);
+                resolver.Update(uri, values, null, null);
+            }
+            catch
+            {
+                resolver.Delete(uri, null, null);   // don't leave a half-written file behind
+                throw;
+            }
+            return $"Saved to {folder}";
+        }
+#endif
+        // Older phones: hand it to the share sheet, where "Save" or Files can take it.
         var path = Path.Combine(FileSystem.CacheDirectory, fileName);
         await File.WriteAllBytesAsync(path, data);
         await Share.Default.RequestAsync(new ShareFileRequest { Title = fileName, File = new ShareFile(path, contentType) });
+        return null;
     }
 
     public async Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title)

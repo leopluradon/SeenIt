@@ -7,8 +7,12 @@ namespace SeenIt.UI.Services;
 /// <summary>Things the website and the app do differently: saving files, sharing links, offline storage.</summary>
 public interface IPlatform
 {
-    /// <summary>Saves (web: downloads; app: opens the share sheet for) a generated file.</summary>
-    Task SaveFileAsync(string fileName, string contentType, byte[] data);
+    /// <summary>
+    /// Saves a generated file to the device: a download on the website; in the app, images go to Pictures/SeenIt
+    /// and anything else to Downloads/SeenIt. Returns where it went for a "saved" message (null when the browser
+    /// shows its own download).
+    /// </summary>
+    Task<string?> SaveFileAsync(string fileName, string contentType, byte[] data);
     /// <summary>Opens the share sheet for a file (an image to post). Returns "shared", "downloaded" or "canceled".</summary>
     Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title);
     /// <summary>Returns "shared", "copied" or "failed".</summary>
@@ -40,8 +44,11 @@ public interface INativeNotifications
 
 public class BrowserPlatform(IJSRuntime js, NavigationManager nav) : IPlatform
 {
-    public async Task SaveFileAsync(string fileName, string contentType, byte[] data) =>
+    public async Task<string?> SaveFileAsync(string fileName, string contentType, byte[] data)
+    {
         await js.InvokeVoidAsync("seenit.download", fileName, contentType, Convert.ToBase64String(data));
+        return null;
+    }
 
     public async Task<string> ShareFileAsync(string fileName, string contentType, byte[] data, string title)
     {

@@ -1244,7 +1244,7 @@ else { <h1>Settings</h1> }
         try
         {
             var data = await Api.ExportAsync();
-            await Platform.SaveFileAsync($"seenit-export-{DateTime.Today:yyyy-MM-dd}.zip", "application/zip", data);
+            if (await Platform.SaveFileAsync($"seenit-export-{DateTime.Today:yyyy-MM-dd}.zip", "application/zip", data) is { } where) Toasts.Show(where);
         }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { exporting = false; }
@@ -1334,7 +1334,7 @@ else { <h1>Settings</h1> }
     private async Task DownloadKodi()
     {
         kodiBusy = true;
-        try { await Platform.SaveFileAsync("service.seenit.zip", "application/zip", await Api.KodiAddonAsync()); }
+        try { if (await Platform.SaveFileAsync("service.seenit.zip", "application/zip", await Api.KodiAddonAsync()) is { } where) Toasts.Show(where); }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { kodiBusy = false; }
     }

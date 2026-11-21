@@ -69,7 +69,7 @@
 
     private async Task Save()
     {
-        try { await Platform.SaveFileAsync(FileName, "image/png", image!); }
+        try { if (await Platform.SaveFileAsync(FileName, "image/png", image!) is { } where) Toasts.Show(where); }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 }
