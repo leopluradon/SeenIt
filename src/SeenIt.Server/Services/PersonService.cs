@@ -34,7 +34,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         // What you've actually seen them in: for a show that means one of *their* episodes (a guest role is
         // checked episode by episode against TMDB), not just any episode of it. A show you've watched some of
         // without seeing theirs is "partly seen", shown apart.
-        var watched = userId is null ? null : await WatchedWithAsync(castCredits, crewCredits, watchedMovies, watchedEpisodes, ct);
+        var watched = userId is null ? null : await WatchedWithAsync(id, castCredits, crewCredits, watchedMovies, watchedEpisodes, ct);
         var seenShows = watched?.Where(w => w.Type == MediaType.Show).Select(w => w.TmdbId).ToHashSet() ?? [];
         bool Watched(MediaType t, int tmdbId) => t == MediaType.Movie ? watchedMovies.ContainsKey(tmdbId) : seenShows.Contains(tmdbId);
         bool Partly(MediaType t, int tmdbId) => t == MediaType.Show && !seenShows.Contains(tmdbId) && watchedEpisodes.ContainsKey(tmdbId);
@@ -206,7 +206,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 .Select(u => new UpcomingWork(u.Type, u.TmdbId, u.Title, u.PosterPath, u.Date, u.Role)).ToList())).ToList();
     }
 
-    private async Task<List<WatchedWith>> WatchedWithAsync(
+    private async Task<List<WatchedWith>> WatchedWithAsync(int personId,
         List<TmdbPersonCredit> credits, List<TmdbPersonCredit> crewCredits, Dictionary<int, int> watchedMovies,
         Dictionary<int, Dictionary<(int, int), int>> watchedEpisodes, CancellationToken ct)
     {
@@ -231,9 +231,9 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 JoinRoles(g), plays, (long)runtimes.GetValueOrDefault(g.Key) * plays, false, [], Jobs("movie", g.Key)));
         }
 
-        // Shows: a guest credit lists its episodes, so only count the ones actually watched;
-        // a regular's credit doesn't, so every watched episode counts.
-        // A show they created but aren't in counts like a regular role: every watched episode.
+        // Shows: a guest credit lists its episodes, so only count the ones actually watched. A regular's credit
+        // doesn't, so their seasons are looked up (RegularEpisodesAsync): someone who joined in season 3 isn't in
+        // the first two. A show they created counts every watched episode.
         var showCredits = credits.Concat(crewByTitle.Where(kv => kv.Key.MediaType == "tv").SelectMany(kv => kv.Value))
             .Where(c => c.MediaType == "tv" && watchedEpisodes.ContainsKey(c.Id)).GroupBy(c => c.Id).ToList();
         var showIds = showCredits.Select(g => g.Key).ToList();
@@ -254,14 +254,18 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 }
                 catch (HttpRequestException ex) { log.LogInformation(ex, "Credit {Id} lookup failed", credit.CreditId); }
             }
-            return (Show: g.Key, Credits: g, GuestEpisodes: episodes);
+            var mine = watchedEpisodes[g.Key];
+            var created = Jobs("tv", g.Key) is not null;
+            var guest = episodes.Count > 0 && !created;   // their own show: all of it
+            var keys = guest ? mine.Keys.Where(episodes.Contains).ToList()
+                : created || !g.Any(c => c.Job is null) ? mine.Keys.ToList()
+                : await RegularEpisodesAsync(personId, g.Key, mine.Keys, s => episodeMeta.Keys.Count(e => e.ShowTmdbId == g.Key && e.SeasonNumber == s), ct);
+            return (Show: g.Key, Credits: g, Guest: guest, Keys: keys);
         }));
 
-        foreach (var (showId, group, guestEpisodes) in details)
+        foreach (var (showId, group, guest, keys) in details)
         {
             var mine = watchedEpisodes[showId];
-            var guest = guestEpisodes.Count > 0 && Jobs("tv", showId) is null;   // their own show: all of it
-            var keys = guest ? mine.Keys.Where(guestEpisodes.Contains).ToList() : mine.Keys.ToList();
             if (keys.Count == 0) continue; // watched the show, but none of their episodes
 
             var typical = shows.GetValueOrDefault(showId)?.EpisodeRuntime ?? 0;
@@ -278,6 +282,43 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         }
 
         return result.OrderByDescending(w => w.Minutes).ToList();
+    }
+
+    /// <summary>
+    /// The watched episodes a show's regular is actually in. TMDB's credit for a regular doesn't list episodes, but each
+    /// season's cast does say how many they're in: a season they're not in counts none, a season they're in throughout
+    /// counts all of it, and part of a season is checked episode by episode. Whatever can't be looked up counts.
+    /// </summary>
+    private async Task<List<(int, int)>> RegularEpisodesAsync(int personId, int showId, IEnumerable<(int, int)> watched,
+        Func<int, int> episodesInSeason, CancellationToken ct)
+    {
+        var result = new List<(int, int)>();
+        foreach (var season in watched.GroupBy(k => k.Item1))
+        {
+            TmdbCast? inSeason;
+            try
+            {
+                var credits = await tmdb.GetSeasonCreditsAsync(showId, season.Key, ct);
+                if (credits?.Cast is null) { result.AddRange(season); continue; }
+                inSeason = credits.Cast.FirstOrDefault(c => c.Id == personId);
+            }
+            catch (HttpRequestException ex) { log.LogInformation(ex, "Season credits for {Show} S{Season} failed", showId, season.Key); result.AddRange(season); continue; }
+            if (inSeason is null) continue;
+
+            var theirs = inSeason.TotalEpisodeCount ?? inSeason.Roles?.Sum(r => r.EpisodeCount) ?? 0;
+            var total = episodesInSeason(season.Key);
+            if (theirs <= 0 || total == 0 || theirs >= total) { result.AddRange(season); continue; }
+            foreach (var k in season)
+            {
+                try
+                {
+                    var ep = await tmdb.GetEpisodeAsync(showId, k.Item1, k.Item2, ct);
+                    if (ep is null || (ep.Credits?.Cast ?? []).Concat(ep.GuestStars ?? []).Any(c => c.Id == personId)) result.Add(k);
+                }
+                catch (HttpRequestException) { result.Add(k); }
+            }
+        }
+        return result;
     }
 
     private static string? JoinRoles(IEnumerable<TmdbPersonCredit> g) =>
