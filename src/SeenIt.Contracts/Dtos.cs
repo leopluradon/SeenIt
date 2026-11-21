@@ -1557,5 +1557,8 @@ public record SetWatchOrderRequest(string? OrderId);
 /// as watched: in the watch order you follow when InOrder is set, otherwise in TMDB's season order
 /// (specials only up to a special).
 /// </summary>
+/// <summary>What's left to watch up to an episode: aired episodes not yet seen (it included), and their total runtime.</summary>
+public record CatchUp(int Episodes, long Minutes);
+
 public record WatchThroughRequest(int SeasonNumber, int? EpisodeNumber, WatchTime When, DateTimeOffset? WatchedAt = null, bool InOrder = false,
     bool SeasonOnly = false);   // TMDB order only: start from the season's first episode, not the show's

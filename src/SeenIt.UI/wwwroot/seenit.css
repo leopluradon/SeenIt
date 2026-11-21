@@ -1713,6 +1713,8 @@ body:has(.rate-prompt) .toaster { bottom: 176px; }
 .ctx-head-text .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctx-rate { display: flex; align-items: center; gap: 10px; padding: 6px 10px; }
 .ctx-rate .rating-picker { flex: 1; }
+.ctx-note { display: flex; align-items: center; gap: 8px; padding: 4px 10px 8px; }
+.catch-up { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; }
 .ctx-item {
     display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px;
     background: none; color: var(--text); font: inherit; font-size: .92rem; text-align: left; cursor: pointer; text-decoration: none;

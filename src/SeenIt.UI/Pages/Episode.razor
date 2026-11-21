@@ -70,6 +70,12 @@ else if (e is not null)
                     <a class="btn btn-primary" href="@($"login?returnUrl={Fmt.EpisodeHref(Id, Season, Number)}")">Sign in to track</a>
                 }
             </div>
+            @if (catchUp is { Episodes: > 1 } cu)
+            {
+                <p class="muted small catch-up" title="Aired episodes you haven't seen, up to and including this one">
+                    <Icon Name="clock" Size="14" /> Catch up to here: @cu.Episodes episodes · <Dur Minutes="cu.Minutes" />
+                </p>
+            }
         </div>
     </div>
 
@@ -197,7 +203,16 @@ else if (e is not null)
     }
     private PlayDto? editing;
 
-    private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); StateHasChanged(); }
+    private async Task Reload() { e = await Api.EpisodeAsync(Id, Season, Number); await LoadCatchUp(); StateHasChanged(); }
+
+    /// <summary>What's left before (and including) this episode, for "Catch up to here": shown when it's more than this one.</summary>
+    private CatchUp? catchUp;
+    private async Task LoadCatchUp()
+    {
+        catchUp = null;
+        if (e?.Plays is null) return;   // signed out
+        try { catchUp = await Api.CatchUpAsync(Id, Season, Number); } catch { /* just not shown */ }
+    }
     private bool Seen => e?.Plays is { Count: > 0 };
     /// <summary>The show is started and not finished (a season still airing counts as unfinished): episode counts in
     /// the cast would give away who stays, so the spoiler setting blurs them.</summary>
@@ -212,7 +227,7 @@ else if (e is not null)
         error = null;
         notFound = false;
         if (e is not null && (e.ShowTmdbId != Id || e.SeasonNumber != Season || e.EpisodeNumber != Number)) e = null;
-        try { e = await Api.EpisodeAsync(Id, Season, Number); }
+        try { e = await Api.EpisodeAsync(Id, Season, Number); await LoadCatchUp(); }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = $"This show has no episode {Fmt.Ep(Season, Number)}."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
     }
@@ -225,6 +240,7 @@ else if (e is not null)
             await action();
             if (done is not null) Toasts.Show(done, undo: TakeUndo());
             e = await Api.EpisodeAsync(Id, Season, Number);
+            await LoadCatchUp();
         }
         catch (Exception ex) { Toasts.Error(ex); }
         busy = false;

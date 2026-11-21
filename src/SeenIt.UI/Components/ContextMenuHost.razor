@@ -64,6 +64,8 @@
     private ItemStatus? status, actedStatus;
     /// <summary>On an episode's menu: your rating of the show itself (the menu rates both, labelled apart).</summary>
     private double? showRating;
+    /// <summary>On an episode's menu: what's left to watch up to it (shown when that's more than the episode itself).</summary>
+    private CatchUp? catchUp;
     private bool sheet, busy, showAll, pickDate, pickThrough, listOpen, recOpen, ownOpen, dialogBulk;
     private string position = "";
     private string? expanded;   // "watch" or "friends"
@@ -132,6 +134,7 @@
         target = t;
         status = null;
         showRating = null;
+        catchUp = null;
         friends = null;
         expanded = null;
         showAll = false;
@@ -151,9 +154,12 @@
         {
             var st = Api.ItemStatusAsync(t.Type, t.Id, t.S, t.E);
             var show = t.Kind == MenuKind.Episode ? Api.ItemStatusAsync(MediaType.Show, t.Id, null, null) : null;
+            var upTo = t.Kind == MenuKind.Episode && t.S is { } cs && t.E is { } ce ? Api.CatchUpAsync(t.Id, cs, ce) : null;
             var result = await st;
             var showResult = show is null ? null : await show;
-            if (mine == generation && target == t) { status = result; showRating = showResult?.Rating; StateHasChanged(); }
+            CatchUp? upToResult = null;
+            try { if (upTo is not null) upToResult = await upTo; } catch { /* just not shown */ }
+            if (mine == generation && target == t) { status = result; showRating = showResult?.Rating; catchUp = upToResult; StateHasChanged(); }
         }
         catch (Exception) { /* the menu still works; toggles just don't know their state */ }
     }
@@ -213,6 +219,12 @@
             <span class="small muted">@(isEpisode ? $"Rate {Fmt.Ep(t.S, t.E)}" : "Rate")</span>
             <RatingPicker Compact="true" Value="s?.Rating" ValueChanged="v => Rate(t, v)" />
         </div>
+        @if (isEpisode && catchUp is { Episodes: > 1 } cu)
+        {
+            <div class="ctx-note small muted" title="Aired episodes you haven't seen, up to and including this one">
+                <Icon Name="clock" Size="14" /> Catch up to here: @cu.Episodes episodes · <Dur Minutes="cu.Minutes" />
+            </div>
+        }
 
         <button type="button" class="ctx-item @(expanded == "watch" ? "open" : "")" role="menuitem" aria-expanded="@(expanded == "watch")" @onclick='() => Toggle("watch")'>
             <Icon Name="check" Size="16" /> <span>@(isShow ? "Mark watched…" : s is { Plays: > 0 } ? "Watch again…" : "Mark watched…")</span>

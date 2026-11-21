@@ -340,6 +340,9 @@ public static class ApiEndpoints
             await a.LogAsync(p, ActivityKind.WatchOrder, MediaType.Show, id, detail: req.OrderId ?? "TMDB seasons");
             return Results.NoContent();
         });
+        // How long it'd take to catch up to an episode (the same episodes "Mark up to here" would mark).
+        g.MapGet("/shows/{id:int}/catch-up", (int id, int season, int episode, bool? inOrder, ClaimsPrincipal p, WatchOrderService w, CancellationToken ct) =>
+            w.CatchUpAsync(p.UserId(), id, new WatchThroughRequest(season, episode, WatchTime.Now, InOrder: inOrder == true), ct));
         g.MapPost("/shows/{id:int}/watch-through", async (int id, WatchThroughRequest req, ClaimsPrincipal p, WatchOrderService w, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
             var before = await WatchedResults.BeforeAsync(db, p.UserId(), MediaType.Show, id, ct);

@@ -146,8 +146,12 @@ public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService 
         return null;
     }
 
-    /// <summary>Marks every aired, unwatched episode up to and including this one as watched (see WatchThroughRequest).</summary>
-    public async Task<int> WatchThroughAsync(Guid userId, int showId, WatchThroughRequest req, CancellationToken ct)
+    /// <summary>
+    /// The aired episodes up to and including this one (see WatchThroughRequest for the order) that you haven't
+    /// watched, in order, with every episode's air date.
+    /// </summary>
+    private async Task<(List<(int Season, int Episode)> Todo, Dictionary<(int, int), DateOnly?> AirDates)> UnwatchedThroughAsync(
+        Guid userId, int showId, WatchThroughRequest req, CancellationToken ct)
     {
         if (await catalog.EnsureShowAsync(showId, ct) is null) throw new TrackingException("Show not found.");
         List<(int Season, int Episode)> sequence;
@@ -177,7 +181,26 @@ public class WatchOrderService(AppDbContext db, TmdbClient tmdb, CatalogService 
                 .Select(e => new { e.SeasonNumber, e.EpisodeNumber, e.AirDate }).ToListAsync(ct))
             .ToDictionary(e => (e.SeasonNumber, e.EpisodeNumber), e => e.AirDate);
         var watched = await WatchedAsync(userId, showId, ct);
-        var todo = sequence.Take(upTo + 1).Where(x => !watched.Contains(x) && airDates.ContainsKey(x) && Aired(airDates[x], today)).ToList();
+        return (sequence.Take(upTo + 1).Where(x => !watched.Contains(x) && airDates.ContainsKey(x) && Aired(airDates[x], today)).ToList(), airDates);
+    }
+
+    /// <summary>What's left to watch up to and including an episode: how many aired episodes you haven't seen, and how long they run.</summary>
+    public async Task<CatchUp> CatchUpAsync(Guid userId, int showId, WatchThroughRequest req, CancellationToken ct)
+    {
+        var (todo, _) = await UnwatchedThroughAsync(userId, showId, req, ct);
+        if (todo.Count == 0) return new CatchUp(0, 0);
+        var typical = await db.Shows.AsNoTracking().Where(s => s.TmdbId == showId).Select(s => s.EpisodeRuntime).FirstOrDefaultAsync(ct) ?? 0;
+        var seasons = todo.Select(x => x.Season).Distinct().ToList();
+        var runtimes = (await db.Episodes.AsNoTracking().Where(e => e.ShowTmdbId == showId && seasons.Contains(e.SeasonNumber))
+                .Select(e => new { e.SeasonNumber, e.EpisodeNumber, e.Runtime }).ToListAsync(ct))
+            .ToDictionary(e => (e.SeasonNumber, e.EpisodeNumber), e => e.Runtime);
+        return new CatchUp(todo.Count, todo.Sum(x => (long)(runtimes.GetValueOrDefault(x) is int r and > 0 ? r : typical)));
+    }
+
+    /// <summary>Marks every aired, unwatched episode up to and including this one as watched (see WatchThroughRequest).</summary>
+    public async Task<int> WatchThroughAsync(Guid userId, int showId, WatchThroughRequest req, CancellationToken ct)
+    {
+        var (todo, airDates) = await UnwatchedThroughAsync(userId, showId, req, ct);
 
         // One play each; with a custom date they keep the order's sequence a minute apart.
         var latest = DateTimeOffset.MinValue;
