@@ -142,12 +142,12 @@ public class CheckInService(AppDbContext db, CatalogService catalog, TrackingSer
             if (r.Type == MediaType.Movie)
             {
                 var m = movies.GetValueOrDefault(r.TmdbId);
-                return new NowWatchingDto(r.Type, r.TmdbId, m?.Title ?? $"#{r.TmdbId}", null, null, null, m?.PosterPath, m?.BackdropPath, r.StartedAt, r.EndsAt, r.Source);
+                return new NowWatchingDto(r.Type, r.TmdbId, m?.Title ?? $"#{r.TmdbId}", null, null, null, m?.PosterPath, m?.BackdropPath, r.StartedAt, r.EndsAt, r.Source, PausedAt: r.PausedAt);
             }
             var s = shows.GetValueOrDefault(r.TmdbId);
             var ep = eps.GetValueOrDefault((r.TmdbId, r.SeasonNumber, r.EpisodeNumber));
             return new NowWatchingDto(r.Type, r.TmdbId, s?.Name ?? $"#{r.TmdbId}", r.SeasonNumber, r.EpisodeNumber, ep?.Name,
-                s?.PosterPath, s?.BackdropPath, r.StartedAt, r.EndsAt, r.Source);
+                s?.PosterPath, s?.BackdropPath, r.StartedAt, r.EndsAt, r.Source, PausedAt: r.PausedAt);
         }).ToList();
     }
 }

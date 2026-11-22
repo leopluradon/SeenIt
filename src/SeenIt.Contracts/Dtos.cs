@@ -1296,7 +1296,8 @@ public record CheckInRequest(MediaType Type, int TmdbId, int? SeasonNumber = nul
 public record NowWatchingDto(
     MediaType Type, int TmdbId, string Title, int? SeasonNumber, int? EpisodeNumber, string? EpisodeTitle,
     string? PosterPath, string? BackdropPath, DateTimeOffset StartedAt, DateTimeOffset EndsAt, WatchSource Source,
-    bool? YouWatched = null);  // Someone else's check-in: whether the viewer has seen this episode (null on your own)
+    bool? YouWatched = null,   // Someone else's check-in: whether the viewer has seen this episode (null on your own)
+    DateTimeOffset? PausedAt = null);   // the player is paused (Jellyfin/Plex/Emby): progress and time left hold here
 
 // ---------- Social ----------
 

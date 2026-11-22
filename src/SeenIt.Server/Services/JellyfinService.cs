@@ -249,6 +249,8 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
             if (current.PausedAt is not null || DateTimeOffset.UtcNow - current.LastPingAt > TimeSpan.FromMinutes(1))
                 await db.CheckIns.Where(c => c.UserId == user.Id)
                     .ExecuteUpdateAsync(c => c.SetProperty(x => x.LastPingAt, DateTimeOffset.UtcNow).SetProperty(x => x.PausedAt, (DateTimeOffset?)null), ct);
+            // Resumed: "Paused" on the card gives way to the countdown again.
+            if (current.PausedAt is not null) await live.NotifyWithFollowersAsync(db, user.Id, ct);
             return "Still watching";
         }
 

@@ -13,6 +13,7 @@
             <ProgressBar Value="@((int)Elapsed.TotalMinutes)" Max="@((int)Math.Max(1, (Item.EndsAt - Item.StartedAt).TotalMinutes))" />
             <span class="muted small nowrap">@Left</span>
         </div>
+        @if (Ends is { } ends) { <div class="muted small">@ends</div> }
     </div>
     @if (OnCancel.HasDelegate)
     {
@@ -29,13 +30,27 @@
     private Timer? timer;
 
     private string Href => Item.Type == MediaType.Movie ? Fmt.Href(MediaType.Movie, Item.TmdbId) : Fmt.EpisodeHref(Item.TmdbId, Item.SeasonNumber, Item.EpisodeNumber);
-    private TimeSpan Elapsed => DateTimeOffset.UtcNow - Item.StartedAt;
+    /// <summary>The moment progress is measured at: now, or when the player was paused (it holds there).</summary>
+    private DateTimeOffset At => Item.PausedAt ?? DateTimeOffset.UtcNow;
+    private TimeSpan Elapsed => At - Item.StartedAt;
     private string Left
     {
         get
         {
-            var left = Item.EndsAt - DateTimeOffset.UtcNow;
-            return left.TotalMinutes < 1 ? "finishing" : $"{Fmt.Runtime((int)Math.Ceiling(left.TotalMinutes))} left";
+            var left = Item.EndsAt - At;
+            var text = left.TotalMinutes < 1 ? "finishing" : $"{Fmt.Runtime((int)Math.Ceiling(left.TotalMinutes))} left";
+            return Item.PausedAt is null ? text : $"Paused · {text}";
+        }
+    }
+
+    /// <summary>When it'll be over, in local time: "Ends 9:40 PM"; while paused, if it were resumed now ("~").</summary>
+    private string? Ends
+    {
+        get
+        {
+            var left = (long)Math.Ceiling((Item.EndsAt - At).TotalMinutes);
+            if (left < 1) return null;
+            return Item.PausedAt is null ? $"Ends {Fmt.FinishAt(left)}" : $"Ends ~{Fmt.FinishAt(left)} if you resume now";
         }
     }
 
