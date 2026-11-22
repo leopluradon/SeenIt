@@ -32,6 +32,17 @@ else if (p is not null)
                 <a href="@(p.IsMe ? "friends?tab=followers" : lists ? $"{Fmt.UserHref(p.User.UserName)}/followers" : null)"><b>@p.Followers</b> follower@(p.Followers == 1 ? "" : "s")</a>
                 <a href="@(p.IsMe ? "friends?tab=following" : lists ? $"{Fmt.UserHref(p.User.UserName)}/following" : null)"><b>@p.Following</b> following</a>
             </div>
+            @* Their shared pages, only the ones this viewer may open (Settings → Privacy decides). *@
+            @if (p.Pages is { Count: > 0 } pages)
+            {
+                var home = Fmt.UserHref(p.User.UserName);
+                <nav class="small profile-pages" aria-label="@($"{p.User.Name}'s pages")">
+                    @foreach (var (part, path, label) in SharedPages(DateTime.Today.Year))
+                    {
+                        @if (pages.Contains(part)) { <a href="@($"{home}/{path}")" @key="path">@label</a> }
+                    }
+                </nav>
+            }
         </div>
         <div class="profile-actions">
             <AuthorizeView>
@@ -529,4 +540,17 @@ else if (p is not null)
         self?.Dispose();
         return ValueTask.CompletedTask;
     }
+
+    /// <summary>The pages under a profile, each with the privacy part that decides whether it's linked.</summary>
+    private static IEnumerable<(ProfilePart Part, string Path, string Label)> SharedPages(int year) =>
+    [
+        (ProfilePart.History, "progress", "Progress"),
+        (ProfilePart.History, "history", "History"),
+        (ProfilePart.Ratings, "ratings", "Ratings"),
+        (ProfilePart.Watchlist, "watchlist", "Watchlist"),
+        (ProfilePart.Library, "library", "Library"),
+        (ProfilePart.Favorites, "favorites", "Favorites"),
+        (ProfilePart.Stats, "stats", "Stats"),
+        (ProfilePart.Stats, $"review/{year}", $"{year} in review"),
+    ];
 }

@@ -70,9 +70,12 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var banner = await BannerAsync(prefs.ProfileBanner, ct);
         // Badges are stats: only for people who may see those. Always worked out, so always earned.
         var pinned = See(ProfilePart.Stats) ? await badges.PinnedAsync(owner, prefs, ct) : [];
+        // Their own pages shared under the profile, as far as this viewer may see each (the profile links them).
+        List<ProfilePart> pages = [.. new[] { ProfilePart.History, ProfilePart.Ratings, ProfilePart.Watchlist, ProfilePart.Library,
+            ProfilePart.Favorites, ProfilePart.Stats }.Where(See)];
         if (!canView)
             return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, false, followers, followingCount, null, null, [], [], publicLists, Layout: layout,
-                Banner: banner, Accent: prefs.Accent);
+                Banner: banner, Accent: prefs.Accent, Pages: pages);
 
         // Each part has its own audience (Settings → Privacy); what this viewer may not see is left out.
         var recent = See(ProfilePart.History)
@@ -92,7 +95,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
             See(ProfilePart.Stats) ? await StatsAsync(owner.Id, ct) : null,
             recent, topRated, publicLists,
             See(ProfilePart.Favorites) ? await tracking.GetFavoritesAsync(owner.Id, ct) : null, layout, banner, prefs.Accent,
-            pinned.FirstOrDefault()?.Label, pinned);
+            pinned.FirstOrDefault()?.Label, pinned, pages);
     }
 
     /// <summary>The backdrop of the movie or show picked as a profile banner (fetched from TMDB the first time).</summary>

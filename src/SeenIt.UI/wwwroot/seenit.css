@@ -1949,3 +1949,8 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .card-options .chips { margin: 0; }
 .card-options .chip b { color: var(--accent-text); }
 .review-new { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 18px; }
+
+/* A profile's shared pages (Progress · History · Ratings …), under the follower counts. */
+.profile-pages { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; }
+.profile-pages a { color: var(--text-2); font-weight: 600; }
+.profile-pages a:hover { color: var(--text); }

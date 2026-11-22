@@ -1327,7 +1327,8 @@ public record ProfileDto(
     string? Banner = null,                          // backdrop image path behind the name
     string? Accent = null,                          // the owner's accent color key
     string? Badge = null,                           // the first pinned badge's label (for app versions before Badges)
-    IReadOnlyList<BadgeDto>? Badges = null);        // badges pinned next to the name, in the owner's order
+    IReadOnlyList<BadgeDto>? Badges = null,         // badges pinned next to the name, in the owner's order
+    IReadOnlyList<ProfilePart>? Pages = null);      // which of their shared pages (u/{name}/progress, …) this viewer may open
 
 /// <summary>Badge tiers, lowest first; Special is for one-off badges with no ladder.</summary>
 public enum BadgeTier { Bronze, Silver, Gold, Platinum, Diamond, Emerald, Ruby, Sapphire, Obsidian, Mythic, Special }
