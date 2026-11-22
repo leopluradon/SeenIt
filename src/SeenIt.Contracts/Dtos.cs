@@ -172,6 +172,10 @@ public record UserPrefs(
         [("imdb", "IMDb"), ("tomatoes", "Rotten Tomatoes"), ("popcorn", "RT audience"), ("metacritic", "Metacritic"),
          ("metacriticuser", "Metacritic users"), ("letterboxd", "Letterboxd"), ("trakt", "Trakt"), ("rogerebert", "Roger Ebert"), ("myanimelist", "MyAnimeList")];
     public const int DefaultRowCount = 12;
+    /// <summary>Rows of posters scroll sideways and are narrow: 12 of the small ones didn't reach across a wide screen,
+    /// leaving a gap where Up next's wider cards run on. 20 fills it whatever the poster size.</summary>
+    public const int DefaultPosterRowCount = 20;
+    private static readonly HashSet<string> PosterRows = ["recent", "friends", "foryou", "trending-movies", "trending-shows"];
     /// <summary>What a score can be about. A season has its own kind; everything else follows MediaType.</summary>
     public static readonly (string Key, string Name)[] ScoreKinds = [("movie", "Movies"), ("show", "Shows"), ("season", "Seasons"), ("episode", "Episodes")];
     /// <summary>Which kinds SeenIt has this source's score for. TMDB and friends cover everything; IMDb also has episodes; the rest are titles only.</summary>
@@ -192,7 +196,7 @@ public record UserPrefs(
     /// <summary>"To rate" on Home starts with movies and shows; seasons and episodes are opt-in.</summary>
     public static readonly string[] DefaultRateKinds = ["movie", "show"];
     public bool RatesOnHome(string kind) => (RateKinds ?? DefaultRateKinds).Contains(kind);
-    public int Count(string section) => HomeCounts?.TryGetValue(section, out var n) == true ? n : DefaultRowCount;
+    public int Count(string section) => HomeCounts?.TryGetValue(section, out var n) == true ? n : PosterRows.Contains(section) ? DefaultPosterRowCount : DefaultRowCount;
     public ListLayout LayoutFor(string page) => PageLayouts?.TryGetValue(page, out var l) == true ? l : ListLayout;
     public string? SortFor(string page) => PageSorts?.TryGetValue(page, out var s) == true ? s : null;
     /// <summary>Who can see this part: its own setting, or the profile's.</summary>
