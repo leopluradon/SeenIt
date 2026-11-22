@@ -7,7 +7,8 @@ using SeenIt.Server.Data;
 namespace SeenIt.Server.Services;
 
 /// <summary>
-/// "Out today" alerts for episodes of shows you watch (or have on your watchlist) and watchlist movies,
+/// "Out today" alerts for episodes of shows you watch (or have on your watchlist; not paused or dropped, or any you've
+/// turned alerts on for) and watchlist movies,
 /// shown under the bell and, if you ask for it, emailed once a day. Also the private iCal feed.
 /// </summary>
 public class ReleaseAlertService(AppDbContext db, TrackingService tracking, EmailService email, IConfiguration config, ILogger<ReleaseAlertService> log)
@@ -50,7 +51,12 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
         var now = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz);
         var today = DateOnly.FromDateTime(now.DateTime);
 
-        var releases = (await tracking.GetCalendarAsync(user.Id, today, 1, ct)).Where(e => !e.Watched).ToList();
+        // Paused shows stay on the calendar but don't alert, unless you've turned alerts on for them (dropped
+        // and turned-off shows aren't on the calendar at all).
+        var quiet = (await db.ShowStates.AsNoTracking().Where(x => x.UserId == user.Id && x.Status == ShowTrackStatus.Paused).Select(x => x.ShowTmdbId).ToListAsync(ct))
+            .Except(await db.ShowAlerts.AsNoTracking().Where(a => a.UserId == user.Id && a.On).Select(a => a.ShowTmdbId).ToListAsync(ct)).ToHashSet();
+        var releases = (await tracking.GetCalendarAsync(user.Id, today, 1, ct))
+            .Where(e => !e.Watched && !(e.Type == MediaType.Episode && quiet.Contains(e.TmdbId))).ToList();
         var existing = (await db.Notifications.Where(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.Day >= today.AddDays(-1))
                 .Select(n => new { n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber }).ToListAsync(ct))
             .Select(n => (n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber)).ToHashSet();

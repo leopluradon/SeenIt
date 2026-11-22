@@ -313,6 +313,19 @@ public class JellyfinEvent
 }
 
 /// <summary>A show the user has paused or dropped. No row means "watching".</summary>
+/// <summary>
+/// Your choice of release alerts for one show, when it isn't left to the default (alerts while you're watching it or
+/// have it on your watchlist, not once it's paused or dropped). On: alerts (and the calendar) even if you haven't
+/// started it or dropped it. Off: neither. Kept apart from ShowState, whose row goes when a show is back to Watching.
+/// </summary>
+public class ShowAlert
+{
+    public Guid UserId { get; set; }
+    public int ShowTmdbId { get; set; }
+    public bool On { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public class ShowState
 {
     public Guid UserId { get; set; }

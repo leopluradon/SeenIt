@@ -340,6 +340,14 @@ public static class ApiEndpoints
             await a.LogAsync(p, ActivityKind.WatchOrder, MediaType.Show, id, detail: req.OrderId ?? "TMDB seasons");
             return Results.NoContent();
         });
+        // Release alerts for one show: automatic, always on, or off.
+        g.MapGet("/shows/{id:int}/alerts", (int id, ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.ShowAlertsAsync(p.UserId(), id, ct));
+        g.MapPut("/shows/{id:int}/alerts", async (int id, ShowAlertState req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        {
+            var state = await t.SetShowAlertsAsync(p.UserId(), id, req.Setting, ct);
+            await a.LogAsync(p, ActivityKind.ShowStatus, MediaType.Show, id, detail: $"Release alerts: {req.Setting}");
+            return state;
+        });
         // How long it'd take to catch up to an episode (the same episodes "Mark up to here" would mark).
         g.MapGet("/shows/{id:int}/catch-up", (int id, int season, int episode, bool? inOrder, ClaimsPrincipal p, WatchOrderService w, CancellationToken ct) =>
             w.CatchUpAsync(p.UserId(), id, new WatchThroughRequest(season, episode, WatchTime.Now, InOrder: inOrder == true), ct));

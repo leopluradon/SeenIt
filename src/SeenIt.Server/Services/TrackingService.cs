@@ -943,11 +943,14 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         days = Math.Clamp(days, 1, 92);
         var to = from.AddDays(days);
 
-        // Shows you've watched any of, or have on your watchlist.
+        // Shows you've watched any of, or have on your watchlist, except dropped ones; and those you've turned
+        // alerts on or off for (ShowAlert) either way.
         var watchedShows = db.WatchEvents.Where(w => w.UserId == userId && w.Type == MediaType.Episode).Select(w => w.TmdbId);
         var watchlistShows = db.Watchlist.Where(w => w.UserId == userId && w.Type == MediaType.Show).Select(w => w.TmdbId);
         var dropped = db.ShowStates.Where(x => x.UserId == userId && x.Status == ShowTrackStatus.Dropped).Select(x => x.ShowTmdbId);
-        var showIds = await watchedShows.Union(watchlistShows).Where(id => !dropped.Contains(id)).ToListAsync(ct);
+        var alerts = await db.ShowAlerts.AsNoTracking().Where(a => a.UserId == userId).ToDictionaryAsync(a => a.ShowTmdbId, a => a.On, ct);
+        var showIds = (await watchedShows.Union(watchlistShows).Where(id => !dropped.Contains(id)).ToListAsync(ct))
+            .Where(id => alerts.GetValueOrDefault(id, true)).Concat(alerts.Where(a => a.Value).Select(a => a.Key)).Distinct().ToList();
         var started = (await watchedShows.Distinct().ToListAsync(ct)).ToHashSet();
 
         var episodes = await db.Episodes
@@ -995,6 +998,32 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
 
         var marker = await EpisodeMarker.LoadAsync(db, entries.Where(e => e.Type == MediaType.Episode).Select(e => e.TmdbId), ct);
         return entries.Select(marker.Mark).OrderBy(e => e.Date).ThenBy(e => e.Title).ThenBy(e => e.SeasonNumber).ThenBy(e => e.EpisodeNumber).ToList();
+    }
+
+    /// <summary>Your release-alert choice for a show and whether it alerts now (see ShowAlerts).</summary>
+    public async Task<ShowAlertState> ShowAlertsAsync(Guid userId, int showId, CancellationToken ct)
+    {
+        var row = await db.ShowAlerts.AsNoTracking().FirstOrDefaultAsync(a => a.UserId == userId && a.ShowTmdbId == showId, ct);
+        if (row is not null) return new ShowAlertState(row.On ? ShowAlerts.On : ShowAlerts.Off, row.On);
+        var status = await db.ShowStates.Where(x => x.UserId == userId && x.ShowTmdbId == showId).Select(x => (ShowTrackStatus?)x.Status).FirstOrDefaultAsync(ct);
+        var follows = await db.WatchEvents.AnyAsync(w => w.UserId == userId && w.Type == MediaType.Episode && w.TmdbId == showId, ct)
+                      || await db.Watchlist.AnyAsync(w => w.UserId == userId && w.Type == MediaType.Show && w.TmdbId == showId, ct);
+        return new ShowAlertState(ShowAlerts.Auto, follows && status is null or ShowTrackStatus.Watching);
+    }
+
+    public async Task<ShowAlertState> SetShowAlertsAsync(Guid userId, int showId, ShowAlerts setting, CancellationToken ct)
+    {
+        var row = await db.ShowAlerts.FirstOrDefaultAsync(a => a.UserId == userId && a.ShowTmdbId == showId, ct);
+        if (setting == ShowAlerts.Auto) { if (row is not null) db.ShowAlerts.Remove(row); }
+        else
+        {
+            // Alerts and the calendar need the show's episodes.
+            if (setting == ShowAlerts.On && await catalog.EnsureShowAsync(showId, ct) is null) throw new TrackingException("Show not found.");
+            if (row is null) db.ShowAlerts.Add(new ShowAlert { UserId = userId, ShowTmdbId = showId, On = setting == ShowAlerts.On });
+            else { row.On = setting == ShowAlerts.On; row.UpdatedAt = DateTimeOffset.UtcNow; }
+        }
+        await db.SaveChangesAsync(ct);
+        return await ShowAlertsAsync(userId, showId, ct);
     }
 
     public async Task SetShowStatusAsync(Guid userId, int showId, ShowTrackStatus status, CancellationToken ct)

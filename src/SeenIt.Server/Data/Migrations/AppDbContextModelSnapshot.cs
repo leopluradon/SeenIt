@@ -1322,6 +1322,25 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("ServerState");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.ShowAlert", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ShowTmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("On")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "ShowTmdbId");
+
+                    b.ToTable("ShowAlerts");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.ShowMeta", b =>
                 {
                     b.Property<int>("TmdbId")
@@ -2018,6 +2037,15 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("ToId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.ShowAlert", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

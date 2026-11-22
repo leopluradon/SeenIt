@@ -879,6 +879,12 @@ public static class UpNextSorts
 /// <summary>Paused and dropped shows are kept out of Up Next and the widget until you resume them.</summary>
 public enum ShowTrackStatus { Watching, Paused, Dropped }
 
+/// <summary>Release alerts for a show: Auto (while you're watching it or have it on your watchlist; not paused or
+/// dropped), always On, or Off. On and Off decide the calendar too.</summary>
+public enum ShowAlerts { Auto, On, Off }
+/// <summary>The choice, and whether alerts come with it right now.</summary>
+public record ShowAlertState(ShowAlerts Setting, bool Active);
+
 /// <summary>
 /// Where you stand with one movie, show or episode, for the right-click / long-press menu. Plays and Rating are the
 /// episode's own when one is asked for; the show fields (Watched/Aired/NextEpisode/ShowStatus/Rewatch) are for shows.

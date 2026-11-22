@@ -420,6 +420,9 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>The order you follow for the show, or null for TMDB's seasons.</summary>
     public Task<WatchOrderDto?> WatchOrderAsync(int showId) => SendAsync<WatchOrderDto>(HttpMethod.Get, $"api/shows/{showId}/order");
     public Task SetWatchOrderAsync(int showId, string? orderId) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/order", new SetWatchOrderRequest(orderId));
+    public Task<ShowAlertState> ShowAlertsAsync(int showId) => GetAsync<ShowAlertState>($"api/shows/{showId}/alerts")!;
+    public Task<ShowAlertState> SetShowAlertsAsync(int showId, ShowAlerts setting) =>
+        SendAsync<ShowAlertState>(HttpMethod.Put, $"api/shows/{showId}/alerts", new ShowAlertState(setting, false))!;
     /// <summary>Aired episodes not yet seen up to and including this one, and how long they run.</summary>
     public Task<CatchUp> CatchUpAsync(int showId, int season, int episode) =>
         GetAsync<CatchUp>($"api/shows/{showId}/catch-up?season={season}&episode={episode}")!;

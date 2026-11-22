@@ -1,0 +1,66 @@
+@* Release alerts for one show: left to the default (on while you're watching it or have it on your watchlist,
+   off once it's paused or dropped), always on (even before you start it, or after dropping it), or off. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+<div class="split-btn alerts-btn">
+    <button type="button" class="btn @(state?.Active == true ? "btn-on" : "")" disabled="@(state is null || busy)" aria-haspopup="true" aria-expanded="@open"
+            title="Release alerts for this show" @onclick="() => open = !open">
+        <Icon Name="@(state?.Active == true ? "bell" : "bell-off")" Size="18" /> @(state?.Active == true ? "Alerts on" : "Alerts off")
+    </button>
+    @if (open && state is { } st)
+    {
+        <div class="menu-backdrop" @onclick="() => open = false"></div>
+        <div class="menu split-menu" role="menu">
+            @foreach (var (setting, label, note) in Choices)
+            {
+                <button type="button" role="menuitemradio" aria-checked="@(st.Setting == setting)" class="@(st.Setting == setting ? "on" : "")" @onclick="() => Set(setting)">
+                    <Icon Name="@(st.Setting == setting ? "check" : "bell")" Size="16" />
+                    <span>@label<br /><span class="muted small">@note</span></span>
+                </button>
+            }
+        </div>
+    }
+</div>
+@* Pausing or dropping from the menu changes what Automatic means. *@
+<ReloadOnMenu OnChange="Refresh" />
+@code {
+    [Parameter, EditorRequired] public int ShowId { get; set; }
+    [Parameter] public string? ShowName { get; set; }
+    private ShowAlertState? state;
+    private bool open, busy;
+    private int loadedFor;
+
+    private static readonly (ShowAlerts Setting, string Label, string Note)[] Choices =
+    [
+        (ShowAlerts.Auto, "Automatic", "While you're watching it or it's on your watchlist"),
+        (ShowAlerts.On, "Always", "Even if you haven't started it, paused or dropped it"),
+        (ShowAlerts.Off, "Never", "No alerts, and off your calendar"),
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedFor == ShowId) return;
+        loadedFor = ShowId;
+        state = null;
+        try { state = await Api.ShowAlertsAsync(ShowId); } catch { /* the button just stays disabled */ }
+    }
+
+    private async Task Refresh()
+    {
+        try { state = await Api.ShowAlertsAsync(ShowId); StateHasChanged(); } catch { }
+    }
+
+    private async Task Set(ShowAlerts setting)
+    {
+        open = false;
+        if (state?.Setting == setting) return;
+        busy = true;
+        try
+        {
+            state = await Api.SetShowAlertsAsync(ShowId, setting);
+            Toasts.Show(state.Active ? $"You'll get release alerts for {ShowName ?? "this show"}" : $"No more release alerts for {ShowName ?? "this show"}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        busy = false;
+    }
+}
