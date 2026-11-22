@@ -240,10 +240,11 @@ public class JellyfinService(AppDbContext db, TmdbClient tmdb, TrackingService t
         // Paused with nothing live (the pause ran out, or it was never started here): don't bring it back.
         if (p.NotificationType == "PlaybackProgress" && p.IsPaused == true) return "Paused";
 
-        // Progress pings arrive every few seconds; only touch the database when something changed.
+        // Progress pings arrive every few seconds; only touch the database when something changed. Half a minute of
+        // slack: a short pause or a skip moves the end by less than the old two minutes, and those added up.
         if (p.NotificationType == "PlaybackProgress" && current is not null && current.Source == source && CheckInService.IsLive(current)
-            && (endsAt is null || Math.Abs((current.EndsAt - endsAt.Value).TotalMinutes) < 2)
-            && (startedAt is null || Math.Abs((current.StartedAt - startedAt.Value).TotalMinutes) < 2))
+            && (endsAt is null || Math.Abs((current.EndsAt - endsAt.Value).TotalSeconds) < 30)
+            && (startedAt is null || Math.Abs((current.StartedAt - startedAt.Value).TotalSeconds) < 30))
         {
             // Nothing to change, but note the player is still reporting so the check-in isn't dropped as quiet.
             if (current.PausedAt is not null || DateTimeOffset.UtcNow - current.LastPingAt > TimeSpan.FromMinutes(1))

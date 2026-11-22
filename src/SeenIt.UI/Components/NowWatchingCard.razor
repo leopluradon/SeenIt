@@ -48,9 +48,10 @@
     {
         get
         {
-            var left = (long)Math.Ceiling((Item.EndsAt - At).TotalMinutes);
-            if (left < 1) return null;
-            return Item.PausedAt is null ? $"Ends {Fmt.FinishAt(left)}" : $"Ends ~{Fmt.FinishAt(left)} if you resume now";
+            var left = Item.EndsAt - At;
+            if (left.TotalMinutes < 1) return null;
+            // Playing: the end as the player last reported it. Paused: what's left, from now.
+            return Item.PausedAt is null ? $"Ends {Fmt.EndTime(Item.EndsAt)}" : $"Ends ~{Fmt.EndTime(DateTimeOffset.Now + left)} if you resume now";
         }
     }
 

@@ -191,10 +191,13 @@ public static class Fmt
     /// When something that long would be over if started now, in local time: "9:40 PM" today, "tomorrow 1:15 AM",
     /// a weekday within the week, a date after that.
     /// </summary>
-    public static string FinishAt(long minutes)
+    public static string FinishAt(long minutes) => EndTime(DateTimeOffset.Now.AddMinutes(minutes));
+
+    /// <summary>A moment later on, in local time: "9:40 PM" today, "tomorrow 1:15 AM", a weekday within the week, a date after that.</summary>
+    public static string EndTime(DateTimeOffset at)
     {
         var now = DateTime.Now;
-        var end = now.AddMinutes(minutes);
+        var end = at.ToLocalTime().DateTime;
         var time = end.ToString(TimeOnly);
         var days = (end.Date - now.Date).Days;
         return days switch
