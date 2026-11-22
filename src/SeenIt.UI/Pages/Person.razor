@@ -141,11 +141,17 @@ else if (p is not null)
                 }
             </div>
         }
-        <label class="check small seen-only"><input type="checkbox" @bind="seenOnly" @bind:after="Remember" /> Only show what I've watched</label>
+        <div class="seen-only">
+            <label class="check small"><input type="checkbox" @bind="seenOnly" @bind:after="Remember" /> Only show what I've watched</label>
+            @if (p.Cast.Concat(p.Crew).Any(c => c.InLibrary))
+            {
+                <label class="check small"><input type="checkbox" @bind="libraryOnly" @bind:after="Remember" /> Only what's in my library</label>
+            }
+        </div>
         @{
             var rows = Rows(shown)
                 .Where(c => tab switch { "movies" => c.Type == MediaType.Movie, "tv" => c.Type == MediaType.Show, _ => true })
-                .Where(c => !seenOnly || c.Watched).ToList();
+                .Where(c => !seenOnly || c.Watched).Where(c => !libraryOnly || c.InLibrary).ToList();
         }
         @if (rows.Count == 0) { <p class="muted">Nothing here.</p> }
         <ol class="filmography">
@@ -158,13 +164,14 @@ else if (p is not null)
                             <b>@c.Title</b>
                             <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")@(c.Role is { Length: > 0 } r ? " · " + r : "")@if (c.EpisodeCount is > 0) { <text> · </text><Spoiler Force="HideCount(c)">@Plural(c.EpisodeCount.Value, "episode")</Spoiler> }</span>
                         </span>
+                        @if (c.InLibrary) { <span class="ep-owned" title="In your library" aria-label="In your library"><Icon Name="download" Size="15" /></span> }
                         @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
                         else if (c.PartlySeen) { <span class="ep-partly" title="@($"You've watched some of {c.Title}, but not the episodes {p.Name} is in")" aria-label="Partly seen: not their episodes">◐</span> }
                     </a>
                 </li>
             }
         </ol>
-        @{ var appearances = p.Cast.Where(c => c.Appearance && (!seenOnly || c.Watched)).ToList(); }
+        @{ var appearances = p.Cast.Where(c => c.Appearance && (!seenOnly || c.Watched) && (!libraryOnly || c.InLibrary)).ToList(); }
         @if (shown.Contains(Acting) && tab != "movies" && appearances.Count > 0)
         {
             <details class="appearances">
@@ -190,7 +197,7 @@ else if (p is not null)
     private PersonDetail? p;
     private string? error;
     private bool notFound;
-    private bool bioOpen, seenOnly, following;
+    private bool bioOpen, seenOnly, libraryOnly, following;
     private string tab = "all";
     private HashSet<string> shown = [];
 
@@ -223,8 +230,8 @@ else if (p is not null)
 
     // What you picked on each person's page this session, so Back (or coming back later) shows the same
     // list, at the same length, and the scroll position can be restored.
-    private static readonly Dictionary<int, (string[] Shown, string Tab, bool SeenOnly)> Picked = [];
-    private void Remember() { if (p is not null) Picked[p.Id] = ([.. shown], tab, seenOnly); }
+    private static readonly Dictionary<int, (string[] Shown, string Tab, bool SeenOnly, bool LibraryOnly)> Picked = [];
+    private void Remember() { if (p is not null) Picked[p.Id] = ([.. shown], tab, seenOnly, libraryOnly); }
 
     /// <summary>One row per title across the chosen groups: "Director, Screenplay" and, when acting is shown with crew, "as Kambei".</summary>
     private List<PersonCreditDto> Rows(IReadOnlySet<string> groups)
@@ -306,7 +313,7 @@ else if (p is not null)
 
     protected override async Task OnParametersSetAsync()
     {
-        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; seenOnly = false; shown = []; }
+        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; seenOnly = false; libraryOnly = false; shown = []; }
         await Load();
         if (p is not null && shown.Count == 0)
         {
@@ -315,6 +322,7 @@ else if (p is not null)
                 shown = [.. was.Shown.Where(g => Groups.Contains(g))];
                 tab = was.Tab;
                 seenOnly = was.SeenOnly;
+                libraryOnly = was.LibraryOnly;
             }
             else shown = Groups.Count > 0 ? [Groups[0]] : [Acting];
         }

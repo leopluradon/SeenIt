@@ -38,6 +38,10 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         var seenShows = watched?.Where(w => w.Type == MediaType.Show).Select(w => w.TmdbId).ToHashSet() ?? [];
         bool Watched(MediaType t, int tmdbId) => t == MediaType.Movie ? watchedMovies.ContainsKey(tmdbId) : seenShows.Contains(tmdbId);
         bool Partly(MediaType t, int tmdbId) => t == MediaType.Show && !seenShows.Contains(tmdbId) && watchedEpisodes.ContainsKey(tmdbId);
+        var owned = userId is { } ownerId
+            ? (await db.Library.AsNoTracking().Where(l => l.UserId == ownerId).Select(l => new { l.Type, l.TmdbId }).Distinct().ToListAsync(ct))
+                .Select(l => (l.Type, l.TmdbId)).ToHashSet()
+            : [];
         var watching = await WatchingAsync(db, castCredits.Concat(crewCredits).Where(c => c.MediaType == "tv").Select(c => c.Id), watchedEpisodes, ct);
 
         // One row per title: TV people often have several credits on the same show.
@@ -54,7 +58,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 string.IsNullOrEmpty(roles) ? null : roles,
                 type == MediaType.Show ? g.Sum(x => x.EpisodeCount ?? 0) : null,
                 c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id), appearance, PartlySeen: Partly(type, c.Id),
-                Watching: type == MediaType.Show && watching.Contains(c.Id));
+                Watching: type == MediaType.Show && watching.Contains(c.Id), InLibrary: owned.Contains((type, c.Id)));
         }).OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
 
         var crew = (p.CombinedCredits?.Crew ?? []).Where(c => c.MediaType is "movie" or "tv")
@@ -68,7 +72,7 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                     type == MediaType.Show ? g.Sum(x => x.EpisodeCount ?? 0) : null,
                     c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id),
                     Jobs: g.Where(x => !string.IsNullOrWhiteSpace(x.Job)).Select(x => new CrewJob(x.Job!, x.Department)).Distinct().ToList(),
-                    PartlySeen: Partly(type, c.Id), Watching: type == MediaType.Show && watching.Contains(c.Id));
+                    PartlySeen: Partly(type, c.Id), Watching: type == MediaType.Show && watching.Contains(c.Id), InLibrary: owned.Contains((type, c.Id)));
             }).OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
 
         var following = false;

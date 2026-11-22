@@ -396,7 +396,7 @@ a.cast { color: var(--text); }
 .ww-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ww-episodes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .ww-episodes .chip { padding: 2px 8px; font-size: .74rem; }
-.seen-only { margin: -4px 0 10px; color: var(--text-2); }
+.seen-only { margin: -4px 0 10px; color: var(--text-2); display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .role-chips { margin: 0 0 12px; }
 .chip-count { font-weight: 500; opacity: .7; font-variant-numeric: tabular-nums; }
 .filmography { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -498,6 +498,7 @@ a.cast { color: var(--text); }
 .ep-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ep-name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ep-check { color: var(--ok); flex-shrink: 0; }
+.ep-owned { color: var(--accent); flex-shrink: 0; display: inline-flex; }
 
 /* ---------- History / progress lists ---------- */
 .history-item { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--radius); }
