@@ -820,6 +820,55 @@ public static class ApiEndpoints
         app.MapGet("/api/users/{name}/history/genres", async (string name, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
             await s.ViewableAsync(name, p.OptionalUserId(), ct) is { } owner ? Results.Ok(await t.GetHistoryGenresAsync(owner.Id, ct)) : Results.NotFound());
 
+        // Someone's own pages, shared: /u/{name}/progress and the rest. Each follows the privacy part it shows
+        // (Settings → Privacy), and where things were watched only goes to those allowed to see it. Stats and
+        // reviews are in the owner's time zone, so everyone sees the same thing.
+        var shared = app.MapGroup("/api/users/{name}");
+        async Task<IResult> Shared<T>(string name, ClaimsPrincipal p, SocialService s, ProfilePart part, Func<AppUser, bool, Task<T>> load, CancellationToken ct) =>
+            await s.SharedAsync(name, p.OptionalUserId(), part, ct) is var (owner, sources) ? Results.Ok(await load(owner, sources)) : Results.NotFound();
+        shared.MapGet("/progress", (string name, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.History, (o, _) => t.GetProgressAsync(o.Id, ct), ct));
+        shared.MapGet("/progress/franchises", (string name, ClaimsPrincipal p, SocialService s, MoreStatsService m, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.History, (o, _) => m.FranchiseProgressAsync(o.Id, ct), ct));
+        shared.MapGet("/ratings", (string name, MediaType? type, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Ratings, (o, _) => t.GetRatingsAsync(o.Id, type, ct), ct));
+        shared.MapGet("/favorites", (string name, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Favorites, (o, _) => t.GetFavoritesAsync(o.Id, ct), ct));
+        shared.MapGet("/watchlist", (string name, ClaimsPrincipal p, SocialService s, TrackingService t, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Watchlist, (o, _) => t.GetWatchlistAsync(o.Id, ct), ct));
+        shared.MapGet("/library", (string name, ClaimsPrincipal p, SocialService s, LibraryService l, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Library, async (o, sources) =>
+            {
+                var items = await l.ListAsync(o.Id, ct);
+                return sources ? items : items.Select(i => i with { Source = WatchSource.Manual,
+                    Copies = i.Copies?.Select(c => c with { Source = WatchSource.Manual }).ToList() }).ToList();
+            }, ct));
+        shared.MapGet("/stats", (string name, string? type, ClaimsPrincipal p, SocialService s, TrackingService t, UserDataCache c, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Stats, (o, _) =>
+                c.GetAsync(o.Id, $"stats:{o.TimeZone}:{MediaFilter.Key(MediaFilter.Parse(type))}", () => t.GetStatsAsync(o.Id, o.TimeZone, ct, MediaFilter.Parse(type)), ct), ct));
+        shared.MapGet("/stats/more", (string name, string? type, ClaimsPrincipal p, SocialService s, MoreStatsService m, UserDataCache c, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Stats, async (o, _) =>
+            {
+                var more = await c.GetAsync(o.Id, $"more:{o.TimeZone}:{MediaFilter.Key(MediaFilter.Parse(type))}", () => m.GetAsync(o.Id, o.TimeZone, ct, MediaFilter.Parse(type)), ct);
+                // The friends panel is other people's activity: not theirs to share.
+                return more with { Friends = more.Friends with { Rows = [], TopTitle = null } };
+            }, ct));
+        shared.MapGet("/review/periods", (string name, ClaimsPrincipal p, SocialService s, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Stats, (o, _) => c.GetAsync(o.Id, $"periods:{o.TimeZone}", () => r.GetPeriodsAsync(o.Id, o.TimeZone, ct), ct), ct));
+        Task<IResult> SharedReview(string name, int year, int? month, ReviewNew? mode, string? type, ClaimsPrincipal p, SocialService s, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Stats, async (o, sources) =>
+            {
+                var review = await c.GetAsync(o.Id, $"review:{year}:{(month is { } m ? $"{m}:" : "")}{o.TimeZone}:{mode ?? ReviewNew.All}:{MediaFilter.Key(MediaFilter.Parse(type))}",
+                    () => r.BuildAsync(o.Id, year, month, o.TimeZone, ct, mode ?? ReviewNew.All, MediaFilter.Parse(type)), ct);
+                return sources ? review : review with { Sources = [],
+                    FirstPlay = review.FirstPlay is { } f ? SocialService.Unsourced(f) : null,
+                    LastPlay = review.LastPlay is { } l ? SocialService.Unsourced(l) : null };
+            }, ct);
+        shared.MapGet("/review/{year:int}", (string name, int year, [FromQuery(Name = "new")] ReviewNew? mode, string? type, ClaimsPrincipal p, SocialService s, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            SharedReview(name, year, null, mode, type, p, s, r, c, ct));
+        shared.MapGet("/review/{year:int}/{month:int}", (string name, int year, int month, [FromQuery(Name = "new")] ReviewNew? mode, string? type, ClaimsPrincipal p, SocialService s, ReviewService r, UserDataCache c, CancellationToken ct) =>
+            SharedReview(name, year, month, mode, type, p, s, r, c, ct));
+
         var g = app.MapGroup("/api/social").RequireAuthorization();
         g.MapGet("/feed", (int? take, ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.FeedAsync(p.UserId(), take ?? 40, ct));
         g.MapGet("/history", (MediaType? type, string? q, WatchSource? source, string? genre, DateTimeOffset? from, DateTimeOffset? to,

@@ -24,4 +24,24 @@ public static class UiLayout
     };
 
     public static bool Shows(MeDto? me, string section) => me?.HiddenHomeSections?.Contains(section) != true;
+
+    /// <summary>
+    /// Your own pages that have a shared copy under your profile (u/{you}/progress, …), with the privacy part that
+    /// decides who can open it; null for any other page.
+    /// </summary>
+    public static ProfilePart? SharedPage(string path)
+    {
+        var page = path.Split('?', '#')[0].Trim('/');
+        var first = page.Split('/')[0];
+        return first switch
+        {
+            "progress" or "history" => ProfilePart.History,
+            "ratings" => ProfilePart.Ratings,
+            "stats" or "review" => ProfilePart.Stats,
+            "favorites" => ProfilePart.Favorites,
+            "watchlist" => ProfilePart.Watchlist,
+            "library" => ProfilePart.Library,
+            _ => null,
+        };
+    }
 }

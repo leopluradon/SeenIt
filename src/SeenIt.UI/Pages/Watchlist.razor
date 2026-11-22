@@ -1,26 +1,28 @@
 @page "/watchlist"
-@attribute [Authorize]
+@page "/u/{UserName}/watchlist"
+@* No [Authorize]: someone's shared watchlist follows their Watchlist privacy; your own needs signing in. *@
 @inject ApiClient Api
 @inject SessionState Session
 @inject NavigationManager Nav
 @inject Toasts Toasts
-<PageTitle>Watchlist · SeenIt</PageTitle>
+<PageTitle>@(Other is { } on ? $"{on}'s watchlist" : "Watchlist") · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
 <div class="page-head">
-    <h1>Watchlist</h1>
-    <a class="btn btn-sm" href="pick"><Icon Name="shuffle" Size="16" /> Pick for me</a>
+    <h1>@(Other is { } o ? $"{o}'s watchlist" : "Watchlist")</h1>
+    @if (Mine) { <a class="btn btn-sm" href="pick"><Icon Name="shuffle" Size="16" /> Pick for me</a> }
     <div class="segmented">
         <button class="@(filter is null ? "on" : "")" @onclick="() => SetFilter(null)">All</button>
         <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => SetFilter(MediaType.Movie)">Movies</button>
         <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => SetFilter(MediaType.Show)">Shows</button>
     </div>
 </div>
-<SavedViews Page="watchlist" Current="@ViewQuery" />
+@if (Mine) { <SavedViews Page="watchlist" Current="@ViewQuery" /> }
 <div class="chips">
     <button class="chip @(sort == "added" ? "on" : "")" @onclick='() => SetSort("added")'>Recently added</button>
     <button class="chip @(sort == "release" ? "on" : "")" @onclick='() => SetSort("release")'>Release date</button>
     <button class="chip @(sort == "title" ? "on" : "")" @onclick='() => SetSort("title")'>Title</button>
-    @if (Fmt.Prefs.MyServices is { Count: > 0 })
+    @if (Mine && Fmt.Prefs.MyServices is { Count: > 0 })
     {
         <button class="chip chip-toggle @(onMine ? "on" : "")" aria-pressed="@onMine" @onclick="ToggleMine" title="Only what's streaming on your services now">
             @if (onMine) { <Icon Name="check" Size="14" /> } @(onMine && available is null ? "Checking…" : "On my services")
@@ -102,7 +104,22 @@ else if (items is not null)
         if (QParam is not null) find = QParam;   // a saved view; changing type or order keeps what you typed
     }
 
-    protected override Task OnInitializedAsync() => Load();
+    /// <summary>Someone else's watchlist (read-only), shared at u/{name}/….</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? loadedFor = "\0";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
+        if (loadedFor != Other) { loadedFor = Other; items = null; await Load(); }
+    }
 
     private bool onMine;
     private HashSet<MediaRef>? available;
@@ -120,7 +137,7 @@ else if (items is not null)
     {
         sort = s;
         Remember();
-        return PagePrefs.SetSortAsync(Session, Api, "watchlist", s);
+        return Mine ? PagePrefs.SetSortAsync(Session, Api, "watchlist", s) : Task.CompletedTask;   // someone else's: just this view
     }
 
     private void SetFilter(MediaType? f) { filter = f; Remember(); }
@@ -142,7 +159,8 @@ else if (items is not null)
     private async Task Load()
     {
         error = null;
-        try { items = await Api.WatchlistAsync(); }
+        try { items = await Api.WatchlistAsync(Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s watchlist is private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
 

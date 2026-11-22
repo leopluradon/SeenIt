@@ -191,7 +191,11 @@
 
     private static string Initial(string? name) => string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
 
-    /// <summary>Shares the page you're on: its public link (it opens in the app for people who have it) and its title.</summary>
+    /// <summary>
+    /// Shares the page you're on: its public link (it opens in the app for people who have it) and its title. Your
+    /// own pages (progress, ratings, stats…) go out as u/{you}/…, which others can open as far as your privacy
+    /// settings allow; the toast says who that is.
+    /// </summary>
     private async Task SharePage()
     {
         var path = Nav.ToBaseRelativePath(Nav.Uri);
@@ -200,9 +204,21 @@
         catch { title = "SeenIt"; }
         // Page titles end in "· SeenIt"; the shared text reads better without it.
         if (title.EndsWith(" · SeenIt", StringComparison.Ordinal)) title = title[..^" · SeenIt".Length];
+        string? audience = null;
+        if (Session.Me is { } me && UiLayout.SharedPage(path) is { } part)
+        {
+            path = $"{Fmt.UserHref(me.UserName)}/{path}";
+            title = $"{me.DisplayName ?? me.UserName}'s {title.ToLowerInvariant()}";
+            audience = Fmt.Prefs.For(part, me.Visibility) switch
+            {
+                ProfileVisibility.Public => "anyone can open it",
+                ProfileVisibility.Friends => "friends who follow you back can open it",
+                _ => "only you can open it (Settings → Privacy)",
+            };
+        }
         switch (await Platform.ShareLinkAsync(string.IsNullOrWhiteSpace(title) ? "SeenIt" : title, Platform.PublicUrl(path)))
         {
-            case "copied": Toasts.Show("Link copied"); break;
+            case "copied": Toasts.Show(audience is null ? "Link copied" : $"Link copied · {audience}"); break;
             case "failed": Toasts.Show("Couldn't share this page", error: true); break;
         }
     }

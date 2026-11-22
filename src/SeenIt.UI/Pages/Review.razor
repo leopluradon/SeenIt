@@ -1,40 +1,43 @@
 @page "/review/{Year:int}"
 @page "/review/{Year:int}/{Month:int}"
-@attribute [Authorize]
+@page "/u/{UserName}/review/{Year:int}"
+@page "/u/{UserName}/review/{Year:int}/{Month:int}"
+@* No [Authorize]: someone's shared review follows their Stats privacy; your own needs signing in. *@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @inject SessionState Session
 @inject IJSRuntime Js
-<PageTitle>@(r?.Label ?? "Review") in review · SeenIt</PageTitle>
+<PageTitle>@(Other is { } on ? $"{on}'s " : "")@(r?.Label ?? "Review") in review · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
 <div class="review-head">
     <button class="icon-btn" @onclick="() => Go(-1)" disabled="@AtTrackingStart" aria-label="Previous @(Month is null ? "year" : "month")"><Icon Name="chevron-left" /></button>
     <div class="review-title">
-        <span class="review-kicker">@(Month is null ? "Year" : "Month") in review</span>
+        <span class="review-kicker">@(Other is { } ok ? $"{ok}'s " : "")@(Month is null ? "year" : "month") in review</span>
         <h1>@Label</h1>
     </div>
     <button class="icon-btn" @onclick="() => Go(1)" disabled="@IsCurrentOrFuture" aria-label="Next @(Month is null ? "year" : "month")"><Icon Name="chevron-right" /></button>
 </div>
 <div class="chips center-chips">
-    @if (Month is not null) { <a class="chip" href="@($"review/{Year}{Keep}")">See all of @Year</a> }
+    @if (Month is not null) { <a class="chip" href="@($"{ReviewBase}/{Year}{Keep}")">See all of @Year</a> }
     else if (periods?.FirstOrDefault(p => p.Year == Year) is { } py)
     {
         @foreach (var m in py.Months)
         {
-            <a class="chip" href="@($"review/{Year}/{m.Month}{Keep}")" @key="m.Month">@(new DateTime(Year, m.Month, 1).ToString("MMM"))</a>
+            <a class="chip" href="@($"{ReviewBase}/{Year}/{m.Month}{Keep}")" @key="m.Month">@(new DateTime(Year, m.Month, 1).ToString("MMM"))</a>
         }
     }
-    <a class="chip" href="@($"stats{(MediaFilter.Key(Kind) is { } sk ? $"?type={sk}" : "")}")">All-time stats</a>
-    @if (r is { Totals.Plays: > 0 }) { <button class="chip" @onclick="OpenShare"><Icon Name="share" Size="14" /> Share image</button> }
+    <a class="chip" href="@($"{StatsBase}{(MediaFilter.Key(Kind) is { } sk ? $"?type={sk}" : "")}")">All-time stats</a>
+    @if (Mine && r is { Totals.Plays: > 0 }) { <button class="chip" @onclick="OpenShare"><Icon Name="share" Size="14" /> Share image</button> }
 </div>
 @* The whole page from everything, from first-time watches of movies and episodes (a show started earlier still
    counts for its new episodes), or from just the movies and shows first watched in this period. *@
 <div class="center review-new">
     <MediaFilterSwitch Value="Kind" />
     <select class="fit-select" aria-label="What to count" value="@Mode" @onchange="e => SetMode(e.Value as string)">
-        <option value="@ReviewNew.All">Everything I watched</option>
+        <option value="@ReviewNew.All">@(Mine ? "Everything I watched" : "Everything watched")</option>
         <option value="@ReviewNew.Firsts">First watches (no rewatches)</option>
-        <option value="@ReviewNew.Titles">Only titles new to me</option>
+        <option value="@ReviewNew.Titles">@(Mine ? "Only titles new to me" : "Only titles new to them")</option>
     </select>
     @if (Mode != ReviewNew.All)
     {
@@ -102,13 +105,13 @@ else if (r is not null)
     {
         <Empty Title="@($"Reviews start from {(since).ToString(Fmt.DateFull)}.")">
             <span>That's when you started tracking; plays before it were back-filled, so they aren't reviewed.</span>
-            <a class="btn btn-sm" href="@($"review/{since.Year}" + (Month is null ? "" : $"/{since.Month}"))">Go to @(Month is null ? since.Year.ToString() : since.ToString("MMMM yyyy"))</a>
+            <a class="btn btn-sm" href="@($"{ReviewBase}/{since.Year}" + (Month is null ? "" : $"/{since.Month}"))">Go to @(Month is null ? since.Year.ToString() : since.ToString("MMMM yyyy"))</a>
         </Empty>
     }
     else if (r.Totals.Plays == 0)
     {
         <Empty Title="@($"Nothing watched in {r.Label}.")">
-            @if (periods is { Count: > 0 }) { <span>Try another period:</span> <PeriodLinks Periods="periods" /> }
+            @if (periods is { Count: > 0 }) { <span>Try another period:</span> <PeriodLinks Periods="periods" Base="@ReviewBase" /> }
         </Empty>
     }
     else
@@ -322,7 +325,16 @@ else if (r is not null)
     private DateOnly PeriodStart => new(Year, Month ?? 1, 1);
     private DateOnly PeriodEnd => Month is null ? PeriodStart.AddYears(1) : PeriodStart.AddMonths(1);
     /// <summary>Nothing to review before the "started tracking" day, so don't offer to go back past it.</summary>
-    private bool AtTrackingStart => Session.Me?.TrackingSince is { } s && PeriodStart <= s;
+    private bool AtTrackingStart => (Mine ? Session.Me?.TrackingSince : r?.TrackingSince) is { } s && PeriodStart <= s;
+
+    /// <summary>Someone else's review (read-only), shared at u/{name}/review/….</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    private string ReviewBase => Other is { } n ? $"u/{Uri.EscapeDataString(n)}/review" : "review";
+    private string StatsBase => Other is { } n ? $"u/{Uri.EscapeDataString(n)}/stats" : "stats";
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? periodsFor = "\0";
 
     private bool IsCurrentOrFuture => Month is { } m
         ? new DateTime(Year, m, 1) >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
@@ -330,22 +342,29 @@ else if (r is not null)
 
     protected override async Task OnParametersSetAsync()
     {
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
         r = null;
         showAllShows = showAllMovies = false;   // a new year or month starts collapsed
         await Load();
-        if (periods is null)
+        if (periods is null || periodsFor != Other)
         {
-            try { periods = await Api.ReviewPeriodsAsync(); } catch { periods = []; }
+            periodsFor = Other;
+            try { periods = await Api.ReviewPeriodsAsync(Other); } catch { periods = []; }
         }
     }
 
     private async Task Load()
     {
         error = null;
-        try { r = await Api.ReviewAsync(Year, Month, Mode, Kind); }
+        try { r = await Api.ReviewAsync(Year, Month, Mode, Kind, Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s stats are private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
         goals = null;
-        if (Month is null) { try { goals = await Api.GoalsAsync(Year); } catch { } }
+        if (Mine && Month is null) { try { goals = await Api.GoalsAsync(Year); } catch { } }
     }
 
     private void Go(int step)
@@ -353,9 +372,9 @@ else if (r is not null)
         if (Month is { } m)
         {
             var d = new DateTime(Year, m, 1).AddMonths(step);
-            Nav.NavigateTo($"review/{d.Year}/{d.Month}{Keep}");
+            Nav.NavigateTo($"{ReviewBase}/{d.Year}/{d.Month}{Keep}");
         }
-        else Nav.NavigateTo($"review/{Year + step}{Keep}");
+        else Nav.NavigateTo($"{ReviewBase}/{Year + step}{Keep}");
     }
 
     private static string HourLabel(int h) => Fmt.Prefs.Clock24 ? $"{h:00}:00" : new DateTime(2000, 1, 1, h, 0, 0).ToString("h tt").ToLowerInvariant();

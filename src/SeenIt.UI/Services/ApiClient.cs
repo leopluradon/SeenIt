@@ -198,23 +198,25 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public async Task<RemovedPlays> DeleteHistoryAsync(Guid id) =>
         await SendAsync<RemovedPlays>(HttpMethod.Delete, $"api/history/{id}") ?? new RemovedPlays(0, []);
 
-    public Task<List<WatchlistEntry>> WatchlistAsync() => GetAsync<List<WatchlistEntry>>("api/watchlist");
+    /// <summary>Your own (null) or someone else's shared page (api/users/{name}/…); see Shared in ApiEndpoints.</summary>
+    private static string Of(string? user, string path) => user is null ? $"api/{path}" : $"api/users/{Uri.EscapeDataString(user)}/{path}";
+    public Task<List<WatchlistEntry>> WatchlistAsync(string? user = null) => GetAsync<List<WatchlistEntry>>(Of(user, "watchlist"));
     public Task AddToWatchlistAsync(MediaType type, int id) => SendQueueableAsync(HttpMethod.Post, "api/watchlist", new WatchlistRequest(type, id));
     public Task RemoveFromWatchlistAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/watchlist?type={type}&tmdbId={id}");
 
-    public Task<List<FavoriteEntry>> FavoritesAsync() => GetAsync<List<FavoriteEntry>>("api/favorites");
+    public Task<List<FavoriteEntry>> FavoritesAsync(string? user = null) => GetAsync<List<FavoriteEntry>>(Of(user, "favorites"));
     public Task AddFavoriteAsync(MediaType type, int id) => SendQueueableAsync(HttpMethod.Post, "api/favorites", new FavoriteRequest(type, id));
     public Task RemoveFavoriteAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/favorites?type={type}&tmdbId={id}");
     public Task ReorderFavoritesAsync(IReadOnlyList<FavoriteRequest> order) => SendAsync(HttpMethod.Put, "api/favorites/order", order);
 
-    public Task<List<RatingEntry>> RatingsAsync(MediaType? type = null) => GetAsync<List<RatingEntry>>("api/ratings" + (type is null ? "" : $"?type={type}"));
+    public Task<List<RatingEntry>> RatingsAsync(MediaType? type = null, string? user = null) => GetAsync<List<RatingEntry>>(Of(user, "ratings") + (type is null ? "" : $"?type={type}"));
     public Task RateAsync(RatingRequest r) => SendQueueableAsync(HttpMethod.Post, "api/ratings", r);
     public Task UnrateAsync(MediaType type, int id, int? season = null, int? episode = null) =>
         SendAsync(HttpMethod.Delete, $"api/ratings?type={type}&tmdbId={id}" + (season is null ? "" : $"&season={season}") + (episode is null ? "" : $"&episode={episode}"));
 
     public Task<ItemStatus> ItemStatusAsync(MediaType type, int id, int? season = null, int? episode = null) =>
         GetAsync<ItemStatus>($"api/status/{type}/{id}" + (season is { } s && episode is { } e ? $"?season={s}&episode={e}" : ""));
-    public Task<List<ShowProgressDto>> ProgressAsync() => GetAsync<List<ShowProgressDto>>("api/progress");
+    public Task<List<ShowProgressDto>> ProgressAsync(string? user = null) => GetAsync<List<ShowProgressDto>>(Of(user, "progress"));
     public Task<List<CalendarEntry>> CalendarAsync(DateOnly from, int days) => GetAsync<List<CalendarEntry>>($"api/calendar?from={from:yyyy-MM-dd}&days={days}");
     public Task<List<ToRateItem>> ToRateAsync(int max) => GetAsync<List<ToRateItem>>($"api/torate?max={max}");
     public Task SkipToRateAsync(ToRateSkip s) => SendAsync(HttpMethod.Post, "api/torate/skip", s);
@@ -278,12 +280,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<NotInterestedEntry>> NotInterestedAsync() => GetAsync<List<NotInterestedEntry>>("api/not-interested");
     public Task MarkNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Post, "api/not-interested", new FavoriteRequest(type, id));
     public Task UndoNotInterestedAsync(MediaType type, int id) => SendAsync(HttpMethod.Delete, $"api/not-interested?type={type}&tmdbId={id}");
-    public Task<List<FranchiseProgress>> FranchiseProgressAsync() => GetAsync<List<FranchiseProgress>>("api/progress/franchises");
+    public Task<List<FranchiseProgress>> FranchiseProgressAsync(string? user = null) => GetAsync<List<FranchiseProgress>>(Of(user, "progress/franchises"));
     public Task<ForYouDto> ForYouAsync() => GetAsync<ForYouDto>("api/recommendations");
 
     public Task<ListFeedsDto> ListFeedsAsync(Guid id) => GetAsync<ListFeedsDto>($"api/lists/{id}/feeds");
     public Task SaveNoteAsync(MediaType type, int id, string? text) => SendAsync(HttpMethod.Put, "api/notes", new NoteRequest(type, id, text));
-    public Task<List<LibraryEntry>> LibraryAsync() => GetAsync<List<LibraryEntry>>("api/library");
+    public Task<List<LibraryEntry>> LibraryAsync(string? user = null) => GetAsync<List<LibraryEntry>>(Of(user, "library"));
     public Task AddToLibraryAsync(MediaType type, int id, OwnedFormat format, int? season = null) =>
         SendAsync(HttpMethod.Post, "api/library", new LibraryRequest(type, id, format, season));
     /// <summary>No format: all of it; a format: that format (and its seasons); a season too: just that season.</summary>
@@ -344,12 +346,12 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     }
     public Task<CompareDto> CompareAsync(string a, string b) =>
         GetAsync<CompareDto>($"api/social/compare/{Uri.EscapeDataString(a)}/{Uri.EscapeDataString(b)}");
-    public Task<MoreStatsDto> MoreStatsAsync(MediaType? kind = null) => GetAsync<MoreStatsDto>($"api/stats/more?tz={Tz}" + TypeParam(kind));
-    public Task<StatsDto> StatsAsync(MediaType? kind = null) => GetAsync<StatsDto>($"api/stats?tz={Tz}" + TypeParam(kind));
+    public Task<MoreStatsDto> MoreStatsAsync(MediaType? kind = null, string? user = null) => GetAsync<MoreStatsDto>(Of(user, "stats/more") + $"?tz={Tz}" + TypeParam(kind));
+    public Task<StatsDto> StatsAsync(MediaType? kind = null, string? user = null) => GetAsync<StatsDto>(Of(user, "stats") + $"?tz={Tz}" + TypeParam(kind));
     private static string TypeParam(MediaType? kind) => MediaFilter.Key(kind) is { } k ? $"&type={k}" : "";
-    public Task<List<ReviewYear>> ReviewPeriodsAsync() => GetAsync<List<ReviewYear>>($"api/review/periods?tz={Tz}");
-    public Task<ReviewDto> ReviewAsync(int year, int? month, ReviewNew mode = ReviewNew.All, MediaType? kind = null) =>
-        GetAsync<ReviewDto>($"api/review/{year}" + (month is null ? "" : $"/{month}") + $"?tz={Tz}" + (mode == ReviewNew.All ? "" : $"&new={mode}") + TypeParam(kind));
+    public Task<List<ReviewYear>> ReviewPeriodsAsync(string? user = null) => GetAsync<List<ReviewYear>>(Of(user, "review/periods") + $"?tz={Tz}");
+    public Task<ReviewDto> ReviewAsync(int year, int? month, ReviewNew mode = ReviewNew.All, MediaType? kind = null, string? user = null) =>
+        GetAsync<ReviewDto>(Of(user, $"review/{year}") + (month is null ? "" : $"/{month}") + $"?tz={Tz}" + (mode == ReviewNew.All ? "" : $"&new={mode}") + TypeParam(kind));
 
     /// <summary>The device's IANA time zone, so reviews use the viewer's own calendar days.</summary>
     private static string Tz => Uri.EscapeDataString(TimeZoneInfo.Local.Id);

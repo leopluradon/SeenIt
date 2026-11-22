@@ -1,14 +1,18 @@
 @page "/stats"
-@attribute [Authorize]
+@page "/u/{UserName}/stats"
+@* No [Authorize]: someone's shared stats follow their Stats privacy; your own need signing in. *@
 @inject ApiClient Api
-<PageTitle>Stats · SeenIt</PageTitle>
+@inject SessionState Session
+@inject NavigationManager Nav
+<PageTitle>@(Other is { } on ? $"{on}'s stats" : "Stats") · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
 <div class="page-head">
-    <h1>Stats</h1>
+    <h1>@(Other is { } o ? $"{o}'s stats" : "Stats")</h1>
     <MediaFilterSwitch Value="Kind" />
     <div class="inline">
-        <a class="btn btn-sm btn-primary" href="@($"review/{DateTime.Today.Year}/{DateTime.Today.Month}{TypeQuery}")"><Icon Name="chart" Size="16" /> Month in review</a>
-        <a class="btn btn-sm" href="@($"review/{DateTime.Today.Year}{TypeQuery}")">Year in review</a>
+        <a class="btn btn-sm btn-primary" href="@($"{ReviewBase}/{DateTime.Today.Year}/{DateTime.Today.Month}{TypeQuery}")"><Icon Name="chart" Size="16" /> Month in review</a>
+        <a class="btn btn-sm" href="@($"{ReviewBase}/{DateTime.Today.Year}{TypeQuery}")">Year in review</a>
     </div>
 </div>
 <ErrorBox Message="@error" />
@@ -267,7 +271,7 @@ else if (s is not null)
     {
         <section class="panel review-periods">
             <h2>Reviews</h2>
-            <PeriodLinks Periods="periods" />
+            <PeriodLinks Periods="periods" Base="@ReviewBase" />
         </section>
     }
 }
@@ -287,17 +291,34 @@ else if (s is not null)
     private MediaType? loadedKind;
     private bool loadedOnce;
 
+    /// <summary>Someone else's stats (read-only), shared at u/{name}/stats.</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    private string ReviewBase => Other is { } n ? $"u/{Uri.EscapeDataString(n)}/review" : "review";
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? loadedFor = "\0";
+
     protected override async Task OnParametersSetAsync()
     {
-        if (loadedOnce && loadedKind == Kind) return;
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
+        if (loadedOnce && loadedKind == Kind && loadedFor == Other) return;
+        if (loadedFor != Other) periods = null;
         loadedOnce = true;
         loadedKind = Kind;
+        loadedFor = Other;
         s = null; more = null; error = null;
-        if (periods is null) { try { periods = await Api.ReviewPeriodsAsync(); } catch { periods = []; } }
-        try { s = await Api.StatsAsync(Kind); }
+        if (periods is null) { try { periods = await Api.ReviewPeriodsAsync(Other); } catch { periods = []; } }
+        try { s = await Api.StatsAsync(Kind, Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s stats are private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
         StateHasChanged();
-        try { more = await Api.MoreStatsAsync(Kind); }
+        if (s is null) return;
+        try { more = await Api.MoreStatsAsync(Kind, Other); }
         catch (Exception ex) { error ??= ex.Message; }
     }
 }

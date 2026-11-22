@@ -1,13 +1,17 @@
 @page "/favorites"
-@attribute [Authorize]
+@page "/u/{UserName}/favorites"
+@* No [Authorize]: someone's shared favorites follow their Favorites privacy; your own need signing in. *@
 @inject ApiClient Api
 @inject Toasts Toasts
-<PageTitle>Favorites · SeenIt</PageTitle>
+@inject SessionState Session
+@inject NavigationManager Nav
+<PageTitle>@(Other is { } on ? $"{on}'s favorites" : "Favorites") · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
 <div class="page-head">
-    <h1>Favorites</h1>
+    <h1>@(Other is { } o ? $"{o}'s favorites" : "Favorites")</h1>
 </div>
-<p class="muted small">Your four favorite movies and four favorite shows, in your order. They're shown on your profile. Add one with the heart on any movie or show.</p>
+@if (Mine) { <p class="muted small">Your four favorite movies and four favorite shows, in your order. They're shown on your profile. Add one with the heart on any movie or show.</p> }
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }
@@ -25,14 +29,17 @@ else if (items is not null)
                     var f = group[index];
                     <div @key="(f.Media.Type, f.Media.TmdbId)">
                         <PosterCard Media="f.Media" ShowScore="false" Badge="@($"#{index + 1}")" />
+                        @if (Mine)
+                        {
                         <div class="fav-tools">
                             <button class="icon-btn" disabled="@(busy || index == 0)" @onclick="() => Move(type, index, -1)" aria-label="Move @f.Media.Title earlier"><Icon Name="chevron-left" Size="16" /></button>
                             <button class="icon-btn" disabled="@(busy || index == group.Count - 1)" @onclick="() => Move(type, index, 1)" aria-label="Move @f.Media.Title later"><Icon Name="chevron-right" Size="16" /></button>
                             <button class="icon-btn" disabled="@busy" @onclick="() => Remove(f)" aria-label="Remove @f.Media.Title from favorites"><Icon Name="x" Size="16" /></button>
                         </div>
+                        }
                     </div>
                 }
-                @for (var i = group.Count; i < FavoriteLimits.PerType; i++)
+                @for (var i = group.Count; Mine && i < FavoriteLimits.PerType; i++)
                 {
                     <a class="fav-empty" href="@(type == MediaType.Movie ? "discover" : "discover?type=Show")" @key="(type, i)">
                         <Icon Name="heart" Size="20" />
@@ -50,12 +57,28 @@ else if (items is not null)
     private string? error;
     private bool busy;
 
-    protected override Task OnInitializedAsync() => Load();
+    /// <summary>Someone else's favorites (read-only), shared at u/{name}/….</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? loadedFor = "\0";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
+        if (loadedFor != Other) { loadedFor = Other; items = null; await Load(); }
+    }
 
     private async Task Load()
     {
         error = null;
-        try { items = await Api.FavoritesAsync(); }
+        try { items = await Api.FavoritesAsync(Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s favorites are private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
 

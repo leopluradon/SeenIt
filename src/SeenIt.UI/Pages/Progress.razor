@@ -1,14 +1,16 @@
 @page "/progress"
-@attribute [Authorize]
+@page "/u/{UserName}/progress"
+@* No [Authorize]: someone's shared progress (u/{name}/progress) is open as far as their History privacy allows; your own needs signing in. *@
 @inject ApiClient Api
 @inject SessionState Session
-<PageTitle>Progress · SeenIt</PageTitle>
+<PageTitle>@(Other is { } on ? $"{on}'s progress" : "Progress") · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
 <div class="page-head">
-    <h1>Progress</h1>
+    <h1>@(Other is { } o ? $"{o}'s progress" : "Progress")</h1>
     <div class="segmented" role="tablist" aria-label="What to show">
-        <button role="tab" aria-selected="@(!Franchises)" class="@(Franchises ? "" : "on")" @onclick='() => Nav.NavigateTo("progress")'><Icon Name="tv" Size="16" /> TV shows</button>
-        <button role="tab" aria-selected="@Franchises" class="@(Franchises ? "on" : "")" @onclick='() => Nav.NavigateTo("progress?view=franchises")'><Icon Name="film" Size="16" /> Movie franchises</button>
+        <button role="tab" aria-selected="@(!Franchises)" class="@(Franchises ? "" : "on")" @onclick='() => Nav.NavigateTo(BasePath)'><Icon Name="tv" Size="16" /> TV shows</button>
+        <button role="tab" aria-selected="@Franchises" class="@(Franchises ? "on" : "")" @onclick='() => Nav.NavigateTo(BasePath + "?view=franchises")'><Icon Name="film" Size="16" /> Movie franchises</button>
     </div>
 </div>
 @if (Franchises)
@@ -44,7 +46,7 @@
                         @if (f.LastWatchedAt is { } lw) { <div class="muted small">Last watched <RelTime At="lw" /></div> }
                     </div>
                     <div class="progress-actions">
-                        @if (f.Next is { } next)
+                        @if (Mine && f.Next is { } next)
                         {
                             <WhenButton Small="true" What="@next.Title" OnClick="() => { askWhen = true; pendingMovie = next; }" />
                             <button class="btn btn-sm btn-check" @onclick="() => { askWhen = false; pendingMovie = next; }" aria-label="@($"Mark {next.Title} watched")"><Icon Name="check" Size="16" /></button>
@@ -62,7 +64,7 @@
 else
 {
 <div class="page-head">
-    <SavedViews Page="progress" Current="@ViewQuery" />
+    @if (Mine) { <SavedViews Page="progress" Current="@ViewQuery" /> }
     <div class="segmented">
         <button class="@(tab == "watching" ? "on" : "")" @onclick='() => SetTab("watching")'>Watching</button>
         <button class="@(tab == "waiting" ? "on" : "")" @onclick='() => SetTab("waiting")'>Caught up</button>
@@ -70,7 +72,7 @@ else
         <button class="@(tab == "dropped" ? "on" : "")" @onclick='() => SetTab("dropped")'>Dropped@(Count(ShowTrackStatus.Dropped))</button>
         <button class="@(tab == "all" ? "on" : "")" @onclick='() => SetTab("all")'>All</button>
     </div>
-    <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
+    @if (Mine) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
     <label class="sort-pick">
         <span class="muted small">Sort</span>
         <select value="@Sort" @onchange="SetSort" aria-label="Sort shows">
@@ -83,7 +85,8 @@ else
 else if (items is not null)
 {
     var shown = UpNextSorts.Apply(items, Sort).Where(InTab).ToList();
-    @if (shown.Count == 0)
+    @if (shown.Count == 0 && !Mine) { <Empty Title="Nothing here." /> }
+    else if (shown.Count == 0)
     {
         <Empty Title="@(tab == "watching" ? "Nothing in progress." : "Nothing here.")">
             @(tab switch
@@ -134,6 +137,8 @@ else if (items is not null)
                             </div>
                         }
                     </div>
+                    @if (Mine)
+                    {
                     <div class="progress-actions">
                         @if (p.NextEpisode is { } next && p.Status != ShowTrackStatus.Dropped)
                         {
@@ -142,6 +147,7 @@ else if (items is not null)
                         }
                         <button class="icon-btn" @onclick="() => menuFor = menuFor == p.ShowTmdbId ? null : p.ShowTmdbId" aria-label="More options for @p.Name" aria-expanded="@(menuFor == p.ShowTmdbId)"><Icon Name="more" Size="18" /></button>
                     </div>
+                    }
                 </div>
             }
         </div>
@@ -175,6 +181,13 @@ else if (items is not null)
 <ReloadOnMenu OnChange="Load" />
 @code {
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    /// <summary>Someone else's progress (read-only), shared at u/{name}/progress.</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    private string BasePath => Other is { } n ? $"u/{Uri.EscapeDataString(n)}/progress" : "progress";
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? loadedFor = "\0";
     [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
     /// <summary>TV shows are the default; franchises only when asked for.</summary>
     private bool Franchises => View == "franchises";
@@ -193,6 +206,18 @@ else if (items is not null)
 
     protected override async Task OnParametersSetAsync()
     {
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
+        // Someone else's (or back to yours): start over.
+        if (loadedFor != Other)
+        {
+            loadedFor = Other;
+            items = null; franchises = null; selecting = false; selected.Clear();
+            await Load();
+        }
         // Only when the address changes, so a re-render doesn't undo tabs picked on the page.
         if ((TabParam, SortParam) != applied)
         {
@@ -219,7 +244,8 @@ else if (items is not null)
     private async Task LoadFranchises()
     {
         ferror = null;
-        try { franchises = await Api.FranchiseProgressAsync(); }
+        try { franchises = await Api.FranchiseProgressAsync(Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { ferror = $"{Other}'s progress is private, or there's no such member."; }
         catch (Exception ex) { ferror = ex.Message; }
     }
 
@@ -243,6 +269,7 @@ else if (items is not null)
     private async Task SetSort(ChangeEventArgs e)
     {
         if (!Enum.TryParse<UpNextSort>(e.Value?.ToString(), out var s) || s == Sort) return;
+        if (!Mine) { sortOverride = s; return; }   // someone else's: just this view, not your setting
         sortOverride = null;
         Session.Update(me => me with { UpNextSort = s });
         try { await Api.SetPreferencesAsync(new PreferencesRequest(UpNextSort: s)); }
@@ -357,12 +384,11 @@ else if (items is not null)
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    protected override Task OnInitializedAsync() => Load();
-
     private async Task Load()
     {
         error = null;
-        try { items = await Api.ProgressAsync(); }
+        try { items = await Api.ProgressAsync(Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s progress is private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
 

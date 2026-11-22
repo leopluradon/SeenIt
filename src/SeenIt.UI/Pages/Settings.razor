@@ -1684,8 +1684,9 @@ else { <h1>Settings</h1> }
     private static readonly (string, string)[] StartPages =
         [("home", "Home"), ("progress", "Progress"), ("calendar", "Calendar"), ("watchlist", "Watchlist"), ("discover", "Discover")];
     private static readonly (ProfilePart, string)[] Parts =
-        [(ProfilePart.History, "History"), (ProfilePart.Ratings, "Ratings"), (ProfilePart.Stats, "Stats"), (ProfilePart.WatchingNow, "Watching now"),
-         (ProfilePart.Favorites, "Favorites"), (ProfilePart.Sources, "Where you watched (Jellyfin, Plex, Letterboxd…)"), (ProfilePart.WatchingApp, "Which app you're watching on")];
+        [(ProfilePart.History, "History and progress"), (ProfilePart.Ratings, "Ratings"), (ProfilePart.Stats, "Stats and month/year in review"), (ProfilePart.WatchingNow, "Watching now"),
+         (ProfilePart.Favorites, "Favorites"), (ProfilePart.Watchlist, "Watchlist"), (ProfilePart.Library, "Library"),
+         (ProfilePart.Sources, "Where you watched (Jellyfin, Plex, Letterboxd…)"), (ProfilePart.WatchingApp, "Which app you're watching on")];
     private static string VisibilityName(ProfileVisibility v) => v switch { ProfileVisibility.Public => "everyone", ProfileVisibility.Private => "only me", _ => "friends" };
 
     /// <summary>Changes the UserPrefs bundle, applies it straight away and saves it.</summary>

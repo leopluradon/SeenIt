@@ -1,15 +1,17 @@
 @page "/ratings"
-@attribute [Authorize]
+@page "/u/{UserName}/ratings"
+@* No [Authorize]: someone's shared ratings follow their Ratings privacy; your own need signing in. *@
 @inject ApiClient Api
 @inject SessionState Session
 @inject NavigationManager Nav
 @inject Toasts Toasts
 @inject Confirm Confirmer
-<PageTitle>Ratings · SeenIt</PageTitle>
+<PageTitle>@(Other is { } on ? $"{on}'s ratings" : "Ratings") · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
 <div class="page-head">
-    <h1>Ratings</h1>
-    <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
+    <h1>@(Other is { } o ? $"{o}'s ratings" : "Ratings")</h1>
+    @if (Mine) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
     <div class="segmented">
         <button class="@(filter is null ? "on" : "")" @onclick="() => SetFilter(null)">All</button>
         <button class="@(filter == MediaType.Movie ? "on" : "")" @onclick="() => SetFilter(MediaType.Movie)">Movies</button>
@@ -159,7 +161,22 @@ else if (items is not null)
         return PagePrefs.SetSortAsync(Session, Api, "ratings", s);
     }
 
-    protected override Task OnInitializedAsync() => Load();
+    /// <summary>Someone else's ratings (read-only), shared at u/{name}/ratings.</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? loadedFor = "\0";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
+        if (loadedFor != Other) { loadedFor = Other; items = null; selecting = false; selected.Clear(); await Load(); }
+    }
 
     // Type and score go in the address, so Back from a title returns to the same filtered list.
     [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
@@ -179,7 +196,9 @@ else if (items is not null)
 
     private async Task Load()
     {
-        try { items = await Api.RatingsAsync(); }
+        error = null;
+        try { items = await Api.RatingsAsync(user: Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s ratings are private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
 }

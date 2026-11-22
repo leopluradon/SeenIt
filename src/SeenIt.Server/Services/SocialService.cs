@@ -129,12 +129,22 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
     }
 
     /// <summary>The account behind a profile, if the viewer may see its history (same rule as the profile).</summary>
-    public async Task<AppUser?> ViewableAsync(string userName, Guid? viewer, CancellationToken ct)
+    public Task<AppUser?> ViewableAsync(string userName, Guid? viewer, CancellationToken ct) => ViewableAsync(userName, viewer, ProfilePart.History, ct);
+
+    /// <summary>
+    /// The account behind a shared page (their progress, ratings, stats…), if the viewer may see that part of
+    /// it, with whether they may also see where things were watched. Null: no such member, or not for them.
+    /// </summary>
+    public async Task<AppUser?> ViewableAsync(string userName, Guid? viewer, ProfilePart part, CancellationToken ct) =>
+        (await SharedAsync(userName, viewer, part, ct))?.Owner;
+
+    public async Task<(AppUser Owner, bool Sources)?> SharedAsync(string userName, Guid? viewer, ProfilePart part, CancellationToken ct)
     {
         var owner = await FindAsync(userName);
         if (owner is null) return null;
         var (following, followsYou) = await RelationAsync(viewer, owner.Id, ct);
-        return CanSee(owner, viewer, following && followsYou, ProfilePart.History) ? owner : null;
+        var mutual = following && followsYou;
+        return CanSee(owner, viewer, mutual, part) ? (owner, CanSee(owner, viewer, mutual, ProfilePart.Sources)) : null;
     }
 
     /// <summary>
