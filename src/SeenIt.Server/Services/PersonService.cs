@@ -127,7 +127,8 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
             var watched = ca.Type == MediaType.Movie ? ca.Watched : ca.Watched && cb.Watched;
             var partly = !watched && ca.Type == MediaType.Show && (ca.Watched || cb.Watched || ca.PartlySeen || cb.PartlySeen);
             return new PairCredit(ca.Type, ca.TmdbId, ca.Title, ca.Date ?? cb.Date, ca.PosterPath ?? cb.PosterPath, ra, rb,
-                ca.Type == MediaType.Show ? ca.EpisodeCount : null, cb.Type == MediaType.Show ? cb.EpisodeCount : null, watched, partly);
+                ca.Type == MediaType.Show ? ca.EpisodeCount : null, cb.Type == MediaType.Show ? cb.EpisodeCount : null, watched, partly,
+                ca.Appearance || cb.Appearance);
         }).OrderByDescending(c => c.Date is null).ThenByDescending(c => c.Date).ToList();
         static PersonHit Brief(PersonDetail p) => new(p.Id, p.Name, p.ProfilePath, p.KnownFor, []);
         return new PersonPair(Brief(pa), Brief(pb), credits);

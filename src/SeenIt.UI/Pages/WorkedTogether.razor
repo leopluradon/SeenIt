@@ -20,10 +20,11 @@ else if (pair is { } pr)
         }
     </div>
     <h1 class="pair-title">@pr.A.Name &amp; @pr.B.Name</h1>
-    var seen = pr.Credits.Count(c => c.Watched);
-    var tvCount = pr.Credits.Count(c => c.Type == MediaType.Show);
+    var together = pr.Credits.Where(c => !c.Appearance).ToList();
+    var seen = together.Count(c => c.Watched);
+    var tvCount = together.Count(c => c.Type == MediaType.Show);
     <p class="muted">
-        @(pr.Credits.Count == 0 ? "No movies or shows together on TMDB." : $"{Plural(pr.Credits.Count - tvCount, "movie")} and {Plural(tvCount, "show")} together")@if (Session.Me is not null && pr.Credits.Count > 0) { <span> · you've seen @seen</span> }
+        @(together.Count == 0 ? "No movies or shows together on TMDB." : $"{Plural(together.Count - tvCount, "movie")} and {Plural(tvCount, "show")} together")@if (Session.Me is not null && together.Count > 0) { <span> · you've seen @seen</span> }
     </p>
     @if (pr.Credits.Count > 0)
     {
@@ -31,26 +32,17 @@ else if (pair is { } pr)
         {
             <label class="check small seen-only"><input type="checkbox" @bind="seenOnly" /> Only show what I've watched</label>
         }
-        <ol class="filmography">
-            @foreach (var c in pr.Credits.Where(c => !seenOnly || c.Watched))
-            {
-                <li @key="(c.Type, c.TmdbId)">
-                    <a class="film-row @(c.Watched ? "watched" : c.PartlySeen ? "partly" : "")" href="@Fmt.Href(c.Type, c.TmdbId)" data-ctx="@Menu.Title(c.Type, c.TmdbId, c.Title, c.PosterPath)">
-                        <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
-                        <span class="film-main">
-                            <b>@c.Title</b>
-                            <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")</span>
-                            <span class="small pair-roles">
-                                <span>@pr.A.Name: @(c.RoleA ?? "credited")@if (c.EpisodesA is > 0 and var ea) { <text> · </text><Spoiler Force="Blur(c)">@Plural(ea, "episode")</Spoiler> }</span>
-                                <span>@pr.B.Name: @(c.RoleB ?? "credited")@if (c.EpisodesB is > 0 and var eb) { <text> · </text><Spoiler Force="Blur(c)">@Plural(eb, "episode")</Spoiler> }</span>
-                            </span>
-                        </span>
-                        @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
-                        else if (c.PartlySeen) { <span class="ep-partly" title="@($"You've watched some of {c.Title}, but not with both of them in it")" aria-label="Partly seen">◐</span> }
-                    </a>
-                </li>
-            }
-        </ol>
+        var work = pr.Credits.Where(c => !c.Appearance && (!seenOnly || c.Watched)).ToList();
+        @if (work.Count > 0) { <ol class="filmography">@foreach (var c in work) { @Row(pr, c) }</ol> }
+        else { <p class="muted">@(seenOnly ? "Nothing you've watched." : "Only appearances as themselves.")</p> }
+        var appearances = pr.Credits.Where(c => c.Appearance && (!seenOnly || c.Watched)).ToList();
+        @if (appearances.Count > 0)
+        {
+            <details class="appearances">
+                <summary>@Plural(appearances.Count, "talk show or appearance") as themselves</summary>
+                <ol class="filmography">@foreach (var c in appearances) { @Row(pr, c) }</ol>
+            </details>
+        }
     }
     <h2 class="pair-again">Someone else with @pr.A.Name</h2>
     <PersonPicker PersonId="A" />
@@ -78,6 +70,25 @@ else if (pair is { } pr)
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "One of these people isn't on TMDB."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
     }
+
+    private RenderFragment Row(PersonPair pr, PairCredit c) => __builder =>
+    {
+                <li @key="(c.Type, c.TmdbId)">
+                    <a class="film-row @(c.Watched ? "watched" : c.PartlySeen ? "partly" : "")" href="@Fmt.Href(c.Type, c.TmdbId)" data-ctx="@Menu.Title(c.Type, c.TmdbId, c.Title, c.PosterPath)">
+                        <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
+                        <span class="film-main">
+                            <b>@c.Title</b>
+                            <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")</span>
+                            <span class="small pair-roles">
+                                <span>@pr.A.Name: @(c.RoleA ?? "credited")@if (c.EpisodesA is > 0 and var ea) { <text> · </text><Spoiler Force="Blur(c)">@Plural(ea, "episode")</Spoiler> }</span>
+                                <span>@pr.B.Name: @(c.RoleB ?? "credited")@if (c.EpisodesB is > 0 and var eb) { <text> · </text><Spoiler Force="Blur(c)">@Plural(eb, "episode")</Spoiler> }</span>
+                            </span>
+                        </span>
+                        @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
+                        else if (c.PartlySeen) { <span class="ep-partly" title="@($"You've watched some of {c.Title}, but not with both of them in it")" aria-label="Partly seen">◐</span> }
+                    </a>
+                </li>
+    };
 
     private static string Plural(int n, string word) => $"{n:N0} {word}{(n == 1 ? "" : "s")}";
     // Episode counts follow Settings → Spoilers like on a person page: a show you've seen some of counts as partway.

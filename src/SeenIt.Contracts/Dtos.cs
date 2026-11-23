@@ -473,7 +473,8 @@ public record PersonPair(PersonHit A, PersonHit B, IReadOnlyList<PairCredit> Cre
 /// both of them in it); PartlySeen: a show you've watched some of, but not with both of them.
 /// </summary>
 public record PairCredit(MediaType Type, int TmdbId, string Title, DateOnly? Date, string? PosterPath,
-    string? RoleA, string? RoleB, int? EpisodesA, int? EpisodesB, bool Watched, bool PartlySeen);
+    string? RoleA, string? RoleB, int? EpisodesA, int? EpisodesB, bool Watched, bool PartlySeen,
+    bool Appearance = false);   // talk shows, documentaries, "Self" for either of them: listed apart, it's not working together
 
 public record CastMember(int Id, string Name, string? Character, string? ProfilePath, int? EpisodeCount = null);
 public record CrewMember(int Id, string Name, string Job, string? ProfilePath);
