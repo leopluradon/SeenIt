@@ -104,6 +104,36 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
     }
 
     /// <summary>
+    /// What two people both worked on: their filmographies (acting and crew, talk-show appearances included)
+    /// put side by side. Null if either isn't on TMDB.
+    /// </summary>
+    public async Task<PersonPair?> PairAsync(int a, int b, Guid? userId, CancellationToken ct)
+    {
+        var (pa, pb) = (await GetAsync(a, userId, ct), await GetAsync(b, userId, ct));
+        if (pa is null || pb is null) return null;
+        static Dictionary<(MediaType, int), (PersonCreditDto Credit, string? Role)> Works(PersonDetail p) =>
+            p.Cast.Select(c => (c, Role: c.Role is { Length: > 0 } r ? $"as {r}" : "Cast"))
+                .Concat(p.Crew.Select(c => (c, Role: c.Role)))
+                .GroupBy(x => (x.c.Type, x.c.TmdbId))
+                .ToDictionary(g => g.Key, g => (g.First().c with { EpisodeCount = g.Max(x => x.c.EpisodeCount) },
+                    string.Join(" · ", g.Select(x => x.Role).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct()) is { Length: > 0 } roles ? roles : null));
+        var wa = Works(pa);
+        var wb = Works(pb);
+        var credits = wa.Keys.Intersect(wb.Keys).Select(k =>
+        {
+            var (ca, ra) = wa[k];
+            var (cb, rb) = wb[k];
+            // A movie is simply seen; a show only fully if you've seen episodes with each of them in.
+            var watched = ca.Type == MediaType.Movie ? ca.Watched : ca.Watched && cb.Watched;
+            var partly = !watched && ca.Type == MediaType.Show && (ca.Watched || cb.Watched || ca.PartlySeen || cb.PartlySeen);
+            return new PairCredit(ca.Type, ca.TmdbId, ca.Title, ca.Date ?? cb.Date, ca.PosterPath ?? cb.PosterPath, ra, rb,
+                ca.Type == MediaType.Show ? ca.EpisodeCount : null, cb.Type == MediaType.Show ? cb.EpisodeCount : null, watched, partly);
+        }).OrderByDescending(c => c.Date is null).ThenByDescending(c => c.Date).ToList();
+        static PersonHit Brief(PersonDetail p) => new(p.Id, p.Name, p.ProfilePath, p.KnownFor, []);
+        return new PersonPair(Brief(pa), Brief(pb), credits);
+    }
+
+    /// <summary>
     /// Their shows you're partway through: you've seen an episode, and there's an aired regular episode you haven't.
     /// A show whose episodes aren't cached yet counts too (better to hide a count than give something away).
     /// </summary>

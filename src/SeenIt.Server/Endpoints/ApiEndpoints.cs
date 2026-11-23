@@ -104,6 +104,9 @@ public static class ApiEndpoints
 
         g.MapGet("/person/{id:int}", async (int id, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
             await people.GetAsync(id, p.OptionalUserId(), ct) is { } person ? Results.Ok(person) : Results.NotFound());
+        // What two people both worked on (person/{id}/with/{other}).
+        g.MapGet("/person/{id:int}/with/{other:int}", async (int id, int other, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
+            await people.PairAsync(id, other, p.OptionalUserId(), ct) is { } pair ? Results.Ok(pair) : Results.NotFound());
 
         g.MapGet("/providers/{type}/{id:int}", async (MediaType type, int id, string? region, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
         {

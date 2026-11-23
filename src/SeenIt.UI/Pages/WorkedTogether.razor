@@ -1,0 +1,85 @@
+@page "/person/{A:int}/with/{B:int}"
+@* What two people both worked on, and which of it you've seen: like a person page for the pair. *@
+@inject ApiClient Api
+@inject SessionState Session
+<PageTitle>@(pair is { } t ? $"{t.A.Name} & {t.B.Name}" : "Worked together") · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
+@if (pair is null && error is null) { <Spinner /> }
+else if (pair is { } pr)
+{
+    <nav class="crumbs"><a href="@($"person/{A}")"><Icon Name="chevron-left" Size="16" /> @pr.A.Name</a></nav>
+    <div class="pair-head">
+        @foreach (var who in new[] { pr.A, pr.B })
+        {
+            <a class="pair-person" href="@($"person/{who.Id}")" @key="who.Id">
+                @if (Img.Profile(who.ProfilePath) is { } src) { <img src="@src" alt="" /> } else { <span class="cast-fallback">@who.Name[..1]</span> }
+                <b>@who.Name</b>
+                @if (who.Department is { } d) { <span class="muted small">@d</span> }
+            </a>
+        }
+    </div>
+    <h1 class="pair-title">@pr.A.Name &amp; @pr.B.Name</h1>
+    var seen = pr.Credits.Count(c => c.Watched);
+    var tvCount = pr.Credits.Count(c => c.Type == MediaType.Show);
+    <p class="muted">
+        @(pr.Credits.Count == 0 ? "No movies or shows together on TMDB." : $"{Plural(pr.Credits.Count - tvCount, "movie")} and {Plural(tvCount, "show")} together")@if (Session.Me is not null && pr.Credits.Count > 0) { <span> · you've seen @seen</span> }
+    </p>
+    @if (pr.Credits.Count > 0)
+    {
+        @if (Session.Me is not null)
+        {
+            <label class="check small seen-only"><input type="checkbox" @bind="seenOnly" /> Only show what I've watched</label>
+        }
+        <ol class="filmography">
+            @foreach (var c in pr.Credits.Where(c => !seenOnly || c.Watched))
+            {
+                <li @key="(c.Type, c.TmdbId)">
+                    <a class="film-row @(c.Watched ? "watched" : c.PartlySeen ? "partly" : "")" href="@Fmt.Href(c.Type, c.TmdbId)" data-ctx="@Menu.Title(c.Type, c.TmdbId, c.Title, c.PosterPath)">
+                        <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
+                        <span class="film-main">
+                            <b>@c.Title</b>
+                            <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")</span>
+                            <span class="small pair-roles">
+                                <span>@pr.A.Name: @(c.RoleA ?? "credited")@if (c.EpisodesA is > 0 and var ea) { <text> · </text><Spoiler Force="Blur(c)">@Plural(ea, "episode")</Spoiler> }</span>
+                                <span>@pr.B.Name: @(c.RoleB ?? "credited")@if (c.EpisodesB is > 0 and var eb) { <text> · </text><Spoiler Force="Blur(c)">@Plural(eb, "episode")</Spoiler> }</span>
+                            </span>
+                        </span>
+                        @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
+                        else if (c.PartlySeen) { <span class="ep-partly" title="@($"You've watched some of {c.Title}, but not with both of them in it")" aria-label="Partly seen">◐</span> }
+                    </a>
+                </li>
+            }
+        </ol>
+    }
+    <h2 class="pair-again">Someone else with @pr.A.Name</h2>
+    <PersonPicker PersonId="A" />
+}
+@code {
+    [Parameter] public int A { get; set; }
+    [Parameter] public int B { get; set; }
+    private PersonPair? pair;
+    private string? error;
+    private bool notFound, seenOnly;
+    private (int, int)? loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded == (A, B)) return;
+        loaded = (A, B);
+        pair = null;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null; notFound = false;
+        try { pair = await Api.PersonPairAsync(A, B); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "One of these people isn't on TMDB."; notFound = true; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static string Plural(int n, string word) => $"{n:N0} {word}{(n == 1 ? "" : "s")}";
+    // Episode counts follow Settings → Spoilers like on a person page: a show you've seen some of counts as partway.
+    private static bool Blur(PairCredit c) => Fmt.BlurCounts(c.PartlySeen, false);
+}

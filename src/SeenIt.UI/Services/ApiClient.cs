@@ -97,6 +97,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>An IMDb/TMDB id or link; null when the query isn't one.</summary>
     public Task<LookupResult?> LookupAsync(string q) => SendAsync<LookupResult>(HttpMethod.Get, $"api/catalog/lookup?q={Uri.EscapeDataString(q)}");
 
+    public Task<PersonPair> PersonPairAsync(int a, int b) => GetAsync<PersonPair>($"api/catalog/person/{a}/with/{b}")!;
     public Task<PagedResult<PersonHit>> SearchPeopleAsync(string q, int page = 1) =>
         GetAsync<PagedResult<PersonHit>>($"api/catalog/search/people?q={Uri.EscapeDataString(q)}&page={page}");
 

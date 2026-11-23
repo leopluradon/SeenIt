@@ -1957,3 +1957,16 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 
 /* A setting with its own dropdown inside a list of checkboxes (Settings → Spoilers). */
 .pref-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+
+/* ----- Two people side by side (person/{a}/with/{b}) ----- */
+.pair-head { display: flex; gap: 18px; margin: 8px 0 6px; }
+.pair-person { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 120px; text-align: center; color: var(--text); }
+.pair-person img, .pair-person .cast-fallback { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
+.pair-title { margin: 6px 0 2px; }
+.pair-roles { display: flex; flex-wrap: wrap; gap: 2px 14px; color: var(--text-2); }
+.pair-again { font-size: 1.05rem; margin: 28px 0 8px; }
+.person-picker { position: relative; max-width: 420px; margin: 10px 0; }
+.person-picker-hits { list-style: none; margin: 6px 0 0; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); }
+.person-picker-hits button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; background: none; border: 0; border-radius: var(--radius-sm); color: var(--text); text-align: left; cursor: pointer; }
+.person-picker-hits button:hover { background: var(--surface-3); }
+.person-picker-hits img, .person-picker-hits .cast-fallback { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: grid; place-items: center; font-size: .8rem; }

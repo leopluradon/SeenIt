@@ -45,6 +45,8 @@ else if (p is not null)
                 @* Wikidata sends this to their English Wikipedia article (or the Wikidata page when there isn't one). *@
                 @if (p.WikidataId is { Length: > 0 } wd) { <a href="@($"https://www.wikidata.org/wiki/Special:GoToLinkedPage/enwiki/{Uri.EscapeDataString(wd)}")" target="_blank" rel="noopener">Wikipedia</a> }
             </div>
+            @* What they made with someone else, and which of it you've seen (person/{id}/with/{other}). *@
+            <PersonPicker PersonId="p.Id" Placeholder="@($"What has {p.Name} worked on with…")" />
         </div>
     </div>
 

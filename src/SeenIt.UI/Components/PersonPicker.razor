@@ -1,0 +1,52 @@
+@* "Worked with…": search for someone and open what they and this person both worked on (person/{id}/with/{other}). *@
+@inject ApiClient Api
+@inject NavigationManager Nav
+<div class="person-picker">
+    <div class="searchbar">
+        <Icon Name="search" Size="16" />
+        <input type="search" @bind="q" @bind:event="oninput" @bind:after="Debounce" placeholder="@Placeholder" aria-label="@Placeholder" />
+    </div>
+    @if (hits is { Count: > 0 })
+    {
+        <ul class="person-picker-hits" role="listbox">
+            @foreach (var h in hits.Where(h => h.Id != PersonId).Take(6))
+            {
+                <li role="option" @key="h.Id">
+                    <button type="button" @onclick="() => Pick(h)">
+                        @if (Img.Profile(h.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> } else { <span class="cast-fallback">@h.Name[..1]</span> }
+                        <span><b>@h.Name</b>@if (h.KnownFor.Count > 0) { <span class="muted small"> · @string.Join(", ", h.KnownFor.Take(2))</span> }</span>
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+    else if (searched && q.Trim().Length > 1) { <p class="muted small">Nobody found.</p> }
+</div>
+@code {
+    /// <summary>The person whose page this is; the one picked is compared with them.</summary>
+    [Parameter, EditorRequired] public int PersonId { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Worked with… (search for someone)";
+    private string q = "";
+    private List<PersonHit>? hits;
+    private bool searched;
+    private CancellationTokenSource? debounce;
+
+    private async Task Debounce()
+    {
+        debounce?.Cancel();
+        debounce = new CancellationTokenSource();
+        try { await Task.Delay(300, debounce.Token); }
+        catch (TaskCanceledException) { return; }
+        var term = q.Trim();
+        if (term.Length < 2) { hits = null; searched = false; return; }
+        try { hits = (await Api.SearchPeopleAsync(term)).Items.ToList(); }
+        catch { hits = []; }
+        searched = true;
+    }
+
+    private void Pick(PersonHit h)
+    {
+        q = ""; hits = null; searched = false;
+        Nav.NavigateTo($"person/{PersonId}/with/{h.Id}");
+    }
+}

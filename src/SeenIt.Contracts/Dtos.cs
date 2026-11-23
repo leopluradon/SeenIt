@@ -466,6 +466,15 @@ public record Suggestion(string Kind, int Id, string Title, int? Year, string? I
 
 public record PersonHit(int Id, string Name, string? ProfilePath, string? Department, IReadOnlyList<string> KnownFor);
 
+/// <summary>Two people and what they both have a credit in (acting or behind the camera), newest first.</summary>
+public record PersonPair(PersonHit A, PersonHit B, IReadOnlyList<PairCredit> Credits);
+/// <summary>
+/// A title both worked on, with each one's part ("as Bakta", "Director"). Watched: you've seen it (a show: seen
+/// both of them in it); PartlySeen: a show you've watched some of, but not with both of them.
+/// </summary>
+public record PairCredit(MediaType Type, int TmdbId, string Title, DateOnly? Date, string? PosterPath,
+    string? RoleA, string? RoleB, int? EpisodesA, int? EpisodesB, bool Watched, bool PartlySeen);
+
 public record CastMember(int Id, string Name, string? Character, string? ProfilePath, int? EpisodeCount = null);
 public record CrewMember(int Id, string Name, string Job, string? ProfilePath);
 public record Video(string Key, string Name, string Site, string Type);
