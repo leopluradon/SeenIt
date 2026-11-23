@@ -164,7 +164,7 @@ public record UserPrefs(
     ProfileVisibility? WatchingAppVisibility = null,
     bool HideWhereToWatch = false,                   // no "Where to watch" section on movie and show pages
     bool BlurEpisodeCounts = false,                  // spoilers: blur how many episodes someone is in, for shows you're partway through
-    bool BlurAllEpisodeCounts = false)               // … for every show (takes over from BlurEpisodeCounts)
+    bool BlurAllEpisodeCounts = false)               // … for every show you haven't finished, started or not (takes over from BlurEpisodeCounts)
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];

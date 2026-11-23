@@ -187,8 +187,10 @@ public static class Fmt
         return null;
     }
 
-    /// <summary>Whether a cast's "N episodes" is blurred (Settings → Spoilers): for every show, or only ones you're partway through.</summary>
-    public static bool BlurCounts(bool partway) => Prefs.BlurAllEpisodeCounts || (Prefs.BlurEpisodeCounts && partway);
+    /// <summary>Whether a cast's "N episodes" is blurred (Settings → Spoilers): for every show you haven't finished,
+    /// or only ones you're partway through. A show you've finished never is.</summary>
+    public static bool BlurCounts(bool partway, bool finished) =>
+        Prefs.BlurAllEpisodeCounts ? !finished : Prefs.BlurEpisodeCounts && partway;
 
     /// <summary>
     /// When something that long would be over if started now, in local time: "9:40 PM" today, "tomorrow 1:15 AM",

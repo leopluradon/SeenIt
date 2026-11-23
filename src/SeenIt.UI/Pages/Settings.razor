@@ -490,17 +490,7 @@ else { <h1>Settings</h1> }
                     </select>
                 }
             </div>
-            <div class="field">
-                <label for="score-spoilers">Spoiler-tag scores</label>
-                <select id="score-spoilers" class="fit-select" value="@Fmt.Prefs.ScoreSpoilers"
-                        @onchange='e => SavePrefs(p => p with { ScoreSpoilers = Enum.TryParse<ScoreSpoilers>(e.Value?.ToString(), out var v) ? v : ScoreSpoilers.Off }, "Saved")'>
-                    <option value="@ScoreSpoilers.Off">No, show them right away</option>
-                    <option value="@ScoreSpoilers.Unwatched">Hide until tapped on things I haven't watched</option>
-                    <option value="@ScoreSpoilers.Always">Hide until tapped everywhere</option>
-                </select>
-            </div>
-            <p class="muted small">Hidden scores are blurred; tap one to see it. A show or season counts as watched once you've seen every aired episode. Your own ratings always show.</p>
-            <button class="btn btn-sm btn-ghost" @onclick='() => SavePrefs(p => p with { Scores = null, HiddenScores = null, ScoreSpoilers = ScoreSpoilers.Off }, "Scores back to the default")'>Reset to default</button>
+            <button class="btn btn-sm btn-ghost" @onclick='() => SavePrefs(p => p with { Scores = null, HiddenScores = null }, "Scores back to the default")'>Reset to default</button>
         </section>
         <section class="panel" id="spoilers">
             <h2>Spoilers</h2>
@@ -524,9 +514,19 @@ else { <h1>Settings</h1> }
                             @onchange='e => SavePrefs(p => p with { BlurEpisodeCounts = e.Value as string == "partway", BlurAllEpisodeCounts = e.Value as string == "all" }, "Saved")'>
                         <option value="off">Never</option>
                         <option value="partway">For shows I'm partway through</option>
-                        <option value="all">For all shows</option>
+                        <option value="all">For shows I haven't finished</option>
                     </select>
                 </label>
+                <label class="pref-inline">
+                    <span>Blur scores (IMDb, Rotten Tomatoes…)</span>
+                    <select id="score-spoilers" class="fit-select" value="@Fmt.Prefs.ScoreSpoilers"
+                            @onchange='e => SavePrefs(p => p with { ScoreSpoilers = Enum.TryParse<ScoreSpoilers>(e.Value?.ToString(), out var v) ? v : ScoreSpoilers.Off }, "Saved")'>
+                        <option value="@ScoreSpoilers.Off">Never</option>
+                        <option value="@ScoreSpoilers.Unwatched">On things I haven't watched</option>
+                        <option value="@ScoreSpoilers.Always">Everywhere</option>
+                    </select>
+                </label>
+                <p class="muted small">A show or season counts as watched once you've seen every aired episode. Your own ratings always show.</p>
             </div>
         </section>
 

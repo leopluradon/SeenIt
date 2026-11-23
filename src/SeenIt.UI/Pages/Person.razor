@@ -257,7 +257,8 @@ else if (p is not null)
 
     /// <summary>How many episodes someone is in gives away who sticks around: blurred until tapped for a show you're partway through
     /// when that spoiler setting is on (Settings → Spoilers).</summary>
-    private static bool HideCount(PersonCreditDto c) => c.Type == MediaType.Show && Fmt.BlurCounts(c.Watching);
+    // Finished: you've started it (seen them in it, or other episodes) and nothing aired is left (not Watching).
+    private static bool HideCount(PersonCreditDto c) => c.Type == MediaType.Show && Fmt.BlurCounts(c.Watching, (c.Watched || c.PartlySeen) && !c.Watching);
 
     /// <summary>Their most popular work on TMDB in what they're known for (a director's films before their cameos), then the rest.</summary>
     private List<PersonCreditDto> KnownFor
