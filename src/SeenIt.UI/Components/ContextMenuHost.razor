@@ -260,7 +260,8 @@
         {
             <button type="button" class="ctx-item" role="menuitem" @onclick="() => Through(t)"><Icon Name="history" Size="16" /> <span>Mark everything up to here…</span></button>
         }
-        @if (!isShow && s is { Plays: > 0 })
+        @* With only the one play, "Delete this play" below does the same, so it's the only one offered. *@
+        @if (!isShow && s is { Plays: > 0 } && !(t.Play is not null && s.Plays == 1))
         {
             <button type="button" class="ctx-item" role="menuitem" @onclick="() => Unwatch(t)"><Icon Name="x" Size="16" /> <span>Mark unwatched</span><span class="ctx-hint">@(s.Plays > 1 ? $"all {s.Plays} plays" : "")</span></button>
         }
