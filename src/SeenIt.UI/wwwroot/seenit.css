@@ -1954,3 +1954,6 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .profile-pages { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; }
 .profile-pages a { color: var(--text-2); font-weight: 600; }
 .profile-pages a:hover { color: var(--text); }
+
+/* A setting with its own dropdown inside a list of checkboxes (Settings → Spoilers). */
+.pref-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }

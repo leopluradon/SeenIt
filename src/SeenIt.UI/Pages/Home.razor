@@ -51,7 +51,7 @@
                     @if (now is not null)
                     {
                         var what = now.Type == MediaType.Episode ? $"{now.Title} {Fmt.Ep(now.SeasonNumber, now.EpisodeNumber)}" : now.Title;
-                        @if (nowCast is { Count: > 0 } castNow) { <CastRow Cast="castNow" Title="@($"In {what}")" BlurEpisodeCounts="Fmt.Prefs.BlurEpisodeCounts" /> }
+                        @if (nowCast is { Count: > 0 } castNow) { <CastRow Cast="castNow" Title="@($"In {what}")" BlurEpisodeCounts="@Fmt.BlurCounts(true)" /> }
                         @if (nowGuests is { Count: > 0 } guests)
                         {
                             @if (Fmt.Prefs.HideGuestStars && !nowSeen && !showNowGuests)
@@ -61,7 +61,7 @@
                                     <button class="btn btn-sm hidden-guests" @onclick="() => showNowGuests = true"><Icon Name="eye" Size="14" /> Hidden to avoid spoilers. Show guest stars</button>
                                 </section>
                             }
-                            else { <CastRow Cast="guests" Title="@($"Guest stars in {what}")" BlurEpisodeCounts="Fmt.Prefs.BlurEpisodeCounts" /> }
+                            else { <CastRow Cast="guests" Title="@($"Guest stars in {what}")" BlurEpisodeCounts="@Fmt.BlurCounts(true)" /> }
                         }
                     }
                     break;

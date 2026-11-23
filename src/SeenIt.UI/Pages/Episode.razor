@@ -151,7 +151,7 @@ else if (e is not null)
         }
     </section>
 
-    <CastRow Cast="@(e.Cast ?? [])" Title="Cast" BlurEpisodeCounts="@(Fmt.Prefs.BlurEpisodeCounts && Partway(e))" />
+    <CastRow Cast="@(e.Cast ?? [])" Title="Cast" BlurEpisodeCounts="@Fmt.BlurCounts(Partway(e))" />
     @if (Fmt.Prefs.HideGuestStars && !Seen && !showGuests && e.GuestStars.Count > 0)
     {
         <section class="row-section">
@@ -159,7 +159,7 @@ else if (e is not null)
             <button class="btn btn-sm hidden-guests" @onclick="() => showGuests = true"><Icon Name="eye" Size="14" /> Hidden to avoid spoilers. Show guest stars</button>
         </section>
     }
-    else { <CastRow Cast="e.GuestStars" Title="Guest stars" BlurEpisodeCounts="@(Fmt.Prefs.BlurEpisodeCounts && Partway(e))" /> }
+    else { <CastRow Cast="e.GuestStars" Title="Guest stars" BlurEpisodeCounts="@Fmt.BlurCounts(Partway(e))" /> }
 
     <RatePrompt @bind-Open="ratePrompt" Title="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" OnRate="Rate" RecommendType="MediaType.Show" RecommendId="Id" RecommendTitle="@e.ShowName" />
     <WatchDialog @bind-Open="watchOpen" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" ReleaseDate="e.AirDate" OnPick="Watch" AskWhen="askWhen"

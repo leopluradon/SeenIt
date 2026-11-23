@@ -518,9 +518,14 @@ else { <h1>Settings</h1> }
                     <input type="checkbox" checked="@Fmt.Prefs.HideGuestStars" @onchange='e => SavePrefs(p => p with { HideGuestStars = (bool)e.Value! }, "Saved")' />
                     Hide guest stars of episodes I haven't watched
                 </label>
-                <label class="check">
-                    <input type="checkbox" checked="@Fmt.Prefs.BlurEpisodeCounts" @onchange='e => SavePrefs(p => p with { BlurEpisodeCounts = (bool)e.Value! }, "Saved")' />
-                    Blur how many episodes someone is in, for shows I'm partway through
+                <label class="pref-inline">
+                    <span>Blur how many episodes someone is in</span>
+                    <select class="fit-select" value="@(Fmt.Prefs.BlurAllEpisodeCounts ? "all" : Fmt.Prefs.BlurEpisodeCounts ? "partway" : "off")"
+                            @onchange='e => SavePrefs(p => p with { BlurEpisodeCounts = e.Value as string == "partway", BlurAllEpisodeCounts = e.Value as string == "all" }, "Saved")'>
+                        <option value="off">Never</option>
+                        <option value="partway">For shows I'm partway through</option>
+                        <option value="all">For all shows</option>
+                    </select>
                 </label>
             </div>
         </section>

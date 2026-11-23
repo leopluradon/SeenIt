@@ -225,7 +225,7 @@ else if (s is not null)
         </div>
     </section>
 
-    <CastRow Cast="s.Cast" BlurEpisodeCounts="@(Fmt.Prefs.BlurEpisodeCounts && s.Progress is { Watched: > 0 } pr && pr.Watched < pr.Aired)" />
+    <CastRow Cast="s.Cast" BlurEpisodeCounts="@Fmt.BlurCounts(s.Progress is { Watched: > 0 } pr && pr.Watched < pr.Aired)" />
     <Trailers Videos="s.Videos" />
     <PosterRow Title="You might also like" Items="s.Recommendations" EmptyText="No recommendations yet." />
 

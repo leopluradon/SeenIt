@@ -150,7 +150,7 @@ else if (season is not null)
             </a>
         }
     </nav>
-    <CastRow Cast="@(season.Cast ?? [])" Title="Cast this season" BlurEpisodeCounts="@(Fmt.Prefs.BlurEpisodeCounts && Partway(season))" />
+    <CastRow Cast="@(season.Cast ?? [])" Title="Cast this season" BlurEpisodeCounts="@Fmt.BlurCounts(Partway(season))" />
 
     <WatchDialog @bind-Open="watchAllOpen" What="@season.Name" Bulk="true" OnPick="WatchSeason" Through="seasonThrough" ThroughNote=" in the earlier seasons" />
     <WatchDialog Open="pending is not null" OpenChanged="o => { if (!o) pending = null; }"
