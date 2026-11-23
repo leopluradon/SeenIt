@@ -99,10 +99,6 @@ else if (s is not null)
                 ("Per episode", s.EpisodeRuntime is > 0 ? "~" + Fmt.Runtime(s.EpisodeRuntime) : null),
                 ("You've watched", s.WatchedMinutes > 0 ? Fmt.Duration(s.WatchedMinutes) : null),
                 ("Left to watch", s.User is not null && s.WatchedMinutes > 0 ? Fmt.Duration(s.RemainingMinutes) : null),
-                // One day: just when. Otherwise when you started and when you last watched.
-                (s.FirstWatchedAt is { } fw && s.LastWatchedAt is { } lw && fw.ToLocalTime().Date == lw.ToLocalTime().Date ? "Watched" : "Started",
-                    s.FirstWatchedAt is { } f ? f.ToLocalTime().ToString(Fmt.DateLong) : null),
-                ("Last watched", s.FirstWatchedAt is { } f2 && s.LastWatchedAt is { } l && f2.ToLocalTime().Date != l.ToLocalTime().Date ? l.ToLocalTime().ToString(Fmt.DateLong) : null),
                 ("Aired", s.FirstAirDate is { } fa ? $"{fa.Year}–{(s.Status is "Ended" or "Canceled" or "Removed from TMDB" ? s.LastAirDate?.Year.ToString() : "")}" : null),
             ])" />
         <div class="detail-cols">
@@ -145,6 +141,7 @@ else if (s is not null)
                         <span class="muted small">@(p.Aired == 0 ? 0 : 100 * p.Watched / p.Aired)%</span>
                     </div>
                     <ProgressBar Value="p.Watched" Max="p.Aired" />
+                    @if (WatchSpan(s) is { } span) { <div class="muted small watch-span">@span</div> }
                     @if (p.Rewatch is null && (p.Completed || p.RewatchesCompleted > 0))
                     {
                         <div class="inline spread next-ep">
@@ -482,4 +479,21 @@ else if (s is not null)
         return async () => { await u(); await InvokeAsync(async () => { await Load(); StateHasChanged(); }); };
     }
 
+
+    /// <summary>
+    /// When you started and when you last watched, and how many days that spans: "Watched over 12 days: Mar 3 – Mar 14,
+    /// 2026" once it's finished, "Started Mar 3, 2026 · last watched Nov 20 · 263 days" while it isn't; one day: "Watched Mar 3".
+    /// </summary>
+    private static string? WatchSpan(ShowDetail s)
+    {
+        if (s.FirstWatchedAt is not { } f || s.LastWatchedAt is not { } l) return null;
+        var first = f.ToLocalTime().Date;
+        var last = l.ToLocalTime().Date;
+        var days = (last - first).Days + 1;
+        if (days == 1) return $"Watched {first.ToString(Fmt.DateLong)}";
+        var range = first.Year == last.Year ? $"{first.ToString(Fmt.DateShort)} – {last.ToString(Fmt.DateLong)}" : $"{first.ToString(Fmt.DateLong)} – {last.ToString(Fmt.DateLong)}";
+        return s.Progress is { Completed: true, Rewatch: null }
+            ? $"Watched over {days:N0} days: {range}"
+            : $"Started {first.ToString(Fmt.DateLong)} · last watched {last.ToString(first.Year == last.Year ? Fmt.DateShort : Fmt.DateLong)} · {days:N0} days";
+    }
 }

@@ -1970,3 +1970,5 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .person-picker-hits button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; background: none; border: 0; border-radius: var(--radius-sm); color: var(--text); text-align: left; cursor: pointer; }
 .person-picker-hits button:hover { background: var(--surface-3); }
 .person-picker-hits img, .person-picker-hits .cast-fallback { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: grid; place-items: center; font-size: .8rem; }
+
+.watch-span { margin-top: 6px; }
