@@ -528,6 +528,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
         Dictionary<int, int> watchedPerSeason = [];
         Dictionary<int, DateTimeOffset> completedPerSeason = [];
         var trackStatus = ShowTrackStatus.Watching;
+        DateTimeOffset? firstWatched = null, lastWatched = null;
         if (userId is { } uid)
         {
             user = await GetUserStateAsync(uid, MediaType.Show, id, ct);
@@ -544,6 +545,8 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
                     completedPerSeason[season.SeasonNumber] = done;
             if (watched.Count > 0)
                 progress = (await new ProgressCalculator(db).ForUserAsync(uid, [id], ct)).FirstOrDefault();
+            var dated = watched.Where(w => !WatchDates.IsUnknown(w.WatchedAt)).Select(w => w.WatchedAt).ToList();
+            if (dated.Count > 0) (firstWatched, lastWatched) = (dated.Min(), dated.Max());
         }
 
         // The next episode's exact time and channel, when TVmaze has them.
@@ -580,7 +583,7 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             s.NextEpisodeToAir is { } n ? marker.Mark(id, new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, nextDay ?? TmdbDates.Parse(n.AirDate), AirsAt: nextAt, Network: nextNetwork)) : null,
             user,
             progress,
-            totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus, ShowCrew(s));
+            totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus, ShowCrew(s), firstWatched, lastWatched);
     }
 
     /// <summary>Running time of the whole show from the cached episode list (regular seasons only).</summary>

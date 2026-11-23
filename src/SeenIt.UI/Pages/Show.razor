@@ -99,6 +99,10 @@ else if (s is not null)
                 ("Per episode", s.EpisodeRuntime is > 0 ? "~" + Fmt.Runtime(s.EpisodeRuntime) : null),
                 ("You've watched", s.WatchedMinutes > 0 ? Fmt.Duration(s.WatchedMinutes) : null),
                 ("Left to watch", s.User is not null && s.WatchedMinutes > 0 ? Fmt.Duration(s.RemainingMinutes) : null),
+                // One day: just when. Otherwise when you started and when you last watched.
+                (s.FirstWatchedAt is { } fw && s.LastWatchedAt is { } lw && fw.ToLocalTime().Date == lw.ToLocalTime().Date ? "Watched" : "Started",
+                    s.FirstWatchedAt is { } f ? f.ToLocalTime().ToString(Fmt.DateLong) : null),
+                ("Last watched", s.FirstWatchedAt is { } f2 && s.LastWatchedAt is { } l && f2.ToLocalTime().Date != l.ToLocalTime().Date ? l.ToLocalTime().ToString(Fmt.DateLong) : null),
                 ("Aired", s.FirstAirDate is { } fa ? $"{fa.Year}–{(s.Status is "Ended" or "Canceled" or "Removed from TMDB" ? s.LastAirDate?.Year.ToString() : "")}" : null),
             ])" />
         <div class="detail-cols">

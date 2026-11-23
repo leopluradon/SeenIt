@@ -583,7 +583,9 @@ public record ShowDetail(
     long WatchedMinutes = 0,
     long RemainingMinutes = 0,    // aired episodes you haven't watched
     ShowTrackStatus TrackStatus = ShowTrackStatus.Watching,
-    IReadOnlyList<CrewMember>? Crew = null);   // created by, and who directed, wrote and scored the most episodes
+    IReadOnlyList<CrewMember>? Crew = null,    // created by, and who directed, wrote and scored the most episodes
+    DateTimeOffset? FirstWatchedAt = null,     // your first and latest dated episode plays (rewatches included)
+    DateTimeOffset? LastWatchedAt = null);
 
 /// <summary>A milestone episode, shown as a badge: S01E01, a season's first or last, or the very last.</summary>
 public enum EpisodeMark { None, SeriesPremiere, SeasonPremiere, SeasonFinale, SeriesFinale }
