@@ -248,22 +248,35 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
 
         var details = await Task.WhenAll(showCredits.Select(async g =>
         {
+            // A credit can list episodes (a guest's) and seasons (a regular's) at once: someone who guested in a
+            // season, or became a regular and then only appeared now and then (FROM's Bakta: seasons 2 and 3 as a
+            // regular, then six season 4 episodes).
             var episodes = new HashSet<(int, int)>();
+            var seasons = new HashSet<int>();
             foreach (var credit in g.Where(c => c.CreditId is not null && c.Job is null))   // cast credits only
             {
                 try
                 {
                     var d = await tmdb.GetCreditAsync(credit.CreditId!, ct);
                     foreach (var e in d?.Media?.Episodes ?? []) episodes.Add((e.SeasonNumber, e.EpisodeNumber));
+                    foreach (var se in d?.Media?.Seasons ?? []) seasons.Add(se.SeasonNumber);
                 }
                 catch (HttpRequestException ex) { log.LogInformation(ex, "Credit {Id} lookup failed", credit.CreditId); }
             }
             var mine = watchedEpisodes[g.Key];
             var created = Jobs("tv", g.Key) is not null;
-            var guest = episodes.Count > 0 && !created;   // their own show: all of it
-            var keys = guest ? mine.Keys.Where(episodes.Contains).ToList()
-                : created || !g.Any(c => c.Job is null) ? mine.Keys.ToList()
-                : await RegularEpisodesAsync(personId, g.Key, mine.Keys, s => episodeMeta.Keys.Count(e => e.ShowTmdbId == g.Key && e.SeasonNumber == s), ct);
+            int InSeason(int season) => episodeMeta.Keys.Count(e => e.ShowTmdbId == g.Key && e.SeasonNumber == season);
+            var guest = episodes.Count > 0 && seasons.Count == 0 && !created;   // their own show: all of it
+            List<(int, int)> keys;
+            if (created || !g.Any(c => c.Job is null)) keys = mine.Keys.ToList();
+            else if (guest) keys = mine.Keys.Where(episodes.Contains).ToList();
+            else if (episodes.Count > 0)
+            {
+                // Both: their listed episodes, and the seasons they're a regular in (checked like any regular's).
+                var regular = await RegularEpisodesAsync(personId, g.Key, mine.Keys.Where(k => seasons.Contains(k.Item1)), InSeason, ct);
+                keys = mine.Keys.Where(episodes.Contains).Union(regular).ToList();
+            }
+            else keys = await RegularEpisodesAsync(personId, g.Key, mine.Keys, InSeason, ct);
             return (Show: g.Key, Credits: g, Guest: guest, Keys: keys);
         }));
 
