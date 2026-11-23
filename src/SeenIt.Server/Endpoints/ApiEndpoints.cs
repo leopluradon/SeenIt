@@ -460,6 +460,8 @@ public static class ApiEndpoints
         // Recommending titles to friends.
         g.MapGet("/friend-recs", (ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) => r.ListAsync(p.UserId(), ct));
         g.MapGet("/friend-recs/recipients", (ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) => r.RecipientsAsync(p.UserId(), ct));
+        g.MapGet("/friend-recs/sent/{type}/{id:int}", (MediaType type, int id, ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) =>
+            r.SentAsync(p.UserId(), type, id, ct));
         g.MapGet("/friend-recs/{type}/{id:int}", (MediaType type, int id, ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) =>
             r.ForTitleAsync(p.UserId(), type, id, ct));
         g.MapPost("/friend-recs", (RecommendRequest req, ClaimsPrincipal p, FriendRecommendationService r, CancellationToken ct) => r.SendAsync(p.UserId(), req, ct));

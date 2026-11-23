@@ -19,9 +19,17 @@
                         <Avatar Name="@u.Name" Url="@u.Avatar" Class="avatar-sm" />
                         <span class="recipient-name">@u.Name</span>
                         @if (u.Following) { <span class="muted tiny" title="You follow each other">friend</span> }
+                        @if (before.TryGetValue(u.UserName, out var at))
+                        {
+                            <span class="pill pill-sm sent-before" title="Sending again updates the note and puts it back at the top of their list">Sent @at.ToLocalTime().ToString(Fmt.DateShort)</span>
+                        }
                     </label>
                 }
             </div>
+            @if (chosen.Any(before.ContainsKey) is true)
+            {
+                <p class="small warn-note"><Icon Name="send" Size="14" /> You've already recommended @Title to @string.Join(", ", people.Where(p => chosen.Contains(p.UserName) && before.ContainsKey(p.UserName)).Select(p => p.Name)). Sending again updates your note and puts it back at the top of their list.</p>
+            }
             <label class="stack-tight">
                 <span class="small">Note <span class="muted">(optional)</span></span>
                 <textarea rows="3" maxlength="500" placeholder="Why they'd like it" @bind="note" @bind:event="oninput"></textarea>
@@ -40,6 +48,8 @@
     [Parameter, EditorRequired] public int TmdbId { get; set; }
     [Parameter] public string Title { get; set; } = "this";
     private List<UserCard>? people;
+    /// <summary>Who you've already sent this to, and when.</summary>
+    private Dictionary<string, DateTimeOffset> before = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> chosen = [];
     private string? note;
     private bool busy, wasOpen;
@@ -50,8 +60,11 @@
         {
             chosen.Clear();
             note = null;
+            before = new(StringComparer.OrdinalIgnoreCase);
+            var sent = Api.RecommendedBeforeAsync(Type, TmdbId);
             try { people = await Api.RecommendRecipientsAsync(); }
             catch (Exception ex) { people = []; Toasts.Error(ex); }
+            try { before = (await sent).ToDictionary(x => x.UserName, x => x.At, StringComparer.OrdinalIgnoreCase); } catch { /* just not marked */ }
         }
         wasOpen = Open;
     }

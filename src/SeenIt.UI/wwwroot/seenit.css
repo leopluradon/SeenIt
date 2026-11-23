@@ -1972,3 +1972,7 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .person-picker-hits img, .person-picker-hits .cast-fallback { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: grid; place-items: center; font-size: .8rem; }
 
 .watch-span { margin-top: 6px; }
+
+/* Recommend dialog: who you've already sent it to. */
+.sent-before { margin-left: auto; }
+.warn-note { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-2); margin: 0; }

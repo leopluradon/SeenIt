@@ -305,6 +305,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     public Task<RecommendationsDto> FriendRecsAsync() => GetAsync<RecommendationsDto>("api/friend-recs");
     public Task<List<UserCard>> RecommendRecipientsAsync() => GetAsync<List<UserCard>>("api/friend-recs/recipients");
+    public Task<List<RecommendedBefore>> RecommendedBeforeAsync(MediaType type, int id) => GetAsync<List<RecommendedBefore>>($"api/friend-recs/sent/{type}/{id}");
     public Task<List<RecommendationDto>> RecommendedToMeAsync(MediaType type, int id) => GetAsync<List<RecommendationDto>>($"api/friend-recs/{type}/{id}");
     public async Task<RecommendResult> RecommendAsync(RecommendRequest r) => (await SendAsync<RecommendResult>(HttpMethod.Post, "api/friend-recs", r))!;
     public Task DismissRecAsync(Guid id, bool undo = false) => SendAsync(HttpMethod.Post, $"api/friend-recs/{id}/dismiss{(undo ? "?undo=true" : "")}", null);

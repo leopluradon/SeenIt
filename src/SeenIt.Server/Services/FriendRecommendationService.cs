@@ -23,6 +23,12 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
             .OrderByDescending(c => c.Following).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>Who you've already recommended this title to, so the dialog can say so (sending again is still allowed).</summary>
+    public async Task<List<RecommendedBefore>> SentAsync(Guid me, MediaType type, int tmdbId, CancellationToken ct) =>
+        (await db.Recommendations.AsNoTracking().Where(r => r.FromId == me && r.Type == type && r.TmdbId == tmdbId)
+            .Join(db.Users, r => r.ToId, u => u.Id, (r, u) => new { u.UserName, r.CreatedAt }).ToListAsync(ct))
+        .Select(x => new RecommendedBefore(x.UserName!, x.CreatedAt)).ToList();
+
     public async Task<RecommendResult> SendAsync(Guid me, RecommendRequest req, CancellationToken ct)
     {
         if (req.Type is not (MediaType.Movie or MediaType.Show)) throw new TrackingException("Only movies and shows can be recommended.");
