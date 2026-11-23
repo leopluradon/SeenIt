@@ -367,7 +367,6 @@
         {
             <button type="button" class="ctx-item" role="menuitem" @onclick="() => NewTab(t)"><Icon Name="external" Size="16" /> <span>Open in new tab</span></button>
         }
-        <button type="button" class="ctx-item" role="menuitem" @onclick="() => CopyLink(t)"><Icon Name="link" Size="16" /> <span>Copy link</span></button>
         <button type="button" class="ctx-item" role="menuitem" @onclick="() => Share(t)"><Icon Name="share" Size="16" /> <span>Share…</span></button>
     };
 
@@ -661,14 +660,7 @@
         await Platform.OpenExternalAsync(Platform.PublicUrl(Href(t)));
     }
 
-    private async Task CopyLink(MenuTarget t)
-    {
-        Close();
-        var ok = false;
-        try { ok = await Js.InvokeAsync<bool>("seenit.copyText", Platform.PublicUrl(Href(t))); } catch (JSException) { }
-        Toasts.Show(ok ? "Link copied" : "Couldn't copy the link", error: !ok);
-    }
-
+    /// <summary>The share sheet has "Copy"; where there's no share sheet this copies the link itself, so there's no separate Copy link.</summary>
     private async Task Share(MenuTarget t)
     {
         Close();
