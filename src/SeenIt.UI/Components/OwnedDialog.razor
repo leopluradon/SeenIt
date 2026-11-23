@@ -13,7 +13,7 @@
                     <button class="btn btn-sm @(on ? "btn-on" : "")" disabled="@busy" aria-pressed="@on" @onclick="() => ToggleFormat(f, on)">
                         @if (on) { <Icon Name="check" Size="14" /> } @OwnedFormats.Label(f)
                     </button>
-                    @if (on && Type == MediaType.Show && Seasons is { Count: > 0 } seasons)
+                    @if (on && Type == MediaType.Show && (Seasons ?? fetchedSeasons) is { Count: > 0 } seasons)
                     {
                         var whole = mine.Any(c => c.SeasonNumber is null);
                         <div class="chips owned-seasons" role="group" aria-label="@($"Seasons on {OwnedFormats.Label(f)}")">
@@ -43,16 +43,26 @@
     [Parameter] public string Title { get; set; } = "this";
     /// <summary>What you own of it now (ItemStatus/UserMediaState.Copies).</summary>
     [Parameter] public IReadOnlyList<OwnedCopy>? Copies { get; set; }
-    /// <summary>A show's season numbers, to pick from; without them a show can only be owned whole.</summary>
+    /// <summary>A show's season numbers, to pick from. Left out (the ⋯ / long-press menu), they're looked up when the dialog opens.</summary>
     [Parameter] public IReadOnlyList<int>? Seasons { get; set; }
+    private IReadOnlyList<int>? fetchedSeasons;
+    private int fetchedFor;
     [Parameter] public EventCallback OnChanged { get; set; }
     private List<OwnedCopy> copies = [];
     private bool busy, wasOpen, changed;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        if (Open && !wasOpen) { copies = [.. Copies ?? []]; changed = false; }
+        var opening = Open && !wasOpen;
+        if (opening) { copies = [.. Copies ?? []]; changed = false; }
         wasOpen = Open;
+        if (opening && Type == MediaType.Show && Seasons is null && fetchedFor != TmdbId)
+        {
+            fetchedFor = TmdbId;
+            fetchedSeasons = null;
+            try { fetchedSeasons = (await Api.ShowAsync(TmdbId)).Seasons.Select(x => x.SeasonNumber).ToList(); }
+            catch { /* the whole show can still be owned */ }
+        }
     }
 
     private static OwnedCopy New(OwnedFormat f, int? season) => new(f, season, WatchSource.Manual, DateTimeOffset.Now);
