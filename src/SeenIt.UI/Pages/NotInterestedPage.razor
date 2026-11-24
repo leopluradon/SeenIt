@@ -12,8 +12,22 @@
 else if (items is { Count: 0 }) { <Empty Title="Nothing hidden." /> }
 else if (items is not null)
 {
+    <div class="filter-row">
+        <div class="searchbar">
+            <Icon Name="search" Size="16" />
+            <input type="search" @bind="find" @bind:event="oninput" placeholder="Find a title" aria-label="Find a hidden title" />
+        </div>
+        <div class="segmented segmented-sm">
+            <button class="@(kind is null ? "on" : "")" @onclick="() => kind = null">All</button>
+            <button class="@(kind == MediaType.Movie ? "on" : "")" @onclick="() => kind = MediaType.Movie">Movies</button>
+            <button class="@(kind == MediaType.Show ? "on" : "")" @onclick="() => kind = MediaType.Show">Shows</button>
+        </div>
+    </div>
+    var shown = items.Where(i => (kind is null || i.Media.Type == kind)
+        && (find.Trim() is not { Length: > 0 } f || i.Media.Title.Contains(f, StringComparison.OrdinalIgnoreCase))).ToList();
+    @if (shown.Count == 0) { <p class="muted">Nothing matches.</p> }
     <div class="poster-grid">
-        @foreach (var i in items)
+        @foreach (var i in shown)
         {
             <PosterCard Media="i.Media" ShowScore="false" Sub="@($"Hidden {(i.AddedAt.ToLocalTime()).ToString(Fmt.DateLong)}")" OnDismiss="Undo" @key="(i.Media.Type, i.Media.TmdbId)" />
         }
@@ -22,6 +36,8 @@ else if (items is not null)
 @code {
     private List<NotInterestedEntry>? items;
     private string? error;
+    private string find = "";
+    private MediaType? kind;
 
     protected override Task OnInitializedAsync() => Load();
 

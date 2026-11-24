@@ -20,11 +20,17 @@
         <button class="chip @(ftab == "done" ? "on" : "")" @onclick='() => ftab = "done"'>Completed</button>
         <button class="chip @(ftab == "all" ? "on" : "")" @onclick='() => ftab = "all"'>All</button>
     </div>
+<div class="filter-row">
+    <div class="searchbar">
+        <Icon Name="search" Size="16" />
+        <input type="search" @bind="find" @bind:event="oninput" placeholder="@(Franchises ? "Find a franchise" : "Find a show")" aria-label="Find" />
+    </div>
+</div>
     <ErrorBox Message="@ferror" OnRetry="LoadFranchises" />
     @if (franchises is null && ferror is null) { <Spinner /> }
     else if (franchises is not null)
     {
-        var fshown = franchises.Where(f => ftab switch { "progress" => f.Seen < f.Released, "done" => f.Seen >= f.Released, _ => true }).ToList();
+        var fshown = franchises.Where(f => ftab switch { "progress" => f.Seen < f.Released, "done" => f.Seen >= f.Released, _ => true } && Found(f.Name)).ToList();
         @if (fshown.Count == 0)
         {
             <Empty Title="@(ftab == "done" ? "No finished franchises yet." : "No franchises in progress.")">Watch a movie that's part of a series (Star Wars, Harry Potter, the MCU…) and it shows up here.</Empty>
@@ -79,6 +85,12 @@ else
             @foreach (var s in Enum.GetValues<UpNextSort>()) { <option value="@s">@UpNextSorts.Label(s)</option> }
         </select>
     </label>
+</div>
+<div class="filter-row">
+    <div class="searchbar">
+        <Icon Name="search" Size="16" />
+        <input type="search" @bind="find" @bind:event="oninput" placeholder="@(Franchises ? "Find a franchise" : "Find a show")" aria-label="Find" />
+    </div>
 </div>
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> }
@@ -335,7 +347,11 @@ else if (items is not null)
 
     private string Count(ShowTrackStatus st) => items?.Count(p => p.Status == st) is > 0 and var n ? $" {n}" : "";
 
-    private bool InTab(ShowProgressDto p) => tab switch
+    /// <summary>The "Find a show / franchise" box: a name containing what's typed.</summary>
+    private string find = "";
+    private bool Found(string name) => find.Trim() is not { Length: > 0 } f || name.Contains(f, StringComparison.OrdinalIgnoreCase);
+
+    private bool InTab(ShowProgressDto p) => Found(p.Name) && tab switch
     {
         "watching" => p.NextEpisode is not null && p.Status == ShowTrackStatus.Watching,
         "waiting" => p.NextEpisode is null && p.Status != ShowTrackStatus.Dropped,

@@ -1976,3 +1976,7 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 /* Recommend dialog: who you've already sent it to. */
 .sent-before { margin-left: auto; }
 .warn-note { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-2); margin: 0; }
+
+/* A page's own filters (search plus a few pickers), on one wrapping row. */
+.filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 4px 0 10px; }
+.filter-row .searchbar { flex: 1 1 220px; max-width: 360px; margin: 0; }

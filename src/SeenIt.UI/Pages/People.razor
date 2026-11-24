@@ -38,8 +38,25 @@ else if (people is not null)
 
     <section class="row-section">
         <div class="section-head"><h2>Following <span class="muted small">@people.Count</span></h2></div>
+        <div class="filter-row">
+            <div class="searchbar">
+                <Icon Name="search" Size="16" />
+                <input type="search" @bind="find" @bind:event="oninput" placeholder="Find someone" aria-label="Find someone you follow" />
+            </div>
+            @{ var departments = people.Select(x => x.Department).OfType<string>().Distinct().Order().ToList(); }
+            @if (departments.Count > 1)
+            {
+                <div class="chips">
+                    <button class="chip @(department is null ? "on" : "")" @onclick="() => department = null">All</button>
+                    @foreach (var d in departments) { <button class="chip @(department == d ? "on" : "")" @onclick="() => department = d" @key="d">@d</button> }
+                </div>
+            }
+        </div>
+        @{ var shownPeople = people.Where(x => (department is null || x.Department == department)
+               && (find.Trim() is not { Length: > 0 } f || x.Name.Contains(f, StringComparison.OrdinalIgnoreCase))).ToList(); }
+        @if (shownPeople.Count == 0) { <p class="muted">Nobody matches.</p> }
         <div class="people-list">
-            @foreach (var p in people)
+            @foreach (var p in shownPeople)
             {
                 <div class="people-row" @key="p.Id">
                     <a href="@($"person/{p.Id}")" class="people-photo">
@@ -70,6 +87,8 @@ else if (people is not null)
     private List<FollowedPerson>? people;
     private string? error;
     private bool busy;
+    private string find = "";
+    private string? department;
 
     protected override Task OnInitializedAsync() => Load();
 

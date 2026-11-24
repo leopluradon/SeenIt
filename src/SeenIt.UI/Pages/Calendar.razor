@@ -24,6 +24,34 @@
     <button class="chip @(hideWatched ? "on" : "")" @onclick="() => SetFilter(() => hideWatched = !hideWatched)" aria-pressed="@hideWatched">Hide watched</button>
     <button class="chip @(hidePremieres ? "on" : "")" @onclick="() => SetFilter(() => hidePremieres = !hidePremieres)" aria-pressed="@hidePremieres" title="Season premieres of shows that are only on your watchlist">Hide premieres of shows I haven't started</button>
 </div>
+@* One show, or one channel / streaming service, from what's in the range on screen (not remembered: it changes as you move). *@
+@if (items is { Count: > 0 })
+{
+    var showChoices = items.Where(c => c.Type != MediaType.Movie).GroupBy(c => c.TmdbId).Select(g => (Id: g.Key, g.First().Title)).OrderBy(x => x.Title).ToList();
+    var networkChoices = items.Select(c => c.Network).OfType<string>().Distinct().Order().ToList();
+    <div class="filter-row">
+        @if (showChoices.Count > 1 || onlyShow is not null)
+        {
+            <label class="sort-pick">
+                <span class="muted small">Show</span>
+                <select value="@(onlyShow?.ToString() ?? "")" @onchange="e => onlyShow = int.TryParse(e.Value as string, out var id) ? id : null">
+                    <option value="">All shows</option>
+                    @foreach (var (id, title) in showChoices) { <option value="@id">@title</option> }
+                </select>
+            </label>
+        }
+        @if (networkChoices.Count > 1 || network is not null)
+        {
+            <label class="sort-pick">
+                <span class="muted small">On</span>
+                <select value="@(network ?? "")" @onchange="e => network = e.Value as string is { Length: > 0 } n ? n : null">
+                    <option value="">Any channel or service</option>
+                    @foreach (var n in networkChoices) { <option value="@n">@n</option> }
+                </select>
+            </label>
+        }
+    </div>
+}
 <p class="muted small">@(month ? anchor.ToString("MMMM yyyy") : $"{(from).ToString(Fmt.DateShort)} – {(from.AddDays(Days - 1)).ToString(Fmt.DateLong)}")</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
@@ -103,8 +131,13 @@ else if (items is not null)
         </a>
     };
 
+    private int? onlyShow;
+    private string? network;
+
     private bool Keep(CalendarEntry c) =>
         (kind is null || c.Type == kind || (kind == MediaType.Episode && c.Type == MediaType.Show))
+        && (onlyShow is null || (c.Type != MediaType.Movie && c.TmdbId == onlyShow))
+        && (network is null || c.Network == network)
         && (!hideWatched || !c.Watched)
         && (!hidePremieres || c.Type != MediaType.Episode || c.Started || c.EpisodeNumber != 1);
 

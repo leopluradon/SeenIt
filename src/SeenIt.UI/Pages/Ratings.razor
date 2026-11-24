@@ -35,6 +35,23 @@
         }
     }
 </div>
+@* Find a title, and narrow to when it was rated (in the address with type and score). *@
+<div class="filter-row">
+    <div class="searchbar">
+        <Icon Name="search" Size="16" />
+        <input type="search" @bind="find" @bind:event="oninput" @bind:after="Remember" placeholder="Find a title" aria-label="Find a rated title" />
+    </div>
+    @if (items is { Count: > 0 })
+    {
+        <label class="sort-pick">
+            <span class="muted small">Rated in</span>
+            <select value="@(year?.ToString() ?? "")" @onchange="e => { year = int.TryParse(e.Value as string, out var y) ? y : null; Remember(); }" aria-label="Rated in">
+                <option value="">Any year</option>
+                @foreach (var y in items.Select(i => i.RatedAt.ToLocalTime().Year).Distinct().OrderByDescending(y => y)) { <option value="@y">@y</option> }
+            </select>
+        </label>
+    }
+</div>
 <div class="chips">
     @foreach (var (key, label) in Sorts)
     {
@@ -112,7 +129,11 @@ else if (items is not null)
     private static readonly (string Key, string Label)[] Sorts = [("recent", "Recently rated"), ("high", "Highest first"), ("low", "Lowest first"), ("title", "Title")];
     private string sort = Sorts.Any(x => x.Key == Fmt.Prefs.SortFor("ratings")) ? Fmt.Prefs.SortFor("ratings")! : "recent";
 
+    private string find = "";
+    private int? year;
     private bool Matches(RatingEntry r) => (filter is null || r.Type == filter)
+        && (find.Trim() is not { Length: > 0 } f || r.Title.Contains(f, StringComparison.OrdinalIgnoreCase))
+        && (year is null || r.RatedAt.ToLocalTime().Year == year)
         && (stars is null || (Fmt.Scale == RatingScale.Thumbs ? RatingThumbs.Liked(r.Rating) == (stars >= 6)
             : (Fmt.FiveStars ? (int)Math.Round(r.Rating, MidpointRounding.AwayFromZero) : (int)Math.Floor(r.Rating + 1e-9)) == stars));
 
@@ -181,10 +202,14 @@ else if (items is not null)
     // Type and score go in the address, so Back from a title returns to the same filtered list.
     [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
     [SupplyParameterFromQuery(Name = "score")] public int? ScoreParam { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "year")] public int? YearParam { get; set; }
     protected override void OnParametersSet()
     {
         filter = Enum.TryParse<MediaType>(TypeParam, true, out var t) ? t : null;
         stars = ScoreParam is >= 1 and <= 10 ? ScoreParam : null;
+        if (QParam is not null && QParam != find.Trim()) find = QParam;   // typing updates the address; don't fight it
+        year = YearParam;
     }
     private void SetFilter(MediaType? f) { filter = f; Remember(); }
     private void SetStars(int? n) { stars = n; Remember(); }
@@ -192,6 +217,8 @@ else if (items is not null)
     {
         ["type"] = filter?.ToString().ToLowerInvariant(),
         ["score"] = stars,
+        ["q"] = find.Trim() is { Length: > 0 } q ? q : null,
+        ["year"] = year,
     }), replace: true);
 
     private async Task Load()

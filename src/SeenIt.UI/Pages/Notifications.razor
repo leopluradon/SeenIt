@@ -19,7 +19,25 @@ else if (data is { Items.Count: 0 })
 }
 else if (data is not null)
 {
-    @foreach (var day in data.Items.GroupBy(n => n.Day))
+    <div class="filter-row">
+        <div class="searchbar">
+            <Icon Name="search" Size="16" />
+            <input type="search" @bind="find" @bind:event="oninput" placeholder="Find a title" aria-label="Find an alert" />
+        </div>
+        <div class="chips">
+            @foreach (var (key, label) in Kinds)
+            {
+                @if (key == "" || data.Items.Any(n => KindOf(n) == key))
+                {
+                    <button class="chip @(kind == key ? "on" : "")" @onclick="() => kind = key" @key="key">@label</button>
+                }
+            }
+            <button class="chip @(newOnly ? "on" : "")" aria-pressed="@newOnly" @onclick="() => newOnly = !newOnly">New only</button>
+        </div>
+    </div>
+    var items = data.Items.Where(Matches).ToList();
+    @if (items.Count == 0) { <p class="muted">Nothing matches.</p> }
+    @foreach (var day in items.GroupBy(n => n.Day))
     {
         <section class="cal-day">
             <h3 class="day-head">@Fmt.Day(day.Key) @if (Fmt.DayNote(day.Key) is { } dn) { <span class="muted small">@dn</span> }</h3>
@@ -42,6 +60,17 @@ else if (data is not null)
 @code {
     private NotificationsDto? data;
     private string? error;
+
+    // Filters: a kind of alert, only new ones, a title.
+    private static readonly (string Key, string Label)[] Kinds =
+        [("", "All"), ("episode", "Episodes"), ("movie", "Movies"), ("show", "New series"), ("rec", "Recommended to me"), ("recwatched", "Friends watched my picks")];
+    private string kind = "";
+    private bool newOnly;
+    private string find = "";
+    private static string KindOf(NotificationDto n) => n.RecommendationWatched ? "recwatched" : n.Recommendation ? "rec"
+        : n.Type switch { MediaType.Episode => "episode", MediaType.Movie => "movie", _ => "show" };
+    private bool Matches(NotificationDto n) => (kind == "" || KindOf(n) == kind) && (!newOnly || !n.Read)
+        && (find.Trim() is not { Length: > 0 } f || n.Title.Contains(f, StringComparison.OrdinalIgnoreCase) || n.Detail?.Contains(f, StringComparison.OrdinalIgnoreCase) == true);
 
     protected override Task OnInitializedAsync() => Load();
 
