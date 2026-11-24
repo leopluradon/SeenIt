@@ -43,7 +43,9 @@ else if (c is not null)
         var kind = Kind(key);
         var find = finds.GetValueOrDefault(key, "");
         var searching = !string.IsNullOrWhiteSpace(find);
-        var shown = items.Where(i => (kind == "all" || i.Media.Type == (kind == "movie" ? MediaType.Movie : MediaType.Show)) && TextMatch.Contains(i.Media.Title, find)).ToList();
+        var shown = Sorted(key, items.Where(i => (kind == "all" || i.Media.Type == (kind == "movie" ? MediaType.Movie : MediaType.Show)) && TextMatch.Contains(i.Media.Title, find)
+            && InDecade(key, i) && RatedMatch(key, i))).ToList();
+        var recommendTo = RecommendTo(key);
         var expanded = open.Contains(key) || searching;   // matches show in full
         <section class="row-section compare-section" @key="key">
             <div class="section-head">
@@ -62,9 +64,41 @@ else if (c is not null)
             </div>
             @if (items.Count > 1)
             {
-                <div class="searchbar searchbar-sm compare-find">
-                    <Icon Name="search" Size="16" />
-                    <input type="search" value="@find" @oninput="e => finds[key] = e.Value?.ToString() ?? string.Empty" placeholder="Search this section" aria-label="@($"Search {title}")" />
+                <div class="filter-row compare-filters">
+                    <div class="searchbar searchbar-sm compare-find">
+                        <Icon Name="search" Size="16" />
+                        <input type="search" value="@find" @oninput="e => finds[key] = e.Value?.ToString() ?? string.Empty" placeholder="Search this section" aria-label="@($"Search {title}")" />
+                    </div>
+                    <label class="sort-pick">
+                        <span class="muted small">Sort</span>
+                        <select value="@sorts.GetValueOrDefault(key, "default")" @onchange='e => sorts[key] = e.Value as string ?? "default"' aria-label="@($"Sort {title}")">
+                            @foreach (var (sk, sl) in SortChoices(key, items)) { <option value="@sk">@sl</option> }
+                        </select>
+                    </label>
+                    @{ var decadeChoices = items.Select(i => i.Media.Year).OfType<int>().Select(y => y / 10 * 10).Distinct().OrderByDescending(d => d).ToList(); }
+                    @if (decadeChoices.Count > 1)
+                    {
+                        <label class="sort-pick">
+                            <span class="muted small">Decade</span>
+                            <select value="@(decades.GetValueOrDefault(key)?.ToString() ?? "")" @onchange="e => decades[key] = int.TryParse(e.Value as string, out var d) ? d : null" aria-label="@($"Decade in {title}")">
+                                <option value="">Any</option>
+                                @foreach (var d in decadeChoices) { <option value="@d">@(d)s</option> }
+                            </select>
+                        </label>
+                    }
+                    @if (key != "rated" && items.Any(i => i.A is not null || i.B is not null))
+                    {
+                        <label class="sort-pick">
+                            <span class="muted small">Ratings</span>
+                            <select value="@rated.GetValueOrDefault(key, "any")" @onchange='e => rated[key] = e.Value as string ?? "any"' aria-label="@($"Ratings in {title}")">
+                                <option value="any">Any</option>
+                                <option value="a">Rated by @c.A.Name</option>
+                                <option value="b">Rated by @c.B.Name</option>
+                                <option value="both">Rated by both</option>
+                                <option value="none">Not rated</option>
+                            </select>
+                        </label>
+                    }
                 </div>
             }
             @if (shown.Count == 0) { <p class="muted small">@(searching ? $"Nothing called “{find.Trim()}” here." : "None.")</p> }
@@ -73,14 +107,24 @@ else if (c is not null)
                 <div class="@(expanded ? "poster-grid" : "poster-scroller")">
                     @foreach (var i in expanded ? shown : shown.Take(RowSize))
                     {
-                        <PosterCard Media="i.Media" ShowScore="false" Sub="@Ratings(i)" SubTitle="@RatingsLong(i)"
-                                    Badge="@(key == "rated" ? (i.A == i.B ? "Agree" : Math.Abs(i.A!.Value - i.B!.Value) >= 4 ? "Disagree" : null) : null)"
-                                    @key="(i.Media.Type, i.Media.TmdbId)" />
+                        <div class="compare-card" @key="(i.Media.Type, i.Media.TmdbId)">
+                            <PosterCard Media="i.Media" ShowScore="false" Sub="@Ratings(i)" SubTitle="@RatingsLong(i)"
+                                        Badge="@(key == "rated" ? (i.A == i.B ? "Agree" : Math.Abs(i.A!.Value - i.B!.Value) >= 4 ? "Disagree" : null) : null)" />
+                            @if (recommendTo is { } other)
+                            {
+                                <button class="btn btn-sm btn-block compare-rec" @onclick="() => recommending = i.Media" title="@($"Recommend {i.Media.Title} to {other.Name}")"><Icon Name="send" Size="14" /> Recommend</button>
+                            }
+                        </div>
                     }
                 </div>
             }
         </section>
     }
+}
+
+@if (recommending is { } rm && c is not null && Other is { } them)
+{
+    <RecommendDialog Open="true" OpenChanged="o => { if (!o) recommending = null; }" Type="rm.Type" TmdbId="rm.TmdbId" Title="@rm.Title" To="@them.UserName" />
 }
 
 @code {
@@ -93,6 +137,59 @@ else if (c is not null)
     private readonly Dictionary<string, string> finds = [];
     private readonly Dictionary<string, string> kinds = [];
     private readonly HashSet<string> open = [];
+    // Per section: order, decade and who rated it (Search and Movies/TV are above).
+    private readonly Dictionary<string, string> sorts = [];
+    private readonly Dictionary<string, int?> decades = [];
+    private readonly Dictionary<string, string> rated = [];
+    private MediaSummary? recommending;
+
+    /// <summary>When you're one of the two: the other one.</summary>
+    private UserCard? Other => c is null || Session.Me is not { } me ? null
+        : string.Equals(c.A.UserName, me.UserName, StringComparison.OrdinalIgnoreCase) ? c.B
+        : string.Equals(c.B.UserName, me.UserName, StringComparison.OrdinalIgnoreCase) ? c.A : null;
+
+    /// <summary>Sections of what you've seen and they haven't get a Recommend button (to them).</summary>
+    private UserCard? RecommendTo(string key)
+    {
+        if (Other is not { } them || c is null) return null;
+        var meIsA = ReferenceEquals(them, c.B);
+        return (meIsA ? key is "a-only" or "a-loved" : key is "b-only" or "b-loved") ? them : null;
+    }
+
+    private IEnumerable<(string Key, string Label)> SortChoices(string key, IReadOnlyList<CompareItem> items)
+    {
+        yield return ("default", key switch { "rated" => "Closest agreement", "watched" or "a-only" or "b-only" => "Recently watched", _ => "Highest rated" });
+        if (key == "rated") yield return ("diff", "Biggest disagreement");
+        yield return ("title", "Title");
+        yield return ("newest", "Newest");
+        yield return ("oldest", "Oldest");
+        if (items.Any(i => i.A is not null)) yield return ("a", $"{c!.A.Name}'s rating");
+        if (items.Any(i => i.B is not null)) yield return ("b", $"{c!.B.Name}'s rating");
+        if (items.Any(i => i.Media.VoteAverage is > 0)) yield return ("tmdb", "TMDB score");
+    }
+
+    private IEnumerable<CompareItem> Sorted(string key, IEnumerable<CompareItem> items) => sorts.GetValueOrDefault(key, "default") switch
+    {
+        "diff" => items.OrderByDescending(i => Math.Abs((i.A ?? 0) - (i.B ?? 0))),
+        "title" => items.OrderBy(i => i.Media.Title, StringComparer.OrdinalIgnoreCase),
+        "newest" => items.OrderByDescending(i => i.Media.Year ?? 0),
+        "oldest" => items.OrderBy(i => i.Media.Year ?? int.MaxValue),
+        "a" => items.OrderByDescending(i => i.A ?? -1),
+        "b" => items.OrderByDescending(i => i.B ?? -1),
+        "tmdb" => items.OrderByDescending(i => i.Media.VoteAverage ?? -1),
+        _ => items,
+    };
+
+    private bool InDecade(string key, CompareItem i) => decades.GetValueOrDefault(key) is not { } d || i.Media.Year is { } y && y / 10 * 10 == d;
+
+    private bool RatedMatch(string key, CompareItem i) => rated.GetValueOrDefault(key, "any") switch
+    {
+        "a" => i.A is not null,
+        "b" => i.B is not null,
+        "both" => i.A is not null && i.B is not null,
+        "none" => i.A is null && i.B is null,
+        _ => true,
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -107,6 +204,9 @@ else if (c is not null)
         kinds.Clear();
         open.Clear();
         finds.Clear();
+        sorts.Clear();
+        decades.Clear();
+        rated.Clear();
         await Load();
     }
 

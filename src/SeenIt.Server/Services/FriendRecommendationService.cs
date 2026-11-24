@@ -44,6 +44,7 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
             : await db.Shows.Where(s => s.TmdbId == req.TmdbId).Select(s => new ValueTuple<string, string?>(s.Name, s.PosterPath)).FirstAsync(ct);
         var sender = await db.Users.AsNoTracking().FirstAsync(u => u.Id == me, ct);
         var note = string.IsNullOrWhiteSpace(req.Note) ? null : Trim(req.Note.Trim(), NoteMax);
+        if (req.Weight is < 1 or > 10) throw new TrackingException("Strength goes from 1 to 10.");
 
         var normalized = wanted.Select(w => w.ToUpperInvariant()).ToList();
         var targets = await db.Follows.Where(f => f.FolloweeId == me)
@@ -62,6 +63,7 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
                 db.Recommendations.Add(rec);
             }
             rec.Note = note;
+            rec.Weight = req.Weight;
             rec.CreatedAt = DateTimeOffset.UtcNow;
             rec.DismissedAt = null;
 
@@ -71,7 +73,15 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
                 // The recipient's own calendar day, so the alert files under "Today" for them rather than the UTC date.
                 UserId = to.Id, Type = req.Type, TmdbId = req.TmdbId, Title = headline, PosterPath = poster,
                 Day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ReviewService.Zone(to.TimeZone)).DateTime),
-                Detail = note is null ? null : Trim(note, 400), RecommendationId = rec.Id, Kind = AlertKind.Recommendation,
+                // The alert shows the note; with a strength, "9/10" leads it.
+                Detail = (req.Weight, note) switch
+                {
+                    (null, null) => null,
+                    ({ } w, null) => $"{w}/10",
+                    (null, { } n) => Trim(n, 400),
+                    ({ } w, { } n) => Trim($"{w}/10 · {n}", 400),
+                },
+                RecommendationId = rec.Id, Kind = AlertKind.Recommendation,
             });
         }
         await db.SaveChangesAsync(ct);
@@ -126,7 +136,7 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
             var played = plays.TryGetValue((me, r.Type, r.TmdbId), out var at);
             return new RecommendationDto(r.Id, media[(r.Type, r.TmdbId)], Card(senders[r.FromId], following.Contains(r.FromId), true), r.Note, r.CreatedAt,
                 r.DismissedAt is not null, played, played ? at : null, ratings.TryGetValue((me, r.Type, r.TmdbId), out var v) ? v : null,
-                watchlist.Contains((r.Type, r.TmdbId)));
+                watchlist.Contains((r.Type, r.TmdbId)), r.Weight);
         }).ToList();
     }
 
@@ -148,7 +158,7 @@ public class FriendRecommendationService(AppDbContext db, TrackingService tracki
             var played = plays.TryGetValue((r.ToId, r.Type, r.TmdbId), out var at);
             return new RecommendationDto(r.Id, media[(r.Type, r.TmdbId)], Card(recipients[r.ToId], following.Contains(r.ToId), followers.Contains(r.ToId)),
                 r.Note, r.CreatedAt, r.DismissedAt is not null,
-                canSee ? played : null, played ? at : null, ratings.TryGetValue((r.ToId, r.Type, r.TmdbId), out var v) ? v : null, false);
+                canSee ? played : null, played ? at : null, ratings.TryGetValue((r.ToId, r.Type, r.TmdbId), out var v) ? v : null, false, r.Weight);
         }).ToList();
     }
 

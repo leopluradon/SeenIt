@@ -596,6 +596,8 @@ public class Recommendation
     public MediaType Type { get; set; }   // Movie or Show
     public int TmdbId { get; set; }
     public string? Note { get; set; }
+    /// <summary>How strongly it's recommended, 1–10 (optional).</summary>
+    public int? Weight { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     /// <summary>The recipient cleared it from their inbox. The sender still sees it.</summary>
     public DateTimeOffset? DismissedAt { get; set; }

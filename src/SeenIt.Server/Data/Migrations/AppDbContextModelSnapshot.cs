@@ -1298,6 +1298,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("Weight")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("FromId", "CreatedAt");

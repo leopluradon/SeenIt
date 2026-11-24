@@ -789,12 +789,14 @@ public record RecapEpisode(int SeasonNumber, int EpisodeNumber, string? Name, st
 /// (null when their history or ratings aren't visible to you).
 /// </summary>
 public record RecommendationDto(Guid Id, MediaSummary Media, UserCard Who, string? Note, DateTimeOffset At, bool Dismissed,
-    bool? Watched, DateTimeOffset? WatchedAt, double? Rating, bool OnWatchlist);
+    bool? Watched, DateTimeOffset? WatchedAt, double? Rating, bool OnWatchlist,
+    int? Weight = null);   // how strongly it's recommended, 1–10, if the sender said
 public record RecommendationsDto(IReadOnlyList<RecommendationDto> Received, IReadOnlyList<RecommendationDto> Sent);
 /// <summary>Someone you've already recommended a title to, and when (the latest time).</summary>
 public record RecommendedBefore(string UserName, DateTimeOffset At);
 
-public record RecommendRequest(MediaType Type, int TmdbId, IReadOnlyList<string> To, string? Note);
+public record RecommendRequest(MediaType Type, int TmdbId, IReadOnlyList<string> To, string? Note,
+    int? Weight = null);   // optional strength, 1–10
 public record RecommendResult(int Sent, IReadOnlyList<string> Skipped);   // Skipped: names you can't send to
 
 public record HistoryEntry(

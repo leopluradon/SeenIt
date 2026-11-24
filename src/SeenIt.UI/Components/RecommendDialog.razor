@@ -10,6 +10,10 @@
         }
         else
         {
+            @if (To is { } wanted && !people.Any(p => string.Equals(p.UserName, wanted, StringComparison.OrdinalIgnoreCase)))
+            {
+                <p class="small warn-note">@wanted doesn't follow you, so you can't send them recommendations. You can still send it to the people below.</p>
+            }
             <p class="muted small">Goes to their alerts and their Recommendations page. You'll see when they watch it and what they rate it, if their history and ratings are visible to you.</p>
             <div class="recipient-list" role="group" aria-label="Who to send it to">
                 @foreach (var u in people)
@@ -30,6 +34,13 @@
             {
                 <p class="small warn-note"><Icon Name="send" Size="14" /> You've already recommended @Title to @string.Join(", ", people.Where(p => chosen.Contains(p.UserName) && before.ContainsKey(p.UserName)).Select(p => p.Name)). Sending again updates your note and puts it back at the top of their list.</p>
             }
+            <label class="pref-inline">
+                <span class="small">How strongly <span class="muted">(optional)</span></span>
+                <select class="fit-select" value="@(weight?.ToString() ?? "")" @onchange="e => weight = int.TryParse(e.Value as string, out var w) ? w : null" aria-label="How strongly you recommend it">
+                    <option value="">No strength</option>
+                    @for (var w = 10; w >= 1; w--) { <option value="@w">@w/10@(w == 10 ? " · must watch" : w == 1 ? " · if you've nothing else" : "")</option> }
+                </select>
+            </label>
             <label class="stack-tight">
                 <span class="small">Note <span class="muted">(optional)</span></span>
                 <textarea rows="3" maxlength="500" placeholder="Why they'd like it" @bind="note" @bind:event="oninput"></textarea>
@@ -47,6 +58,9 @@
     [Parameter, EditorRequired] public MediaType Type { get; set; }
     [Parameter, EditorRequired] public int TmdbId { get; set; }
     [Parameter] public string Title { get; set; } = "this";
+    /// <summary>Someone to have ticked already (Compare's Recommend button), if they're someone you can send to.</summary>
+    [Parameter] public string? To { get; set; }
+    private int? weight;
     private List<UserCard>? people;
     /// <summary>Who you've already sent this to, and when.</summary>
     private Dictionary<string, DateTimeOffset> before = new(StringComparer.OrdinalIgnoreCase);
@@ -60,11 +74,13 @@
         {
             chosen.Clear();
             note = null;
+            weight = null;
             before = new(StringComparer.OrdinalIgnoreCase);
             var sent = Api.RecommendedBeforeAsync(Type, TmdbId);
             try { people = await Api.RecommendRecipientsAsync(); }
             catch (Exception ex) { people = []; Toasts.Error(ex); }
             try { before = (await sent).ToDictionary(x => x.UserName, x => x.At, StringComparer.OrdinalIgnoreCase); } catch { /* just not marked */ }
+            if (To is { } to && people?.FirstOrDefault(p => string.Equals(p.UserName, to, StringComparison.OrdinalIgnoreCase)) is { } them) chosen.Add(them.UserName);
         }
         wasOpen = Open;
     }
@@ -76,7 +92,7 @@
         busy = true;
         try
         {
-            var r = await Api.RecommendAsync(new RecommendRequest(Type, TmdbId, chosen.ToList(), note));
+            var r = await Api.RecommendAsync(new RecommendRequest(Type, TmdbId, chosen.ToList(), note, weight));
             var names = people!.Where(p => chosen.Contains(p.UserName) && !r.Skipped.Contains(p.UserName)).Select(p => p.Name).ToList();
             Toasts.Show(names.Count switch
             {

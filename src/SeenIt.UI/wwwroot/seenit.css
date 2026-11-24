@@ -1980,3 +1980,10 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 /* A page's own filters (search plus a few pickers), on one wrapping row. */
 .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 4px 0 10px; }
 .filter-row .searchbar { flex: 1 1 220px; max-width: 360px; margin: 0; }
+
+.rec-weight { margin: 2px 0; background: var(--accent-soft); color: var(--accent-hover); font-weight: 700; }
+
+/* Compare: each section's filters, and Recommend under a poster. */
+.compare-filters { margin: 4px 0 10px; }
+.compare-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.compare-rec { padding: 4px 8px; font-size: .8rem; }

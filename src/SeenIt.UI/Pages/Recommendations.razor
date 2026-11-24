@@ -22,7 +22,7 @@
 else if (data is not null)
 {
     var all = Sent ? data.Sent : data.Received.Where(r => showCleared || !r.Dismissed).ToList();
-    var rows = all.Where(Matches).ToList();
+    var rows = (sort == "strength" ? all.Where(Matches).OrderByDescending(r => r.Weight ?? 0).ThenByDescending(r => r.At) : all.Where(Matches)).ToList();
     @if (all.Count > 0)
     {
         <div class="filter-row">
@@ -43,6 +43,16 @@ else if (data is not null)
                     <select value="@(who ?? "")" @onchange="e => who = e.Value as string is { Length: > 0 } w ? w : null">
                         <option value="">Anyone</option>
                         @foreach (var u in people) { <option value="@u.UserName">@u.Name</option> }
+                    </select>
+                </label>
+            }
+            @if (all.Any(r => r.Weight is not null))
+            {
+                <label class="sort-pick">
+                    <span class="muted small">Sort</span>
+                    <select value="@sort" @onchange='e => sort = e.Value as string ?? "newest"'>
+                        <option value="newest">Newest</option>
+                        <option value="strength">Strongest first</option>
                     </select>
                 </label>
             }
@@ -78,6 +88,7 @@ else if (data is not null)
                         <Avatar Name="@r.Who.Name" Url="@r.Who.Avatar" Class="avatar-sm" />
                         <span>@(Sent ? "To " : "From ")<a href="@Fmt.UserHref(r.Who.UserName)"><b>@r.Who.Name</b></a> · <RelTime At="r.At" /></span>
                     </div>
+                    @if (r.Weight is { } w) { <span class="pill pill-sm rec-weight" title="How strongly it's recommended">@w/10</span> }
                     @if (r.Note is { } note) { <q class="rec-note">@note</q> }
                     <div class="small rec-status">@Status(r)</div>
                 </div>
@@ -118,6 +129,7 @@ else if (data is not null)
     private MediaType? kind;
     private string? who;
     private string state = "all";
+    private string sort = "newest";
     private string? filtersFor;
 
     protected override void OnParametersSet()
