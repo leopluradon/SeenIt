@@ -1524,7 +1524,8 @@ public record Milestone(string Label, DateTimeOffset? At, MediaSummary? Item, bo
 
 // ---------- Goals ----------
 
-public enum GoalKind { Movies, NewMovies, Episodes, Hours, ShowsFinished }
+/// <summary>ShowsStartedAndFinished: ended shows whose first episode and last you both watched in the year (not caught up on a running one).</summary>
+public enum GoalKind { Movies, NewMovies, Episodes, Hours, ShowsFinished, ShowsStartedAndFinished }
 
 public static class GoalKinds
 {
@@ -1534,6 +1535,7 @@ public static class GoalKinds
         GoalKind.NewMovies => "New-to-me movies",
         GoalKind.Episodes => "Episodes",
         GoalKind.Hours => "Hours watched",
+        GoalKind.ShowsStartedAndFinished => "Shows started & finished",
         _ => "Shows finished",
     };
 
@@ -1544,6 +1546,7 @@ public static class GoalKinds
         GoalKind.NewMovies => n == 1 ? "new movie" : "new movies",
         GoalKind.Episodes => n == 1 ? "episode" : "episodes",
         GoalKind.Hours => n == 1 ? "hour" : "hours",
+        GoalKind.ShowsStartedAndFinished => n == 1 ? "show started & finished" : "shows started & finished",
         _ => n == 1 ? "show finished" : "shows finished",
     };
 
@@ -1553,6 +1556,7 @@ public static class GoalKinds
         GoalKind.NewMovies => "Only movies you'd never seen before.",
         GoalKind.Episodes => "Every episode play counts.",
         GoalKind.Hours => "Movies and episodes, by runtime.",
+        GoalKind.ShowsStartedAndFinished => "Shows that have ended, watched from your first episode to your last within the year. Being caught up on one still running doesn't count, nor does one you started in an earlier year.",
         _ => "Shows you caught up on or finished this year.",
     };
 }

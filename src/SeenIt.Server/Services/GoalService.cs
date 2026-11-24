@@ -52,6 +52,21 @@ public class GoalService(AppDbContext db, TrackingService tracking, ReviewServic
             var progress = shows.Count == 0 ? [] : await new ProgressCalculator(db).ForUserAsync(userId, shows, ct);
             result[GoalKind.ShowsFinished] = progress.Count(p => p.Completed && p.LastWatchedAt is { } at && InYear(ReviewService.Local(at, tz)));
         }
+        if (kinds.Contains(GoalKind.ShowsStartedAndFinished))
+        {
+            // Started this year: the show's first-ever episode play (any earlier one, or one with no date, rules it out).
+            // From the database, not the plays loaded above, which leave out undated ones.
+            var candidates = plays.Where(p => p.Type == MediaType.Episode).Select(p => p.TmdbId).Distinct().ToList();
+            var firstEver = await db.WatchEvents.AsNoTracking().Where(w => w.UserId == userId && w.Type == MediaType.Episode && candidates.Contains(w.TmdbId))
+                .GroupBy(w => w.TmdbId).Select(g => new { g.Key, First = g.Min(w => w.WatchedAt) }).ToListAsync(ct);
+            var startedThisYear = firstEver.Where(f => !WatchDates.IsUnknown(f.First) && InYear(ReviewService.Local(f.First, tz))).Select(f => f.Key).ToList();
+            // Over on TMDB, so finishing it means the end, not being caught up.
+            var ended = startedThisYear.Count == 0 ? [] : (await db.Shows.AsNoTracking()
+                    .Where(s => startedThisYear.Contains(s.TmdbId) && (s.Status == "Ended" || s.Status == "Canceled"))
+                    .Select(s => s.TmdbId).ToListAsync(ct)).ToList();
+            var progress = ended.Count == 0 ? [] : await new ProgressCalculator(db).ForUserAsync(userId, ended, ct);
+            result[GoalKind.ShowsStartedAndFinished] = progress.Count(p => p.Completed && p.LastWatchedAt is { } at && InYear(ReviewService.Local(at, tz)));
+        }
         return result;
     }
 
