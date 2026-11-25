@@ -1,0 +1,71 @@
+@* Add several titles at once to one of your lists, or to a new one (Recommendations' Select). Titles already on the
+   list are left as they are. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+<Modal Open="Open" OpenChanged="OpenChanged" Title="@($"Add {Items.Count} to a list")">
+    @if (lists is null) { <Spinner /> }
+    else
+    {
+        <div class="stack">
+            @foreach (var l in lists.Where(x => !x.Smart && (x.Owner is null || x.Shared)))   // yours, or ones shared with you to add to
+            {
+                <button class="list-choice" disabled="@busy" @onclick="() => AddTo(l.Id, l.Name)" @key="l.Id">
+                    <span class="check-dot"><Icon Name="plus" Size="14" /></span>
+                    <span>@l.Name</span>
+                    <span class="muted small">@l.ItemCount</span>
+                </button>
+            }
+            <form class="inline" @onsubmit="Create">
+                <input placeholder="New list name" @bind="newName" @bind:event="oninput" maxlength="100" aria-label="New list name" />
+                <button class="btn" type="submit" disabled="@(busy || string.IsNullOrWhiteSpace(newName))"><Icon Name="plus" Size="16" /> Create and add</button>
+            </form>
+        </div>
+    }
+</Modal>
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public IReadOnlyList<MediaSummary> Items { get; set; } = [];
+    /// <summary>After adding (to clear the selection).</summary>
+    [Parameter] public EventCallback OnAdded { get; set; }
+    private List<ListSummary>? lists;
+    private string newName = "";
+    private bool wasOpen, busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Open && !wasOpen)
+        {
+            lists = null;
+            try { lists = await Api.ListsAsync(); }
+            catch (Exception ex) { Toasts.Error(ex); lists = []; }
+        }
+        wasOpen = Open;
+    }
+
+    private async Task AddTo(Guid id, string name)
+    {
+        busy = true;
+        try
+        {
+            foreach (var m in Items) await Api.AddToListAsync(id, m.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, m.TmdbId);
+            Toasts.Show($"Added {Items.Count} to {name}");
+            await OpenChanged.InvokeAsync(false);
+            await OnAdded.InvokeAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Create()
+    {
+        var name = newName.Trim();
+        if (name.Length == 0) return;
+        busy = true;
+        Guid id;
+        try { id = await Api.CreateListAsync(new CreateListRequest(name, null, false)); }
+        catch (Exception ex) { Toasts.Error(ex); busy = false; return; }
+        newName = "";
+        await AddTo(id, name);
+    }
+}

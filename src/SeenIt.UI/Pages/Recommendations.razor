@@ -11,6 +11,7 @@
         <button class="@(Sent ? "" : "on")" @onclick='() => Nav.NavigateTo("recommendations")'>To you@(NewCount is > 0 and var n ? $" {n}" : "")</button>
         <button class="@(Sent ? "on" : "")" @onclick='() => Nav.NavigateTo("recommendations?tab=sent")'>Sent</button>
     </div>
+    <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
 </div>
 <p class="muted small">
     @if (Sent) { <span>What you've recommended, and whether they've watched it. Recommend something from any movie or show page.</span> }
@@ -79,7 +80,13 @@ else if (data is not null)
         @foreach (var r in rows)
         {
             var m = r.Media;
-            <div class="rec-item @(r.Dismissed ? "dismissed" : "")" @key="r.Id">
+            <div class="rec-item @(r.Dismissed ? "dismissed" : "") @(selecting && selected.Contains(r.Id) ? "picked" : "")" @key="r.Id">
+                @if (selecting)
+                {
+                    <label class="pick-box" aria-label="@($"Select {r.Media.Title}")">
+                        <input type="checkbox" checked="@selected.Contains(r.Id)" @onchange="() => { if (!selected.Remove(r.Id)) selected.Add(r.Id); }" />
+                    </label>
+                }
                 <a href="@Fmt.Href(m.Type, m.TmdbId)"><img src="@Img.Poster(m.PosterPath, "w154")" alt="" loading="lazy" /></a>
                 <div class="rec-body">
                     <a class="mini-title" href="@Fmt.Href(m.Type, m.TmdbId)">@m.Title</a>
@@ -112,6 +119,23 @@ else if (data is not null)
             </div>
         }
     </div>
+    @if (selecting)
+    {
+        <div class="bulk-bar" role="toolbar" aria-label="Selected recommendations">
+            <span><b>@selected.Count</b> selected</span>
+            @if (rows.Count > 0)
+            {
+                @if (rows.All(r => selected.Contains(r.Id))) { <button class="btn btn-sm btn-ghost" @onclick="() => selected.Clear()">Unselect all</button> }
+                else { <button class="btn btn-sm btn-ghost" @onclick="() => { foreach (var r in rows) selected.Add(r.Id); }">Select all @rows.Count</button> }
+            }
+            <span class="bulk-actions">
+                <button class="btn btn-sm" disabled="@(selected.Count == 0)" @onclick="() => listOpen = true"><Icon Name="list" Size="16" /> Add to list…</button>
+            </span>
+        </div>
+        <div class="bulk-spacer" aria-hidden="true"></div>
+        <BulkAddToListDialog @bind-Open="listOpen" OnAdded="() => { selecting = false; selected.Clear(); }"
+                             Items="@((Sent ? data.Sent : data.Received).Where(r => selected.Contains(r.Id)).Select(r => r.Media).DistinctBy(m => (m.Type, m.TmdbId)).ToList())" />
+    }
     @if (!Sent && data.Received.Any(r => r.Dismissed))
     {
         <label class="check small"><input type="checkbox" @bind="showCleared" /> Show cleared ones too</label>
@@ -130,6 +154,9 @@ else if (data is not null)
     private string? who;
     private string state = "all";
     private string sort = "newest";
+    // Select several to add to a list (one of yours, or a new one).
+    private bool selecting, listOpen;
+    private readonly HashSet<Guid> selected = [];
     private string? filtersFor;
 
     protected override void OnParametersSet()
@@ -138,6 +165,7 @@ else if (data is not null)
         if (filtersFor == Tab) return;
         filtersFor = Tab;
         who = null; state = "all";
+        selecting = false; selected.Clear();
     }
 
     private bool Matches(RecommendationDto r) =>
