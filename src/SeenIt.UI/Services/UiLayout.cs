@@ -45,3 +45,6 @@ public static class UiLayout
         };
     }
 }
+
+/// <summary>Titles you've seen on Discover and lists: shown as usual, faded, or left out.</summary>
+public enum SeenMode { Show, Fade, Hide }

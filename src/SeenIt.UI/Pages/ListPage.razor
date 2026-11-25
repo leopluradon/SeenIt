@@ -1,5 +1,6 @@
 @page "/lists/{Id:guid}"
 @inject ApiClient Api
+@inject SessionState Session
 @inject Toasts Toasts
 @inject NavigationManager Nav
 @inject IPlatform Platform
@@ -112,13 +113,72 @@ else if (list is not null)
     }
     else
     {
-    @if (list.Items.Count > 8)
+    @if (list.Items.Count > 1)
     {
+        var active = ActiveFilters;
         <div class="searchbar">
             <Icon Name="search" Size="18" />
-            <input type="search" @bind="find" @bind:event="oninput" placeholder="Filter this list" aria-label="Filter this list" />
-            @if (list.IsOwner) { <a class="btn btn-sm btn-ghost" href="lists">Search all lists</a> }
+            <input type="search" @bind="find" @bind:event="oninput" placeholder="Search this list" aria-label="Search this list" />
+            <button type="button" class="btn btn-sm filter-toggle @(active > 0 ? "btn-on" : "")" aria-expanded="@filtersOpen" @onclick="() => filtersOpen = !filtersOpen">
+                Filters@(active > 0 ? $" · {active}" : "")
+            </button>
         </div>
+        @if (filtersOpen)
+        {
+            <div class="filter-row list-filters">
+                <label class="sort-pick">
+                    <span class="muted small">Sort</span>
+                    <select value="@sort" @onchange='e => sort = e.Value as string ?? "list"'>
+                        <option value="list">@(list.Ranked ? "Ranking" : "List order")</option>
+                        <option value="added">Recently added</option>
+                        <option value="title">Title</option>
+                        <option value="newest">Newest</option>
+                        <option value="oldest">Oldest</option>
+                        @if (list.Items.Any(i => i.Media.VoteAverage is > 0)) { <option value="tmdb">TMDB score</option> }
+                    </select>
+                </label>
+                @if (list.Items.Any(i => i.Media.Type == MediaType.Movie) && list.Items.Any(i => i.Media.Type != MediaType.Movie))
+                {
+                    <div class="segmented segmented-sm">
+                        <button class="@(kind is null ? "on" : "")" @onclick="() => kind = null">All</button>
+                        <button class="@(kind == MediaType.Movie ? "on" : "")" @onclick="() => kind = MediaType.Movie">Movies</button>
+                        <button class="@(kind == MediaType.Show ? "on" : "")" @onclick="() => kind = MediaType.Show">Shows</button>
+                    </div>
+                }
+                @if (Session.Me is not null)
+                {
+                    <SeenModePicker Value="seenMode" ValueChanged="m => seenMode = m" />
+                    <label class="sort-pick">
+                        <span class="muted small">Watchlist</span>
+                        <select value="@watchlist" @onchange='e => watchlist = e.Value as string ?? "any"'>
+                            <option value="any">Any</option>
+                            <option value="on">On my watchlist</option>
+                            <option value="off">Not on it</option>
+                        </select>
+                    </label>
+                }
+                @if (list.Items.Any(i => i.Media.VoteAverage is > 0))
+                {
+                    <label class="sort-pick">
+                        <span class="muted small">TMDB score</span>
+                        <select value="@(minScore?.ToString() ?? "")" @onchange="e => minScore = int.TryParse(e.Value as string, out var v) ? v : null">
+                            <option value="">Any</option>
+                            @for (var v = 8; v >= 5; v--) { <option value="@v">@v+</option> }
+                        </select>
+                    </label>
+                }
+                @if (list.Items.Any(i => i.Media.Year is not null))
+                {
+                    <label class="sort-pick">
+                        <span class="muted small">Years</span>
+                        <input type="number" class="year-input" placeholder="from" min="1880" max="2100" value="@fromYear" @onchange="e => fromYear = int.TryParse(e.Value as string, out var y) ? y : null" aria-label="From year" />
+                        <span class="muted small">–</span>
+                        <input type="number" class="year-input" placeholder="to" min="1880" max="2100" value="@toYear" @onchange="e => toYear = int.TryParse(e.Value as string, out var y) ? y : null" aria-label="To year" />
+                    </label>
+                }
+                @if (active > 0) { <button class="btn btn-sm btn-ghost" @onclick="ClearFilters">Clear</button> }
+            </div>
+        }
     }
     @if (list.Items.Count > 0)
     {
@@ -127,9 +187,9 @@ else if (list is not null)
     @if (Layout == ListLayout.Rows)
     {
         <ol class="list-rows">
-            @foreach (var (i, rank) in list.Items.Select((x, n) => (x, n + 1)).Where(x => TextMatch.Contains(x.x.Media.Title, find)))
+            @foreach (var (i, rank) in Shown(list))
             {
-                <li class="list-row" @key="i.Id" data-ctx="@Menu.Title(i.Media)">
+                <li class="list-row @Faded(i)" @key="i.Id" data-ctx="@Menu.Title(i.Media)">
                     @if (list.Ranked) { <span class="list-rank">@rank</span> }
                     <a href="@Fmt.Href(i.Media.Type, i.Media.TmdbId)" class="list-row-link">
                         <img src="@Img.Poster(i.Media.PosterPath, "w92")" alt="" loading="lazy" />
@@ -150,9 +210,9 @@ else if (list is not null)
     else
     {
     <div class="poster-grid">
-        @foreach (var (i, rank) in list.Items.Select((x, n) => (x, n + 1)).Where(x => TextMatch.Contains(x.x.Media.Title, find)))
+        @foreach (var (i, rank) in Shown(list))
         {
-            <div class="poster-wrap" @key="i.Id">
+            <div class="poster-wrap @Faded(i)" @key="i.Id">
                 <PosterCard Media="i.Media" Badge="@(list.Ranked ? $"#{rank}" : null)" />
                 @if (i.Note is { Length: > 0 } note) { <p class="list-note">@note</p> }
                 @if (list.CanEdit && list.Rules is null)
@@ -176,6 +236,45 @@ else if (list is not null)
     /// <summary>Posters or rows: what you last picked on a list page, else the default from Settings → Layout.</summary>
     private ListLayout? layout;
     private ListLayout Layout => layout ?? Fmt.Prefs.LayoutFor("list");
+
+    // Search, sorting and filters (the Filters button in the search box). A ranked list's numbers stay its ranking.
+    private bool filtersOpen;
+    private string sort = "list", watchlist = "any";
+    private MediaType? kind;
+    private static SeenMode seenMode;   // like Discover's, kept for the session
+    private int? minScore, fromYear, toYear;
+
+    private int ActiveFilters => new[]
+    {
+        sort != "list", kind is not null, seenMode != SeenMode.Show, watchlist != "any", minScore is not null, fromYear is not null, toYear is not null,
+    }.Count(on => on);
+
+    private void ClearFilters() { sort = "list"; kind = null; seenMode = SeenMode.Show; watchlist = "any"; minScore = null; fromYear = toYear = null; }
+
+    private string Faded(ListItemDto i) => seenMode == SeenMode.Fade && i.Media.Watched == true ? "seen-faded" : "";
+
+    private IEnumerable<(ListItemDto Item, int Rank)> Shown(ListDetail l)
+    {
+        var items = l.Items.Select((x, n) => (Item: x, Rank: n + 1)).Where(x =>
+        {
+            var m = x.Item.Media;
+            return TextMatch.Contains(m.Title, find)
+                && (kind is null || (kind == MediaType.Movie ? m.Type == MediaType.Movie : m.Type != MediaType.Movie))
+                && (seenMode != SeenMode.Hide || m.Watched != true)
+                && watchlist switch { "on" => m.OnWatchlist == true, "off" => m.OnWatchlist != true, _ => true }
+                && (minScore is null || m.VoteAverage >= minScore)
+                && (fromYear is null || m.Year >= fromYear) && (toYear is null || m.Year <= toYear);
+        });
+        return sort switch
+        {
+            "added" => items.OrderByDescending(x => x.Item.AddedAt),
+            "title" => items.OrderBy(x => x.Item.Media.Title, StringComparer.OrdinalIgnoreCase),
+            "newest" => items.OrderByDescending(x => x.Item.Media.Year ?? 0),
+            "oldest" => items.OrderBy(x => x.Item.Media.Year ?? int.MaxValue),
+            "tmdb" => items.OrderByDescending(x => x.Item.Media.VoteAverage ?? -1),
+            _ => items,
+        };
+    }
 
     /// <summary>A smart list's rules in words, e.g. "From your watchlist", "Movies", "1980–1989", "Not seen yet".</summary>
     private static IEnumerable<string> RuleText(SmartRules r)

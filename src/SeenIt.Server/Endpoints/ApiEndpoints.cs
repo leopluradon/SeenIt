@@ -549,8 +549,13 @@ public static class ApiEndpoints
     private static void MapLists(IEndpointRouteBuilder app)
     {
         // Public lists can be viewed without signing in.
-        app.MapGet("/api/lists/{id:guid}", async (Guid id, ClaimsPrincipal p, ListService l, CancellationToken ct) =>
-            await l.GetAsync(id, p.OptionalUserId(), ct) is { } list ? Results.Ok(list) : Results.NotFound());
+        app.MapGet("/api/lists/{id:guid}", async (Guid id, ClaimsPrincipal p, ListService l, AppDbContext db, CancellationToken ct) =>
+        {
+            if (await l.GetAsync(id, p.OptionalUserId(), ct) is not { } list) return Results.NotFound();
+            // What the viewer has seen or has on their watchlist, for fading or hiding seen titles and filtering.
+            var marked = await UserMarks.ApplyAsync(db, p.OptionalUserId(), list.Items.Select(i => i.Media).ToList(), ct);
+            return Results.Ok(list with { Items = list.Items.Zip(marked, (i, m) => i with { Media = m }).ToList() });
+        });
 
         // Everyone's public lists, most saved first (or most recently updated).
         app.MapGet("/api/lists/browse", (string? q, string? sort, ClaimsPrincipal p, ListService l, CancellationToken ct) =>

@@ -24,18 +24,18 @@
     {
         <button class="chip @(CurrentList == key ? "on" : "")" @onclick="() => Go(Type, key)">@label</button>
     }
-    @if (Session.Me is not null)
-    {
-        <button class="chip chip-toggle @(hideSeen ? "on" : "")" aria-pressed="@hideSeen" @onclick="() => hideSeen = !hideSeen" title="Leave out what you've seen or started">
-            @if (hideSeen) { <Icon Name="check" Size="14" /> } Hide seen
-        </button>
-    }
 </div>
+@if (Session.Me is not null) { <SeenModePicker Value="seenMode" ValueChanged="m => seenMode = m" /> }
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items.Count == 0 && loading) { <Spinner /> }
 <div class="poster-grid">
-    @foreach (var m in items.Where(m => !hideSeen || m.Watched != true)) { <PosterCard Media="m" OnDismiss="@(Session.Me is null ? default : EventCallback.Factory.Create<MediaSummary>(this, Dismiss))" @key="(m.Type, m.TmdbId)" /> }
+    @foreach (var m in items.Where(m => seenMode != SeenMode.Hide || m.Watched != true))
+    {
+        <div class="@(seenMode == SeenMode.Fade && m.Watched == true ? "seen-faded" : "")" @key="(m.Type, m.TmdbId)">
+            <PosterCard Media="m" OnDismiss="@(Session.Me is null ? default : EventCallback.Factory.Create<MediaSummary>(this, Dismiss))" />
+        </div>
+    }
 </div>
 @if (page < totalPages)
 {
@@ -60,7 +60,8 @@
     /// <summary>What's been loaded this session, per list, so Back from a title finds the page as long as you left it
     /// (and the browser can put you back where you were scrolled).</summary>
     private static readonly Dictionary<string, (List<MediaSummary> Items, int Page, int TotalPages, DateTime At)> Loaded = [];
-    private static bool hideSeen;
+    /// <summary>Seen titles: shown, faded or hidden (kept for the session, like the list you're on).</summary>
+    private static SeenMode seenMode;
     private string Key => $"{Type}/{CurrentList}";
 
     protected override Task OnParametersSetAsync()

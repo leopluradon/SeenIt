@@ -1987,3 +1987,12 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .compare-filters { margin: 4px 0 10px; }
 .compare-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .compare-rec { padding: 4px 8px; font-size: .8rem; }
+
+/* Seen titles, faded (Discover, lists): still there, out of the way; full again on hover or focus. */
+.seen-faded { opacity: .35; transition: opacity .15s; }
+.seen-faded:hover, .seen-faded:focus-within { opacity: 1; }
+.seen-mode { align-items: center; }
+.seen-mode > span { padding: 0 6px 0 4px; }
+
+.list-filters { margin: 0 0 12px; }
+.year-input { width: 5.5em; }

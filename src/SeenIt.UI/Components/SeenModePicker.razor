@@ -1,0 +1,13 @@
+@* What to do with titles you've seen (or started): show them as usual, fade them, or leave them out. *@
+<div class="segmented segmented-sm seen-mode" role="radiogroup" aria-label="Seen titles">
+    <span class="muted small">Seen</span>
+    @foreach (var (mode, label) in Modes)
+    {
+        <button type="button" role="radio" aria-checked="@(Value == mode)" class="@(Value == mode ? "on" : "")" @onclick="() => ValueChanged.InvokeAsync(mode)">@label</button>
+    }
+</div>
+@code {
+    [Parameter] public SeenMode Value { get; set; }
+    [Parameter] public EventCallback<SeenMode> ValueChanged { get; set; }
+    private static readonly (SeenMode Mode, string Label)[] Modes = [(SeenMode.Show, "Show"), (SeenMode.Fade, "Fade"), (SeenMode.Hide, "Hide")];
+}
