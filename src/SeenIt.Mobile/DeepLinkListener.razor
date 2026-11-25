@@ -1,4 +1,4 @@
-@* A second root component that navigates the app when a widget (or other native code) asks to open a page. *@
+@* A second root component that navigates the app when a link, a widget or other native code asks to open a page. *@
 @implements IDisposable
 @inject NavigationManager Nav
 @code {
@@ -6,15 +6,30 @@
 
     protected override void OnAfterRender(bool firstRender)
     {
-        if (firstRender) Go();
+        if (firstRender) _ = InvokeAsync(Go);
     }
 
     private void OnRequested() => _ = InvokeAsync(Go);
 
-    private void Go()
+    /// <summary>
+    /// Opens the page, and checks it took: when a link starts the app, this runs as the app comes up and the router can
+    /// still settle on its first page (Home) afterwards, losing the link. So it looks again for a few seconds and
+    /// navigates once more if it isn't there.
+    /// </summary>
+    private async Task Go()
     {
-        if (DeepLinks.Take() is { } path) Nav.NavigateTo(path);
+        if (DeepLinks.Take() is not { } path) return;
+        var want = path.TrimStart('/');
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            if (!Here(want)) Nav.NavigateTo(want);
+            await Task.Delay(300);
+            if (Here(want) && attempt > 0) return;   // there, and stayed there a moment
+        }
     }
+
+    private bool Here(string want) =>
+        string.Equals(Nav.ToBaseRelativePath(Nav.Uri).TrimStart('/'), want, StringComparison.OrdinalIgnoreCase);
 
     public void Dispose() => DeepLinks.Requested -= OnRequested;
 }
