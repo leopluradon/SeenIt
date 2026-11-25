@@ -1390,7 +1390,7 @@ public record CompareDto(
     IReadOnlyList<CompareItem>? AOnly = null,   // watched by A, not by B, most recently watched first
     IReadOnlyList<CompareItem>? BOnly = null);  // watched by B, not by A
 /// <summary>A title in a comparison, with each person's rating if they rated it.</summary>
-public record CompareItem(MediaSummary Media, double? A, double? B);
+public record CompareItem(MediaSummary Media, double? A, double? B, IReadOnlyList<string>? Genres = null);   // Genres: for Compare's filters
 
 // ---------- Pick for me ----------
 

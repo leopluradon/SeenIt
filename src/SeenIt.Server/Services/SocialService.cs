@@ -430,9 +430,9 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var (movies, shows) = await tracking.LoadMetaAsync(watchedBoth.Concat(shared).Concat(bLoved).Concat(aLoved).Concat(aOnly).Concat(bOnly).Distinct(), ct);
         List<CompareItem> Items(IEnumerable<(MediaType Type, int Id)> keys) => keys
             .Select(k => (k.Type == MediaType.Movie
-                    ? movies.TryGetValue(k.Id, out var m) ? CatalogService.ToSummary(m) : null
-                    : shows.TryGetValue(k.Id, out var s) ? CatalogService.ToSummary(s) : null) is { } media
-                ? new CompareItem(media, ar.TryGetValue(k, out var x) ? x : null, br.TryGetValue(k, out var y) ? y : null)
+                    ? movies.TryGetValue(k.Id, out var m) ? (CatalogService.ToSummary(m), m.Genres) : (null, null)
+                    : shows.TryGetValue(k.Id, out var s) ? (CatalogService.ToSummary(s), s.Genres) : (null, null)) is ({ } media, var genres)
+                ? new CompareItem(media, ar.TryGetValue(k, out var x) ? x : null, br.TryGetValue(k, out var y) ? y : null, genres)
                 : null)
             .OfType<CompareItem>().ToList();
 

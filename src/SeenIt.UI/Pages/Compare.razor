@@ -44,7 +44,7 @@ else if (c is not null)
         var find = finds.GetValueOrDefault(key, "");
         var searching = !string.IsNullOrWhiteSpace(find);
         var shown = Sorted(key, items.Where(i => (kind == "all" || i.Media.Type == (kind == "movie" ? MediaType.Movie : MediaType.Show)) && TextMatch.Contains(i.Media.Title, find)
-            && InDecade(key, i) && RatedMatch(key, i))).ToList();
+            && InDecade(key, i) && RatedMatch(key, i) && MoreMatch(key, i))).ToList();
         var recommendTo = RecommendTo(key);
         var expanded = open.Contains(key) || searching;   // matches show in full
         <section class="row-section compare-section" @key="key">
@@ -64,44 +64,100 @@ else if (c is not null)
             </div>
             @if (items.Count > 1)
             {
-                <div class="filter-row compare-filters">
-                    <div class="searchbar searchbar-sm compare-find">
-                        <Icon Name="search" Size="16" />
-                        <input type="search" value="@find" @oninput="e => finds[key] = e.Value?.ToString() ?? string.Empty" placeholder="Search this section" aria-label="@($"Search {title}")" />
-                    </div>
-                    <label class="sort-pick">
-                        <span class="muted small">Sort</span>
-                        <select value="@sorts.GetValueOrDefault(key, "default")" @onchange='e => sorts[key] = e.Value as string ?? "default"' aria-label="@($"Sort {title}")">
-                            @foreach (var (sk, sl) in SortChoices(key, items)) { <option value="@sk">@sl</option> }
-                        </select>
-                    </label>
-                    @{ var decadeChoices = items.Select(i => i.Media.Year).OfType<int>().Select(y => y / 10 * 10).Distinct().OrderByDescending(d => d).ToList(); }
-                    @if (decadeChoices.Count > 1)
-                    {
-                        <label class="sort-pick">
-                            <span class="muted small">Decade</span>
-                            <select value="@(decades.GetValueOrDefault(key)?.ToString() ?? "")" @onchange="e => decades[key] = int.TryParse(e.Value as string, out var d) ? d : null" aria-label="@($"Decade in {title}")">
-                                <option value="">Any</option>
-                                @foreach (var d in decadeChoices) { <option value="@d">@(d)s</option> }
-                            </select>
-                        </label>
-                    }
-                    @* Only where both have seen everything: elsewhere one of them hasn't (the "only … has seen" rows), or one
-                       rating is the reason it's there ("loved"), so the choices wouldn't mean anything. *@
-                    @if (key == "watched" && items.Any(i => i.A is not null || i.B is not null))
-                    {
-                        <label class="sort-pick">
-                            <span class="muted small">Ratings</span>
-                            <select value="@rated.GetValueOrDefault(key, "any")" @onchange='e => rated[key] = e.Value as string ?? "any"' aria-label="@($"Ratings in {title}")">
-                                <option value="any">Any</option>
-                                <option value="a">Rated by @c.A.Name</option>
-                                <option value="b">Rated by @c.B.Name</option>
-                                <option value="both">Rated by both</option>
-                                <option value="none">Not rated</option>
-                            </select>
-                        </label>
-                    }
+                var active = ActiveFilters(key);
+                var panelOpen = filtersOpen.Contains(key);
+                <div class="searchbar searchbar-sm compare-find">
+                    <Icon Name="search" Size="16" />
+                    <input type="search" value="@find" @oninput="e => finds[key] = e.Value?.ToString() ?? string.Empty" placeholder="Search this section" aria-label="@($"Search {title}")" />
+                    <button type="button" class="btn btn-sm filter-toggle @(active > 0 ? "btn-on" : "")" aria-expanded="@panelOpen" @onclick="() => { if (!filtersOpen.Remove(key)) filtersOpen.Add(key); }">
+                        Filters@(active > 0 ? $" · {active}" : "")
+                    </button>
                 </div>
+                @if (panelOpen)
+                {
+                    <div class="filter-row compare-filters">
+                        <label class="sort-pick">
+                            <span class="muted small">Sort</span>
+                            <select value="@sorts.GetValueOrDefault(key, "default")" @onchange='e => sorts[key] = e.Value as string ?? "default"' aria-label="@($"Sort {title}")">
+                                @foreach (var (sk, sl) in SortChoices(key, items)) { <option value="@sk">@sl</option> }
+                            </select>
+                        </label>
+                        @{ var genreChoices = items.SelectMany(i => i.Genres ?? []).Distinct().Order().ToList(); }
+                        @if (genreChoices.Count > 1)
+                        {
+                            <label class="sort-pick">
+                                <span class="muted small">Genre</span>
+                                <select value="@(genres.GetValueOrDefault(key) ?? "")" @onchange="e => genres[key] = e.Value as string is { Length: > 0 } g ? g : null">
+                                    <option value="">Any</option>
+                                    @foreach (var g in genreChoices) { <option value="@g">@g</option> }
+                                </select>
+                            </label>
+                        }
+                        @{ var decadeChoices = items.Select(i => i.Media.Year).OfType<int>().Select(y => y / 10 * 10).Distinct().OrderByDescending(d => d).ToList(); }
+                        @if (decadeChoices.Count > 1)
+                        {
+                            <label class="sort-pick">
+                                <span class="muted small">Decade</span>
+                                <select value="@(decades.GetValueOrDefault(key)?.ToString() ?? "")" @onchange="e => decades[key] = int.TryParse(e.Value as string, out var d) ? d : null">
+                                    <option value="">Any</option>
+                                    @foreach (var d in decadeChoices) { <option value="@d">@(d)s</option> }
+                                </select>
+                            </label>
+                        }
+                        @if (items.Any(i => i.Media.VoteAverage is > 0))
+                        {
+                            <label class="sort-pick">
+                                <span class="muted small">TMDB score</span>
+                                <select value="@(minTmdb.GetValueOrDefault(key)?.ToString() ?? "")" @onchange="e => minTmdb[key] = int.TryParse(e.Value as string, out var v) ? v : null">
+                                    <option value="">Any</option>
+                                    @for (var v = 8; v >= 5; v--) { <option value="@v">@v+</option> }
+                                </select>
+                            </label>
+                        }
+                        @foreach (var (side, name) in new[] { ("a", c.A.Name), ("b", c.B.Name) })
+                        {
+                            @if (items.Any(i => (side == "a" ? i.A : i.B) is not null))
+                            {
+                                var mk = $"{key}:{side}";
+                                <label class="sort-pick" @key="mk">
+                                    <span class="muted small">@name rated</span>
+                                    <select value="@(minRating.GetValueOrDefault(mk)?.ToString() ?? "")" @onchange="e => minRating[mk] = int.TryParse(e.Value as string, out var v) ? v : null">
+                                        <option value="">Anything</option>
+                                        @if (Fmt.Scale == RatingScale.Thumbs) { <option value="6">👍 Liked</option> }
+                                        else { @foreach (var v in new[] { 9, 8, 7, 6, 5 }) { <option value="@v">@(Fmt.FiveStars ? $"★{Fmt.Stars(v)}" : v.ToString())+</option> } }
+                                    </select>
+                                </label>
+                            }
+                        }
+                        @if (key == "rated")
+                        {
+                            <label class="sort-pick">
+                                <span class="muted small">Agreement</span>
+                                <select value="@agreement.GetValueOrDefault(key, "any")" @onchange='e => agreement[key] = e.Value as string ?? "any"'>
+                                    <option value="any">Any</option>
+                                    <option value="agree">Same rating</option>
+                                    <option value="close">Within a point</option>
+                                    <option value="apart">Disagree (4+ apart)</option>
+                                </select>
+                            </label>
+                        }
+                        @* Only where both have seen everything: elsewhere one of them hasn't, or one rating is why it's there. *@
+                        @if (key == "watched" && items.Any(i => i.A is not null || i.B is not null))
+                        {
+                            <label class="sort-pick">
+                                <span class="muted small">Ratings</span>
+                                <select value="@rated.GetValueOrDefault(key, "any")" @onchange='e => rated[key] = e.Value as string ?? "any"' aria-label="@($"Ratings in {title}")">
+                                    <option value="any">Any</option>
+                                    <option value="a">Rated by @c.A.Name</option>
+                                    <option value="b">Rated by @c.B.Name</option>
+                                    <option value="both">Rated by both</option>
+                                    <option value="none">Not rated</option>
+                                </select>
+                            </label>
+                        }
+                        @if (active > 0) { <button class="btn btn-sm btn-ghost" @onclick="() => ClearFilters(key)">Clear</button> }
+                    </div>
+                }
             }
             @if (shown.Count == 0) { <p class="muted small">@(searching ? $"Nothing called “{find.Trim()}” here." : "None.")</p> }
             else
@@ -144,6 +200,38 @@ else if (c is not null)
     private readonly Dictionary<string, int?> decades = [];
     private readonly Dictionary<string, string> rated = [];
     private MediaSummary? recommending;
+    private readonly HashSet<string> filtersOpen = [];
+    private readonly Dictionary<string, string?> genres = [];
+    private readonly Dictionary<string, int?> minTmdb = [];
+    private readonly Dictionary<string, int?> minRating = [];   // "{section}:a" / "{section}:b"
+    private readonly Dictionary<string, string> agreement = [];
+
+    private bool MoreMatch(string key, CompareItem i) =>
+        (genres.GetValueOrDefault(key) is not { } g || i.Genres?.Contains(g) == true)
+        && (minTmdb.GetValueOrDefault(key) is not { } t || i.Media.VoteAverage >= t)
+        && (minRating.GetValueOrDefault($"{key}:a") is not { } ma || i.A >= ma)
+        && (minRating.GetValueOrDefault($"{key}:b") is not { } mb || i.B >= mb)
+        && agreement.GetValueOrDefault(key, "any") switch
+        {
+            "agree" => i.A == i.B,
+            "close" => i.A is { } x && i.B is { } y && Math.Abs(x - y) <= 1,
+            "apart" => i.A is { } x2 && i.B is { } y2 && Math.Abs(x2 - y2) >= 4,
+            _ => true,
+        };
+
+    /// <summary>How many of a section's filters are on (sort counts when it isn't the section's own order).</summary>
+    private int ActiveFilters(string key) => new[]
+    {
+        sorts.GetValueOrDefault(key, "default") != "default", genres.GetValueOrDefault(key) is not null, decades.GetValueOrDefault(key) is not null,
+        minTmdb.GetValueOrDefault(key) is not null, minRating.GetValueOrDefault($"{key}:a") is not null, minRating.GetValueOrDefault($"{key}:b") is not null,
+        agreement.GetValueOrDefault(key, "any") != "any", rated.GetValueOrDefault(key, "any") != "any",
+    }.Count(on => on);
+
+    private void ClearFilters(string key)
+    {
+        sorts.Remove(key); genres.Remove(key); decades.Remove(key); minTmdb.Remove(key);
+        minRating.Remove($"{key}:a"); minRating.Remove($"{key}:b"); agreement.Remove(key); rated.Remove(key);
+    }
 
     /// <summary>When you're one of the two: the other one.</summary>
     private UserCard? Other => c is null || Session.Me is not { } me ? null
@@ -209,6 +297,7 @@ else if (c is not null)
         sorts.Clear();
         decades.Clear();
         rated.Clear();
+        filtersOpen.Clear(); genres.Clear(); minTmdb.Clear(); minRating.Clear(); agreement.Clear();
         await Load();
     }
 
