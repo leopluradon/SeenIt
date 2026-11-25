@@ -86,7 +86,9 @@ else if (c is not null)
                             </select>
                         </label>
                     }
-                    @if (key != "rated" && items.Any(i => i.A is not null || i.B is not null))
+                    @* Only where both have seen everything: elsewhere one of them hasn't (the "only … has seen" rows), or one
+                       rating is the reason it's there ("loved"), so the choices wouldn't mean anything. *@
+                    @if (key == "watched" && items.Any(i => i.A is not null || i.B is not null))
                     {
                         <label class="sort-pick">
                             <span class="muted small">Ratings</span>
