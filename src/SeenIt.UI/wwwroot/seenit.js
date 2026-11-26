@@ -728,3 +728,13 @@ document.addEventListener('keydown', e => {
             navigator.serviceWorker.getRegistration().then(r => { if (r) window.seenit._pushWorker(); });
     } catch { }
 })();
+
+// Whether the page now showing was reached with Back/Forward (a saved default view only applies when you go to a
+// page, not when you come back to it the way you left it).
+(() => {
+    let back = false;
+    const push = history.pushState;
+    history.pushState = function (...args) { back = false; return push.apply(this, args); };
+    window.addEventListener('popstate', () => { back = true; });
+    window.seenit.cameBack = () => back;
+})();

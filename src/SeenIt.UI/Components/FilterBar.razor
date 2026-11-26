@@ -32,6 +32,10 @@
         </div>
     }
 }
+@if (ViewPage is not null)
+{
+    <SavedViews Page="@ViewPage" Current="@(ViewQuery ?? "")" Path="@ViewPath" Scope="@ViewScope" ScopeLabel="@ViewScopeLabel" Keep="@(ViewKeep ?? [])" />
+}
 @code {
     [Parameter] public string? Query { get; set; }
     [Parameter] public EventCallback<string> QueryChanged { get; set; }
@@ -43,6 +47,13 @@
     [Parameter] public IReadOnlyList<FilterChip>? Chips { get; set; }
     [Parameter] public EventCallback OnClear { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+    // Saved views under the bar (SavedViews): the page's key, its filters as a query string, and where views link to.
+    [Parameter] public string? ViewPage { get; set; }
+    [Parameter] public string? ViewQuery { get; set; }
+    [Parameter] public string? ViewPath { get; set; }
+    [Parameter] public string? ViewScope { get; set; }
+    [Parameter] public string? ViewScopeLabel { get; set; }
+    [Parameter] public string[]? ViewKeep { get; set; }
     /// <summary>A small control that sits at the end of the bar (the posters/rows switch).</summary>
     [Parameter] public RenderFragment? Extra { get; set; }
     /// <summary>Starts shut: what's on shows as chips, and the fields are a tap away.</summary>

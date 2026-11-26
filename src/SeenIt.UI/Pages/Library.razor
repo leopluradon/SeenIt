@@ -10,9 +10,9 @@
 <div class="page-head">
     <h1>@(Other is { } o ? $"{o}'s library" : "My library")</h1>
     <div class="segmented">
-        <button class="@(type is null ? "on" : "")" @onclick="() => type = null">All</button>
-        <button class="@(type == MediaType.Movie ? "on" : "")" @onclick="() => type = MediaType.Movie">Movies</button>
-        <button class="@(type == MediaType.Show ? "on" : "")" @onclick="() => type = MediaType.Show">Shows</button>
+        <button class="@(type is null ? "on" : "")" @onclick="() => Set(() => type = null)">All</button>
+        <button class="@(type == MediaType.Movie ? "on" : "")" @onclick="() => Set(() => type = MediaType.Movie)">Movies</button>
+        <button class="@(type == MediaType.Show ? "on" : "")" @onclick="() => Set(() => type = MediaType.Show)">Shows</button>
     </div>
 </div>
 <p class="muted small">What you own, separate from what you've watched, in as many formats as you have it (and for shows, which seasons). Add things with <b>Own it</b> on any movie or show; Plex and Jellyfin add what lands on your server (Settings → Media servers), and you can import what's already there (Settings → Import).</p>
@@ -22,16 +22,17 @@
 else if (items is { Count: 0 }) { <Empty Title="Your library is empty.">Mark what you own (Blu-ray, 4K, digital…) from a title's ⋯ menu with <b>Own it…</b>, or import a collection in <a href="settings?tab=data">Settings → Import</a>.</Empty> }
 else if (items is not null)
 {
-    <FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find in your library"
-               Active="@((format is null ? 0 : 1) + (unwatched ? 1 : 0))" Chips="Chips" OnClear='() => { find = ""; format = null; unwatched = false; }'>
+    <FilterBar Query="@find" QueryChanged="q => Set(() => find = q)" Placeholder="Find in your library"
+               Active="@((format is null ? 0 : 1) + (unwatched ? 1 : 0))" Chips="Chips" OnClear='() => Set(() => { find = ""; format = null; unwatched = false; })'
+               ViewPage="@(Mine ? "library" : null)" ViewQuery="@UrlState.Query(State)">
         <div class="field">
             <label for="lib-format">Format</label>
-            <select id="lib-format" value="@(format?.ToString() ?? "")" @onchange="e => format = Enum.TryParse<OwnedFormat>(e.Value as string, out var f) ? f : null">
+            <select id="lib-format" value="@(format?.ToString() ?? "")" @onchange="e => Set(() => format = Enum.TryParse<OwnedFormat>(e.Value as string, out var f) ? f : null)">
                 <option value="">Any format</option>
                 @foreach (var f in items.SelectMany(Formats).Distinct().Order()) { <option value="@f">@OwnedFormats.Label(f) · @items.Count(i => Formats(i).Contains(f))</option> }
             </select>
         </div>
-        <label class="field inline check-field"><input type="checkbox" checked="@unwatched" @onchange="e => unwatched = e.Value is true" /> Not watched yet</label>
+        <label class="field inline check-field"><input type="checkbox" checked="@unwatched" @onchange="e => Set(() => unwatched = e.Value is true)" /> Not watched yet</label>
     </FilterBar>
     var shown = items.Where(i => (type is null || i.Media.Type == type) && (format is null || Formats(i).Contains(format.Value)) && (!unwatched || !i.Watched)
         && TextMatch.Contains(i.Media.Title, find)).ToList();
@@ -56,10 +57,25 @@ else if (items is not null)
     private bool unwatched;
     private List<FilterChip> Chips =>
     [
-        .. format is { } f ? [new FilterChip(OwnedFormats.Label(f), () => format = null)] : Array.Empty<FilterChip>(),
-        .. unwatched ? [new FilterChip("Not watched yet", () => unwatched = false)] : Array.Empty<FilterChip>(),
+        .. format is { } f ? [new FilterChip(OwnedFormats.Label(f), () => Set(() => format = null))] : Array.Empty<FilterChip>(),
+        .. unwatched ? [new FilterChip("Not watched yet", () => Set(() => unwatched = false))] : Array.Empty<FilterChip>(),
     ];
     private string find = "";
+
+    // Filters live in the address (Back returns to them; they can be saved as a view).
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    [SupplyParameterFromQuery(Name = "format")] public string? FormatParam { get; set; }
+    [SupplyParameterFromQuery(Name = "unwatched")] public string? UnwatchedParam { get; set; }
+    private (string, string?)[] State => [("q", find.Trim()), ("type", type?.ToString().ToLowerInvariant()), ("format", format?.ToString()), ("unwatched", unwatched ? "1" : null)];
+    private void Set(Action change) { change(); UrlState.Write(Nav, State); }
+    protected override void OnParametersSet()
+    {
+        find = UrlState.Find(QParam, find);
+        type = Enum.TryParse<MediaType>(TypeParam, true, out var t) ? t : null;
+        format = Enum.TryParse<OwnedFormat>(FormatParam, true, out var f) ? f : null;
+        unwatched = UnwatchedParam == "1";
+    }
 
     /// <summary>Every copy; an older server sends only the one format.</summary>
     private static IReadOnlyList<OwnedCopy> Copies(LibraryEntry i) => i.Copies is { Count: > 0 } c ? c : [new OwnedCopy(i.Format, null, i.Source, i.AddedAt)];

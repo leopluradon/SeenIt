@@ -29,9 +29,9 @@
     var showChoices = (items ?? []).Where(c => c.Type != MediaType.Movie).GroupBy(c => c.TmdbId).Select(g => (Id: g.Key, g.First().Title)).OrderBy(x => x.Title).ToList();
     var networkChoices = (items ?? []).Select(c => c.Network).OfType<string>().Distinct().Order().ToList();
 }
-<FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find a title" Label="Find a title in the calendar"
+<FilterBar Query="@find" QueryChanged="q => SetFilter(() => find = q)" Placeholder="Find a title" Label="Find a title in the calendar"
            Active="@((hideWatched ? 1 : 0) + (hidePremieres ? 1 : 0) + (onlyShow is null ? 0 : 1) + (network is null ? 0 : 1))"
-           Chips="Chips(showChoices)" OnClear="ClearFilters">
+           Chips="Chips(showChoices)" OnClear="ClearFilters" ViewPage="calendar" ViewQuery="@UrlState.Query(State)">
     @if (showChoices.Count > 1 || onlyShow is not null)
     {
         <div class="field">
@@ -198,9 +198,32 @@ else if (items is not null)
         await Load();
     }
 
+    // Type, search and the hide switches go in the address too (Back returns to them; they can be saved as a view).
+    // One show or one channel stays out: it depends on the dates on screen.
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "hidewatched")] public string? HideWatchedParam { get; set; }
+    [SupplyParameterFromQuery(Name = "hidepremieres")] public string? HidePremieresParam { get; set; }
+    private (string, string?)[] State => [("type", kind switch { MediaType.Movie => "movie", MediaType.Episode => "shows", _ => null }), ("q", find.Trim()),
+        ("hidewatched", hideWatched ? "1" : null), ("hidepremieres", hidePremieres ? "1" : null)];
+
+    /// <summary>The address wins over what this device remembered, when it says anything.</summary>
+    protected override void OnParametersSet()
+    {
+        if (TypeParam is null && QParam is null && HideWatchedParam is null && HidePremieresParam is null && !wrote) return;
+        kind = TypeParam switch { "movie" => MediaType.Movie, "shows" => MediaType.Episode, _ => null };
+        find = UrlState.Find(QParam, find);
+        hideWatched = HideWatchedParam == "1";
+        hidePremieres = HidePremieresParam == "1";
+    }
+    private bool wrote;
+
     private async Task SetFilter(Action change)
     {
         change();
+        wrote = true;
+        UrlState.Write(Nav, State);
         try { await Js.InvokeVoidAsync("localStorage.setItem", PrefsKey, $"{(month ? "month" : "list")}|{kind}|{(hideWatched ? 1 : 0)}|{(hidePremieres ? 1 : 0)}"); }
         catch (JSException) { }
     }

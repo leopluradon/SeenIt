@@ -65,7 +65,6 @@
 else
 {
 <div class="page-head">
-    @if (Mine) { <SavedViews Page="progress" Current="@ViewQuery" /> }
     <div class="segmented">
         <button class="@(tab == "watching" ? "on" : "")" @onclick='() => SetTab("watching")'>Watching</button>
         <button class="@(tab == "waiting" ? "on" : "")" @onclick='() => SetTab("waiting")'>Caught up</button>
@@ -76,7 +75,7 @@ else
     @if (Mine) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
 </div>
 <FilterBar Query="@find" QueryChanged="SetFind" Placeholder="Find a show" Active="@(Sort == UpNextSort.LastWatched ? 0 : 1)"
-           Chips="SortChips" OnClear="ClearFilters">
+           Chips="SortChips" OnClear="ClearFilters" ViewPage="@(Mine ? "progress" : null)" ViewQuery="@ViewQuery" ViewKeep="@(["view"])">
     <div class="field">
         <label for="pf-sort">Order</label>
         <select id="pf-sort" value="@Sort" @onchange="SetSort">
@@ -237,7 +236,8 @@ else if (items is not null)
         {
             ("tab", tab == "watching" ? null : tab),
             ("sort", Sort == UpNextSort.LastWatched ? null : Sort.ToString()),
-        }.Where(p => p.Value is not null).Select(p => $"{p.Key}={p.Value}"));
+            ("q", find.Trim() is { Length: > 0 } q ? q : null),
+        }.Where(p => p.Value is not null).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     /// <summary>The tab goes in the address, so Back from a show returns to it.</summary>
     private void SetTab(string t)

@@ -39,13 +39,14 @@ else if (people is not null)
     <section class="row-section">
         <div class="section-head"><h2>Following <span class="muted small">@people.Count</span></h2></div>
         @{ var departments = people.Select(x => x.Department).OfType<string>().Distinct().Order().ToList(); }
-        <FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find someone" Label="Find someone you follow"
-                   Active="@(department is null ? 0 : 1)" Chips="@(department is { } dep ? [new FilterChip(dep, () => department = null)] : null)" OnClear='() => { find = ""; department = null; }'>
+        <FilterBar Query="@find" QueryChanged="q => Set(() => find = q)" Placeholder="Find someone" Label="Find someone you follow"
+                   Active="@(department is null ? 0 : 1)" Chips="@(department is { } dep ? [new FilterChip(dep, () => Set(() => department = null))] : null)" OnClear='() => Set(() => { find = ""; department = null; })'
+                   ViewPage="people" ViewQuery="@UrlState.Query(State)">
             @if (departments.Count > 1)
             {
                 <div class="field">
                     <label for="ppl-dept">Known for</label>
-                    <select id="ppl-dept" value="@(department ?? "")" @onchange="e => department = e.Value as string is { Length: > 0 } d ? d : null">
+                    <select id="ppl-dept" value="@(department ?? "")" @onchange="e => Set(() => department = e.Value as string is { Length: > 0 } d ? d : null)">
                         <option value="">Anything</option>
                         @foreach (var d in departments) { <option value="@d">@d</option> }
                     </select>
@@ -89,6 +90,14 @@ else if (people is not null)
     private bool busy;
     private string find = "";
     private string? department;
+
+    // Filters live in the address (Back returns to them; they can be saved as a view).
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "dept")] public string? DeptParam { get; set; }
+    private (string, string?)[] State => [("q", find.Trim()), ("dept", department)];
+    private void Set(Action change) { change(); UrlState.Write(Nav, State); }
+    protected override void OnParametersSet() { find = UrlState.Find(QParam, find); department = DeptParam; }
 
     protected override Task OnInitializedAsync() => Load();
 

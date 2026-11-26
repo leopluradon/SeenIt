@@ -19,21 +19,22 @@ else if (data is { Items.Count: 0 })
 }
 else if (data is not null)
 {
-    <FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find a title" Label="Find an alert"
-               Active="@((kind == "" ? 0 : 1) + (newOnly ? 1 : 0))" Chips="Chips" OnClear='() => { find = ""; kind = ""; newOnly = false; }'>
+    <FilterBar Query="@find" QueryChanged="q => Set(() => find = q)" Placeholder="Find a title" Label="Find an alert"
+               Active="@((kind == "" ? 0 : 1) + (newOnly ? 1 : 0))" Chips="Chips" OnClear="ClearFilters"
+               ViewPage="notifications" ViewQuery="@UrlState.Query(State)">
         <div class="field">
             <label for="al-kind">Kind</label>
-            <select id="al-kind" value="@kind" @onchange='e => kind = e.Value as string ?? ""'>
+            <select id="al-kind" value="@kind" @onchange='e => Set(() => kind = e.Value as string ?? "")'>
                 @foreach (var (key, label) in Kinds)
                 {
                     @if (key == "" || data.Items.Any(n => KindOf(n) == key)) { <option value="@key">@label</option> }
                 }
             </select>
         </div>
-        <label class="field inline check-field"><input type="checkbox" checked="@newOnly" @onchange="e => newOnly = e.Value is true" /> New only</label>
+        <label class="field inline check-field"><input type="checkbox" checked="@newOnly" @onchange="e => Set(() => newOnly = e.Value is true)" /> New only</label>
     </FilterBar>
     var items = data.Items.Where(Matches).ToList();
-    @if (items.Count == 0) { <Empty Title="Nothing matches."><button class="btn btn-sm" @onclick='() => { find = ""; kind = ""; newOnly = false; }'>Clear filters</button></Empty> }
+    @if (items.Count == 0) { <Empty Title="Nothing matches."><button class="btn btn-sm" @onclick="ClearFilters">Clear filters</button></Empty> }
     @foreach (var day in items.GroupBy(n => n.Day))
     {
         <section class="cal-day">
@@ -65,8 +66,8 @@ else if (data is not null)
     private bool newOnly;
     private List<FilterChip> Chips =>
     [
-        .. kind != "" ? [new FilterChip(Kinds.First(k => k.Key == kind).Label, () => kind = "")] : Array.Empty<FilterChip>(),
-        .. newOnly ? [new FilterChip("New only", () => newOnly = false)] : Array.Empty<FilterChip>(),
+        .. kind != "" ? [new FilterChip(Kinds.First(k => k.Key == kind).Label, () => Set(() => kind = ""))] : Array.Empty<FilterChip>(),
+        .. newOnly ? [new FilterChip("New only", () => Set(() => newOnly = false))] : Array.Empty<FilterChip>(),
     ];
     private string find = "";
     private static string KindOf(NotificationDto n) => n.PollId is not null ? "poll" : n.RecommendationWatched ? "recwatched" : n.Recommendation ? "rec"
@@ -75,6 +76,21 @@ else if (data is not null)
         && (find.Trim() is not { Length: > 0 } f || n.Title.Contains(f, StringComparison.OrdinalIgnoreCase) || n.Detail?.Contains(f, StringComparison.OrdinalIgnoreCase) == true);
 
     protected override Task OnInitializedAsync() => Load();
+
+    // Filters live in the address (Back returns to them; they can be saved as a view).
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "kind")] public string? KindParam { get; set; }
+    [SupplyParameterFromQuery(Name = "new")] public string? NewParam { get; set; }
+    private (string, string?)[] State => [("q", find.Trim()), ("kind", kind), ("new", newOnly ? "1" : null)];
+    protected override void OnParametersSet()
+    {
+        find = UrlState.Find(QParam, find);
+        kind = Kinds.Any(k => k.Key == KindParam) ? KindParam! : "";
+        newOnly = NewParam == "1";
+    }
+    private void Set(Action change) { change(); UrlState.Write(Nav, State); }
+    private void ClearFilters() => Set(() => { find = ""; kind = ""; newOnly = false; });
 
     private async Task Load()
     {

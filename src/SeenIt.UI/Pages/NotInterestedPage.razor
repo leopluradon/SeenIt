@@ -14,15 +14,16 @@ else if (items is not null)
 {
     <div class="filter-row">
         <div class="segmented segmented-sm">
-            <button class="@(kind is null ? "on" : "")" @onclick="() => kind = null">All</button>
-            <button class="@(kind == MediaType.Movie ? "on" : "")" @onclick="() => kind = MediaType.Movie">Movies</button>
-            <button class="@(kind == MediaType.Show ? "on" : "")" @onclick="() => kind = MediaType.Show">Shows</button>
+            <button class="@(kind is null ? "on" : "")" @onclick="() => Set(() => kind = null)">All</button>
+            <button class="@(kind == MediaType.Movie ? "on" : "")" @onclick="() => Set(() => kind = MediaType.Movie)">Movies</button>
+            <button class="@(kind == MediaType.Show ? "on" : "")" @onclick="() => Set(() => kind = MediaType.Show)">Shows</button>
         </div>
     </div>
-    <FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find a title" Label="Find a hidden title" />
+    <FilterBar Query="@find" QueryChanged="q => Set(() => find = q)" Placeholder="Find a title" Label="Find a hidden title"
+               ViewPage="not-interested" ViewQuery="@UrlState.Query(State)" />
     var shown = items.Where(i => (kind is null || i.Media.Type == kind)
         && (find.Trim() is not { Length: > 0 } f || i.Media.Title.Contains(f, StringComparison.OrdinalIgnoreCase))).ToList();
-    @if (shown.Count == 0) { <Empty Title="Nothing matches."><button class="btn btn-sm" @onclick='() => { find = ""; kind = null; }'>Clear filters</button></Empty> }
+    @if (shown.Count == 0) { <Empty Title="Nothing matches."><button class="btn btn-sm" @onclick='() => Set(() => { find = ""; kind = null; })'>Clear filters</button></Empty> }
     <div class="poster-grid">
         @foreach (var i in shown)
         {
@@ -35,6 +36,14 @@ else if (items is not null)
     private string? error;
     private string find = "";
     private MediaType? kind;
+
+    // Filters live in the address (Back returns to them; they can be saved as a view).
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    private (string, string?)[] State => [("q", find.Trim()), ("type", kind?.ToString().ToLowerInvariant())];
+    private void Set(Action change) { change(); UrlState.Write(Nav, State); }
+    protected override void OnParametersSet() { find = UrlState.Find(QParam, find); kind = Enum.TryParse<MediaType>(TypeParam, true, out var t) ? t : null; }
 
     protected override Task OnInitializedAsync() => Load();
 

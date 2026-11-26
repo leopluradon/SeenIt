@@ -60,7 +60,7 @@
         <Icon Name="sliders" Size="14" /> Filters@(ActiveFilters > 0 ? $" · {ActiveFilters}" : "")
     </button>
 </form>
-@if (Mine && !Friends) { <SavedViews Page="history" Current="@ViewQuery" /> }
+@if (Mine) { <SavedViews Page="@(Friends ? "history-friends" : "history")" Path="@(Friends ? "friends" : "history")" Current="@ViewQuery" Keep="@(["tab", "page"])" /> }
 
 <div class="history-filters @(filtersOpen ? "open" : "")">
     @if (Friends && data?.People is { Count: > 1 } everyone)
@@ -452,7 +452,7 @@ else if (data is not null)
     /// <summary>The filters in use, as a query string, for saving as a view (no paging).</summary>
     private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
         {
-            ("type", TypeParam), ("q", Q), ("source", SourceParam), ("genre", Genre), ("period", Period),
+            ("type", TypeParam), ("user", Friends ? UserParam : null), ("q", Q), ("source", SourceParam), ("genre", Genre), ("period", Period),
             ("from", Period == "custom" ? FromParam : null), ("to", Period == "custom" ? ToParam : null), ("sort", Sort), ("group", Type == MediaType.Show && !PerShow ? "day" : null), ("by", PerShow ? null : ByKey(Unit)), ("all", PerShow && !AllOnOnePage ? "0" : null),
         }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 

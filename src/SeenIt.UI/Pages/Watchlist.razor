@@ -17,9 +17,9 @@
         <button class="@(filter == MediaType.Show ? "on" : "")" @onclick="() => SetFilter(MediaType.Show)">Shows</button>
     </div>
 </div>
-@if (Mine) { <SavedViews Page="watchlist" Current="@ViewQuery" /> }
 <FilterBar Query="@find" QueryChanged="q => { find = q; Remember(); }" Placeholder="Find in this watchlist"
-           Active="@((sort == "added" ? 0 : 1) + (released is null ? 0 : 1) + (onMine ? 1 : 0))" Chips="Chips" OnClear="Clear">
+           Active="@((sort == "added" ? 0 : 1) + (released is null ? 0 : 1) + (onMine ? 1 : 0))" Chips="Chips" OnClear="Clear"
+           ViewPage="@(Mine ? "watchlist" : null)" ViewQuery="@ViewQuery">
     <Extra><LayoutToggle Page="watchlist" Value="layout" ValueChanged="v => layout = v" /></Extra>
     <ChildContent>
     <div class="field">
@@ -100,6 +100,7 @@ else if (items is not null)
     [SupplyParameterFromQuery(Name = "sort")] public string? SortParam { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
     [SupplyParameterFromQuery(Name = "released")] public string? ReleasedParam { get; set; }
+    [SupplyParameterFromQuery(Name = "mine")] public string? MineParam { get; set; }
     private string? released;
     private static readonly string[] Sorts = ["added", "release", "title"];
 
@@ -108,12 +109,13 @@ else if (items is not null)
     protected override void OnParametersSet()
     {
         // Only when the address changes, so a re-render doesn't undo what's been picked on the page.
-        if ((TypeParam, SortParam, QParam + "|" + ReleasedParam) == applied) return;
-        applied = (TypeParam, SortParam, QParam + "|" + ReleasedParam);
+        if ((TypeParam, SortParam, QParam + "|" + ReleasedParam + "|" + MineParam) == applied) return;
+        applied = (TypeParam, SortParam, QParam + "|" + ReleasedParam + "|" + MineParam);
         filter = TypeParam switch { "movie" => MediaType.Movie, "show" => MediaType.Show, _ => null };
         sort = Sorts.Contains(SortParam) ? SortParam! : Fmt.Prefs.SortFor("watchlist") is { } s && Sorts.Contains(s) ? s : "added";
         if (QParam is not null && QParam != find.Trim()) find = QParam;   // typing updates the address; don't fight it
         released = ReleasedParam is "out" or "soon" ? ReleasedParam : null;
+        if ((MineParam == "1") != onMine && Mine && Fmt.Prefs.MyServices is { Count: > 0 }) _ = InvokeAsync(async () => { await ToggleMine(); StateHasChanged(); });
     }
 
     /// <summary>Someone else's watchlist (read-only), shared at u/{name}/….</summary>
@@ -140,9 +142,10 @@ else if (items is not null)
     private async Task ToggleMine()
     {
         onMine = !onMine;
+        Remember();
         if (!onMine || available is not null) return;
         try { available = (await Api.WatchlistOnMyServicesAsync()).ToHashSet(); }
-        catch (Exception ex) { onMine = false; Toasts.Error(ex); }
+        catch (Exception ex) { onMine = false; Remember(); Toasts.Error(ex); }
     }
 
     private Task SetSort(string s)
@@ -161,6 +164,7 @@ else if (items is not null)
         ["sort"] = sort == "added" ? null : sort,
         ["q"] = find.Trim() is { Length: > 0 } q ? q : null,
         ["released"] = released,
+        ["mine"] = onMine ? "1" : null,
     }), replace: true);
 
     private List<FilterChip> Chips =>
@@ -182,6 +186,7 @@ else if (items is not null)
             ("sort", sort == "added" ? null : sort),
             ("q", find.Trim()),
             ("released", released),
+            ("mine", onMine ? "1" : null),
         }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private async Task Load()

@@ -1,15 +1,23 @@
-@* Filters saved as quick chips at the top of a page (History, Watchlist, Progress). Tap one to apply it. *@
+@* Filters and sorting saved as quick chips on a page. Tap one to apply it; the star makes it the page's default,
+   which it opens with whenever you go to it (not when you come back with Back, and not once the address already has
+   filters in it, like a shared link). On a list, a view can be saved for every list or just this one. *@
 @inject SessionState Session
 @inject ApiClient Api
 @inject Toasts Toasts
-@{ var views = PagePrefs.Views(Page); }
-@if (views.Count > 0 || CanSave)
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+@{ var views = Shown; }
+@if (Session.Me is not null && (views.Count > 0 || CanSave))
 {
     <div class="saved-views" aria-label="Saved views">
         @foreach (var v in views)
         {
-            <span class="chip saved-view @(Same(v.Query, Current) ? "on" : "")" @key="v.Name">
-                <a href="@($"{Page}{(v.Query.Length > 0 ? "?" + v.Query : "")}")">@v.Name</a>
+            <span class="chip saved-view @(Same(v.Query, Current) ? "on" : "")" @key="(v.Page, v.Name)">
+                <button type="button" class="saved-view-star @(v.Default ? "is-default" : "")" @onclick="() => ToggleDefault(v)" aria-pressed="@v.Default"
+                        title="@(v.Default ? "Opens with this view. Tap to stop." : $"Open {Where(v)} with this view")"
+                        aria-label="@(v.Default ? $"Stop opening with {v.Name}" : $"Open {Where(v)} with {v.Name}")"><Icon Name="star" Size="12" /></button>
+                <a href="@Href(v)">@v.Name</a>
+                @if (Scope is not null && v.Page == Scope) { <span class="muted tiny" title="Saved for this list only">this list</span> }
                 <button type="button" @onclick="() => Remove(v)" aria-label="@($"Remove saved view {v.Name}")"><Icon Name="x" Size="12" /></button>
             </span>
         }
@@ -17,6 +25,8 @@
         {
             <form class="saved-view-name" @onsubmit="Save">
                 <input @ref="nameBox" @bind="name" @bind:event="oninput" maxlength="40" placeholder="Name this view" aria-label="Name this view" />
+                <label class="check small"><input type="checkbox" @bind="asDefault" /> Open with it</label>
+                @if (Scope is not null) { <label class="check small"><input type="checkbox" @bind="scoped" /> @(ScopeLabel ?? "Only here")</label> }
                 <button class="btn btn-sm btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(name)">Save</button>
                 <button class="btn btn-sm btn-ghost" type="button" @onclick="() => naming = false">Cancel</button>
             </form>
@@ -28,25 +38,58 @@
     </div>
 }
 @code {
-    /// <summary>"history", "watchlist" or "progress": also the page's address.</summary>
+    /// <summary>Which page's views (UiPrefs.ViewPages).</summary>
     [Parameter, EditorRequired] public string Page { get; set; } = "";
     /// <summary>The page's current filters as a query string (no "?"); empty when nothing is filtered.</summary>
     [Parameter] public string Current { get; set; } = "";
+    /// <summary>Where a view's link goes (default: the page key). May carry its own query, e.g. "recommendations?tab=sent".</summary>
+    [Parameter] public string? Path { get; set; }
+    /// <summary>A narrower set of views shown as well, e.g. "list:{id}" for one list's own.</summary>
+    [Parameter] public string? Scope { get; set; }
+    [Parameter] public string? ScopeLabel { get; set; }
+    /// <summary>Address keys that aren't filters (a tab, the page number): they don't stop the default from applying.</summary>
+    [Parameter] public string[] Keep { get; set; } = [];
 
-    private bool naming;
+    private bool naming, asDefault, scoped;
     private string name = "";
     private ElementReference nameBox;
 
+    private List<SavedView> Shown => [.. Scope is null ? [] : PagePrefs.Views(Scope), .. PagePrefs.Views(Page)];
+
     // Something to save: filters are set and no saved view already has them.
-    private bool CanSave => Current.Length > 0 && !PagePrefs.Views(Page).Any(v => Same(v.Query, Current));
+    private bool CanSave => Current.Length > 0 && !Shown.Any(v => Same(v.Query, Current));
 
     private static bool Same(string a, string b) => Normalize(a) == Normalize(b);
     private static string Normalize(string q) => string.Join('&', q.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal));
+
+    private string Base => Path ?? Page;
+    private string Href(SavedView v) => v.Query.Length == 0 ? Base : Base + (Base.Contains('?') ? "&" : "?") + v.Query;
+    private string Where(SavedView v) => Scope is not null && v.Page == Scope ? "this list" : Scope is not null ? "every list" : "this page";
+
+    private string? checkedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Once per page (a tab that's a page of its own, like Recommendations → Sent, counts as arriving).
+        if (checkedFor == Page + "|" + Scope) return;
+        checkedFor = Page + "|" + Scope;
+        // Going to the page with nothing filtered in the address: open it with the default view, if there is one.
+        if (Session.Me is null || PagePrefs.DefaultView(Page, Scope) is not { } view || view.Query.Length == 0) return;
+        if (Parse(new Uri(Nav.Uri).Query).Keys.Any(k => !Keep.Contains(k))) return;
+        try { if (await Js.InvokeAsync<bool>("seenit.cameBack")) return; } catch (JSException) { }
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(Parse(view.Query).ToDictionary(kv => kv.Key, kv => (object?)kv.Value)), replace: true);
+    }
+
+    private static Dictionary<string, string> Parse(string query) => query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+        .Select(p => p.Split('=', 2)).Where(p => p[0].Length > 0)
+        .GroupBy(p => Uri.UnescapeDataString(p[0])).ToDictionary(g => g.Key, g => Uri.UnescapeDataString(g.First().ElementAtOrDefault(1) ?? ""));
 
     private async Task StartNaming()
     {
         naming = true;
         name = "";
+        asDefault = false;
+        scoped = false;
         StateHasChanged();
         await Task.Yield();
         try { await nameBox.FocusAsync(); } catch (JSException) { }
@@ -57,9 +100,19 @@
         if (string.IsNullOrWhiteSpace(name)) return;
         if ((Fmt.Prefs.SavedViews?.Count ?? 0) >= UiPrefs.MaxSavedViews) { Toasts.Show("That's the most saved views you can have. Remove one first.", error: true); return; }
         naming = false;
-        await PagePrefs.AddViewAsync(Session, Api, new SavedView(Page, name.Trim(), Current));
-        Toasts.Show($"Saved “{name.Trim()}”");
+        var view = new SavedView(scoped && Scope is not null ? Scope : Page, name.Trim(), Current);
+        await PagePrefs.AddViewAsync(Session, Api, view);
+        if (asDefault) await PagePrefs.SetDefaultAsync(Session, Api, view, true);
+        Toasts.Show(asDefault ? $"Saved “{view.Name}”. {Capital(Where(view))} opens with it now." : $"Saved “{view.Name}”");
     }
+
+    private async Task ToggleDefault(SavedView v)
+    {
+        await PagePrefs.SetDefaultAsync(Session, Api, v, !v.Default);
+        Toasts.Show(v.Default ? $"{Capital(Where(v))} opens unfiltered again" : $"{Capital(Where(v))} opens with “{v.Name}” now");
+    }
+
+    private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     private Task Remove(SavedView v) => PagePrefs.RemoveViewAsync(Session, Api, v);
 }

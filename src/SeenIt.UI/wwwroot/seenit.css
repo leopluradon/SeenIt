@@ -2085,3 +2085,9 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
     .hero-rate .rating-picker:not(.stars):not(.decimal):not(.thumbs) { max-width: none; }
     .hero-rate .rating-picker .pip { max-width: none; height: 32px; }
 }
+.saved-view .saved-view-star { padding: 6px 0 6px 10px; }
+.saved-view a { padding-left: 6px; }
+.saved-view .saved-view-star.is-default { color: var(--warn); }
+.saved-view .saved-view-star.is-default svg { fill: currentColor; }
+.saved-view-name { flex-wrap: wrap; }
+.saved-view .tiny { padding-right: 2px; }

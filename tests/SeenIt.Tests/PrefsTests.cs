@@ -8,6 +8,27 @@ namespace SeenIt.Tests;
 public class PrefsTests
 {
     [Fact]
+    public void Saved_views_keep_one_default_per_page_and_lists_can_have_their_own()
+    {
+        var list = Guid.NewGuid();
+        var p = (UserPrefs.Default with
+        {
+            SavedViews =
+            [
+                new("ratings", "Tens", "score=10", Default: true),
+                new("ratings", "Movies", "type=movie", Default: true),   // marked last: this one wins
+                new("person", "Main work", "major=1&seen=fade", Default: true),
+                new($"list:{list}", "Unseen", "seen=hide", Default: true),
+                new("list:not-a-guid", "Bad", "q=a"),
+                new("compare", "Nope", "q=a"),
+            ],
+        }).Clean();
+        Assert.Equal(
+            [("ratings", "Tens", false), ("ratings", "Movies", true), ("person", "Main work", true), ($"list:{list}", "Unseen", true)],
+            p.SavedViews!.Select(v => (v.Page, v.Name, v.Default)));
+    }
+
+    [Fact]
     public void Scores_can_be_hidden_per_source_and_kind()
     {
         var p = new UserPrefs(Scores: ["imdb", "letterboxd"], HiddenScores: ["imdb/episode", "tmdb/season", "friends/movie", "bogus/movie", "imdb/nope"]).Clean();

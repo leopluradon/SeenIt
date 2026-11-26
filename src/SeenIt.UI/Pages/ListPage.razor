@@ -115,20 +115,14 @@ else if (list is not null)
     {
     @if (list.Items.Count > 1)
     {
-        var active = ActiveFilters;
-        <div class="searchbar">
-            <Icon Name="search" Size="18" />
-            <input type="search" @bind="find" @bind:event="oninput" placeholder="Search this list" aria-label="Search this list" />
-            <button type="button" class="btn btn-sm filter-toggle @(active > 0 ? "btn-on" : "")" aria-expanded="@filtersOpen" @onclick="() => filtersOpen = !filtersOpen">
-                <Icon Name="sliders" Size="14" /> Filters@(active > 0 ? $" · {active}" : "")
-            </button>
-        </div>
-        @if (filtersOpen)
-        {
-            <div class="filter-row list-filters">
-                <label class="sort-pick">
-                    <span class="muted small">Sort</span>
-                    <select value="@sort" @onchange='e => sort = e.Value as string ?? "list"'>
+        <FilterBar Query="@find" QueryChanged="q => Set(() => find = q)" Placeholder="Search this list" Active="ActiveFilters" Chips="Chips" OnClear="ClearFilters"
+                   ViewPage="@(Session.Me is null ? null : "list")" ViewScope="@($"list:{Id}")" ViewScopeLabel="Only for this list"
+                   ViewPath="@($"lists/{Id}")" ViewQuery="@UrlState.Query(State)">
+            <Extra><LayoutToggle Page="list" Value="Layout" ValueChanged="v => layout = v" /></Extra>
+            <ChildContent>
+                <div class="field">
+                    <label for="lf-sort">Order</label>
+                    <select id="lf-sort" value="@sort" @onchange='e => Set(() => sort = e.Value as string ?? "list")'>
                         <option value="list">@(list.Ranked ? "Ranking" : "List order")</option>
                         <option value="added">Recently added</option>
                         <option value="title">Title</option>
@@ -136,51 +130,62 @@ else if (list is not null)
                         <option value="oldest">Oldest</option>
                         @if (list.Items.Any(i => i.Media.VoteAverage is > 0)) { <option value="tmdb">TMDB score</option> }
                     </select>
-                </label>
+                </div>
                 @if (list.Items.Any(i => i.Media.Type == MediaType.Movie) && list.Items.Any(i => i.Media.Type != MediaType.Movie))
                 {
-                    <div class="segmented segmented-sm">
-                        <button class="@(kind is null ? "on" : "")" @onclick="() => kind = null">All</button>
-                        <button class="@(kind == MediaType.Movie ? "on" : "")" @onclick="() => kind = MediaType.Movie">Movies</button>
-                        <button class="@(kind == MediaType.Show ? "on" : "")" @onclick="() => kind = MediaType.Show">Shows</button>
+                    <div class="field">
+                        <label for="lf-type">Type</label>
+                        <select id="lf-type" value="@(kind?.ToString() ?? "")" @onchange="e => Set(() => kind = Enum.TryParse<MediaType>(e.Value as string, out var k) ? k : null)">
+                            <option value="">Movies and shows</option>
+                            <option value="Movie">Movies</option>
+                            <option value="Show">Shows</option>
+                        </select>
                     </div>
                 }
                 @if (Session.Me is not null)
                 {
-                    <SeenModePicker Value="seenMode" ValueChanged="m => seenMode = m" />
-                    <label class="sort-pick">
-                        <span class="muted small">Watchlist</span>
-                        <select value="@watchlist" @onchange='e => watchlist = e.Value as string ?? "any"'>
+                    <div class="field">
+                        <label for="lf-seen">What I've seen</label>
+                        <select id="lf-seen" value="@seenMode" @onchange="e => Set(() => seenMode = Enum.TryParse<SeenMode>(e.Value as string, out var m) ? m : SeenMode.Show)">
+                            <option value="@SeenMode.Show">Show it</option>
+                            <option value="@SeenMode.Fade">Fade it</option>
+                            <option value="@SeenMode.Hide">Hide it</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="lf-wl">Watchlist</label>
+                        <select id="lf-wl" value="@watchlist" @onchange='e => Set(() => watchlist = e.Value as string ?? "any")'>
                             <option value="any">Any</option>
                             <option value="on">On my watchlist</option>
                             <option value="off">Not on it</option>
                         </select>
-                    </label>
+                    </div>
                 }
                 @if (list.Items.Any(i => i.Media.VoteAverage is > 0))
                 {
-                    <label class="sort-pick">
-                        <span class="muted small">TMDB score</span>
-                        <select value="@(minScore?.ToString() ?? "")" @onchange="e => minScore = int.TryParse(e.Value as string, out var v) ? v : null">
+                    <div class="field">
+                        <label for="lf-score">TMDB score</label>
+                        <select id="lf-score" value="@(minScore?.ToString() ?? "")" @onchange="e => Set(() => minScore = int.TryParse(e.Value as string, out var v) ? v : null)">
                             <option value="">Any</option>
                             @for (var v = 8; v >= 5; v--) { <option value="@v">@v+</option> }
                         </select>
-                    </label>
+                    </div>
                 }
                 @if (list.Items.Any(i => i.Media.Year is not null))
                 {
-                    <label class="sort-pick">
-                        <span class="muted small">Years</span>
-                        <input type="number" class="year-input" placeholder="from" min="1880" max="2100" value="@fromYear" @onchange="e => fromYear = int.TryParse(e.Value as string, out var y) ? y : null" aria-label="From year" />
-                        <span class="muted small">–</span>
-                        <input type="number" class="year-input" placeholder="to" min="1880" max="2100" value="@toYear" @onchange="e => toYear = int.TryParse(e.Value as string, out var y) ? y : null" aria-label="To year" />
-                    </label>
+                    <div class="field">
+                        <label for="lf-from">From year</label>
+                        <input id="lf-from" type="number" min="1880" max="2100" value="@fromYear" @onchange="e => Set(() => fromYear = int.TryParse(e.Value as string, out var y) ? y : null)" />
+                    </div>
+                    <div class="field">
+                        <label for="lf-to">To year</label>
+                        <input id="lf-to" type="number" min="1880" max="2100" value="@toYear" @onchange="e => Set(() => toYear = int.TryParse(e.Value as string, out var y) ? y : null)" />
+                    </div>
                 }
-                @if (active > 0) { <button class="btn btn-sm btn-ghost" @onclick="ClearFilters">Clear</button> }
-            </div>
-        }
+            </ChildContent>
+        </FilterBar>
     }
-    @if (list.Items.Count > 0)
+    else if (list.Items.Count > 0)
     {
         <LayoutToggle Page="list" Value="Layout" ValueChanged="v => layout = v" />
     }
@@ -238,10 +243,9 @@ else if (list is not null)
     private ListLayout Layout => layout ?? Fmt.Prefs.LayoutFor("list");
 
     // Search, sorting and filters (the Filters button in the search box). A ranked list's numbers stay its ranking.
-    private bool filtersOpen;
     private string sort = "list", watchlist = "any";
     private MediaType? kind;
-    private static SeenMode seenMode;   // like Discover's, kept for the session
+    private SeenMode seenMode;
     private int? minScore, fromYear, toYear;
 
     private int ActiveFilters => new[]
@@ -249,7 +253,38 @@ else if (list is not null)
         sort != "list", kind is not null, seenMode != SeenMode.Show, watchlist != "any", minScore is not null, fromYear is not null, toYear is not null,
     }.Count(on => on);
 
-    private void ClearFilters() { sort = "list"; kind = null; seenMode = SeenMode.Show; watchlist = "any"; minScore = null; fromYear = toYear = null; }
+    private void ClearFilters() => Set(() => { find = ""; sort = "list"; kind = null; seenMode = SeenMode.Show; watchlist = "any"; minScore = null; fromYear = toYear = null; });
+
+    private static readonly string[] Sorts = ["added", "title", "newest", "oldest", "tmdb"];
+    private List<FilterChip> Chips
+    {
+        get
+        {
+            var chips = new List<FilterChip>();
+            if (sort != "list") chips.Add(new(sort switch { "added" => "Recently added", "title" => "By title", "newest" => "Newest first", "oldest" => "Oldest first", _ => "By TMDB score" }, () => Set(() => sort = "list")));
+            if (kind is { } k) chips.Add(new(k == MediaType.Movie ? "Movies" : "Shows", () => Set(() => kind = null)));
+            if (seenMode != SeenMode.Show) chips.Add(new(seenMode == SeenMode.Fade ? "Fading seen" : "Hiding seen", () => Set(() => seenMode = SeenMode.Show)));
+            if (watchlist != "any") chips.Add(new(watchlist == "on" ? "On my watchlist" : "Not on my watchlist", () => Set(() => watchlist = "any")));
+            if (minScore is { } m) chips.Add(new($"TMDB {m}+", () => Set(() => minScore = null)));
+            if (fromYear is { } f) chips.Add(new($"From {f}", () => Set(() => fromYear = null)));
+            if (toYear is { } t) chips.Add(new($"To {t}", () => Set(() => toYear = null)));
+            return chips;
+        }
+    }
+
+    // Filters live in the address (Back returns to them; they can be saved as a view, for every list or this one).
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? SortParam { get; set; }
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    [SupplyParameterFromQuery(Name = "seen")] public string? SeenParam { get; set; }
+    [SupplyParameterFromQuery(Name = "watchlist")] public string? WatchlistParam { get; set; }
+    [SupplyParameterFromQuery(Name = "score")] public int? ScoreParam { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public int? FromParam { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public int? ToParam { get; set; }
+    private (string, string?)[] State => [("q", find.Trim()), ("sort", sort == "list" ? null : sort), ("type", kind?.ToString().ToLowerInvariant()),
+        ("seen", seenMode == SeenMode.Show ? null : seenMode.ToString().ToLowerInvariant()), ("watchlist", watchlist == "any" ? null : watchlist),
+        ("score", minScore?.ToString()), ("from", fromYear?.ToString()), ("to", toYear?.ToString())];
+    private void Set(Action change) { change(); UrlState.Write(Nav, State); }
 
     private string Faded(ListItemDto i) => seenMode == SeenMode.Fade && i.Media.Watched == true ? "seen-faded" : "";
 
@@ -387,7 +422,20 @@ else if (list is not null)
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    protected override Task OnParametersSetAsync() => Load();
+    private Guid loadedId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        find = UrlState.Find(QParam, find);
+        sort = Sorts.Contains(SortParam) ? SortParam! : "list";
+        kind = Enum.TryParse<MediaType>(TypeParam, true, out var k) ? k : null;
+        seenMode = Enum.TryParse<SeenMode>(SeenParam, true, out var m) ? m : SeenMode.Show;
+        watchlist = WatchlistParam is "on" or "off" ? WatchlistParam : "any";
+        (minScore, fromYear, toYear) = (ScoreParam, FromParam, ToParam);
+        if (loadedId == Id) return;   // just the filters changed
+        loadedId = Id;
+        await Load();
+    }
 
     private async Task Load()
     {

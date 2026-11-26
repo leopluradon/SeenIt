@@ -21,7 +21,8 @@
 </div>
 @* Find a title; score, year and order sit behind Filters (type, score, year and search are in the address). *@
 <FilterBar Query="@find" QueryChanged="q => { find = q; Remember(); }" Placeholder="Find a title" Label="Find a rated title"
-           Active="@((stars is null ? 0 : 1) + (year is null ? 0 : 1) + (sort == "recent" ? 0 : 1))" Chips="Chips" OnClear="Clear">
+           Active="@((stars is null ? 0 : 1) + (year is null ? 0 : 1) + (sort == "recent" ? 0 : 1))" Chips="Chips" OnClear="Clear"
+           ViewPage="@(Mine ? "ratings" : null)" ViewQuery="@ViewQuery">
     <Extra><LayoutToggle Page="ratings" Value="layout" ValueChanged="v => layout = v" /></Extra>
     <ChildContent>
     <div class="field">
@@ -183,7 +184,8 @@ else if (items is not null)
     private Task SetSort(string s)
     {
         sort = s;
-        return PagePrefs.SetSortAsync(Session, Api, "ratings", s);
+        Remember();
+        return Mine ? PagePrefs.SetSortAsync(Session, Api, "ratings", s) : Task.CompletedTask;
     }
 
     /// <summary>Someone else's ratings (read-only), shared at u/{name}/ratings.</summary>
@@ -208,12 +210,14 @@ else if (items is not null)
     [SupplyParameterFromQuery(Name = "score")] public int? ScoreParam { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
     [SupplyParameterFromQuery(Name = "year")] public int? YearParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? SortParam { get; set; }
     protected override void OnParametersSet()
     {
         filter = Enum.TryParse<MediaType>(TypeParam, true, out var t) ? t : null;
         stars = ScoreParam is >= 1 and <= 10 ? ScoreParam : null;
         if (QParam is not null && QParam != find.Trim()) find = QParam;   // typing updates the address; don't fight it
         year = YearParam;
+        if (Sorts.Any(x => x.Key == SortParam)) sort = SortParam!;
     }
     private void SetFilter(MediaType? f) { filter = f; Remember(); }
     private static string ScoreLabel(int n) => Fmt.FiveStars ? "★ " + Fmt.Stars(n) : n.ToString();
@@ -231,7 +235,15 @@ else if (items is not null)
         ["score"] = stars,
         ["q"] = find.Trim() is { Length: > 0 } q ? q : null,
         ["year"] = year,
+        ["sort"] = sort == "recent" ? null : sort,
     }), replace: true);
+
+    /// <summary>The filters as a query string, for saving as a view.</summary>
+    private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
+        {
+            ("type", filter?.ToString().ToLowerInvariant()), ("score", stars?.ToString()), ("q", find.Trim() is { Length: > 0 } q ? q : null),
+            ("year", year?.ToString()), ("sort", sort == "recent" ? null : sort),
+        }.Where(p => p.Value is not null).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private async Task Load()
     {

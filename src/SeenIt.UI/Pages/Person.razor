@@ -159,7 +159,8 @@ else if (p is not null)
         }
         @{ var years = AllRows.Select(c => c.Date?.Year).OfType<int>().Distinct().OrderDescending().ToList(); }
         <FilterBar Query="@find" QueryChanged="q => { find = q; Remember(); }" Placeholder="Find a title or character" Label="Find in their filmography"
-                   Active="ActiveFilters" Chips="Chips" OnClear="ClearFilters">
+                   Active="ActiveFilters" Chips="Chips" OnClear="ClearFilters"
+                   ViewPage="person" ViewPath="@($"person/{Id}")" ViewQuery="@UrlState.Query(State)">
             @if (Session.Me is not null)
             {
                 <div class="field">
@@ -341,7 +342,12 @@ else if (p is not null)
     // list, at the same length, and the scroll position can be restored.
     private sealed record PickedView(string[] Shown, string Tab, bool LibraryOnly, string Find, string Seen, string Order, int? From, int? To, bool MajorOnly);
     private static readonly Dictionary<int, PickedView> Picked = [];
-    private void Remember() { if (p is not null) Picked[p.Id] = new([.. shown], tab, libraryOnly, find, seen, order, fromYear, toYear, majorOnly); }
+    private void Remember()
+    {
+        if (p is null) return;
+        Picked[p.Id] = new([.. shown], tab, libraryOnly, find, seen, order, fromYear, toYear, majorOnly);
+        UrlState.Write(Nav, State);
+    }
 
     /// <summary>One row per title across the chosen groups: "Director, Screenplay" and, when acting is shown with crew, "as Kambei".</summary>
     private List<PersonCreditDto> Rows(IReadOnlySet<string> groups)
@@ -441,10 +447,45 @@ else if (p is not null)
         finally { following = false; }
     }
 
+    private int loadedId;
+
+    // The filmography filters (not the roles, which are this person's own) go in the address too: Back returns to
+    // them, and they can be saved as a view for every person's page.
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
+    [SupplyParameterFromQuery(Name = "seen")] public string? SeenParam { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public int? FromParam { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public int? ToParam { get; set; }
+    [SupplyParameterFromQuery(Name = "order")] public string? OrderParam { get; set; }
+    [SupplyParameterFromQuery(Name = "major")] public string? MajorParam { get; set; }
+    [SupplyParameterFromQuery(Name = "library")] public string? LibraryParam { get; set; }
+    private (string, string?)[] State => [("q", find.Trim()), ("type", tab == "all" ? null : tab), ("seen", seen), ("from", fromYear?.ToString()),
+        ("to", toYear?.ToString()), ("order", order), ("major", majorOnly ? "1" : null), ("library", libraryOnly ? "1" : null)];
+    private bool AddressSaysAnything => new[] { QParam, TypeParam, SeenParam, OrderParam, MajorParam, LibraryParam }.Any(v => v is not null) || FromParam is not null || ToParam is not null;
+
     protected override async Task OnParametersSetAsync()
     {
-        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; shown = []; find = ""; seen = ""; order = ""; fromYear = null; toYear = null; majorOnly = false; libraryOnly = false; }
-        await Load();
+        if (loadedId != Id)
+        {
+            loadedId = Id;
+            p = null; tab = "all"; bioOpen = false; shown = []; find = ""; seen = ""; order = ""; fromYear = null; toYear = null; majorOnly = false; libraryOnly = false;
+            await Load();
+            Restore();
+        }
+        // The address wins over what was picked earlier this session (a saved view, a link, Back).
+        if (AddressSaysAnything)
+        {
+            find = UrlState.Find(QParam, find);
+            tab = TypeParam is "movies" or "tv" ? TypeParam : "all";
+            seen = SeenParam is "fade" or "hide" or "only" ? SeenParam : "";
+            order = OrderParam is "oldest" or "popular" or "episodes" or "title" ? OrderParam : "";
+            (fromYear, toYear, majorOnly, libraryOnly) = (FromParam, ToParam, MajorParam == "1", LibraryParam == "1");
+        }
+    }
+
+    private void Restore()
+    {
         if (p is not null && shown.Count == 0)
         {
             if (Picked.TryGetValue(p.Id, out var was) && was.Shown.Any(g => Groups.Contains(g)))

@@ -102,8 +102,9 @@ public enum AutoRefresh { Always, Ask, Never }
 public enum ListLayout { Posters, Rows }
 /// <summary>How episodes are labeled: S02E05, 2x05, or Season 2, Episode 5.</summary>
 public enum EpisodeStyle { Code, Cross, Long }
-/// <summary>A filter saved as a quick chip on a page: History, Watchlist or Progress, plus its query string.</summary>
-public record SavedView(string Page, string Name, string Query);
+/// <summary>Filters and sorting saved as a quick chip on a page (UiPrefs.ViewPages), as its query string. Default: the
+/// page opens with it when you go to it (not when you come back to it with Back). One default per page.</summary>
+public record SavedView(string Page, string Name, string Query, bool Default = false);
 public enum PosterSize { Small, Medium, Large }
 public enum BackupEvery { Monthly, Weekly }
 /// <summary>Which files a backup holds: JSON and CSV, or just one kind.</summary>
@@ -270,15 +271,26 @@ public record UserPrefs(
         EpisodeStyle = Enum.IsDefined(EpisodeStyle) ? EpisodeStyle : EpisodeStyle.Code,
         PageLayouts = PageLayouts?.Where(kv => UiPrefs.LayoutPages.Contains(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
         PageSorts = PageSorts?.Where(kv => UiPrefs.SortPages.Contains(kv.Key) && kv.Value is { Length: > 0 and <= 30 }).ToDictionary(kv => kv.Key, kv => kv.Value),
-        SavedViews = SavedViews?.Where(v => UiPrefs.ViewPages.Contains(v.Page) && !string.IsNullOrWhiteSpace(v.Name) && (v.Query?.Length ?? 0) <= 500)
-            .Select(v => v with { Name = v.Name.Trim()[..Math.Min(v.Name.Trim().Length, 40)], Query = (v.Query ?? "").TrimStart('?') })
-            .Take(UiPrefs.MaxSavedViews).ToList(),
+        SavedViews = CleanViews(SavedViews),
         ProfileBanner = ProfileBanner is { Type: MediaType.Movie or MediaType.Show } ? ProfileBanner : null,
         ProfileBadge = ProfileBadge is { Length: > 0 and <= 80 } ? ProfileBadge : null,
         RateKinds = RateKinds?.Where(k => ScoreKinds.Any(x => x.Key == k)).Distinct().ToList(),
         DesktopNav = DesktopNav?.Where(k => k != "home" && UiPrefs.Tabs.Any(t => t.Key == k)).Distinct().Take(UiPrefs.MaxDesktopNav).ToList(),
         MyServices = MyServices?.Where(id => id > 0).Distinct().Take(40).ToList(),
     };
+    /// <summary>Saved views that are allowed, trimmed, and with at most one default per page (the last one marked).</summary>
+    private static List<SavedView>? CleanViews(IReadOnlyList<SavedView>? views)
+    {
+        if (views is null) return null;
+        var list = views.Where(v => UiPrefs.IsViewPage(v.Page) && !string.IsNullOrWhiteSpace(v.Name) && (v.Query?.Length ?? 0) <= 500)
+            .Select(v => v with { Name = v.Name.Trim()[..Math.Min(v.Name.Trim().Length, 40)], Query = (v.Query ?? "").TrimStart('?') })
+            .Take(UiPrefs.MaxSavedViews).ToList();
+        var pages = new HashSet<string>();
+        for (var i = list.Count - 1; i >= 0; i--)
+            if (list[i].Default && !pages.Add(list[i].Page)) list[i] = list[i] with { Default = false };
+        return list;
+    }
+
     /// <summary>Whether you have this service (always true when you haven't said which you have).</summary>
     public bool HasService(int providerId) => MyServices is not { Count: > 0 } mine || mine.Contains(providerId);
 }
@@ -318,8 +330,12 @@ public static class UiPrefs
     /// <summary>Pages with their own posters/rows choice, sort memory and saved views.</summary>
     public static readonly string[] LayoutPages = ["watchlist", "ratings", "list"];
     public static readonly string[] SortPages = ["watchlist", "ratings", "lists-browse"];
-    public static readonly string[] ViewPages = ["history", "watchlist", "progress"];
-    public const int MaxSavedViews = 24;
+    /// <summary>Pages with saved views. A list's own views are "list:{its id}"; "list" ones show on every list.</summary>
+    public static readonly string[] ViewPages = ["history", "history-friends", "watchlist", "progress", "ratings", "recommendations", "recommendations-sent",
+        "notifications", "library", "people", "not-interested", "calendar", "person", "list"];
+    public static bool IsViewPage(string? page) =>
+        page is not null && (ViewPages.Contains(page) || (page.StartsWith("list:", StringComparison.Ordinal) && Guid.TryParse(page[5..], out _)));
+    public const int MaxSavedViews = 60;
 
     /// <summary>Accent colors that can replace the theme's own. Hover is a lighter shade; OnAccent is text on it.</summary>
     public static readonly (string Key, string Name, string Hex, string Hover, string Rgb, string Text, string OnAccent)[] Accents =

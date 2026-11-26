@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using SeenIt.Contracts;
@@ -59,6 +60,22 @@ public static class Img
 public record FilterChip(string Label, Func<Task> Remove)
 {
     public FilterChip(string label, Action remove) : this(label, () => { remove(); return Task.CompletedTask; }) { }
+}
+
+/// <summary>
+/// Filters kept in the page's address (so Back returns to the same view, and they can be saved as a view):
+/// write them all at once, and read them back as a query string for SavedViews.
+/// </summary>
+public static class UrlState
+{
+    public static void Write(NavigationManager nav, IEnumerable<(string Key, string? Value)> values) =>
+        nav.NavigateTo(nav.GetUriWithQueryParameters(values.ToDictionary(v => v.Key, v => (object?)(string.IsNullOrWhiteSpace(v.Value) ? null : v.Value))), replace: true);
+
+    /// <summary>The search box's text from the address, without fighting what's being typed (trailing spaces).</summary>
+    public static string Find(string? param, string current) => param is null ? (current.Trim().Length > 0 ? "" : current) : param != current.Trim() ? param : current;
+
+    public static string Query(IEnumerable<(string Key, string? Value)> values) =>
+        string.Join('&', values.Where(v => !string.IsNullOrWhiteSpace(v.Value)).Select(v => $"{v.Key}={Uri.EscapeDataString(v.Value!)}"));
 }
 
 public static class Fmt

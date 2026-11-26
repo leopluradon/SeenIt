@@ -31,6 +31,18 @@ public static class PagePrefs
     public static Task RemoveViewAsync(SessionState session, ApiClient api, SavedView view) =>
         SaveAsync(session, api, Fmt.Prefs with { SavedViews = (Fmt.Prefs.SavedViews ?? []).Where(v => v != view).ToList() });
 
+    /// <summary>Makes a view the page's default (or stops it being one); any other default for that page stops.</summary>
+    public static Task SetDefaultAsync(SessionState session, ApiClient api, SavedView view, bool on) =>
+        SaveAsync(session, api, Fmt.Prefs with
+        {
+            SavedViews = (Fmt.Prefs.SavedViews ?? []).Select(v => v.Page != view.Page ? v
+                : v.Name == view.Name ? v with { Default = on } : v with { Default = false }).ToList(),
+        });
+
+    /// <summary>The view a page opens with: the narrower scope's default (this list) before the page's own.</summary>
+    public static SavedView? DefaultView(string page, string? scope) =>
+        (scope is null ? null : Views(scope).FirstOrDefault(v => v.Default)) ?? Views(page).FirstOrDefault(v => v.Default);
+
     /// <summary>The yearly challenges you've taken on (Goals).</summary>
     public static Task SetChallengesAsync(SessionState session, ApiClient api, IReadOnlyList<string> keys) =>
         SaveAsync(session, api, Fmt.Prefs with { Challenges = keys.Count == 0 ? null : keys.ToList() });
