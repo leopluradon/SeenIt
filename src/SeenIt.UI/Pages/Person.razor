@@ -24,7 +24,7 @@ else if (p is not null)
                     </button>
                 }
             </div>
-            @if (p.Watched is not null && SeenLine(p) is { } seen) { <p class="person-seen">@seen</p> }
+            @if (p.Watched is not null && SeenLine(p) is { } seenLine) { <p class="person-seen">@seenLine</p> }
             <DetailStats Items="@([
                 ("Known for", p.KnownFor),
                 ("Born", p.Birthday is { } b ? $"{(b).ToString(Fmt.DateFull)}" + (p.Deathday is null ? $" (age {Age(b, DateOnly.FromDateTime(DateTime.Today))})" : "") : null),
@@ -157,24 +157,68 @@ else if (p is not null)
                 }
             </div>
         }
-        <div class="seen-only">
-            <label class="check small"><input type="checkbox" @bind="seenOnly" @bind:after="Remember" /> Only show what I've watched</label>
+        @{ var years = AllRows.Select(c => c.Date?.Year).OfType<int>().Distinct().OrderDescending().ToList(); }
+        <FilterBar Query="@find" QueryChanged="q => { find = q; Remember(); }" Placeholder="Find a title or character" Label="Find in their filmography"
+                   Active="ActiveFilters" Chips="Chips" OnClear="ClearFilters">
+            @if (Session.Me is not null)
+            {
+                <div class="field">
+                    <label for="pf-seen">What I've seen</label>
+                    <select id="pf-seen" value="@seen" @onchange='e => { seen = e.Value as string ?? ""; Remember(); }'>
+                        <option value="">Show it</option>
+                        <option value="fade">Fade it</option>
+                        <option value="hide">Hide it</option>
+                        <option value="only">Show only that</option>
+                    </select>
+                </div>
+            }
+            @if (years.Count > 1)
+            {
+                <div class="field">
+                    <label for="pf-from">From</label>
+                    <select id="pf-from" value="@(fromYear?.ToString() ?? "")" @onchange="e => { fromYear = int.TryParse(e.Value as string, out var y) ? y : null; Remember(); }">
+                        <option value="">Any year</option>
+                        @foreach (var y in years.AsEnumerable().Reverse()) { <option value="@y">@y</option> }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="pf-to">To</label>
+                    <select id="pf-to" value="@(toYear?.ToString() ?? "")" @onchange="e => { toYear = int.TryParse(e.Value as string, out var y) ? y : null; Remember(); }">
+                        <option value="">Any year</option>
+                        @foreach (var y in years) { <option value="@y">@y</option> }
+                    </select>
+                </div>
+            }
+            <div class="field">
+                <label for="pf-order">Order</label>
+                <select id="pf-order" value="@order" @onchange='e => { order = e.Value as string ?? ""; Remember(); }'>
+                    <option value="">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="popular">Best known first</option>
+                    <option value="episodes">Most episodes</option>
+                    <option value="title">Title</option>
+                </select>
+            </div>
+            <label class="field inline check-field" title="Titles few people on TMDB have voted on: shorts, early bit parts, obscure TV">
+                <input type="checkbox" checked="@majorOnly" @onchange="e => { majorOnly = e.Value is true; Remember(); }" /> Skip little-known titles
+            </label>
             @if (p.Cast.Concat(p.Crew).Any(c => c.InLibrary))
             {
-                <label class="check small"><input type="checkbox" @bind="libraryOnly" @bind:after="Remember" /> Only what's in my library</label>
+                <label class="field inline check-field"><input type="checkbox" checked="@libraryOnly" @onchange="e => { libraryOnly = e.Value is true; Remember(); }" /> Only what's in my library</label>
             }
-        </div>
+        </FilterBar>
         @{
-            var rows = Rows(shown)
-                .Where(c => tab switch { "movies" => c.Type == MediaType.Movie, "tv" => c.Type == MediaType.Show, _ => true })
-                .Where(c => !seenOnly || c.Watched).Where(c => !libraryOnly || c.InLibrary).ToList();
+            var rows = Filtered(Rows(shown).Where(c => tab switch { "movies" => c.Type == MediaType.Movie, "tv" => c.Type == MediaType.Show, _ => true })).ToList();
         }
-        @if (rows.Count == 0) { <p class="muted">Nothing here.</p> }
+        @if (rows.Count == 0)
+        {
+            <Empty Title="Nothing here.">@if (ActiveFilters > 0 || find.Length > 0) { <button class="btn btn-sm" @onclick="ClearFilters">Clear filters</button> }</Empty>
+        }
         <ol class="filmography">
             @foreach (var c in rows)
             {
                 <li @key="(c.Type, c.TmdbId)">
-                    <a class="film-row @(c.Watched ? "watched" : c.PartlySeen ? "partly" : "")" href="@Fmt.Href(c.Type, c.TmdbId)">
+                    <a class="film-row @(c.Watched ? "watched" : c.PartlySeen ? "partly" : "") @(seen == "fade" && c.Watched ? "seen-faded" : "")" href="@Fmt.Href(c.Type, c.TmdbId)">
                         <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
                         <span class="film-main">
                             <b>@c.Title</b>
@@ -187,7 +231,7 @@ else if (p is not null)
                 </li>
             }
         </ol>
-        @{ var appearances = p.Cast.Where(c => c.Appearance && (!seenOnly || c.Watched) && (!libraryOnly || c.InLibrary)).ToList(); }
+        @{ var appearances = Filtered(p.Cast.Where(c => c.Appearance)).ToList(); }
         @if (shown.Contains(Acting) && tab != "movies" && appearances.Count > 0)
         {
             <details class="appearances">
@@ -213,7 +257,56 @@ else if (p is not null)
     private PersonDetail? p;
     private string? error;
     private bool notFound;
-    private bool bioOpen, seenOnly, libraryOnly, following;
+    private bool bioOpen, libraryOnly, majorOnly, following;
+    // Filmography filters: search, what you've seen (show, fade, hide, only), years, order, little-known titles, library.
+    private string find = "", seen = "", order = "";
+    private int? fromYear, toYear;
+    /// <summary>Below this many TMDB votes a title counts as little-known.</summary>
+    private const int MinVotes = 30;
+
+    private int ActiveFilters => (seen == "" ? 0 : 1) + (fromYear is null ? 0 : 1) + (toYear is null ? 0 : 1) + (order == "" ? 0 : 1)
+        + (majorOnly ? 1 : 0) + (libraryOnly ? 1 : 0);
+
+    private List<FilterChip> Chips
+    {
+        get
+        {
+            var chips = new List<FilterChip>();
+            if (seen != "") chips.Add(new(seen switch { "fade" => "Fading seen", "hide" => "Hiding seen", _ => "Only seen" }, () => { seen = ""; Remember(); }));
+            if (fromYear is { } f) chips.Add(new($"From {f}", () => { fromYear = null; Remember(); }));
+            if (toYear is { } t) chips.Add(new($"To {t}", () => { toYear = null; Remember(); }));
+            if (order != "") chips.Add(new(order switch { "oldest" => "Oldest first", "popular" => "Best known first", "episodes" => "Most episodes", _ => "By title" }, () => { order = ""; Remember(); }));
+            if (majorOnly) chips.Add(new("Well-known only", () => { majorOnly = false; Remember(); }));
+            if (libraryOnly) chips.Add(new("In my library", () => { libraryOnly = false; Remember(); }));
+            return chips;
+        }
+    }
+
+    private void ClearFilters()
+    {
+        find = ""; seen = ""; order = ""; fromYear = null; toYear = null; majorOnly = false; libraryOnly = false;
+        Remember();
+    }
+
+    /// <summary>Every credit, for the year choices.</summary>
+    private IEnumerable<PersonCreditDto> AllRows => p is null ? [] : p.Cast.Concat(p.Crew);
+
+    private IEnumerable<PersonCreditDto> Filtered(IEnumerable<PersonCreditDto> rows)
+    {
+        var q = rows.Where(c => (seen != "only" || c.Watched) && (seen != "hide" || !c.Watched)
+            && (!libraryOnly || c.InLibrary)
+            && (!majorOnly || c.VoteCount >= MinVotes || c.Watched || c.Date is null || c.Date > Today)
+            && (fromYear is null || c.Date?.Year >= fromYear) && (toYear is null || c.Date?.Year <= toYear)
+            && (find.Trim() is not { Length: > 0 } f || c.Title.Contains(f, StringComparison.OrdinalIgnoreCase) || (c.Role?.Contains(f, StringComparison.OrdinalIgnoreCase) ?? false)));
+        return order switch
+        {
+            "oldest" => q.OrderBy(c => c.Date is null).ThenBy(c => c.Date),
+            "popular" => q.OrderByDescending(c => c.VoteCount),
+            "episodes" => q.OrderByDescending(c => c.EpisodeCount ?? 0).ThenByDescending(c => c.Date),
+            "title" => q.OrderBy(c => c.Title, StringComparer.OrdinalIgnoreCase),
+            _ => q,
+        };
+    }
     private string tab = "all";
     private HashSet<string> shown = [];
 
@@ -246,8 +339,9 @@ else if (p is not null)
 
     // What you picked on each person's page this session, so Back (or coming back later) shows the same
     // list, at the same length, and the scroll position can be restored.
-    private static readonly Dictionary<int, (string[] Shown, string Tab, bool SeenOnly, bool LibraryOnly)> Picked = [];
-    private void Remember() { if (p is not null) Picked[p.Id] = ([.. shown], tab, seenOnly, libraryOnly); }
+    private sealed record PickedView(string[] Shown, string Tab, bool LibraryOnly, string Find, string Seen, string Order, int? From, int? To, bool MajorOnly);
+    private static readonly Dictionary<int, PickedView> Picked = [];
+    private void Remember() { if (p is not null) Picked[p.Id] = new([.. shown], tab, libraryOnly, find, seen, order, fromYear, toYear, majorOnly); }
 
     /// <summary>One row per title across the chosen groups: "Director, Screenplay" and, when acting is shown with crew, "as Kambei".</summary>
     private List<PersonCreditDto> Rows(IReadOnlySet<string> groups)
@@ -349,16 +443,15 @@ else if (p is not null)
 
     protected override async Task OnParametersSetAsync()
     {
-        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; seenOnly = false; libraryOnly = false; shown = []; }
+        if (p?.Id != Id) { p = null; tab = "all"; bioOpen = false; shown = []; find = ""; seen = ""; order = ""; fromYear = null; toYear = null; majorOnly = false; libraryOnly = false; }
         await Load();
         if (p is not null && shown.Count == 0)
         {
             if (Picked.TryGetValue(p.Id, out var was) && was.Shown.Any(g => Groups.Contains(g)))
             {
                 shown = [.. was.Shown.Where(g => Groups.Contains(g))];
-                tab = was.Tab;
-                seenOnly = was.SeenOnly;
-                libraryOnly = was.LibraryOnly;
+                (tab, libraryOnly, find, seen, order, fromYear, toYear, majorOnly) =
+                    (was.Tab, was.LibraryOnly, was.Find, was.Seen, was.Order, was.From, was.To, was.MajorOnly);
             }
             else shown = Groups.Count > 0 ? [Groups[0]] : [Acting];
         }

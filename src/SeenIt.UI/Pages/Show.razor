@@ -21,9 +21,9 @@ else if (s is not null)
                 @if (NextUp is { } up)
                 {
                     <SplitButton Class="btn-primary" Disabled="busy" OnClick="() => { askWhen = false; pendingEpisode = up; }">
-                        <ChildContent><Icon Name="check" Size="18" /> Watched @(up.SeasonNumber == 0 ? $"Special {up.EpisodeNumber}" : Fmt.Ep(up.SeasonNumber, up.EpisodeNumber))</ChildContent>
+                        <ChildContent><Icon Name="check" Size="18" /> Mark @(up.SeasonNumber == 0 ? $"Special {up.EpisodeNumber}" : Fmt.Ep(up.SeasonNumber, up.EpisodeNumber)) watched</ChildContent>
                         <Menu>
-                            <button type="button" role="menuitem" @onclick="() => { askWhen = true; pendingEpisode = up; }"><Icon Name="calendar" Size="16" /> Watched @Fmt.Ep(up.SeasonNumber, up.EpisodeNumber) on another day…</button>
+                            <button type="button" role="menuitem" @onclick="() => { askWhen = true; pendingEpisode = up; }"><Icon Name="calendar" Size="16" /> Mark @Fmt.Ep(up.SeasonNumber, up.EpisodeNumber) watched on another day…</button>
                             <button type="button" role="menuitem" @onclick="() => watchAllOpen = true"><Icon Name="check" Size="16" /> Mark the whole show watched…</button>
                             @if (u.Plays > 0) { <button type="button" role="menuitem" @onclick="() => unwatchOpen = true"><Icon Name="x" Size="16" /> Mark unwatched…</button> }
                         </Menu>

@@ -730,10 +730,14 @@ a.cast { color: var(--text); }
     .settings-nav { display: none; }   /* phones: the overview cards and "All settings" link instead */
     .page-head .segmented { width: 100%; }
     .page-head .segmented button { flex: 1; justify-content: center; padding: 6px 8px; }
-    /* Finger-sized rating pips on phones. */
-    .pip { width: 21px; height: 21px; border-radius: 5px; }
-    .rating-picker.compact { gap: 3px; }
-    .rating-picker.compact .pip { width: 18px; height: 18px; border-radius: 4px; }
+    /* Finger-sized rating pips on phones: they share the row's width (up to 34px each), and each one's tap area
+       reaches up and down past the square and across the gap to its neighbours, so a slightly-off tap still lands. */
+    .rating-picker:not(.stars):not(.decimal):not(.thumbs) { flex: 1; min-width: 0; max-width: 380px; gap: 4px; }
+    .pip { flex: 1 1 0; width: auto; min-width: 22px; max-width: 34px; height: 30px; border-radius: 6px; position: relative; }
+    .pip::before { content: ""; position: absolute; inset: -9px -2px; }
+    .pip:hover { transform: none; }
+    .rating-picker.compact { gap: 4px; }
+    .rating-picker.compact .pip { height: 26px; min-width: 20px; border-radius: 5px; }
     .modal { top: auto; bottom: 0; transform: translateX(-50%); width: 100vw; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
     .auth-card { margin: 8px auto; padding: 22px; border: 0; background: transparent; }
 }
@@ -1737,7 +1741,7 @@ body:has(.rate-prompt) .toaster { bottom: 176px; }
 .ctx-sheet .ctx-item { padding: 11px 12px; font-size: 1rem; }
 .ctx-menu:focus { outline: none; }
 .ctx-rate .rating-picker.compact .pip { width: 15px; height: 15px; }
-.ctx-sheet .ctx-rate .rating-picker.compact .pip { width: 22px; height: 22px; border-radius: 5px; }
+.ctx-sheet .ctx-rate .rating-picker.compact .pip { width: auto; height: 30px; border-radius: 6px; }
 .ctx-sheet .ctx-rate .rating-picker { gap: 5px; }
 .season-order { margin: 4px 0 16px; }
 .order-pos { color: var(--text-2); font-weight: 600; }
@@ -2071,3 +2075,13 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .searchbar .list-layout { flex: none; width: auto; }
 .searchbar .list-layout button { padding: 5px 9px; }
 .more-grid a { min-width: 0; }
+
+/* "Alerts on" is a setting being on, not a warning: neutral button, green bell. */
+.alerts-btn > .btn.btn-on { border-color: var(--border); background: var(--surface-2); color: var(--text); }
+.alerts-btn > .btn.btn-on svg { color: var(--ok); }
+/* Phones: the Rate box takes the whole row so the ten pips can be finger-sized (they share its width). */
+@media (max-width: 640px) {
+    .hero-rate { display: flex; width: 100%; height: 48px; }
+    .hero-rate .rating-picker:not(.stars):not(.decimal):not(.thumbs) { max-width: none; }
+    .hero-rate .rating-picker .pip { max-width: none; height: 32px; }
+}

@@ -11,7 +11,11 @@
         <button class="@(Sent ? "" : "on")" @onclick='() => Nav.NavigateTo("recommendations")'>To you@(NewCount is > 0 and var n ? $" {n}" : "")</button>
         <button class="@(Sent ? "on" : "")" @onclick='() => Nav.NavigateTo("recommendations?tab=sent")'>Sent</button>
     </div>
-    <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
+    @* Only with something to select. *@
+    @if (data is not null && (Sent ? data.Sent.Count : data.Received.Count(r => showCleared || !r.Dismissed)) > 0)
+    {
+        <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button>
+    }
 </div>
 <p class="muted small">
     @if (Sent) { <span>What you've recommended, and whether they've watched it. Recommend something from any movie or show page.</span> }
