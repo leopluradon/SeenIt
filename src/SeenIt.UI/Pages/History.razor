@@ -15,6 +15,7 @@
 <div class="@(Friends ? "history-toolbar" : "page-head")">
     @if (!Friends) { <h1>@(Other is { } o ? $"{o}'s history" : "History")</h1> }
     @if (Mine && Type != MediaType.Show) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="ToggleSelecting" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
+    @if (Mine && !Friends) { <a class="btn btn-sm btn-ghost" href="recent" title="Undo anything you did in the last 48 hours"><Icon Name="repeat" Size="16" /> Recent actions</a> }
     <div class="segmented">
         <button class="@(Type is null ? "on" : "")" @onclick='() => Go(type: "")'>All</button>
         <button class="@(Type == MediaType.Movie ? "on" : "")" @onclick='() => Go(type: "Movie")'>Movies</button>

@@ -13,6 +13,15 @@ public static class ApiEndpoints
 {
     /// <summary>History's ?sort=: "title" and "episodes" only order the one-per-show view ("oldest" is its own flag).</summary>
     private static string? ShowSortOf(string? sort) => sort is "title" or "episodes" ? sort : null;
+
+    /// <summary>Your rating of something before you change or clear it, so Recent actions can put it back.</summary>
+    private static async Task<double?> PreviousRatingAsync(AppDbContext db, Guid me, MediaType type, int tmdbId, int? season, int? episode, CancellationToken ct)
+    {
+        // Matched the way TrackingService.RateAsync stores it: a show's season number rates the season, a movie has none.
+        int? s = type == MediaType.Movie ? null : season, e = type == MediaType.Episode ? episode : null;
+        return await db.Ratings.Where(r => r.UserId == me && r.Type == type && r.TmdbId == tmdbId && r.SeasonNumber == s && r.EpisodeNumber == e)
+            .Select(r => (double?)r.Value).FirstOrDefaultAsync(ct);
+    }
     /// <summary>History's ?by=month / ?by=year (grouping); anything else is by day.</summary>
     private static HistoryUnit UnitOf(string? by) => by switch { "month" => HistoryUnit.Month, "year" => HistoryUnit.Year, _ => HistoryUnit.Day };
 
@@ -137,9 +146,10 @@ public static class ApiEndpoints
             var what = req.EpisodeNumber is null && req.Type != MediaType.Movie ? $"{added} episode{(added == 1 ? "" : "s")}" : null;
             var with = req.Type is MediaType.Movie or MediaType.Episode && req.With is { Count: > 0 }
                 ? await WatchedWith.LogAsync(db, t, p.UserId(), req, before.Since, ct) : ((List<Guid> Ids, List<string> Names)?)null;
-            await a.LogAsync(p, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
-                string.Join(", ", new[] { what, ActivityService.When(req.When, req.WatchedAt), with is { Names.Count: > 0 } ? "with " + string.Join(", ", with.Value.Names) : null }.OfType<string>()) is { Length: > 0 } d ? d : null);
             var result = await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct);
+            await a.LogAsync(p, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
+                string.Join(", ", new[] { what, ActivityService.When(req.When, req.WatchedAt), with is { Names.Count: > 0 } ? "with " + string.Join(", ", with.Value.Names) : null }.OfType<string>()) is { Length: > 0 } d ? d : null,
+                result.PlayIds.Count > 0 ? new UndoData(PlayIds: result.PlayIds) : null);
             return Results.Ok(with is { } w ? result with { WithPlayIds = w.Ids, WithNames = w.Names } : result);
         });
 
@@ -151,15 +161,18 @@ public static class ApiEndpoints
         {
             var before = await WatchedResults.BeforeAsync(db, p.UserId(), MediaType.Show, req.ShowTmdbId, ct);
             var added = await t.BulkWatchAsync(p.UserId(), req, ct);
+            var result = await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct);
             await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, req.ShowTmdbId, req.SeasonNumber, null,
-                $"{added} episode{(added == 1 ? "" : "s")}" + (ActivityService.When(req.When, req.WatchedAt) is { } w ? ", " + w : ""));
-            return Results.Ok(await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct));
+                $"{added} episode{(added == 1 ? "" : "s")}" + (ActivityService.When(req.When, req.WatchedAt) is { } w ? ", " + w : ""),
+                result.PlayIds.Count > 0 ? new UndoData(PlayIds: result.PlayIds) : null);
+            return Results.Ok(result);
         });
 
         g.MapDelete("/watch", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             var plays = await t.UnwatchAsync(p.UserId(), type, tmdbId, season, episode, ct);
-            await a.LogAsync(p, ActivityKind.Unwatch, type, tmdbId, season, episode, $"{plays.Count} play{(plays.Count == 1 ? "" : "s")} removed");
+            await a.LogAsync(p, ActivityKind.Unwatch, type, tmdbId, season, episode, $"{plays.Count} play{(plays.Count == 1 ? "" : "s")} removed",
+                plays.Count > 0 ? new UndoData(Plays: plays) : null);
             return Results.Ok(new RemovedPlays(plays.Count, plays));
         });
 
@@ -168,11 +181,20 @@ public static class ApiEndpoints
             t.GetHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, pageSize ?? 50, tz, group == "show", ShowSortOf(sort), UnitOf(by)), ct));
         g.MapGet("/history/genres", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetHistoryGenresAsync(p.UserId(), ct));
 
+        // Recent actions: the last 48 hours of what you did, and undoing one.
+        g.MapGet("/activity/recent", (ClaimsPrincipal p, UndoService u, CancellationToken ct) => u.RecentAsync(p.UserId(), ct));
+        g.MapPost("/activity/{id:long}/undo", async (long id, ClaimsPrincipal p, UndoService u, CancellationToken ct) =>
+        {
+            await u.UndoAsync(p.UserId(), id, ct);
+            return Results.NoContent();
+        });
+
         g.MapDelete("/history/{id:guid}", async (Guid id, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             if (await t.DeleteHistoryAsync(p.UserId(), id, ct) is not { } play) return Results.NotFound();
             await a.LogAsync(p, ActivityKind.DeletePlay, play.Type, play.TmdbId, play.SeasonNumber, play.EpisodeNumber,
-                WatchDates.IsUnknown(play.WatchedAt) ? "play with unknown date" : $"play from {play.WatchedAt:yyyy-MM-dd HH:mm} UTC");
+                WatchDates.IsUnknown(play.WatchedAt) ? "play with unknown date" : $"play from {play.WatchedAt:yyyy-MM-dd HH:mm} UTC",
+                new UndoData(Plays: [play]));
             return Results.Ok(new RemovedPlays(1, [play]));
         });
 
@@ -180,14 +202,15 @@ public static class ApiEndpoints
         {
             if (await t.EditPlayAsync(p.UserId(), id, req, ct) is not { } r) return Results.NotFound();
             string When(DateTimeOffset d) => WatchDates.IsUnknown(d) ? "unknown date" : $"{d:yyyy-MM-dd HH:mm} UTC";
-            await a.LogAsync(p, ActivityKind.EditPlay, detail: $"{When(r.Before)} → {When(r.After.WatchedAt)}");
+            await a.LogAsync(p, ActivityKind.EditPlay, detail: $"{When(r.Before)} → {When(r.After.WatchedAt)}", undo: new UndoData(Dates: [new PlayDate(id, r.Before)]));
             return Results.Ok(r.After);
         });
 
         g.MapPost("/history/edit", async (BulkEditPlaysRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             var before = await t.EditPlaysAsync(p.UserId(), req, ct);
-            await a.LogAsync(p, ActivityKind.EditPlay, detail: $"{before.Count} plays → {req.When}{(req.WatchedAt is { } at ? $" {at:yyyy-MM-dd HH:mm zzz}" : "")}");
+            await a.LogAsync(p, ActivityKind.EditPlay, detail: $"{before.Count} plays → {req.When}{(req.WatchedAt is { } at ? $" {at:yyyy-MM-dd HH:mm zzz}" : "")}",
+                undo: before.Count > 0 ? new UndoData(Dates: before) : null);
             return Results.Ok(before);
         });
         g.MapPost("/history/dates", async (List<PlayDate> dates, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
@@ -200,7 +223,7 @@ public static class ApiEndpoints
         g.MapPost("/history/delete", async (List<Guid> ids, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             var plays = await t.DeleteHistoryAsync(p.UserId(), ids, ct);
-            if (plays.Count > 0) await a.LogAsync(p, ActivityKind.DeletePlay, detail: $"{plays.Count} plays (selected)");
+            if (plays.Count > 0) await a.LogAsync(p, ActivityKind.DeletePlay, detail: $"{plays.Count} plays (selected)", undo: new UndoData(Plays: plays));
             return Results.Ok(new RemovedPlays(plays.Count, plays));
         });
 
@@ -240,28 +263,32 @@ public static class ApiEndpoints
             var me = p.UserId();
             return new { OnWatchlist = await db.Watchlist.AnyAsync(w => w.UserId == me && w.Type == type && w.TmdbId == tmdbId, ct) };
         });
-        g.MapPost("/watchlist", async (WatchlistRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        g.MapPost("/watchlist", async (WatchlistRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
-            await t.AddToWatchlistAsync(p.UserId(), req.Type, req.TmdbId, ct);
-            await a.LogAsync(p, ActivityKind.WatchlistAdd, req.Type, req.TmdbId);
+            var me = p.UserId();
+            var was = await db.Watchlist.AnyAsync(w => w.UserId == me && w.Type == req.Type && w.TmdbId == req.TmdbId, ct);
+            await t.AddToWatchlistAsync(me, req.Type, req.TmdbId, ct);
+            await a.LogAsync(p, ActivityKind.WatchlistAdd, req.Type, req.TmdbId, undo: new UndoData(Was: was));
             return Results.NoContent();
         });
-        g.MapDelete("/watchlist", async (MediaType type, int tmdbId, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        g.MapDelete("/watchlist", async (MediaType type, int tmdbId, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
-            await t.RemoveFromWatchlistAsync(p.UserId(), type, tmdbId, ct);
-            await a.LogAsync(p, ActivityKind.WatchlistRemove, type, tmdbId);
+            var me = p.UserId();
+            var was = await db.Watchlist.AnyAsync(w => w.UserId == me && w.Type == type && w.TmdbId == tmdbId, ct);
+            await t.RemoveFromWatchlistAsync(me, type, tmdbId, ct);
+            await a.LogAsync(p, ActivityKind.WatchlistRemove, type, tmdbId, undo: new UndoData(Was: was));
             return Results.NoContent();
         });
 
         g.MapGet("/favorites", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetFavoritesAsync(p.UserId(), ct));
         g.MapPost("/favorites", async (FavoriteRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
-            if (await t.AddFavoriteAsync(p.UserId(), req.Type, req.TmdbId, ct)) await a.LogAsync(p, ActivityKind.FavoriteAdd, req.Type, req.TmdbId);
+            if (await t.AddFavoriteAsync(p.UserId(), req.Type, req.TmdbId, ct)) await a.LogAsync(p, ActivityKind.FavoriteAdd, req.Type, req.TmdbId, undo: new UndoData());
             return Results.NoContent();
         });
         g.MapDelete("/favorites", async (MediaType type, int tmdbId, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
-            if (await t.RemoveFavoriteAsync(p.UserId(), type, tmdbId, ct)) await a.LogAsync(p, ActivityKind.FavoriteRemove, type, tmdbId);
+            if (await t.RemoveFavoriteAsync(p.UserId(), type, tmdbId, ct)) await a.LogAsync(p, ActivityKind.FavoriteRemove, type, tmdbId, undo: new UndoData());
             return Results.NoContent();
         });
         g.MapPut("/favorites/order", async (List<FavoriteRequest> order, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
@@ -271,16 +298,20 @@ public static class ApiEndpoints
         });
 
         g.MapGet("/ratings", (MediaType? type, ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetRatingsAsync(p.UserId(), type, ct));
-        g.MapPost("/ratings", async (RatingRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        g.MapPost("/ratings", async (RatingRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
+            var before = await PreviousRatingAsync(db, p.UserId(), req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber, ct);
             await t.RateAsync(p.UserId(), req, ct);
-            await a.LogAsync(p, ActivityKind.Rate, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber, $"{req.Rating}/10");
+            await a.LogAsync(p, ActivityKind.Rate, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber, $"{req.Rating}/10",
+                new UndoData(Rating: before, Had: before is not null));
             return Results.NoContent();
         });
-        g.MapDelete("/ratings", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        g.MapDelete("/ratings", async (MediaType type, int tmdbId, int? season, int? episode, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
+            var before = await PreviousRatingAsync(db, p.UserId(), type, tmdbId, season, episode, ct);
             await t.UnrateAsync(p.UserId(), type, tmdbId, season, episode, ct);
-            await a.LogAsync(p, ActivityKind.Unrate, type, tmdbId, season, episode);
+            await a.LogAsync(p, ActivityKind.Unrate, type, tmdbId, season, episode, before is { } b ? $"was {b}/10" : null,
+                before is not null ? new UndoData(Rating: before, Had: true) : null);
             return Results.NoContent();
         });
 
@@ -323,7 +354,7 @@ public static class ApiEndpoints
         g.MapPost("/shows/{id:int}/rewatch", async (int id, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
         {
             var r = await t.StartRewatchAsync(p.UserId(), id, ct);
-            await a.LogAsync(p, ActivityKind.RewatchStart, MediaType.Show, id);
+            await a.LogAsync(p, ActivityKind.RewatchStart, MediaType.Show, id, undo: new UndoData());
             return Results.Ok(r);
         });
         g.MapDelete("/shows/{id:int}/rewatch", async (int id, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
@@ -358,14 +389,17 @@ public static class ApiEndpoints
         {
             var before = await WatchedResults.BeforeAsync(db, p.UserId(), MediaType.Show, id, ct);
             var n = await w.WatchThroughAsync(p.UserId(), id, req, ct);
+            var result = await WatchedResults.AfterAsync(db, p.UserId(), before, n, ct);
             if (n > 0) await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, id, req.SeasonNumber, req.EpisodeNumber,
-                $"{n} episodes up to here{(req.InOrder ? " in watch order" : "")}");
-            return Results.Ok(await WatchedResults.AfterAsync(db, p.UserId(), before, n, ct));
+                $"{n} episodes up to here{(req.InOrder ? " in watch order" : "")}", result.PlayIds.Count > 0 ? new UndoData(PlayIds: result.PlayIds) : null);
+            return Results.Ok(result);
         });
-        g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, CancellationToken ct) =>
+        g.MapPut("/shows/{id:int}/status", async (int id, ShowStatusRequest req, ClaimsPrincipal p, TrackingService t, ActivityService a, AppDbContext db, CancellationToken ct) =>
         {
-            await t.SetShowStatusAsync(p.UserId(), id, req.Status, ct);
-            await a.LogAsync(p, ActivityKind.ShowStatus, MediaType.Show, id, detail: req.Status.ToString());
+            var me = p.UserId();
+            var before = await db.ShowStates.Where(x => x.UserId == me && x.ShowTmdbId == id).Select(x => (ShowTrackStatus?)x.Status).FirstOrDefaultAsync(ct) ?? ShowTrackStatus.Watching;
+            await t.SetShowStatusAsync(me, id, req.Status, ct);
+            await a.LogAsync(p, ActivityKind.ShowStatus, MediaType.Show, id, detail: req.Status.ToString(), undo: new UndoData(Status: before));
             return Results.NoContent();
         });
 
@@ -374,7 +408,7 @@ public static class ApiEndpoints
         g.MapPost("/checkin", async (CheckInRequest req, ClaimsPrincipal p, CheckInService c, ActivityService a, CancellationToken ct) =>
         {
             var now = await c.StartAsync(p.UserId(), req, WatchSource.Manual, null, ct);
-            await a.LogAsync(p, ActivityKind.CheckIn, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber);
+            await a.LogAsync(p, ActivityKind.CheckIn, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber, undo: new UndoData());
             return now;
         });
         g.MapDelete("/checkin", async (ClaimsPrincipal p, CheckInService c, ActivityService a, CancellationToken ct) =>
@@ -606,7 +640,7 @@ public static class ApiEndpoints
         g.MapPost("/{id:guid}/items", async (Guid id, ListItemRequest req, ClaimsPrincipal p, ListService l, AppDbContext db, ActivityService a, CancellationToken ct) =>
         {
             if (!await l.AddItemAsync(p.UserId(), id, req.Type, req.TmdbId, ct)) return Results.NotFound();
-            await a.LogAsync(p, ActivityKind.ListAdd, req.Type, req.TmdbId, detail: $"to \"{await ListName(db, id, ct)}\"");
+            await a.LogAsync(p, ActivityKind.ListAdd, req.Type, req.TmdbId, detail: $"to \"{await ListName(db, id, ct)}\"", undo: new UndoData(ListId: id));
             return Results.NoContent();
         });
         g.MapPut("/{id:guid}/order", async (Guid id, ListOrderRequest req, ClaimsPrincipal p, ListService l, ActivityService a, CancellationToken ct) =>
@@ -620,7 +654,7 @@ public static class ApiEndpoints
         g.MapDelete("/{id:guid}/items", async (Guid id, MediaType type, int tmdbId, ClaimsPrincipal p, ListService l, AppDbContext db, ActivityService a, CancellationToken ct) =>
         {
             if (!await l.RemoveItemAsync(p.UserId(), id, type, tmdbId, ct)) return Results.NotFound();
-            await a.LogAsync(p, ActivityKind.ListRemove, type, tmdbId, detail: $"from \"{await ListName(db, id, ct)}\"");
+            await a.LogAsync(p, ActivityKind.ListRemove, type, tmdbId, detail: $"from \"{await ListName(db, id, ct)}\"", undo: new UndoData(ListId: id));
             return Results.NoContent();
         });
     }
@@ -893,7 +927,7 @@ public static class ApiEndpoints
         g.MapPost("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, ActivityService a, CancellationToken ct) =>
         {
             if (await s.FollowAsync(p.UserId(), name, true, ct) is not { } result) return Results.NotFound();
-            await a.LogAsync(p, ActivityKind.Follow, detail: result.Requested ? $"{name} (requested)" : name);
+            await a.LogAsync(p, ActivityKind.Follow, detail: result.Requested ? $"{name} (requested)" : name, undo: new UndoData(User: name));
             return Results.Ok(result);
         });
         g.MapGet("/requests", (ClaimsPrincipal p, SocialService s, CancellationToken ct) => s.RequestsAsync(p.UserId(), ct));
@@ -907,7 +941,7 @@ public static class ApiEndpoints
         g.MapDelete("/follow/{name}", async (string name, ClaimsPrincipal p, SocialService s, ActivityService a, CancellationToken ct) =>
         {
             if (await s.FollowAsync(p.UserId(), name, false, ct) is null) return Results.NotFound();
-            await a.LogAsync(p, ActivityKind.Unfollow, detail: name);
+            await a.LogAsync(p, ActivityKind.Unfollow, detail: name, undo: new UndoData(User: name));
             return Results.NoContent();
         });
         g.MapGet("/compare/{a}/{b}", async (string a, string b, ClaimsPrincipal p, SocialService s, CancellationToken ct) =>

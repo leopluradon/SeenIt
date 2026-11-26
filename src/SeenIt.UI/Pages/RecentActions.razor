@@ -1,0 +1,120 @@
+@page "/recent"
+@attribute [Authorize]
+@* What you did in the last 48 hours, from the activity log, with Undo on what can be reversed. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+<PageTitle>Recent actions · SeenIt</PageTitle>
+
+<div class="page-head"><h1>Recent actions</h1></div>
+<p class="muted small">Everything you've done in the last 48 hours. Undo puts things back the way they were before that action: plays come back or go, ratings, statuses, lists, watchlist and favorites return to what they were. Undoing an older action after newer ones on the same title takes it back to before the older one. Imports have their own undo in <a href="settings?tab=data#imports">Settings → Import</a>.</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items is null && error is null) { <Spinner /> }
+else if (items is { Count: 0 }) { <Empty Title="Nothing in the last 48 hours." /> }
+else if (items is not null)
+{
+    @foreach (var day in items.GroupBy(i => DateOnly.FromDateTime(i.At.ToLocalTime().Date)))
+    {
+        <section class="cal-day">
+            <h3 class="day-head">@Fmt.Day(day.Key)</h3>
+            <div class="mini-list">
+                @foreach (var a in day)
+                {
+                    <div class="mini-item recent-action @(a.UndoneAt is not null ? "undone" : "")" @key="a.Id">
+                        @if (a.PosterPath is not null) { <img src="@Img.Poster(a.PosterPath, "w92")" alt="" loading="lazy" /> }
+                        else { <span class="recent-icon"><Icon Name="@IconFor(a.Kind)" Size="18" /></span> }
+                        <div class="recent-body">
+                            <div><b>@Verb(a)</b> @if (a.Title is { } t) { <a href="@Href(a)">@t</a>@(Where(a)) }</div>
+                            <div class="muted small">@a.At.ToLocalTime().ToString(Fmt.TimeOnly)@(a.Detail is { Length: > 0 } d && ShowDetail(a.Kind) ? $" · {d}" : "")@(a.UndoneAt is { } u ? $" · undone {u.ToLocalTime().ToString(Fmt.TimeOnly)}" : "")</div>
+                        </div>
+                        @if (a.CanUndo) { <button class="btn btn-sm" disabled="@(busy == a.Id)" @onclick="() => Undo(a)"><Icon Name="repeat" Size="14" /> Undo</button> }
+                        else if (a.UndoneAt is not null) { <span class="pill pill-sm">Undone</span> }
+                    </div>
+                }
+            </div>
+        </section>
+    }
+}
+@code {
+    private List<RecentAction>? items;
+    private string? error;
+    private long? busy;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { items = await Api.RecentActionsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Undo(RecentAction a)
+    {
+        busy = a.Id;
+        try
+        {
+            await Api.UndoActionAsync(a.Id);
+            Toasts.Show($"Undone: {Verb(a).ToLowerInvariant()}{(a.Title is { } t ? " " + t : "")}");
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = null; }
+    }
+
+    private static string Href(RecentAction a) => a.Type == MediaType.Episode && a.SeasonNumber is { } s && a.EpisodeNumber is { } e
+        ? Fmt.EpisodeHref(a.TmdbId!.Value, s, e) : Fmt.Href(a.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, a.TmdbId ?? 0);
+
+    /// <summary>" S02E03" or " season 2" after the title, when it was about part of a show.</summary>
+    private static string Where(RecentAction a) => a.EpisodeNumber is not null ? " " + Fmt.Ep(a.SeasonNumber, a.EpisodeNumber)
+        : a.SeasonNumber is { } s && a.Type != MediaType.Movie ? $" season {s}" : "";
+
+    private static string Verb(RecentAction a) => a.Kind switch
+    {
+        ActivityKind.Watch => "Watched",
+        ActivityKind.BulkWatch => "Marked watched",
+        ActivityKind.Unwatch => "Marked unwatched",
+        ActivityKind.DeletePlay => "Deleted plays of",
+        ActivityKind.EditPlay => "Changed play dates",
+        ActivityKind.Rate => "Rated",
+        ActivityKind.Unrate => "Cleared your rating of",
+        ActivityKind.WatchlistAdd => "Added to watchlist",
+        ActivityKind.WatchlistRemove => "Removed from watchlist",
+        ActivityKind.FavoriteAdd => "Favorited",
+        ActivityKind.FavoriteRemove => "Unfavorited",
+        ActivityKind.ShowStatus => "Changed status of",
+        ActivityKind.RewatchStart => "Started a rewatch of",
+        ActivityKind.RewatchStop => "Stopped rewatching",
+        ActivityKind.CheckIn => "Checked in to",
+        ActivityKind.CheckInCancel => "Cancelled a check-in",
+        ActivityKind.ListAdd => "Added to a list:",
+        ActivityKind.ListRemove => "Removed from a list:",
+        ActivityKind.ListCreate => "Created a list",
+        ActivityKind.ListEdit => "Edited a list",
+        ActivityKind.ListDelete => "Deleted a list",
+        ActivityKind.ListReorder => "Reordered a list",
+        ActivityKind.Follow => "Followed",
+        ActivityKind.Unfollow => "Unfollowed",
+        ActivityKind.Import => "Imported",
+        ActivityKind.ImportUndo => "Undid an import",
+        ActivityKind.GoalSet => "Set a goal",
+        ActivityKind.GoalDelete => "Deleted a goal",
+        ActivityKind.Undo => "Undid",
+        ActivityKind.RestorePlays => "Restored plays",
+        ActivityKind.WatchOrder => "Changed watch order of",
+        _ => a.Kind.ToString(),
+    };
+
+    // Follow/Unfollow say who in Detail; the rest add it after the time.
+    private static bool ShowDetail(ActivityKind k) => true;
+
+    private static string IconFor(ActivityKind k) => k switch
+    {
+        ActivityKind.Follow or ActivityKind.Unfollow => "user-plus",
+        ActivityKind.ListCreate or ActivityKind.ListEdit or ActivityKind.ListDelete or ActivityKind.ListReorder => "list",
+        ActivityKind.Import or ActivityKind.ImportUndo => "upload",
+        ActivityKind.GoalSet or ActivityKind.GoalDelete => "target",
+        ActivityKind.Undo => "repeat",
+        _ => "history",
+    };
+}

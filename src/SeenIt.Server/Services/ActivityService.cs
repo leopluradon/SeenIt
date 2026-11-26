@@ -14,7 +14,7 @@ public class ActivityService(IDbContextFactory<AppDbContext> factory, ILogger<Ac
 {
     public async Task LogAsync(Guid userId, ActivityKind kind, MediaType? type = null, int? tmdbId = null,
         int? season = null, int? episode = null, string? detail = null, WatchSource source = WatchSource.Manual,
-        string? userName = null)
+        string? userName = null, UndoData? undo = null)
     {
         try
         {
@@ -25,6 +25,7 @@ public class ActivityService(IDbContextFactory<AppDbContext> factory, ILogger<Ac
                 UserId = userId, UserName = userName, Kind = kind, Source = source,
                 Type = type, TmdbId = tmdbId, SeasonNumber = season, EpisodeNumber = episode,
                 Detail = detail is { Length: > 500 } ? detail[..500] : detail,
+                UndoJson = undo is null ? null : System.Text.Json.JsonSerializer.Serialize(undo),
             });
             await db.SaveChangesAsync();
         }
@@ -35,8 +36,8 @@ public class ActivityService(IDbContextFactory<AppDbContext> factory, ILogger<Ac
     }
 
     public Task LogAsync(ClaimsPrincipal p, ActivityKind kind, MediaType? type = null, int? tmdbId = null,
-        int? season = null, int? episode = null, string? detail = null) =>
-        LogAsync(p.UserId(), kind, type, tmdbId, season, episode, detail, WatchSource.Manual, p.Identity?.Name);
+        int? season = null, int? episode = null, string? detail = null, UndoData? undo = null) =>
+        LogAsync(p.UserId(), kind, type, tmdbId, season, episode, detail, WatchSource.Manual, p.Identity?.Name, undo);
 
     /// <summary>"custom date 2 Mar 2019", "release date", … for a watch request.</summary>
     public static string? When(WatchTime? when, DateTimeOffset? at) => (when, at) switch

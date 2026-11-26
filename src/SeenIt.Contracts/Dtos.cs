@@ -361,6 +361,7 @@ public static class UiPrefs
         ("recommendations", "Recommendations", "send", "recommendations"),
         ("people", "People", "user-plus", "people"),
         ("duplicates", "Duplicates", "copy", "duplicates"),
+        ("recent", "Recent actions", "repeat", "recent"),
         ("settings", "Settings", "settings", "settings"),
     ];
     /// <summary>The Tabs (all but Home) by category, in order: the website's More menu, like the app's More page.</summary>
@@ -371,7 +372,7 @@ public static class UiPrefs
         ("Your collection", ["lists", "ratings", "favorites", "library"]),
         ("Stats", ["stats", "review-month", "review-year", "goals"]),
         ("Friends", ["friends", "recommendations", "people"]),
-        ("Settings", ["settings", "duplicates"]),
+        ("Settings", ["settings", "duplicates", "recent"]),
     ];
     /// <summary>Stand-ins for the current month's and year's review pages; the UI fills in the dates (UiLayout.Href).</summary>
     public const string ReviewMonthHref = "review/{month}", ReviewYearHref = "review/{year}";
@@ -1108,7 +1109,20 @@ public enum ActivityKind
     ImportUndo, ImportResolve, ListReorder, ListNote, WatchOrder,
     ProfilePicture,
     EmailChanged, UserNameChanged,
+    Undo,   // something undone from Recent actions (Detail says what)
 }
+
+/// <summary>
+/// What reversing an action needs, kept with it in the activity log: the plays it added (PlayIds) or took away
+/// (Plays), the dates plays had (Dates), a rating or show status from before (Rating, Status; Had: there was a
+/// rating), the list (ListId), whether the title was already on the watchlist (Was), the person followed (User).
+/// </summary>
+public record UndoData(IReadOnlyList<Guid>? PlayIds = null, IReadOnlyList<RestorePlay>? Plays = null, IReadOnlyList<PlayDate>? Dates = null,
+    double? Rating = null, bool Had = false, ShowTrackStatus? Status = null, Guid? ListId = null, bool Was = false, string? User = null);
+
+/// <summary>One of your actions on the Recent actions page. Title/PosterPath: the movie or show it was about.</summary>
+public record RecentAction(long Id, DateTimeOffset At, ActivityKind Kind, string? Title, string? PosterPath, MediaType? Type, int? TmdbId,
+    int? SeasonNumber, int? EpisodeNumber, string? Detail, bool CanUndo, DateTimeOffset? UndoneAt);
 
 /// <summary>What an import brings in. Movies/Shows pick the kind of title; the rest pick the kind of data.</summary>
 [Flags]

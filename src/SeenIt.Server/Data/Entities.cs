@@ -411,6 +411,10 @@ public class ActivityEntry
     public int? SeasonNumber { get; set; }
     public int? EpisodeNumber { get; set; }
     public string? Detail { get; set; }
+    /// <summary>What it takes to reverse it (UndoData as JSON), for the Recent actions page; null when it can't be.</summary>
+    public string? UndoJson { get; set; }
+    /// <summary>When it was undone from there.</summary>
+    public DateTimeOffset? UndoneAt { get; set; }
 }
 
 /// <summary>A version of the app that started up here for the first time.</summary>

@@ -1996,3 +1996,9 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 
 .list-filters { margin: 0 0 12px; }
 .year-input { width: 5.5em; }
+
+/* Recent actions */
+.recent-action { align-items: center; }
+.recent-action.undone .recent-body { opacity: .55; }
+.recent-body { flex: 1; min-width: 0; }
+.recent-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-2); flex-shrink: 0; }

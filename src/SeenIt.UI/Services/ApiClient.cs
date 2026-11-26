@@ -424,6 +424,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>The order you follow for the show, or null for TMDB's seasons.</summary>
     public Task<WatchOrderDto?> WatchOrderAsync(int showId) => SendAsync<WatchOrderDto>(HttpMethod.Get, $"api/shows/{showId}/order");
     public Task SetWatchOrderAsync(int showId, string? orderId) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/order", new SetWatchOrderRequest(orderId));
+    public Task<List<RecentAction>> RecentActionsAsync() => GetAsync<List<RecentAction>>("api/activity/recent");
+    public Task UndoActionAsync(long id) => SendAsync(HttpMethod.Post, $"api/activity/{id}/undo", null);
     public Task<ShowAlertState> ShowAlertsAsync(int showId) => GetAsync<ShowAlertState>($"api/shows/{showId}/alerts")!;
     public Task<ShowAlertState> SetShowAlertsAsync(int showId, ShowAlerts setting) =>
         SendAsync<ShowAlertState>(HttpMethod.Put, $"api/shows/{showId}/alerts", new ShowAlertState(setting, false))!;

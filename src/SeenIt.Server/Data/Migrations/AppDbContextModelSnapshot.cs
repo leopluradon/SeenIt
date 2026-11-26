@@ -186,6 +186,12 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int?>("Type")
                         .HasColumnType("integer");
 
+                    b.Property<string>("UndoJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UndoneAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
