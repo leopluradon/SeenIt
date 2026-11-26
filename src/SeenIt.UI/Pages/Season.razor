@@ -6,7 +6,7 @@
 <PageTitle>@(season is null ? "Season" : $"{season.ShowName} · {season.Name}") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
-@if (season is null && error is null) { <Spinner /> }
+@if (season is null && error is null) { <Spinner Shape="title" /> }
 else if (season is not null)
 {
     <nav class="crumbs season-crumbs">

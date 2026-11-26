@@ -93,7 +93,7 @@
 }
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (polls is null && error is null) { <Spinner /> }
+@if (polls is null && error is null) { <Spinner Shape="list" /> }
 else if (polls is { Count: 0 } && !creating) { <Empty Title="No polls yet.">Start one and your friends get an alert to vote.</Empty> }
 else if (polls is not null)
 {

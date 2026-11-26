@@ -1,1 +1,27 @@
-<div class="spinner-wrap"><div class="spinner" role="status" aria-label="Loading"></div></div>
+@* Loading. With a Shape, a placeholder shaped like what's coming (so the page doesn't jump when it arrives):
+   "grid" poster tiles, "list" rows with a thumbnail, "title" a title page's hero. Otherwise a spinner. *@
+@switch (Shape)
+{
+    case "grid":
+        <div class="poster-grid" role="status" aria-label="Loading">
+            @for (var i = 0; i < 12; i++) { <div class="poster-card skeleton"></div> }
+        </div>
+        break;
+    case "list":
+        <div class="skel-list" role="status" aria-label="Loading">
+            @for (var i = 0; i < 6; i++) { <div class="skel-row"><span class="skel-img skeleton"></span><span class="skel-lines"><span class="skeleton"></span><span class="skeleton"></span></span></div> }
+        </div>
+        break;
+    case "title":
+        <div class="skel-title" role="status" aria-label="Loading">
+            <span class="skel-poster skeleton"></span>
+            <span class="skel-lines"><span class="skeleton skel-h"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton skel-btn"></span></span>
+        </div>
+        break;
+    default:
+        <div class="spinner-wrap"><div class="spinner" role="status" aria-label="Loading"></div></div>
+        break;
+}
+@code {
+    [Parameter] public string? Shape { get; set; }
+}

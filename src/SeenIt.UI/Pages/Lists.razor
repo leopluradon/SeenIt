@@ -64,10 +64,10 @@ else
         </div>
     }
 }
-else if (lists is null && error is null) { <Spinner /> }
+else if (lists is null && error is null) { <Spinner Shape="list" /> }
 else if (lists is not null)
 {
-    @if (lists.Count == 0) { <Empty Title="No lists yet.">Make lists like “Best of 2025” or “Comfort rewatches”, and share them publicly if you like.</Empty> }
+    @if (lists.Count == 0) { <Empty Title="No lists yet.">Make lists like “Best of 2025” or “Comfort rewatches”, and share them publicly if you like. <div class="empty-actions"><a class="btn btn-sm" href="lists?tab=browse">Browse public lists</a></div></Empty> }
     <div class="list-grid">
         @foreach (var l in lists) { <ListCard List="l" @key="l.Id" /> }
     </div>

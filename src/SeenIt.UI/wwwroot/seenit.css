@@ -2036,3 +2036,38 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .poll-winner h2 { margin: 0; }
 .poll-members { flex-wrap: wrap; gap: 6px; }
 .poll-members .pill { display: inline-flex; align-items: center; gap: 5px; }
+
+/* FilterBar: chips for what's on while the panel is shut */
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -6px 0 14px; }
+.filter-chips .chip { display: inline-flex; align-items: center; gap: 4px; }
+.filter-toggle { display: inline-flex; align-items: center; gap: 5px; }
+.history-filters .check-field { flex-direction: row; align-items: center; gap: 8px; min-height: 38px; }
+.history-filters .check-field input { width: auto; }
+.empty-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+
+/* Loading placeholders (Spinner Shape="grid|list|title") */
+.skeleton { background: var(--surface-2); animation: pulse 1.4s infinite; }
+.skel-list { display: flex; flex-direction: column; gap: 10px; }
+.skel-row { display: flex; gap: 12px; align-items: center; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); }
+.skel-img { width: 44px; height: 66px; border-radius: var(--radius-sm); flex-shrink: 0; }
+.skel-lines { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.skel-lines > span { height: 12px; border-radius: 6px; width: 60%; }
+.skel-lines > span:first-child { width: 40%; height: 14px; }
+.skel-title { display: flex; gap: 20px; align-items: flex-start; padding: 16px 0; }
+.skel-poster { width: min(180px, 35vw); aspect-ratio: 2/3; border-radius: var(--radius); flex-shrink: 0; }
+.skel-title .skel-h { height: 28px; width: 70%; }
+.skel-title .skel-btn { height: 40px; width: 160px; border-radius: var(--radius); margin-top: 8px; }
+.more-search { margin: 0 0 18px; }
+.more-hits { margin-bottom: 20px; }
+
+/* Blurred inline titles get a faint tint and a small eye, so they read as "tap to reveal" rather than smudged text. */
+.spoiler-inline.is-hidden { background: rgba(var(--text-rgb), .07); padding: 0 .25em; }
+.spoiler-inline.is-hidden::after {
+    content: ""; display: inline-block; width: .9em; height: .9em; margin-left: .3em; vertical-align: -.12em; background: var(--muted);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") center / contain no-repeat;
+    text-shadow: none;
+}
+.searchbar .list-layout { flex: none; width: auto; }
+.searchbar .list-layout button { padding: 5px 9px; }
+.more-grid a { min-width: 0; }

@@ -8,7 +8,7 @@
 <PageTitle>@(poll?.Title ?? "Movie night") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (poll is null && error is null) { <Spinner /> }
+@if (poll is null && error is null) { <Spinner Shape="list" /> }
 else if (poll is not null)
 {
     <div class="page-head">

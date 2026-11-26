@@ -70,7 +70,7 @@ else if (c is not null)
                     <Icon Name="search" Size="16" />
                     <input type="search" value="@find" @oninput="e => finds[key] = e.Value?.ToString() ?? string.Empty" placeholder="Search this section" aria-label="@($"Search {title}")" />
                     <button type="button" class="btn btn-sm filter-toggle @(active > 0 ? "btn-on" : "")" aria-expanded="@panelOpen" @onclick="() => { if (!filtersOpen.Remove(key)) filtersOpen.Add(key); }">
-                        Filters@(active > 0 ? $" · {active}" : "")
+                        <Icon Name="sliders" Size="14" /> Filters@(active > 0 ? $" · {active}" : "")
                     </button>
                 </div>
                 @if (panelOpen)

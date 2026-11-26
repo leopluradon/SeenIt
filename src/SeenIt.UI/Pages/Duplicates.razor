@@ -17,8 +17,8 @@
 </p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (groups is null && error is null) { <Spinner /> }
-else if (groups is { Count: 0 }) { <Empty Title="No duplicates found." /> }
+@if (groups is null && error is null) { <Spinner Shape="list" /> }
+else if (groups is { Count: 0 }) { <Empty Title="No duplicates found.">Nothing in your history was logged twice (the same title played twice within a few minutes, often from an import plus Jellyfin). <div class="empty-actions"><a class="btn btn-sm" href="history">Back to history</a></div></Empty> }
 else if (groups is not null)
 {
     <p class="muted small">@groups.Count to check</p>

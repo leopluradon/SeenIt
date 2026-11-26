@@ -10,7 +10,7 @@
 <p class="muted small">New episodes of shows you watch or have on your watchlist, watchlist movies and new work from <a href="people">people you follow</a>, on the day they come out. Also titles friends <a href="recommendations">recommend to you</a>, and when someone watches one you recommended them.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (data is null && error is null) { <Spinner /> }
+@if (data is null && error is null) { <Spinner Shape="list" /> }
 else if (data is { Items.Count: 0 })
 {
     <Empty Title="Nothing yet.">
@@ -19,24 +19,21 @@ else if (data is { Items.Count: 0 })
 }
 else if (data is not null)
 {
-    <div class="filter-row">
-        <div class="searchbar">
-            <Icon Name="search" Size="16" />
-            <input type="search" @bind="find" @bind:event="oninput" placeholder="Find a title" aria-label="Find an alert" />
-        </div>
-        <div class="chips">
-            @foreach (var (key, label) in Kinds)
-            {
-                @if (key == "" || data.Items.Any(n => KindOf(n) == key))
+    <FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find a title" Label="Find an alert"
+               Active="@((kind == "" ? 0 : 1) + (newOnly ? 1 : 0))" Chips="Chips" OnClear='() => { find = ""; kind = ""; newOnly = false; }'>
+        <div class="field">
+            <label for="al-kind">Kind</label>
+            <select id="al-kind" value="@kind" @onchange='e => kind = e.Value as string ?? ""'>
+                @foreach (var (key, label) in Kinds)
                 {
-                    <button class="chip @(kind == key ? "on" : "")" @onclick="() => kind = key" @key="key">@label</button>
+                    @if (key == "" || data.Items.Any(n => KindOf(n) == key)) { <option value="@key">@label</option> }
                 }
-            }
-            <button class="chip @(newOnly ? "on" : "")" aria-pressed="@newOnly" @onclick="() => newOnly = !newOnly">New only</button>
+            </select>
         </div>
-    </div>
+        <label class="field inline check-field"><input type="checkbox" checked="@newOnly" @onchange="e => newOnly = e.Value is true" /> New only</label>
+    </FilterBar>
     var items = data.Items.Where(Matches).ToList();
-    @if (items.Count == 0) { <p class="muted">Nothing matches.</p> }
+    @if (items.Count == 0) { <Empty Title="Nothing matches."><button class="btn btn-sm" @onclick='() => { find = ""; kind = ""; newOnly = false; }'>Clear filters</button></Empty> }
     @foreach (var day in items.GroupBy(n => n.Day))
     {
         <section class="cal-day">
@@ -66,6 +63,11 @@ else if (data is not null)
         [("", "All"), ("episode", "Episodes"), ("movie", "Movies"), ("show", "New series"), ("rec", "Recommended to me"), ("recwatched", "Friends watched my picks"), ("poll", "Movie nights")];
     private string kind = "";
     private bool newOnly;
+    private List<FilterChip> Chips =>
+    [
+        .. kind != "" ? [new FilterChip(Kinds.First(k => k.Key == kind).Label, () => kind = "")] : Array.Empty<FilterChip>(),
+        .. newOnly ? [new FilterChip("New only", () => newOnly = false)] : Array.Empty<FilterChip>(),
+    ];
     private string find = "";
     private static string KindOf(NotificationDto n) => n.PollId is not null ? "poll" : n.RecommendationWatched ? "recwatched" : n.Recommendation ? "rec"
         : n.Type switch { MediaType.Episode => "episode", MediaType.Movie => "movie", _ => "show" };

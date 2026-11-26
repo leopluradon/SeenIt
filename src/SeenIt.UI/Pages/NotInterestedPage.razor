@@ -8,24 +8,21 @@
 <p class="muted small">Kept out of Discover, trending, "you might also like" and For you. They still turn up in search. Tap × to bring one back.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (items is null && error is null) { <Spinner /> }
-else if (items is { Count: 0 }) { <Empty Title="Nothing hidden." /> }
+@if (items is null && error is null) { <Spinner Shape="grid" /> }
+else if (items is { Count: 0 }) { <Empty Title="Nothing hidden.">Titles you mark <b>Not interested</b> (from a poster's ⋯ menu) stop being suggested on Home and Discover. They show up here so you can bring them back.</Empty> }
 else if (items is not null)
 {
     <div class="filter-row">
-        <div class="searchbar">
-            <Icon Name="search" Size="16" />
-            <input type="search" @bind="find" @bind:event="oninput" placeholder="Find a title" aria-label="Find a hidden title" />
-        </div>
         <div class="segmented segmented-sm">
             <button class="@(kind is null ? "on" : "")" @onclick="() => kind = null">All</button>
             <button class="@(kind == MediaType.Movie ? "on" : "")" @onclick="() => kind = MediaType.Movie">Movies</button>
             <button class="@(kind == MediaType.Show ? "on" : "")" @onclick="() => kind = MediaType.Show">Shows</button>
         </div>
     </div>
+    <FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find a title" Label="Find a hidden title" />
     var shown = items.Where(i => (kind is null || i.Media.Type == kind)
         && (find.Trim() is not { Length: > 0 } f || i.Media.Title.Contains(f, StringComparison.OrdinalIgnoreCase))).ToList();
-    @if (shown.Count == 0) { <p class="muted">Nothing matches.</p> }
+    @if (shown.Count == 0) { <Empty Title="Nothing matches."><button class="btn btn-sm" @onclick='() => { find = ""; kind = null; }'>Clear filters</button></Empty> }
     <div class="poster-grid">
         @foreach (var i in shown)
         {

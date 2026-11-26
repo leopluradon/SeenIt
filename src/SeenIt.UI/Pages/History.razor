@@ -57,7 +57,7 @@
     <Icon Name="search" Size="18" />
     <input type="search" @bind="search" @bind:event="oninput" @bind:after="Debounce" placeholder="@(Friends ? "Search friends' history" : Other is null ? "Search your history" : "Search their history")" aria-label="Search history" />
     <button type="button" class="btn btn-sm filter-toggle @(ActiveFilters > 0 ? "btn-on" : "")" @onclick="() => filtersOpen = !filtersOpen" aria-expanded="@filtersOpen">
-        Filters@(ActiveFilters > 0 ? $" · {ActiveFilters}" : "")
+        <Icon Name="sliders" Size="14" /> Filters@(ActiveFilters > 0 ? $" · {ActiveFilters}" : "")
     </button>
 </form>
 @if (Mine && !Friends) { <SavedViews Page="history" Current="@ViewQuery" /> }
@@ -139,7 +139,7 @@
 </div>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (data is null && error is null) { <Spinner /> }
+@if (data is null && error is null) { <Spinner Shape="list" /> }
 else if (data is not null)
 {
     @if (data.Items.Count == 0)
@@ -154,7 +154,9 @@ else if (data is not null)
         }
         else
         {
-            <Empty Title="Nothing watched yet.">Mark something watched, connect Jellyfin, or import from Trakt or Letterboxd in <a href="settings">Settings</a>.</Empty>
+            <Empty Title="Nothing watched yet.">Mark something watched, connect Jellyfin, or import from Trakt or Letterboxd.
+                <div class="empty-actions"><a class="btn btn-sm btn-primary" href="search">Find something you've seen</a> <a class="btn btn-sm" href="settings?tab=data#imports">Import</a> <a class="btn btn-sm" href="settings?tab=tracking#jellyfin">Connect Jellyfin</a></div>
+            </Empty>
         }
     }
     else

@@ -55,6 +55,12 @@ public static class Img
         path is null ? "" : $"--bg-sm:url('{Base}w780{path}'); --bg-lg:url('{Base}w1280{path}')";
 }
 
+/// <summary>A filter that's on, as FilterBar shows it while its panel is shut: tap to turn it off.</summary>
+public record FilterChip(string Label, Func<Task> Remove)
+{
+    public FilterChip(string label, Action remove) : this(label, () => { remove(); return Task.CompletedTask; }) { }
+}
+
 public static class Fmt
 {
     public static string Href(MediaType type, int id) => type == MediaType.Movie ? $"movie/{id}" : $"show/{id}";

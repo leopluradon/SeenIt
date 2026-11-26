@@ -18,6 +18,22 @@
     </a>
 }
 
+<div class="searchbar more-search" role="search">
+    <Icon Name="search" Size="18" />
+    <input type="search" value="@find" @oninput='e => find = e.Value as string ?? ""' placeholder="Find a page or setting" aria-label="Find a page or setting" />
+</div>
+
+@if (find.Trim() is { Length: > 0 } q)
+{
+    var hits = Groups().SelectMany(g => g.Links.Where(l => l.Show && Hit(l, g.Title, q))).DistinctBy(l => l.Href).ToList();
+    <nav class="more-grid more-hits" aria-label="Matching pages">
+        @foreach (var l in hits) { <a href="@l.Href" @key="l.Href"><Icon Name="@l.Icon" Size="20" /><span>@l.Label</span></a> }
+        <a href="@($"settings?q={Uri.EscapeDataString(q)}")"><Icon Name="settings" Size="20" /><span>Settings: “@q”</span></a>
+        <a href="@($"search?q={Uri.EscapeDataString(q)}")"><Icon Name="search" Size="20" /><span>Search titles: “@q”</span></a>
+    </nav>
+}
+else
+{
 @foreach (var (title, links) in Groups())
 {
     var shown = links.Where(l => l.Show).ToList();
@@ -32,53 +48,60 @@
         </nav>
     </section>
 }
+}
 
 <button class="btn btn-block more-signout" @onclick="Logout"><Icon Name="logout" Size="18" /> Sign out</button>
 
 @code {
-    private sealed record Link(string Label, string Icon, string Href, bool Show = true);
+    private sealed record Link(string Label, string Icon, string Href, bool Show = true, string Also = "");
+    private string find = "";
+
+    /// <summary>Matches the name, its group, or other words for it ("undo", "notifications", "blu-ray"…).</summary>
+    private static bool Hit(Link l, string group, string q) =>
+        q.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(w =>
+            l.Label.Contains(w, StringComparison.OrdinalIgnoreCase) || group.Contains(w, StringComparison.OrdinalIgnoreCase) || l.Also.Contains(w, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Everything SeenIt has, grouped by what you'd go looking for.</summary>
     private IEnumerable<(string Title, Link[] Links)> Groups()
     {
         var today = DateTime.Today;
         yield return ("Watching", [
-            new("Progress", "progress", "progress"),
-            new("Calendar", "calendar", "calendar"),
-            new("Watchlist", "bookmark", "watchlist"),
-            new("History", "history", "history"),
-            new("Release alerts", "bell", "notifications"),
+            new("Progress", "progress", "progress", Also: "up next shows tracking episodes franchises paused dropped"),
+            new("Calendar", "calendar", "calendar", Also: "upcoming schedule airing releases"),
+            new("Watchlist", "bookmark", "watchlist", Also: "want to watch later queue"),
+            new("History", "history", "history", Also: "watched plays log diary"),
+            new("Release alerts", "bell", "notifications", Also: "notifications alerts push new episodes"),
         ]);
         yield return ("Find something", [
-            new("Search", "search", "search"),
-            new("Discover", "compass", "discover"),
-            new("For you", "eye", "for-you"),
-            new("Pick for me", "shuffle", "pick"),
+            new("Search", "search", "search", Also: "find titles people"),
+            new("Discover", "compass", "discover", Also: "browse trending popular genres"),
+            new("For you", "eye", "for-you", Also: "recommendations suggestions picked"),
+            new("Pick for me", "shuffle", "pick", Also: "random decide roulette"),
         ]);
         yield return ("Your collection", [
-            new("Lists", "list", "lists"),
-            new("Ratings", "star", "ratings"),
-            new("Favorites", "heart", "favorites"),
-            new("Library", "download", "library"),
+            new("Lists", "list", "lists", Also: "collections smart"),
+            new("Ratings", "star", "ratings", Also: "scores rated"),
+            new("Favorites", "heart", "favorites", Also: "favourites top"),
+            new("Library", "download", "library", Also: "owned blu-ray dvd 4k digital physical collection"),
         ]);
         yield return ("Stats", [
-            new("Stats", "chart", "stats"),
+            new("Stats", "chart", "stats", Also: "statistics numbers hours"),
             new($"{today:MMMM} so far", "clock", $"review/{today.Year}/{today.Month}"),
             new($"{today.Year} so far", "chart", $"review/{today.Year}"),
-            new("Goals", "target", "goals"),
-            new("Completionist", "check", "completionist"),
+            new("Goals", "target", "goals", Also: "challenges yearly target"),
+            new("Completionist", "check", "completionist", Also: "badges filmography complete director actor"),
         ]);
         yield return ("Friends", [
-            new("Friends", "users", "friends"),
-            new("Recommendations", "send", "recommendations"),
-            new("Movie night", "users", "movie-night"),
-            new("People you follow", "user-plus", "people"),
+            new("Friends", "users", "friends", Also: "social activity feed follow"),
+            new("Recommendations", "send", "recommendations", Also: "recs sent suggest"),
+            new("Movie night", "users", "movie-night", Also: "poll vote group watch party"),
+            new("People you follow", "user-plus", "people", Also: "actors directors following cast crew"),
         ]);
         yield return ("Settings", [
-            new("Settings", "settings", "settings"),
-            new("Customize tabs", "menu", "settings#layout"),
-            new("Duplicates", "copy", "duplicates"),
-            new("Recent actions (undo)", "repeat", "recent"),
+            new("Settings", "settings", "settings", Also: "preferences account password theme spoilers privacy"),
+            new("Customize tabs", "menu", "settings#layout", Also: "navigation bar bottom tabs order"),
+            new("Duplicates", "copy", "duplicates", Also: "double plays cleanup"),
+            new("Recent actions (undo)", "repeat", "recent", Also: "undo mistake revert"),
             new("Admin", "shield", "admin", Session.Me?.IsAdmin == true),
         ]);
     }

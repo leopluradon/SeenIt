@@ -17,45 +17,48 @@
         <input type="date" class="cal-jump" value="@((month ? picked ?? anchor : from.AddDays(3)).ToString("yyyy-MM-dd"))" @onchange="Jump" aria-label="Go to a date" />
     </div>
 </div>
-<div class="chips">
-    <button class="chip @(kind is null ? "on" : "")" @onclick="() => SetFilter(() => kind = null)">All</button>
-    <button class="chip @(kind == MediaType.Movie ? "on" : "")" @onclick="() => SetFilter(() => kind = MediaType.Movie)">Movies</button>
-    <button class="chip @(kind == MediaType.Episode ? "on" : "")" @onclick="() => SetFilter(() => kind = MediaType.Episode)">Shows</button>
-    <button class="chip @(hideWatched ? "on" : "")" @onclick="() => SetFilter(() => hideWatched = !hideWatched)" aria-pressed="@hideWatched">Hide watched</button>
-    <button class="chip @(hidePremieres ? "on" : "")" @onclick="() => SetFilter(() => hidePremieres = !hidePremieres)" aria-pressed="@hidePremieres" title="Season premieres of shows that are only on your watchlist">Hide premieres of shows I haven't started</button>
-</div>
-@* One show, or one channel / streaming service, from what's in the range on screen (not remembered: it changes as you move). *@
-@if (items is { Count: > 0 })
-{
-    var showChoices = items.Where(c => c.Type != MediaType.Movie).GroupBy(c => c.TmdbId).Select(g => (Id: g.Key, g.First().Title)).OrderBy(x => x.Title).ToList();
-    var networkChoices = items.Select(c => c.Network).OfType<string>().Distinct().Order().ToList();
-    <div class="filter-row">
-        @if (showChoices.Count > 1 || onlyShow is not null)
-        {
-            <label class="sort-pick">
-                <span class="muted small">Show</span>
-                <select value="@(onlyShow?.ToString() ?? "")" @onchange="e => onlyShow = int.TryParse(e.Value as string, out var id) ? id : null">
-                    <option value="">All shows</option>
-                    @foreach (var (id, title) in showChoices) { <option value="@id">@title</option> }
-                </select>
-            </label>
-        }
-        @if (networkChoices.Count > 1 || network is not null)
-        {
-            <label class="sort-pick">
-                <span class="muted small">On</span>
-                <select value="@(network ?? "")" @onchange="e => network = e.Value as string is { Length: > 0 } n ? n : null">
-                    <option value="">Any channel or service</option>
-                    @foreach (var n in networkChoices) { <option value="@n">@n</option> }
-                </select>
-            </label>
-        }
+<div class="filter-row">
+    <div class="segmented segmented-sm">
+        <button class="@(kind is null ? "on" : "")" @onclick="() => SetFilter(() => kind = null)">All</button>
+        <button class="@(kind == MediaType.Movie ? "on" : "")" @onclick="() => SetFilter(() => kind = MediaType.Movie)">Movies</button>
+        <button class="@(kind == MediaType.Episode ? "on" : "")" @onclick="() => SetFilter(() => kind = MediaType.Episode)">Shows</button>
     </div>
+</div>
+@{
+    // One show, or one channel / streaming service, from what's in the range on screen (not remembered: it changes as you move).
+    var showChoices = (items ?? []).Where(c => c.Type != MediaType.Movie).GroupBy(c => c.TmdbId).Select(g => (Id: g.Key, g.First().Title)).OrderBy(x => x.Title).ToList();
+    var networkChoices = (items ?? []).Select(c => c.Network).OfType<string>().Distinct().Order().ToList();
 }
+<FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find a title" Label="Find a title in the calendar"
+           Active="@((hideWatched ? 1 : 0) + (hidePremieres ? 1 : 0) + (onlyShow is null ? 0 : 1) + (network is null ? 0 : 1))"
+           Chips="Chips(showChoices)" OnClear="ClearFilters">
+    @if (showChoices.Count > 1 || onlyShow is not null)
+    {
+        <div class="field">
+            <label for="cal-show">Show</label>
+            <select id="cal-show" value="@(onlyShow?.ToString() ?? "")" @onchange="e => onlyShow = int.TryParse(e.Value as string, out var id) ? id : null">
+                <option value="">All shows</option>
+                @foreach (var (id, title) in showChoices) { <option value="@id">@title</option> }
+            </select>
+        </div>
+    }
+    @if (networkChoices.Count > 1 || network is not null)
+    {
+        <div class="field">
+            <label for="cal-net">On</label>
+            <select id="cal-net" value="@(network ?? "")" @onchange="e => network = e.Value as string is { Length: > 0 } n ? n : null">
+                <option value="">Any channel or service</option>
+                @foreach (var n in networkChoices) { <option value="@n">@n</option> }
+            </select>
+        </div>
+    }
+    <label class="field inline check-field"><input type="checkbox" checked="@hideWatched" @onchange="() => SetFilter(() => hideWatched = !hideWatched)" /> Hide watched</label>
+    <label class="field inline check-field" title="Season premieres of shows that are only on your watchlist"><input type="checkbox" checked="@hidePremieres" @onchange="() => SetFilter(() => hidePremieres = !hidePremieres)" /> Hide premieres of shows I haven't started</label>
+</FilterBar>
 <p class="muted small">@(month ? anchor.ToString("MMMM yyyy") : $"{(from).ToString(Fmt.DateShort)} – {(from.AddDays(Days - 1)).ToString(Fmt.DateLong)}")</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (items is null && error is null) { <Spinner /> }
+@if (items is null && error is null) { <Spinner Shape="list" /> }
 else if (items is not null)
 {
     var shown = items.Where(Keep).ToList();
@@ -91,7 +94,20 @@ else if (items is not null)
     }
     else
     {
-        @if (shown.Count == 0) { <Empty Title="Nothing airing in this window." /> }
+        @if (shown.Count == 0)
+        {
+            <Empty Title="Nothing airing in this window.">
+                @if (find.Length > 0 || hideWatched || hidePremieres || onlyShow is not null || network is not null || kind is not null) { <span>Some things may be filtered out.</span> }
+                else { <span>Shows you watch and titles on your watchlist show up here when they air.</span> }
+                <div class="empty-actions">
+                    <button class="btn btn-sm" @onclick="() => Shift(1)">Later <Icon Name="chevron-right" Size="14" /></button>
+                    @if (find.Length > 0 || hideWatched || hidePremieres || onlyShow is not null || network is not null || kind is not null)
+                    {
+                        <button class="btn btn-sm" @onclick="async () => { kind = null; await ClearFilters(); }">Clear filters</button>
+                    }
+                </div>
+            </Empty>
+        }
         @foreach (var day in shown.GroupBy(i => i.Date))
         {
             <section class="cal-day @(day.Key == today ? "today" : "") @(day.Key >= today ? "from-today" : "")">
@@ -132,12 +148,30 @@ else if (items is not null)
     };
 
     private int? onlyShow;
+    private string find = "";
+
+    private List<FilterChip> Chips(List<(int Id, string Title)> shows)
+    {
+        var chips = new List<FilterChip>();
+        if (onlyShow is { } id) chips.Add(new(shows.FirstOrDefault(x => x.Id == id).Title ?? "One show", () => onlyShow = null));
+        if (network is { } n) chips.Add(new($"On {n}", () => network = null));
+        if (hideWatched) chips.Add(new("Hiding watched", () => SetFilter(() => hideWatched = false)));
+        if (hidePremieres) chips.Add(new("Hiding premieres", () => SetFilter(() => hidePremieres = false)));
+        return chips;
+    }
+
+    private Task ClearFilters()
+    {
+        find = ""; onlyShow = null; network = null;
+        return SetFilter(() => { hideWatched = false; hidePremieres = false; });
+    }
     private string? network;
 
     private bool Keep(CalendarEntry c) =>
         (kind is null || c.Type == kind || (kind == MediaType.Episode && c.Type == MediaType.Show))
         && (onlyShow is null || (c.Type != MediaType.Movie && c.TmdbId == onlyShow))
         && (network is null || c.Network == network)
+        && TextMatch.Contains(c.Title, find)
         && (!hideWatched || !c.Watched)
         && (!hidePremieres || c.Type != MediaType.Episode || c.Started || c.EpisodeNumber != 1);
 

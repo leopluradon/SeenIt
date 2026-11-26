@@ -5,7 +5,7 @@
 <PageTitle>@(p?.Name ?? "Person") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
-@if (p is null && error is null) { <Spinner /> }
+@if (p is null && error is null) { <Spinner Shape="title" /> }
 else if (p is not null)
 {
     <div class="person-head">

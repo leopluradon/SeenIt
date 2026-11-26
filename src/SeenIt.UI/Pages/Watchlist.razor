@@ -18,32 +18,41 @@
     </div>
 </div>
 @if (Mine) { <SavedViews Page="watchlist" Current="@ViewQuery" /> }
-<div class="chips">
-    <button class="chip @(sort == "added" ? "on" : "")" @onclick='() => SetSort("added")'>Recently added</button>
-    <button class="chip @(sort == "release" ? "on" : "")" @onclick='() => SetSort("release")'>Release date</button>
-    <button class="chip @(sort == "title" ? "on" : "")" @onclick='() => SetSort("title")'>Title</button>
+<FilterBar Query="@find" QueryChanged="q => { find = q; Remember(); }" Placeholder="Find in this watchlist"
+           Active="@((sort == "added" ? 0 : 1) + (released is null ? 0 : 1) + (onMine ? 1 : 0))" Chips="Chips" OnClear="Clear">
+    <Extra><LayoutToggle Page="watchlist" Value="layout" ValueChanged="v => layout = v" /></Extra>
+    <ChildContent>
+    <div class="field">
+        <label for="wf-sort">Order</label>
+        <select id="wf-sort" value="@sort" @onchange='e => SetSort(e.Value as string ?? "added")'>
+            <option value="added">Recently added</option>
+            <option value="release">Release date</option>
+            <option value="title">Title</option>
+        </select>
+    </div>
+    <div class="field">
+        <label for="wf-rel">Released</label>
+        <select id="wf-rel" value="@(released ?? "")" @onchange="e => { released = e.Value as string is { Length: > 0 } v ? v : null; Remember(); }">
+            <option value="">Any</option>
+            <option value="out">Out now</option>
+            <option value="soon">Not out yet</option>
+        </select>
+    </div>
     @if (Mine && Fmt.Prefs.MyServices is { Count: > 0 })
     {
-        <button class="chip chip-toggle @(onMine ? "on" : "")" aria-pressed="@onMine" @onclick="ToggleMine" title="Only what's streaming on your services now">
-            @if (onMine) { <Icon Name="check" Size="14" /> } @(onMine && available is null ? "Checking…" : "On my services")
-        </button>
+        <label class="field inline check-field" title="Only what's streaming on your services now">
+            <input type="checkbox" checked="@onMine" @onchange="ToggleMine" /> @(onMine && available is null ? "Checking…" : "On my services")
+        </label>
     }
-    <LayoutToggle Page="watchlist" Value="layout" ValueChanged="v => layout = v" />
-</div>
-@if (items is { Count: > 8 })
-{
-    <div class="searchbar">
-        <Icon Name="search" Size="18" />
-        <input type="search" @bind="find" @bind:event="oninput" placeholder="Filter your watchlist" aria-label="Filter your watchlist" />
-        <a class="btn btn-sm btn-ghost" href="lists">Search all lists</a>
-    </div>
-}
+    </ChildContent>
+</FilterBar>
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (items is null && error is null) { <Spinner /> }
+@if (items is null && error is null) { <Spinner Shape="grid" /> }
 else if (items is not null)
 {
     var shown = Sorted().ToList();
-    @if (shown.Count == 0 && !string.IsNullOrWhiteSpace(find)) { <Empty Title="@($"Nothing called “{find.Trim()}” here.")" /> }
+    @if (shown.Count == 0 && items.Count > 0) { <Empty Title="Nothing here matches."><button class="btn btn-sm" @onclick="Clear">Clear filters</button></Empty> }
+    else if (shown.Count == 0 && !Mine) { <Empty Title="Nothing on this watchlist yet." /> }
     else if (shown.Count == 0) { <Empty Title="Your watchlist is empty.">Add movies and shows you want to watch from their pages. <div><a class="btn btn-sm btn-primary" href="discover">Browse Discover</a></div></Empty> }
     else
     {
@@ -90,6 +99,8 @@ else if (items is not null)
     [SupplyParameterFromQuery(Name = "type")] public string? TypeParam { get; set; }
     [SupplyParameterFromQuery(Name = "sort")] public string? SortParam { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    [SupplyParameterFromQuery(Name = "released")] public string? ReleasedParam { get; set; }
+    private string? released;
     private static readonly string[] Sorts = ["added", "release", "title"];
 
     private (string?, string?, string?)? applied;
@@ -97,11 +108,12 @@ else if (items is not null)
     protected override void OnParametersSet()
     {
         // Only when the address changes, so a re-render doesn't undo what's been picked on the page.
-        if ((TypeParam, SortParam, QParam) == applied) return;
-        applied = (TypeParam, SortParam, QParam);
+        if ((TypeParam, SortParam, QParam + "|" + ReleasedParam) == applied) return;
+        applied = (TypeParam, SortParam, QParam + "|" + ReleasedParam);
         filter = TypeParam switch { "movie" => MediaType.Movie, "show" => MediaType.Show, _ => null };
         sort = Sorts.Contains(SortParam) ? SortParam! : Fmt.Prefs.SortFor("watchlist") is { } s && Sorts.Contains(s) ? s : "added";
-        if (QParam is not null) find = QParam;   // a saved view; changing type or order keeps what you typed
+        if (QParam is not null && QParam != find.Trim()) find = QParam;   // typing updates the address; don't fight it
+        released = ReleasedParam is "out" or "soon" ? ReleasedParam : null;
     }
 
     /// <summary>Someone else's watchlist (read-only), shared at u/{name}/….</summary>
@@ -147,13 +159,29 @@ else if (items is not null)
     {
         ["type"] = filter switch { MediaType.Movie => "movie", MediaType.Show => "show", _ => null },
         ["sort"] = sort == "added" ? null : sort,
+        ["q"] = find.Trim() is { Length: > 0 } q ? q : null,
+        ["released"] = released,
     }), replace: true);
+
+    private List<FilterChip> Chips =>
+    [
+        .. sort != "added" ? [new FilterChip(sort == "release" ? "By release date" : "By title", () => SetSort("added"))] : Array.Empty<FilterChip>(),
+        .. released is { } r ? [new FilterChip(r == "out" ? "Out now" : "Not out yet", () => { released = null; Remember(); })] : Array.Empty<FilterChip>(),
+        .. onMine ? [new FilterChip("On my services", ToggleMine)] : Array.Empty<FilterChip>(),
+    ];
+
+    private async Task Clear()
+    {
+        find = ""; released = null; filter = null; onMine = false;
+        await SetSort("added");
+    }
 
     private string ViewQuery => string.Join('&', new (string Key, string? Value)[]
         {
             ("type", filter switch { MediaType.Movie => "movie", MediaType.Show => "show", _ => null }),
             ("sort", sort == "added" ? null : sort),
             ("q", find.Trim()),
+            ("released", released),
         }.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
 
     private async Task Load()
@@ -167,6 +195,7 @@ else if (items is not null)
     private IEnumerable<WatchlistEntry> Sorted()
     {
         var q = items!.Where(i => (filter is null || i.Media.Type == filter) && TextMatch.Contains(i.Media.Title, find)
+            && (released is null || (released == "soon") == (i.ReleaseDate is not { } rd || rd > DateOnly.FromDateTime(DateTime.Today)))
             && (!onMine || available is null || available.Contains(new MediaRef(i.Media.Type, i.Media.TmdbId))));
         return sort switch
         {

@@ -6,7 +6,7 @@
 <PageTitle>@(e is null ? "Episode" : $"{e.ShowName} {Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)}") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
-@if (e is null && error is null) { <Spinner /> }
+@if (e is null && error is null) { <Spinner Shape="title" /> }
 else if (e is not null)
 {
     var aired = e.AirDate is { } d && d <= DateOnly.FromDateTime(DateTime.Today);

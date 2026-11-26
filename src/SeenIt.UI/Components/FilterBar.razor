@@ -1,0 +1,52 @@
+@* The one search-and-filter pattern: a search box with a Filters button (showing how many are on), a panel of
+   fields it opens, removable chips for what's on while the panel is shut, and Clear all. Pages keep the values
+   (in the address, so Back returns to the same view) and pass the fields in as ChildContent. *@
+<div class="searchbar" role="search">
+    <Icon Name="search" Size="16" />
+    <input type="search" value="@Query" @oninput="Typed" placeholder="@Placeholder" aria-label="@(Label ?? Placeholder)" />
+    @if (ChildContent is not null)
+    {
+        <button type="button" class="btn btn-sm filter-toggle @(Active > 0 ? "btn-on" : "")" @onclick="() => open = !open" aria-expanded="@open">
+            <Icon Name="sliders" Size="14" /> Filters@(Active > 0 ? $" · {Active}" : "")
+        </button>
+    }
+    @Extra
+</div>
+@if (ChildContent is not null)
+{
+    <div class="history-filters @(open ? "open" : "")">
+        @ChildContent
+        @if (Active > 0 || !string.IsNullOrEmpty(Query))
+        {
+            <button type="button" class="btn btn-sm btn-ghost clear-filters" @onclick="OnClear"><Icon Name="x" Size="14" /> Clear all</button>
+        }
+    </div>
+    @if (!open && Chips is { Count: > 0 })
+    {
+        <div class="filter-chips" aria-label="Filters on">
+            @foreach (var c in Chips)
+            {
+                <button type="button" class="chip on" @onclick="c.Remove" title="@($"Remove {c.Label}")">@c.Label <Icon Name="x" Size="12" /></button>
+            }
+            @if (Chips.Count > 1) { <button type="button" class="btn btn-sm btn-ghost" @onclick="OnClear">Clear all</button> }
+        </div>
+    }
+}
+@code {
+    [Parameter] public string? Query { get; set; }
+    [Parameter] public EventCallback<string> QueryChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Search";
+    [Parameter] public string? Label { get; set; }
+    /// <summary>How many filters are on (the search box doesn't count).</summary>
+    [Parameter] public int Active { get; set; }
+    /// <summary>What's on, each with a way to turn it off: shown as chips while the panel is shut.</summary>
+    [Parameter] public IReadOnlyList<FilterChip>? Chips { get; set; }
+    [Parameter] public EventCallback OnClear { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    /// <summary>A small control that sits at the end of the bar (the posters/rows switch).</summary>
+    [Parameter] public RenderFragment? Extra { get; set; }
+    /// <summary>Starts shut: what's on shows as chips, and the fields are a tap away.</summary>
+    private bool open;
+
+    private Task Typed(ChangeEventArgs e) => QueryChanged.InvokeAsync(e.Value as string ?? "");
+}

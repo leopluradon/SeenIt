@@ -15,7 +15,7 @@
 <p class="muted small">Picked from what you've rated highly and watched lately, leaving out what you've seen, rated or have on your watchlist. Tap × on anything you're not interested in.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (data is null && error is null) { <Spinner /> }
+@if (data is null && error is null) { <Spinner Shape="grid" /> }
 else if (data is { Top.Count: 0 })
 {
     <Empty Title="Nothing to suggest yet.">

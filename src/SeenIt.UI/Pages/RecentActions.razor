@@ -9,8 +9,8 @@
 <p class="muted small">Everything you've done in the last 48 hours. Undo puts things back the way they were before that action: plays come back or go, ratings, statuses, lists, watchlist and favorites return to what they were. Undoing an older action after newer ones on the same title takes it back to before the older one. Imports have their own undo in <a href="settings?tab=data#imports">Settings → Import</a>.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (items is null && error is null) { <Spinner /> }
-else if (items is { Count: 0 }) { <Empty Title="Nothing in the last 48 hours." /> }
+@if (items is null && error is null) { <Spinner Shape="list" /> }
+else if (items is { Count: 0 }) { <Empty Title="Nothing in the last 48 hours.">What you mark watched, rate, add to lists or change shows up here for two days, with Undo. <div class="empty-actions"><a class="btn btn-sm" href="history">See your history</a></div></Empty> }
 else if (items is not null)
 {
     @foreach (var day in items.GroupBy(i => DateOnly.FromDateTime(i.At.ToLocalTime().Date)))

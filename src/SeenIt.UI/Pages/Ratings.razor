@@ -19,52 +19,56 @@
         <button class="@(filter == MediaType.Episode ? "on" : "")" @onclick="() => SetFilter(MediaType.Episode)">Episodes</button>
     </div>
 </div>
-<div class="chips">
-    @if (Fmt.Scale == RatingScale.Thumbs)
-    {
-        @* Thumbs: 10 stands for liked, 1 for didn't like (the same "score" in links and saved filters). *@
-        <button class="chip @(stars == 10 ? "on" : "")" @onclick="() => SetStars(stars == 10 ? null : 10)">👍 Liked</button>
-        <button class="chip @(stars == 1 ? "on" : "")" @onclick="() => SetStars(stars == 1 ? null : 1)">👎 Didn't like</button>
-    }
-    else
-    {
-        @for (var i = 10; i >= 1; i--)
-        {
-            var n = i;
-            <button class="chip @(stars == n ? "on" : "")" @onclick="() => SetStars(stars == n ? null : n)">@(Fmt.FiveStars ? "★ " + Fmt.Stars(n) : n)</button>
-        }
-    }
-</div>
-@* Find a title, and narrow to when it was rated (in the address with type and score). *@
-<div class="filter-row">
-    <div class="searchbar">
-        <Icon Name="search" Size="16" />
-        <input type="search" @bind="find" @bind:event="oninput" @bind:after="Remember" placeholder="Find a title" aria-label="Find a rated title" />
+@* Find a title; score, year and order sit behind Filters (type, score, year and search are in the address). *@
+<FilterBar Query="@find" QueryChanged="q => { find = q; Remember(); }" Placeholder="Find a title" Label="Find a rated title"
+           Active="@((stars is null ? 0 : 1) + (year is null ? 0 : 1) + (sort == "recent" ? 0 : 1))" Chips="Chips" OnClear="Clear">
+    <Extra><LayoutToggle Page="ratings" Value="layout" ValueChanged="v => layout = v" /></Extra>
+    <ChildContent>
+    <div class="field">
+        <label for="rf-score">@(Fmt.Scale == RatingScale.Thumbs ? "Verdict" : "Score")</label>
+        <select id="rf-score" value="@(stars?.ToString() ?? "")" @onchange="e => SetStars(int.TryParse(e.Value as string, out var n) ? n : null)">
+            <option value="">Any</option>
+            @if (Fmt.Scale == RatingScale.Thumbs)
+            {
+                @* Thumbs: 10 stands for liked, 1 for didn't like (the same "score" in links and saved filters). *@
+                <option value="10">👍 Liked</option>
+                <option value="1">👎 Didn't like</option>
+            }
+            else
+            {
+                @for (var i = 10; i >= 1; i--) { <option value="@i">@ScoreLabel(i)</option> }
+            }
+        </select>
     </div>
     @if (items is { Count: > 0 })
     {
-        <label class="sort-pick">
-            <span class="muted small">Rated in</span>
-            <select value="@(year?.ToString() ?? "")" @onchange="e => { year = int.TryParse(e.Value as string, out var y) ? y : null; Remember(); }" aria-label="Rated in">
+        <div class="field">
+            <label for="rf-year">Rated in</label>
+            <select id="rf-year" value="@(year?.ToString() ?? "")" @onchange="e => { year = int.TryParse(e.Value as string, out var y) ? y : null; Remember(); }">
                 <option value="">Any year</option>
                 @foreach (var y in items.Select(i => i.RatedAt.ToLocalTime().Year).Distinct().OrderByDescending(y => y)) { <option value="@y">@y</option> }
             </select>
-        </label>
+        </div>
     }
-</div>
-<div class="chips">
-    @foreach (var (key, label) in Sorts)
-    {
-        <button class="chip @(sort == key ? "on" : "")" @onclick="() => SetSort(key)">@label</button>
-    }
-    <LayoutToggle Page="ratings" Value="layout" ValueChanged="v => layout = v" />
-</div>
+    <div class="field">
+        <label for="rf-sort">Order</label>
+        <select id="rf-sort" value="@sort" @onchange='e => SetSort(e.Value as string ?? "recent")'>
+            @foreach (var (key, label) in Sorts) { <option value="@key">@label</option> }
+        </select>
+    </div>
+    </ChildContent>
+</FilterBar>
 <ErrorBox Message="@error" />
-@if (items is null && error is null) { <Spinner /> }
+@if (items is null && error is null) { <Spinner Shape="grid" /> }
 else if (items is not null)
 {
     var shown = Sorted(items.Where(Matches)).ToList();
-    @if (shown.Count == 0) { <Empty Title="No ratings here." /> }
+    @if (shown.Count == 0)
+    {
+        @if (items.Count == 0 && Mine) { <Empty Title="You haven't rated anything yet.">Rate from any title page, or from the <b>To rate</b> row on <a href="">Home</a>, which lists what you've just watched.</Empty> }
+        else if (items.Count == 0) { <Empty Title="No ratings yet." /> }
+        else { <Empty Title="No ratings match.">@if (stars is not null || year is not null || find.Length > 0 || filter is not null) { <button class="btn btn-sm" @onclick="Clear">Clear filters</button> }</Empty> }
+    }
     @* Selecting shows rows with a box each, whatever the layout. *@
     @if (layout == ListLayout.Rows || selecting)
     {
@@ -212,6 +216,14 @@ else if (items is not null)
         year = YearParam;
     }
     private void SetFilter(MediaType? f) { filter = f; Remember(); }
+    private static string ScoreLabel(int n) => Fmt.FiveStars ? "★ " + Fmt.Stars(n) : n.ToString();
+    private List<FilterChip> Chips =>
+    [
+        .. stars is { } st ? [new FilterChip(Fmt.Scale == RatingScale.Thumbs ? (st >= 6 ? "👍 Liked" : "👎 Didn't like") : $"Score {ScoreLabel(st)}", () => SetStars(null))] : Array.Empty<FilterChip>(),
+        .. year is { } yr ? [new FilterChip($"Rated in {yr}", () => { year = null; Remember(); })] : Array.Empty<FilterChip>(),
+        .. sort != "recent" ? [new FilterChip(Sorts.First(x => x.Key == sort).Label, () => { _ = SetSort("recent"); })] : Array.Empty<FilterChip>(),
+    ];
+    private void Clear() { stars = null; year = null; find = ""; filter = null; _ = SetSort("recent"); Remember(); }
     private void SetStars(int? n) { stars = n; Remember(); }
     private void Remember() => Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
     {

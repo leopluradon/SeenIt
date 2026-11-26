@@ -14,7 +14,7 @@
 @if (Mine) { <p class="muted small">Your four favorite movies and four favorite shows, in your order. They're shown on your profile. Add one with the heart on any movie or show.</p> }
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (items is null && error is null) { <Spinner /> }
+@if (items is null && error is null) { <Spinner Shape="grid" /> }
 else if (items is not null)
 {
     @foreach (var (type, label) in new[] { (MediaType.Movie, "Movies"), (MediaType.Show, "Shows") })

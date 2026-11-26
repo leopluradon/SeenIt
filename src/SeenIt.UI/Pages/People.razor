@@ -10,7 +10,7 @@
 <p class="muted small">Actors, directors and writers you follow. Their new movies and shows go on your <a href="calendar">calendar</a> and, on release day, your <a href="notifications">alerts</a>.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (people is null && error is null) { <Spinner /> }
+@if (people is null && error is null) { <Spinner Shape="list" /> }
 else if (people is { Count: 0 })
 {
     <Empty Title="You're not following anyone yet.">
@@ -38,20 +38,20 @@ else if (people is not null)
 
     <section class="row-section">
         <div class="section-head"><h2>Following <span class="muted small">@people.Count</span></h2></div>
-        <div class="filter-row">
-            <div class="searchbar">
-                <Icon Name="search" Size="16" />
-                <input type="search" @bind="find" @bind:event="oninput" placeholder="Find someone" aria-label="Find someone you follow" />
-            </div>
-            @{ var departments = people.Select(x => x.Department).OfType<string>().Distinct().Order().ToList(); }
+        @{ var departments = people.Select(x => x.Department).OfType<string>().Distinct().Order().ToList(); }
+        <FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find someone" Label="Find someone you follow"
+                   Active="@(department is null ? 0 : 1)" Chips="@(department is { } dep ? [new FilterChip(dep, () => department = null)] : null)" OnClear='() => { find = ""; department = null; }'>
             @if (departments.Count > 1)
             {
-                <div class="chips">
-                    <button class="chip @(department is null ? "on" : "")" @onclick="() => department = null">All</button>
-                    @foreach (var d in departments) { <button class="chip @(department == d ? "on" : "")" @onclick="() => department = d" @key="d">@d</button> }
+                <div class="field">
+                    <label for="ppl-dept">Known for</label>
+                    <select id="ppl-dept" value="@(department ?? "")" @onchange="e => department = e.Value as string is { Length: > 0 } d ? d : null">
+                        <option value="">Anything</option>
+                        @foreach (var d in departments) { <option value="@d">@d</option> }
+                    </select>
                 </div>
             }
-        </div>
+        </FilterBar>
         @{ var shownPeople = people.Where(x => (department is null || x.Department == department)
                && (find.Trim() is not { Length: > 0 } f || x.Name.Contains(f, StringComparison.OrdinalIgnoreCase))).ToList(); }
         @if (shownPeople.Count == 0) { <p class="muted">Nobody matches.</p> }

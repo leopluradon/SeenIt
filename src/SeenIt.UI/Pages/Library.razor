@@ -18,22 +18,21 @@
 <p class="muted small">What you own, separate from what you've watched, in as many formats as you have it (and for shows, which seasons). Add things with <b>Own it</b> on any movie or show; Plex and Jellyfin add what lands on your server (Settings → Media servers), and you can import what's already there (Settings → Import).</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (items is null && error is null) { <Spinner /> }
-else if (items is { Count: 0 }) { <Empty Title="Your library is empty." /> }
+@if (items is null && error is null) { <Spinner Shape="grid" /> }
+else if (items is { Count: 0 }) { <Empty Title="Your library is empty.">Mark what you own (Blu-ray, 4K, digital…) from a title's ⋯ menu with <b>Own it…</b>, or import a collection in <a href="settings?tab=data">Settings → Import</a>.</Empty> }
 else if (items is not null)
 {
-    <div class="searchbar">
-        <Icon Name="search" Size="18" />
-        <input type="search" @bind="find" @bind:event="oninput" placeholder="Filter your library" aria-label="Filter your library" />
-    </div>
-    <div class="chips">
-        <button class="chip @(format is null ? "on" : "")" @onclick="() => format = null">Any format</button>
-        @foreach (var f in items.SelectMany(Formats).Distinct().Order())
-        {
-            <button class="chip @(format == f ? "on" : "")" @onclick="() => format = format == f ? null : f" @key="f">@OwnedFormats.Label(f) · @items.Count(i => Formats(i).Contains(f))</button>
-        }
-        <button class="chip @(unwatched ? "on" : "")" @onclick="() => unwatched = !unwatched">Not watched yet</button>
-    </div>
+    <FilterBar Query="@find" QueryChanged="q => find = q" Placeholder="Find in your library"
+               Active="@((format is null ? 0 : 1) + (unwatched ? 1 : 0))" Chips="Chips" OnClear='() => { find = ""; format = null; unwatched = false; }'>
+        <div class="field">
+            <label for="lib-format">Format</label>
+            <select id="lib-format" value="@(format?.ToString() ?? "")" @onchange="e => format = Enum.TryParse<OwnedFormat>(e.Value as string, out var f) ? f : null">
+                <option value="">Any format</option>
+                @foreach (var f in items.SelectMany(Formats).Distinct().Order()) { <option value="@f">@OwnedFormats.Label(f) · @items.Count(i => Formats(i).Contains(f))</option> }
+            </select>
+        </div>
+        <label class="field inline check-field"><input type="checkbox" checked="@unwatched" @onchange="e => unwatched = e.Value is true" /> Not watched yet</label>
+    </FilterBar>
     var shown = items.Where(i => (type is null || i.Media.Type == type) && (format is null || Formats(i).Contains(format.Value)) && (!unwatched || !i.Watched)
         && TextMatch.Contains(i.Media.Title, find)).ToList();
     <p class="muted small">@shown.Count of @items.Count</p>
@@ -55,6 +54,11 @@ else if (items is not null)
     private MediaType? type;
     private OwnedFormat? format;
     private bool unwatched;
+    private List<FilterChip> Chips =>
+    [
+        .. format is { } f ? [new FilterChip(OwnedFormats.Label(f), () => format = null)] : Array.Empty<FilterChip>(),
+        .. unwatched ? [new FilterChip("Not watched yet", () => unwatched = false)] : Array.Empty<FilterChip>(),
+    ];
     private string find = "";
 
     /// <summary>Every copy; an older server sends only the one format.</summary>

@@ -5,7 +5,7 @@
 <PageTitle>@(s?.Name ?? "Show") · SeenIt</PageTitle>
 
 <ErrorBox Message="@error" OnRetry="Load" NotFound="notFound" />
-@if (s is null && error is null) { <Spinner /> }
+@if (s is null && error is null) { <Spinner Shape="title" /> }
 else if (s is not null)
 {
     <MediaHero Title="@s.Name" Year="s.FirstAirDate?.Year" Tagline="@s.Tagline" Poster="@s.PosterPath" Backdrop="@s.BackdropPath" Score="s.VoteAverage" Votes="s.VoteCount" ScoresFor="(MediaType.Show, Id)" Watched="@(s.Progress?.Completed == true)">

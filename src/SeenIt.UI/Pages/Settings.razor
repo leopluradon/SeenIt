@@ -492,6 +492,9 @@ else { <h1>Settings</h1> }
             </div>
             <button class="btn btn-sm btn-ghost" @onclick='() => SavePrefs(p => p with { Scores = null, HiddenScores = null }, "Scores back to the default")'>Reset to default</button>
         </section>
+        }
+        @if (Shows("spoilers"))
+        {
         <section class="panel" id="spoilers">
             <h2>Spoilers</h2>
             <p class="muted small">Applies everywhere you're signed in. Tap anything hidden to reveal it; episodes you've watched are never hidden.</p>
@@ -1103,13 +1106,17 @@ else { <h1>Settings</h1> }
     [
         new("account", "Account", "users", "Profile, privacy, invites, password, email, username", ["profile", "privacy", "invites", "account", "about", "delete"]),
         new("display", "Display", "eye", "Start page, dates, theme, layout, country, your streaming services", ["start", "dates", "appearance", "layout", "time", "region", "services"]),
-        new("scores", "Ratings & scores", "star", "Your rating scale, other sites' scores, spoilers", ["ratings", "scores", "spoilers"]),
+        new("scores", "Ratings & scores", "star", "Your rating scale, other sites' scores", ["ratings", "scores"]),
+        new("spoilers", "Spoilers", "eye-off", "Episode titles and images, guest stars, episode counts, scores", ["spoilers"]),
         new("tracking", "Tracking", "radio", "Time zone, marking watched, media servers", ["tracking", "marking", "jellyfin", "letterboxd", "letterboxd-sync"]),
         new("alerts", "Alerts & feeds", "bell", "Release alerts, calendar, RSS feeds", ["alerts", "push", "calendar", "feeds", "private-link"]),
         new("data", "Import & export", "download", "Imports, exports, backups, clearing data", ["imports", "export", "clear"]),
     ];
 
     [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
+    /// <summary>A search to start with (More's "Settings matching …").</summary>
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    private bool startedQuery;
     private Group? Current => Groups.FirstOrDefault(g => g.Key == TabParam);
     private string? Tab => Current?.Key;
 
@@ -1124,6 +1131,7 @@ else { <h1>Settings</h1> }
     /// <summary>Old links (settings#alerts) and in-page links: open the page that has the section, then scroll to it.</summary>
     protected override void OnParametersSet()
     {
+        if (!startedQuery) { startedQuery = true; if (QParam is { Length: > 0 } sq) query = sq; }
         var uri = new Uri(Nav.Uri);
         var fragment = uri.Fragment.TrimStart('#');
         if (fragment.Length == 0) { scrollTo = null; return; }

@@ -48,7 +48,14 @@ else if (!string.IsNullOrWhiteSpace(Q))
     var peopleItems = people?.Items.Where(p => !Exact || TextMatch.Same(p.Name, Q)).ToList() ?? [];
     var memberItems = members?.Where(u => !Exact || TextMatch.Same(u.UserName, Q) || TextMatch.Same(u.Name, Q)).ToList() ?? [];
     var nothing = titleItems.Count == 0 && peopleItems.Count == 0 && memberItems.Count == 0 && lookup is not { Titles.Count: > 0 } && lookup is not { People.Count: > 0 };
-    @if (nothing && error is null) { <Empty Title="@(Exact ? $"Nothing called exactly “{Q}”" : $"No results for “{Q}”")" /> }
+    @if (nothing && error is null)
+    {
+        <Empty Title="@(Exact ? $"Nothing called exactly “{Q}”" : $"No results for “{Q}”")">
+            @if (Exact) { <div class="empty-actions"><button class="btn btn-sm" @onclick="() => Go(Q, Type, false)">Search without “exactly”</button></div> }
+            else if (Type is not null) { <div class="empty-actions"><button class="btn btn-sm" @onclick="() => Go(Q, null, false)">Search everything</button></div> }
+            else { <span>Check the spelling, or try fewer words (just the title, without the year).</span> }
+        </Empty>
+    }
 
     @if (lookup is { } lk && (lk.Titles.Count > 0 || lk.People.Count > 0))
     {

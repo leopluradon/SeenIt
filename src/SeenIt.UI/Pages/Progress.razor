@@ -20,14 +20,9 @@
         <button class="chip @(ftab == "done" ? "on" : "")" @onclick='() => ftab = "done"'>Completed</button>
         <button class="chip @(ftab == "all" ? "on" : "")" @onclick='() => ftab = "all"'>All</button>
     </div>
-<div class="filter-row">
-    <div class="searchbar">
-        <Icon Name="search" Size="16" />
-        <input type="search" @bind="find" @bind:event="oninput" placeholder="@(Franchises ? "Find a franchise" : "Find a show")" aria-label="Find" />
-    </div>
-</div>
+<FilterBar Query="@find" QueryChanged="SetFind" Placeholder="Find a franchise" />
     <ErrorBox Message="@ferror" OnRetry="LoadFranchises" />
-    @if (franchises is null && ferror is null) { <Spinner /> }
+    @if (franchises is null && ferror is null) { <Spinner Shape="list" /> }
     else if (franchises is not null)
     {
         var fshown = franchises.Where(f => ftab switch { "progress" => f.Seen < f.Released, "done" => f.Seen >= f.Released, _ => true } && Found(f.Name)).ToList();
@@ -79,21 +74,18 @@ else
         <button class="@(tab == "all" ? "on" : "")" @onclick='() => SetTab("all")'>All</button>
     </div>
     @if (Mine) { <button class="btn btn-sm @(selecting ? "btn-on" : "")" @onclick="() => { selecting = !selecting; selected.Clear(); }" aria-pressed="@selecting"><Icon Name="check" Size="16" /> @(selecting ? "Done" : "Select")</button> }
-    <label class="sort-pick">
-        <span class="muted small">Sort</span>
-        <select value="@Sort" @onchange="SetSort" aria-label="Sort shows">
+</div>
+<FilterBar Query="@find" QueryChanged="SetFind" Placeholder="Find a show" Active="@(Sort == UpNextSort.LastWatched ? 0 : 1)"
+           Chips="SortChips" OnClear="ClearFilters">
+    <div class="field">
+        <label for="pf-sort">Order</label>
+        <select id="pf-sort" value="@Sort" @onchange="SetSort">
             @foreach (var s in Enum.GetValues<UpNextSort>()) { <option value="@s">@UpNextSorts.Label(s)</option> }
         </select>
-    </label>
-</div>
-<div class="filter-row">
-    <div class="searchbar">
-        <Icon Name="search" Size="16" />
-        <input type="search" @bind="find" @bind:event="oninput" placeholder="@(Franchises ? "Find a franchise" : "Find a show")" aria-label="Find" />
     </div>
-</div>
+</FilterBar>
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (items is null && error is null) { <Spinner /> }
+@if (items is null && error is null) { <Spinner Shape="list" /> }
 else if (items is not null)
 {
     var shown = UpNextSorts.Apply(items, Sort).Where(InTab).ToList();
@@ -231,6 +223,7 @@ else if (items is not null)
             await Load();
         }
         // Only when the address changes, so a re-render doesn't undo tabs picked on the page.
+        if (QParam is not null && QParam != find.Trim()) find = QParam;
         if ((TabParam, SortParam) != applied)
         {
             applied = (TabParam, SortParam);
@@ -278,9 +271,20 @@ else if (items is not null)
     private UpNextSort Sort => sortOverride ?? Session.Me?.UpNextSort ?? UpNextSort.LastWatched;
 
     /// <summary>Saved to your account: Home's Up next uses the same order.</summary>
-    private async Task SetSort(ChangeEventArgs e)
+    private List<FilterChip>? SortChips => Sort == UpNextSort.LastWatched ? null
+        : [new FilterChip("By " + UpNextSorts.Label(Sort).ToLowerInvariant(), () => SetSortTo(UpNextSort.LastWatched))];
+
+    private async Task ClearFilters()
     {
-        if (!Enum.TryParse<UpNextSort>(e.Value?.ToString(), out var s) || s == Sort) return;
+        SetFind("");
+        await SetSortTo(UpNextSort.LastWatched);
+    }
+
+    private Task SetSort(ChangeEventArgs e) => Enum.TryParse<UpNextSort>(e.Value?.ToString(), out var s) ? SetSortTo(s) : Task.CompletedTask;
+
+    private async Task SetSortTo(UpNextSort s)
+    {
+        if (s == Sort) return;
         if (!Mine) { sortOverride = s; return; }   // someone else's: just this view, not your setting
         sortOverride = null;
         Session.Update(me => me with { UpNextSort = s });
@@ -349,6 +353,13 @@ else if (items is not null)
 
     /// <summary>The "Find a show / franchise" box: a name containing what's typed.</summary>
     private string find = "";
+    [SupplyParameterFromQuery(Name = "q")] public string? QParam { get; set; }
+    /// <summary>What you typed goes in the address too, so Back from a show finds the same list.</summary>
+    private void SetFind(string q)
+    {
+        find = q;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("q", q.Trim() is { Length: > 0 } t ? t : null), replace: true);
+    }
     private bool Found(string name) => find.Trim() is not { Length: > 0 } f || name.Contains(f, StringComparison.OrdinalIgnoreCase);
 
     private bool InTab(ShowProgressDto p) => Found(p.Name) && tab switch
