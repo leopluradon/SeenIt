@@ -164,7 +164,8 @@ public record UserPrefs(
     ProfileVisibility? WatchingAppVisibility = null,
     bool HideWhereToWatch = false,                   // no "Where to watch" section on movie and show pages
     bool BlurEpisodeCounts = false,                  // spoilers: blur how many episodes someone is in, for shows you're partway through
-    bool BlurAllEpisodeCounts = false)               // … for every show you haven't finished, started or not (takes over from BlurEpisodeCounts)
+    bool BlurAllEpisodeCounts = false,               // … for every show you haven't finished, started or not (takes over from BlurEpisodeCounts)
+    IReadOnlyList<string>? Challenges = null)        // yearly challenges you've taken on (Challenges.All keys), shown on Goals
 {
     public static readonly UserPrefs Default = new();
     public static readonly string[] StartPages = ["home", "progress", "calendar", "watchlist", "discover"];
@@ -250,6 +251,7 @@ public record UserPrefs(
     {
         Alerts = Alerts?.Where(kv => Enum.IsDefined(kv.Key) && Enum.IsDefined(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
         ProfileBadges = ProfileBadges?.Where(b => b is { Length: > 0 and <= 60 }).Distinct().Take(MaxBadges).ToList(),
+        Challenges = Challenges?.Where(k => SeenIt.Contracts.Challenges.All.Any(c => c.Key == k)).Distinct().ToList(),
         StartPage = StartPages.Contains(StartPage) ? StartPage : "home",
         Scores = Scores?.Where(s => ScoreSources.Any(x => x.Key == s)).Distinct().ToList(),
         HomeCounts = HomeCounts?.Where(kv => UiPrefs.HomeSections.Any(h => h.Key == kv.Key)).ToDictionary(kv => kv.Key, kv => Math.Clamp(kv.Value, 4, 40)),
@@ -358,6 +360,7 @@ public static class UiPrefs
         ("review-month", "This month", "clock", ReviewMonthHref),
         ("review-year", "This year", "chart", ReviewYearHref),
         ("goals", "Goals", "target", "goals"),
+        ("completionist", "Completionist", "check", "completionist"),
         ("recommendations", "Recommendations", "send", "recommendations"),
         ("people", "People", "user-plus", "people"),
         ("duplicates", "Duplicates", "copy", "duplicates"),
@@ -370,7 +373,7 @@ public static class UiPrefs
         ("Watching", ["progress", "calendar", "watchlist", "history", "notifications"]),
         ("Find something", ["search", "discover", "for-you", "pick"]),
         ("Your collection", ["lists", "ratings", "favorites", "library"]),
-        ("Stats", ["stats", "review-month", "review-year", "goals"]),
+        ("Stats", ["stats", "review-month", "review-year", "goals", "completionist"]),
         ("Friends", ["friends", "recommendations", "people"]),
         ("Settings", ["settings", "duplicates", "recent"]),
     ];
@@ -466,6 +469,22 @@ public record LookupResult(string Label, IReadOnlyList<MediaSummary> Titles, IRe
 public record Suggestion(string Kind, int Id, string Title, int? Year, string? Image, string? Sub);
 
 public record PersonHit(int Id, string Name, string? ProfilePath, string? Department, IReadOnlyList<string> KnownFor);
+
+/// <summary>
+/// What counts toward finishing someone's filmography (person pages and Completionist): released movies, leaving out
+/// obscure ones (fewer than MinVotes votes on TMDB) unless you've seen them, so a long tail of shorts and bit parts
+/// doesn't make it impossible.
+/// </summary>
+public static class Filmography
+{
+    public const int MinVotes = 20;
+    public static bool Counts(DateOnly? released, int votes, bool seen, DateOnly today) =>
+        released is { } d && d <= today && (votes >= MinVotes || seen);
+}
+
+/// <summary>Someone whose movies you're working through: how many of them in one role you've seen, and a few you haven't.</summary>
+public record CompletionDto(int PersonId, string Name, string? ProfilePath, string Role, int Seen, int Total,
+    IReadOnlyList<MediaSummary> Unseen, DateTimeOffset? CompletedAt);
 
 /// <summary>Two people and what they both have a credit in (acting or behind the camera), newest first.</summary>
 public record PersonPair(PersonHit A, PersonHit B, IReadOnlyList<PairCredit> Credits);
@@ -1578,6 +1597,34 @@ public static class GoalKinds
 }
 
 /// <param name="Expected">Where you'd be by today on an even pace (the target once the year is over).</param>
+/// <summary>A yearly challenge: Target slots to fill from what you watch in the year.</summary>
+public record ChallengeDef(string Key, string Title, string Description, int Target);
+
+public static class Challenges
+{
+    public static readonly ChallengeDef[] All =
+    [
+        new("decades", "Every decade", "A movie from each decade, the 1920s to the 2020s", 11),
+        new("countries", "Around the world", "Movies made in 10 different countries", 10),
+        new("languages", "Lost in translation", "Movies in 5 languages other than English", 5),
+        new("silent", "Before sound", "5 movies from before 1930", 5),
+        new("classics", "Golden age", "10 movies from before 1970", 10),
+        new("epics", "Epics", "3 movies over three hours long", 3),
+        new("genres", "Genre hopper", "Movies from 12 different genres", 12),
+        new("docs", "True stories", "6 documentaries", 6),
+        new("animation", "Drawn in", "5 animated movies", 5),
+        new("fresh", "Fresh off the screen", "12 movies in the year they came out", 12),
+        new("longrunner", "In it for the long haul", "Episodes of a show that ran 10 seasons or more", 1),
+        new("worldtv", "World TV", "Shows from 5 different countries", 5),
+    ];
+}
+
+/// <summary>A challenge's progress: one slot per thing that counts (a decade, a country…), with the title that filled it.</summary>
+public record ChallengeDto(string Key, string Title, string Description, int Target, int Count, IReadOnlyList<ChallengeSlot> Slots);
+/// <param name="Label">What the slot is ("1940s", "Japan"), or the title itself for a plain count.</param>
+/// <param name="Item">What filled it; null for a slot still open (decades show every one).</param>
+public record ChallengeSlot(string Label, MediaSummary? Item);
+
 public record GoalDto(Guid Id, int Year, GoalKind Kind, int Target, double Current, double Expected, bool YearOver);
 public record GoalRequest(int Year, GoalKind Kind, int Target);
 

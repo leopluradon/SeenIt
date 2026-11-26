@@ -1,0 +1,73 @@
+@page "/completionist"
+@attribute [Authorize]
+@* Whose movies you're closest to having seen every one of: directors, actors and writers from what you've watched. *@
+@inject ApiClient Api
+<PageTitle>Completionist · SeenIt</PageTitle>
+
+<div class="page-head"><h1>Completionist</h1></div>
+<p class="muted small">Directors, actors and writers whose movies you watch most, and how many of each one's you've seen. Released movies count, apart from obscure ones (under @Filmography.MinVotes votes on TMDB) you haven't seen; talk shows and appearances as themselves don't. Finishing someone earns the Completionist badge.</p>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (items is null && error is null) { <Spinner /> <p class="muted small center">Looking up filmographies… the first time takes a little while.</p> }
+else if (items is { Count: 0 }) { <Empty Title="Nobody yet.">Watch a few movies by the same director or with the same actors and they'll show up here.</Empty> }
+else if (items is not null)
+{
+    var done = items.Where(i => i.Seen >= i.Total).ToList();
+    var going = items.Where(i => i.Seen < i.Total).ToList();
+    <div class="chips">
+        @foreach (var r in new[] { "", "Directing", "Acting", "Writing" }.Where(r => r == "" || items.Any(i => i.Role == r)))
+        {
+            <button class="chip @(role == r ? "on" : "")" @onclick="() => role = r">@(r == "" ? "Everyone" : r)</button>
+        }
+    </div>
+    @if (going.Any(Shown))
+    {
+        <h2 class="progress-group">Closest to finishing</h2>
+        <div class="completion-list">
+            @foreach (var c in going.Where(Shown)) { @Card(c) }
+        </div>
+    }
+    @if (done.Any(Shown))
+    {
+        <h2 class="progress-group">Done <span class="muted small">@done.Count(Shown)</span></h2>
+        <div class="completion-list">
+            @foreach (var c in done.Where(Shown)) { @Card(c) }
+        </div>
+    }
+}
+@code {
+    private List<CompletionDto>? items;
+    private string? error;
+    private string role = "";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { items = await Api.CompletionistAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private bool Shown(CompletionDto c) => role == "" || c.Role == role;
+
+    private static string Verb(string role) => role switch { "Directing" => "directed", "Writing" => "wrote", _ => "acted in" };
+
+    private RenderFragment Card(CompletionDto c) => __builder =>
+    {
+        <div class="completion-card" @key="(c.PersonId, c.Role)">
+            <a href="@($"person/{c.PersonId}")" class="completion-photo">
+                @if (Img.Profile(c.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> } else { <span class="cast-fallback">@c.Name[..1]</span> }
+            </a>
+            <div class="completion-body">
+                <a href="@($"person/{c.PersonId}")" class="mini-title">@c.Name</a>
+                <span class="muted small">@(c.Seen >= c.Total ? $"✓ Seen all {c.Total} movies they {Verb(c.Role)}" + (c.CompletedAt is { } at ? $" · {at.ToLocalTime().ToString(Fmt.DateLong)}" : "") : $"{c.Seen} of {c.Total} movies they {Verb(c.Role)} · {c.Total - c.Seen} to go")</span>
+                <ProgressBar Value="c.Seen" Max="c.Total" />
+                @if (c.Unseen.Count > 0)
+                {
+                    <span class="small">Next: @for (var i = 0; i < c.Unseen.Count; i++) { var m = c.Unseen[i]; <a href="@Fmt.Href(MediaType.Movie, m.TmdbId)">@m.Title</a>@(m.Year is { } y ? $" ({y})" : "")@(i < c.Unseen.Count - 1 ? ", " : "") }</span>
+                }
+            </div>
+        </div>
+    };
+}

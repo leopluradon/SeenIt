@@ -45,6 +45,20 @@ else if (p is not null)
                 @* Wikidata sends this to their English Wikipedia article (or the Wikidata page when there isn't one). *@
                 @if (p.WikidataId is { Length: > 0 } wd) { <a href="@($"https://www.wikidata.org/wiki/Special:GoToLinkedPage/enwiki/{Uri.EscapeDataString(wd)}")" target="_blank" rel="noopener">Wikipedia</a> }
             </div>
+            @if (Session.Me is not null && Completion().ToList() is { Count: > 0 } progress)
+            {
+                @* How much of their movies you've seen, per role (Filmography.Counts: released, not obscure unless seen). *@
+                <div class="completion">
+                    @foreach (var (role, mine, all) in progress)
+                    {
+                        <div class="completion-row" @key="role">
+                            <span class="small">@(mine >= all ? "✓ Every movie they " + role : $"{mine} of {all} movies they {role}")</span>
+                            <ProgressBar Value="mine" Max="all" />
+                        </div>
+                    }
+                    <a class="small" href="completionist">Completionist <Icon Name="chevron-right" Size="12" /></a>
+                </div>
+            }
             @* What they made with someone else, and which of it you've seen (person/{id}/with/{other}). *@
             <PersonPicker PersonId="p.Id" Placeholder="@($"What has {p.Name} worked on with…")" />
         </div>
@@ -260,6 +274,25 @@ else if (p is not null)
     /// <summary>How many episodes someone is in gives away who sticks around: blurred until tapped for a show you're partway through
     /// when that spoiler setting is on (Settings → Spoilers).</summary>
     // Finished: you've started it (seen them in it, or other episodes) and nothing aired is left (not Watching).
+    /// <summary>Per role, how many of their movies you've seen (roles with at least 3 that count and one of them seen).</summary>
+    private IEnumerable<(string Role, int Seen, int Total)> Completion()
+    {
+        if (p is null) yield break;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        bool Counts(PersonCreditDto c) => c.Type == MediaType.Movie && Filmography.Counts(c.Date, c.VoteCount, c.Watched, today);
+        foreach (var (role, credits) in new (string, IEnumerable<PersonCreditDto>)[]
+                 {
+                     ("directed", p.Crew.Where(c => JobsOf(c).Any(j => GroupOf(j) == Directing))),
+                     ("acted in", p.Cast.Where(c => !c.Appearance)),
+                     ("wrote", p.Crew.Where(c => JobsOf(c).Any(j => GroupOf(j) == Writing))),
+                 })
+        {
+            var movies = credits.Where(Counts).DistinctBy(c => c.TmdbId).ToList();
+            var seen = movies.Count(c => c.Watched);
+            if (movies.Count >= 3 && seen > 0) yield return (role, seen, movies.Count);
+        }
+    }
+
     private static bool HideCount(PersonCreditDto c) => c.Type == MediaType.Show && Fmt.BlurCounts(c.Watching, (c.Watched || c.PartlySeen) && !c.Watching);
 
     /// <summary>Their most popular work on TMDB in what they're known for (a director's films before their cameos), then the rest.</summary>

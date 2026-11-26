@@ -1096,6 +1096,38 @@ namespace SeenIt.Server.Data.Migrations
                     b.ToTable("Notifications");
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.PersonCompletion", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Seen")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "PersonId", "Role");
+
+                    b.ToTable("PersonCompletions");
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.PersonFollow", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -1997,6 +2029,15 @@ namespace SeenIt.Server.Data.Migrations
                         .WithMany()
                         .HasForeignKey("WatchedRecommendationId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PersonCompletion", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.PersonFollow", b =>

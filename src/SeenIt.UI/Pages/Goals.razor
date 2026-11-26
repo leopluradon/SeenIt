@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject Toasts Toasts
+@inject SessionState Session
 <PageTitle>Goals · SeenIt</PageTitle>
 
 <div class="page-head">
@@ -53,10 +54,58 @@ else if (goals is not null)
     </section>
 }
 
+@* Yearly challenges: optional, taken on from the list below and ticked off by themselves from what you watch. *@
+<section class="row-section challenges">
+    <div class="section-head"><h2>Challenges <span class="muted small">@ShownYear</span></h2></div>
+    @if (challenges is null) { <Spinner /> }
+    else
+    {
+        var chosen = Fmt.Prefs.Challenges ?? [];
+        var mine = challenges.Where(c => chosen.Contains(c.Key)).ToList();
+        @if (mine.Count == 0) { <p class="muted small">Take one on below: they fill in from what you watch, no logging needed.</p> }
+        <div class="challenge-grid">
+            @foreach (var c in mine)
+            {
+                var done = c.Count >= c.Target;
+                <div class="panel challenge @(done ? "done" : "")" @key="c.Key">
+                    <div class="inline spread">
+                        <b>@(done ? "✓ " : "")@c.Title</b>
+                        <button class="icon-btn" @onclick="() => SetChallenge(c.Key, false)" aria-label="@($"Drop {c.Title}")" title="Drop this challenge"><Icon Name="x" Size="14" /></button>
+                    </div>
+                    <span class="muted small">@c.Description</span>
+                    <div class="inline"><ProgressBar Value="Math.Min(c.Count, c.Target)" Max="c.Target" /><span class="small nowrap">@Math.Min(c.Count, c.Target)/@c.Target</span></div>
+                    <div class="chips challenge-slots">
+                        @foreach (var s in c.Slots)
+                        {
+                            @if (s.Item is { } m)
+                            {
+                                <a class="chip on" href="@Fmt.Href(m.Type, m.TmdbId)" title="@m.Title">@(s.Label == m.Title ? m.Title : $"{s.Label} · {m.Title}")</a>
+                            }
+                            else { <span class="chip muted">@s.Label</span> }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        var rest = challenges.Where(c => !chosen.Contains(c.Key)).ToList();
+        @if (rest.Count > 0)
+        {
+            <label class="sort-pick">
+                <span class="muted small">Take on a challenge</span>
+                <select value="" @onchange="e => { if (e.Value as string is { Length: > 0 } k) _ = SetChallenge(k, true); }">
+                    <option value="">Pick one…</option>
+                    @foreach (var c in rest) { <option value="@c.Key">@c.Title: @c.Description (@Math.Min(c.Count, c.Target)/@c.Target so far)</option> }
+                </select>
+            </label>
+        }
+    }
+</section>
+
 @code {
     [Parameter] public int? Year { get; set; }
     private int ShownYear => Year ?? DateTime.Today.Year;
     private List<GoalDto>? goals, lastYear;
+    private List<ChallengeDto>? challenges;
     private string? error;
     private GoalDto? editing;
     private GoalKind kind = GoalKind.Movies;
@@ -64,6 +113,14 @@ else if (goals is not null)
     private bool busy;
 
     protected override Task OnParametersSetAsync() => Load();
+
+    private async Task SetChallenge(string key, bool on)
+    {
+        var keys = (Fmt.Prefs.Challenges ?? []).Where(k => k != key).ToList();
+        if (on) keys.Add(key);
+        await PagePrefs.SetChallengesAsync(Session, Api, keys);
+        StateHasChanged();
+    }
 
     private async Task Load()
     {
@@ -76,6 +133,7 @@ else if (goals is not null)
             kind = Enum.GetValues<GoalKind>().FirstOrDefault(k => goals.All(g => g.Kind != k));
         }
         catch (Exception ex) { error = ex.Message; }
+        try { challenges = await Api.ChallengesAsync(ShownYear); } catch { challenges = []; }
     }
 
     private string? Suggestion =>

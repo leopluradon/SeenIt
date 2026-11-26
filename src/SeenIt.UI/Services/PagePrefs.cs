@@ -31,6 +31,10 @@ public static class PagePrefs
     public static Task RemoveViewAsync(SessionState session, ApiClient api, SavedView view) =>
         SaveAsync(session, api, Fmt.Prefs with { SavedViews = (Fmt.Prefs.SavedViews ?? []).Where(v => v != view).ToList() });
 
+    /// <summary>The yearly challenges you've taken on (Goals).</summary>
+    public static Task SetChallengesAsync(SessionState session, ApiClient api, IReadOnlyList<string> keys) =>
+        SaveAsync(session, api, Fmt.Prefs with { Challenges = keys.Count == 0 ? null : keys.ToList() });
+
     private static async Task SaveAsync(SessionState session, ApiClient api, UserPrefs prefs)
     {
         prefs = prefs.Clean();

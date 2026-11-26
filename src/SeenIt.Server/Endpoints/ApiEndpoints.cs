@@ -181,6 +181,9 @@ public static class ApiEndpoints
             t.GetHistoryAsync(p.UserId(), new HistoryQuery(type, q, source, genre, from, to, sort == "oldest", page ?? 1, pageSize ?? 50, tz, group == "show", ShowSortOf(sort), UnitOf(by)), ct));
         g.MapGet("/history/genres", (ClaimsPrincipal p, TrackingService t, CancellationToken ct) => t.GetHistoryGenresAsync(p.UserId(), ct));
 
+        // Completionist: whose movies you're closest to having seen them all.
+        g.MapGet("/completionist", (ClaimsPrincipal p, CompletionService c, UserDataCache cache, CancellationToken ct) =>
+            cache.GetAsync(p.UserId(), "completionist", () => c.GetAsync(p.UserId(), ct), ct));
         // Recent actions: the last 48 hours of what you did, and undoing one.
         g.MapGet("/activity/recent", (ClaimsPrincipal p, UndoService u, CancellationToken ct) => u.RecentAsync(p.UserId(), ct));
         g.MapPost("/activity/{id:long}/undo", async (long id, ClaimsPrincipal p, UndoService u, CancellationToken ct) =>

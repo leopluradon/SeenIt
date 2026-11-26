@@ -318,6 +318,23 @@ public class JellyfinEvent
 /// have it on your watchlist, not once it's paused or dropped). On: alerts (and the calendar) even if you haven't
 /// started it or dropped it. Off: neither. Kept apart from ShowState, whose row goes when a show is back to Watching.
 /// </summary>
+/// <summary>
+/// How far through someone's movies (in one role) you were when Completionist last looked: what the Completionist badge
+/// counts (Seen ≥ Total), so profiles don't need TMDB.
+/// </summary>
+public class PersonCompletion
+{
+    public Guid UserId { get; set; }
+    public int PersonId { get; set; }
+    public string Role { get; set; } = "";
+    public string Name { get; set; } = "";
+    public int Seen { get; set; }
+    public int Total { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>When it was first found complete.</summary>
+    public DateTimeOffset? CompletedAt { get; set; }
+}
+
 public class ShowAlert
 {
     public Guid UserId { get; set; }

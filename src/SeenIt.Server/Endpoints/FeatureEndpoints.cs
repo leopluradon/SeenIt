@@ -12,6 +12,9 @@ public static class FeatureEndpoints
     public static void Map(RouteGroupBuilder api)
     {
         // ----- Goals -----
+        // Yearly challenges (every one, worked out; Goals shows the ones you've taken on, UserPrefs.Challenges).
+        api.MapGet("/challenges", (int? year, string? tz, ClaimsPrincipal p, ChallengeService c, CancellationToken ct) =>
+            c.GetAsync(p.UserId(), year ?? DateTime.UtcNow.Year, tz, ct));
         var goals = api.MapGroup("/goals");
         goals.MapGet("", (int? year, string? tz, ClaimsPrincipal p, GoalService g, CancellationToken ct) =>
             g.GetAsync(p.UserId(), year ?? DateTime.UtcNow.Year, tz, ct));

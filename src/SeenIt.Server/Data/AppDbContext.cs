@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<JellyfinEvent> JellyfinEvents => Set<JellyfinEvent>();
     public DbSet<ShowState> ShowStates => Set<ShowState>();
     public DbSet<ShowAlert> ShowAlerts => Set<ShowAlert>();
+    public DbSet<PersonCompletion> PersonCompletions => Set<PersonCompletion>();
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<FollowRequest> FollowRequests => Set<FollowRequest>();
@@ -136,6 +137,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
         b.Entity<ShowState>(e => e.HasKey(x => new { x.UserId, x.ShowTmdbId }));
         b.Entity<ShowAlert>(e => e.HasKey(x => new { x.UserId, x.ShowTmdbId }));
+        b.Entity<PersonCompletion>(e => e.HasKey(x => new { x.UserId, x.PersonId, x.Role }));
         b.Entity<CheckIn>(e =>
         {
             e.HasKey(x => x.UserId);
@@ -304,7 +306,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         });
 
         // Per-user rows go when the user does.
-        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested), typeof(ListLike), typeof(LibraryItem), typeof(TitleNote), typeof(PersonFollow), typeof(RateSkip), typeof(ShowAlert) })
+        foreach (var t in new[] { typeof(WatchEvent), typeof(WatchlistItem), typeof(Rating), typeof(ImportJob), typeof(JellyfinEvent), typeof(ShowState), typeof(CheckIn), typeof(ShowRewatch), typeof(Favorite), typeof(Goal), typeof(LetterboxdSync), typeof(ShowWatchOrder), typeof(Notification), typeof(NotInterested), typeof(ListLike), typeof(LibraryItem), typeof(TitleNote), typeof(PersonFollow), typeof(RateSkip), typeof(ShowAlert), typeof(PersonCompletion) })
             b.Entity(t).HasOne(typeof(AppUser)).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
     }
 }

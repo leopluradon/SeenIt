@@ -2002,3 +2002,19 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .recent-action.undone .recent-body { opacity: .55; }
 .recent-body { flex: 1; min-width: 0; }
 .recent-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-2); flex-shrink: 0; }
+
+/* Person page: how much of their movies you've seen, per role. */
+.completion { display: grid; gap: 6px; max-width: 420px; margin: 10px 0; }
+.completion-row { display: grid; gap: 3px; }
+
+/* Completionist */
+.completion-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); margin-bottom: 18px; }
+.completion-card { display: flex; gap: 12px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.completion-photo img, .completion-photo .cast-fallback { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; }
+.completion-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+/* Goals: yearly challenges */
+.challenge-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); margin-bottom: 12px; }
+.challenge { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.challenge.done { border-color: var(--ok); }
+.challenge-slots .chip { font-size: .75rem; padding: 3px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

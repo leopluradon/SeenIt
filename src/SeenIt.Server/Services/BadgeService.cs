@@ -29,6 +29,8 @@ public class BadgeService(AppDbContext db, IMemoryCache cache)
         new("recommender", "send", "Titles recommended to friends", [10, 25, 50, 100, 150, 250, 400, 600, 800, 1000], n => $"{n:N0} recommended"),
         new("tastemaker", "users", "Recommendations friends went on to watch", [5, 15, 30, 60, 100, 150, 250, 400, 600, 1000], n => $"{n:N0} recs watched"),
         new("curator", "list", "Public lists with at least 5 titles", [3, 6, 10, 15, 25, 40, 60, 90, 130, 200], n => $"{n:N0} lists"),
+        new("completionist", "check", "Directors, actors or writers whose every movie you've seen (as of your last look at Completionist)",
+            [1, 3, 5, 10, 15, 25, 40, 60, 90, 130], n => $"{n:N0} filmograph{(n == 1 ? "y" : "ies")} done"),
     ];
     private static readonly string[] GenreTitles = ["fan", "buff", "devotee", "enthusiast", "connoisseur", "expert", "master", "grandmaster", "legend", "icon"];
     private static readonly long[] GenreGoals = [25, 50, 100, 175, 250, 400, 600, 800, 1000, 1500];
@@ -88,6 +90,7 @@ public class BadgeService(AppDbContext db, IMemoryCache cache)
             ["ratings"] = await db.Ratings.LongCountAsync(r => r.UserId == userId, ct),
             ["recommender"] = await db.Recommendations.LongCountAsync(r => r.FromId == userId, ct),
             ["curator"] = await db.Lists.Where(l => l.UserId == userId && l.IsPublic && db.ListItems.Count(i => i.ListId == l.Id) >= 5).LongCountAsync(ct),
+            ["completionist"] = await db.PersonCompletions.LongCountAsync(c => c.UserId == userId && c.Total > 0 && c.Seen >= c.Total, ct),
         };
         // Days in a row, in their own time zone.
         counts["streak"] = ReviewService.LongestStreak(dated.Select(p => Day(p.WatchedAt)).Distinct().Order().ToList()).Days;
