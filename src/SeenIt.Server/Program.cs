@@ -137,6 +137,7 @@ builder.Services.AddScoped<GoalService>();
 builder.Services.AddScoped<UndoService>();
 builder.Services.AddScoped<CompletionService>();
 builder.Services.AddScoped<ChallengeService>();
+builder.Services.AddScoped<PollService>();
 builder.Services.AddHostedService<CompletionWorker>();
 builder.Services.AddScoped<UserDataCache>();
 builder.Services.AddScoped<WatchOrderService>();

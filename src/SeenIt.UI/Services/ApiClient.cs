@@ -424,6 +424,13 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>The order you follow for the show, or null for TMDB's seasons.</summary>
     public Task<WatchOrderDto?> WatchOrderAsync(int showId) => SendAsync<WatchOrderDto>(HttpMethod.Get, $"api/shows/{showId}/order");
     public Task SetWatchOrderAsync(int showId, string? orderId) => SendAsync(HttpMethod.Put, $"api/shows/{showId}/order", new SetWatchOrderRequest(orderId));
+    public Task<List<PollSummary>> PollsAsync() => GetAsync<List<PollSummary>>("api/polls");
+    public Task<PollDto> PollAsync(Guid id) => GetAsync<PollDto>($"api/polls/{id}");
+    public async Task<Guid> CreatePollAsync(PollRequest r) => (await SendAsync<CreatedId>(HttpMethod.Post, "api/polls", r))!.Id;
+    public Task VotePollAsync(Guid id, IReadOnlyList<Guid> options) => SendAsync(HttpMethod.Put, $"api/polls/{id}/votes", new PollVoteRequest(options));
+    public Task ClosePollAsync(Guid id) => SendAsync(HttpMethod.Post, $"api/polls/{id}/close", null);
+    public Task DeletePollAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/polls/{id}");
+    private sealed record CreatedId(Guid Id);
     public Task<List<CompletionDto>> CompletionistAsync() => GetAsync<List<CompletionDto>>("api/completionist");
     public Task<List<ChallengeDto>> ChallengesAsync(int year) => GetAsync<List<ChallengeDto>>($"api/challenges?year={year}&tz={Tz}");
     public Task<List<RecentAction>> RecentActionsAsync() => GetAsync<List<RecentAction>>("api/activity/recent");

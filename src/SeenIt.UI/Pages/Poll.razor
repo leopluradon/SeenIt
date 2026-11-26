@@ -1,0 +1,139 @@
+@page "/polls/{Id:guid}"
+@attribute [Authorize]
+@* One movie night poll: tick everything you'd watch; the owner closes it and the most votes wins. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject Confirm Confirm
+@inject NavigationManager Nav
+<PageTitle>@(poll?.Title ?? "Movie night") · SeenIt</PageTitle>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (poll is null && error is null) { <Spinner /> }
+else if (poll is not null)
+{
+    <div class="page-head">
+        <h1>@(poll.Title ?? "Movie night")</h1>
+        @if (poll.IsOwner)
+        {
+            <div class="inline">
+                @if (!poll.Closed) { <button class="btn" disabled="@busy" @onclick="Close"><Icon Name="check" Size="16" /> Close and pick</button> }
+                <button class="btn btn-ghost" disabled="@busy" @onclick="Delete" aria-label="Delete poll"><Icon Name="trash" Size="16" /></button>
+            </div>
+        }
+    </div>
+    <p class="muted small">
+        @(poll.IsOwner ? "Your poll" : $"From {poll.Owner.Name}") · @poll.Voted.Count of @poll.Members.Count voted
+        @if (!poll.Closed && poll.ClosesAt is { } c) { <text> · closes @c.ToLocalTime().ToString(Fmt.DateShort) @c.ToLocalTime().ToString(Fmt.TimeOnly)</text> }
+        @if (poll.Closed) { <text> · closed</text> }
+    </p>
+
+    @if (poll.Closed && Winner is { } w)
+    {
+        <section class="card poll-winner">
+            @if (w.Media.PosterPath is not null) { <img src="@Img.Poster(w.Media.PosterPath, "w185")" alt="" /> }
+            <div class="stack-tight">
+                <span class="muted small">It's</span>
+                <h2><a href="@Fmt.Href(w.Media.Type, w.Media.TmdbId)">@w.Media.Title</a></h2>
+                <span class="muted small">@Votes(w.Voters.Count)</span>
+                <div class="inline">
+                    @if (w.Media.Type == MediaType.Movie) { <button class="btn btn-primary" disabled="@busy" @onclick="() => CheckIn(w.Media)"><Icon Name="play" Size="16" /> Check in</button> }
+                    else { <a class="btn btn-primary" href="@Fmt.Href(w.Media.Type, w.Media.TmdbId)"><Icon Name="play" Size="16" /> Open</a> }
+                </div>
+            </div>
+        </section>
+    }
+    else if (poll.Closed) { <p class="muted">Nobody voted, so there's no winner.</p> }
+    else { <p class="small">Tick every one you'd be happy to watch.</p> }
+
+    <div class="mini-list poll-options">
+        @foreach (var o in poll.Options.OrderByDescending(o => poll.Closed ? o.Voters.Count : 0))
+        {
+            var mine = picked.Contains(o.Id);
+            <div class="mini-item poll-option @(mine ? "on" : "") @(o.Id == poll.WinnerId ? "winner" : "")" @key="o.Id">
+                @if (o.Media.PosterPath is not null) { <img src="@Img.Poster(o.Media.PosterPath, "w92")" alt="" loading="lazy" /> }
+                <div class="recent-body">
+                    <div class="mini-title"><a href="@Fmt.Href(o.Media.Type, o.Media.TmdbId)">@o.Media.Title</a> <span class="muted small">@o.Media.Year · @(o.Media.Type == MediaType.Movie ? "Movie" : "TV")@(o.Media.Watched == true ? " · seen" : "")</span></div>
+                    <div class="poll-bar" title="@Votes(o.Voters.Count)"><span style="width:@(Pct(o))%"></span></div>
+                    <div class="muted small">@Votes(o.Voters.Count)@(o.Voters.Count > 0 ? ": " + string.Join(", ", o.Voters.Select(NameOf)) : "")</div>
+                </div>
+                @if (!poll.Closed)
+                {
+                    <button class="btn btn-sm @(mine ? "btn-primary" : "")" disabled="@busy" aria-pressed="@mine" @onclick="() => Toggle(o.Id)">
+                        <Icon Name="@(mine ? "check" : "plus")" Size="14" /> @(mine ? "I'd watch" : "I'd watch this")
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="section-head"><h2>Who's in</h2></div>
+    <div class="inline poll-members">
+        @foreach (var m in poll.Members)
+        {
+            <a class="pill" href="@($"u/{m.UserName}")" @key="m.UserName">
+                <Avatar Name="@m.Name" Url="@m.Avatar" Class="avatar-xs" /> @m.Name
+                @if (poll.Voted.Contains(m.UserName, StringComparer.OrdinalIgnoreCase)) { <Icon Name="check" Size="12" /> }
+            </a>
+        }
+    </div>
+}
+<ReloadOnMenu OnChange="Load" />
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private PollDto? poll;
+    private string? error;
+    private bool busy;
+    private HashSet<Guid> picked = [];
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try
+        {
+            poll = await Api.PollAsync(Id);
+            picked = poll.Options.Where(o => o.Mine).Select(o => o.Id).ToHashSet();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private PollOptionDto? Winner => poll?.Options.FirstOrDefault(o => o.Id == poll.WinnerId);
+    private int Pct(PollOptionDto o) => poll is { Members.Count: > 0 } p ? o.Voters.Count * 100 / p.Members.Count : 0;
+    private static string Votes(int n) => n == 1 ? "1 vote" : $"{n} votes";
+    private string NameOf(string user) => poll?.Members.FirstOrDefault(m => string.Equals(m.UserName, user, StringComparison.OrdinalIgnoreCase))?.Name ?? user;
+
+    private async Task Toggle(Guid option)
+    {
+        if (!picked.Remove(option)) picked.Add(option);
+        busy = true;
+        try { await Api.VotePollAsync(Id, picked.ToList()); await Load(); }
+        catch (Exception ex) { Toasts.Error(ex); await Load(); }
+        finally { busy = false; }
+    }
+
+    private async Task Close()
+    {
+        if (!await Confirm.AskAsync("Close the poll?", "Voting stops and the title with most votes wins. Everyone in it gets an alert.", "Close")) return;
+        busy = true;
+        try { await Api.ClosePollAsync(Id); await Load(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Delete()
+    {
+        if (!await Confirm.AskAsync("Delete this poll?", "It goes for everyone in it, votes and all.", "Delete", danger: true)) return;
+        busy = true;
+        try { await Api.DeletePollAsync(Id); Nav.NavigateTo("movie-night"); }
+        catch (Exception ex) { Toasts.Error(ex); busy = false; }
+    }
+
+    private async Task CheckIn(MediaSummary m)
+    {
+        busy = true;
+        try { await Api.StartCheckInAsync(new CheckInRequest(MediaType.Movie, m.TmdbId)); Toasts.Show($"Checked in to {m.Title}"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

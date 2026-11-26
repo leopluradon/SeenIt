@@ -94,7 +94,7 @@ public enum ScoreSpoilers { Off, Unwatched, Always }
 public enum WatchlistOnWatch { Remove, Ask, Keep }
 /// <summary>The kinds of alert, each with its own delivery setting (UserPrefs.Alerts). Stored on each alert as a number:
 /// add new kinds at the end.</summary>
-public enum AlertKind { Episode, Movie, Person, Recommendation, RecWatched, WatchedWith }
+public enum AlertKind { Episode, Movie, Person, Recommendation, RecWatched, WatchedWith, Poll }
 /// <summary>How an alert reaches you: in the alerts list (and bell), as a push notification, both, or not at all.</summary>
 public enum AlertDelivery { Both, Alert, Push, Off }
 /// <summary>What an open page does when something of yours changes elsewhere (another tab or device, Jellyfin...).</summary>
@@ -245,6 +245,7 @@ public record UserPrefs(
         (AlertKind.Recommendation, "Recommendations to you", "When a friend sends you something to watch."),
         (AlertKind.RecWatched, "Someone watched your recommendation", "\"Sam watched Heat\", or started a show you sent them."),
         (AlertKind.WatchedWith, "Logged with you", "When a friend marks something watched together with you, which adds it to your history too."),
+        (AlertKind.Poll, "Movie nights", "When a friend asks you to vote on what to watch, and when their poll picks a winner."),
     ];
 
     public UserPrefs Clean() => this with
@@ -363,6 +364,7 @@ public static class UiPrefs
         ("completionist", "Completionist", "check", "completionist"),
         ("recommendations", "Recommendations", "send", "recommendations"),
         ("people", "People", "user-plus", "people"),
+        ("movie-night", "Movie night", "users", "movie-night"),
         ("duplicates", "Duplicates", "copy", "duplicates"),
         ("recent", "Recent actions", "repeat", "recent"),
         ("settings", "Settings", "settings", "settings"),
@@ -374,7 +376,7 @@ public static class UiPrefs
         ("Find something", ["search", "discover", "for-you", "pick"]),
         ("Your collection", ["lists", "ratings", "favorites", "library"]),
         ("Stats", ["stats", "review-month", "review-year", "goals", "completionist"]),
-        ("Friends", ["friends", "recommendations", "people"]),
+        ("Friends", ["friends", "recommendations", "people", "movie-night"]),
         ("Settings", ["settings", "duplicates", "recent"]),
     ];
     /// <summary>Stand-ins for the current month's and year's review pages; the UI fills in the dates (UiLayout.Href).</summary>
@@ -812,6 +814,21 @@ public record RecommendationDto(Guid Id, MediaSummary Media, UserCard Who, strin
     bool? Watched, DateTimeOffset? WatchedAt, double? Rating, bool OnWatchlist,
     int? Weight = null);   // how strongly it's recommended, 1–10, if the sender said
 public record RecommendationsDto(IReadOnlyList<RecommendationDto> Received, IReadOnlyList<RecommendationDto> Sent);
+// ---------- Movie night polls ----------
+
+/// <summary>Start a poll: 2–8 titles, friends to ask (people who follow you), and optionally a name and when it closes.</summary>
+public record PollRequest(string? Title, IReadOnlyList<MediaRef> Options, IReadOnlyList<string> Invite, DateTimeOffset? ClosesAt = null);
+/// <summary>Your votes: every option you'd watch (any number; none takes your votes back).</summary>
+public record PollVoteRequest(IReadOnlyList<Guid> OptionIds);
+/// <param name="Voters">Usernames of who'd watch it.</param>
+public record PollOptionDto(Guid Id, MediaSummary Media, IReadOnlyList<string> Voters, bool Mine);
+/// <param name="WinnerId">Once closed: the option with the most votes (ties go to the earlier option).</param>
+public record PollDto(Guid Id, string? Title, UserCard Owner, bool IsOwner, DateTimeOffset CreatedAt, DateTimeOffset? ClosesAt, bool Closed,
+    IReadOnlyList<PollOptionDto> Options, IReadOnlyList<UserCard> Members, IReadOnlyList<string> Voted, Guid? WinnerId);
+/// <summary>A poll in your list: yours or one you're asked to.</summary>
+public record PollSummary(Guid Id, string? Title, string OwnerName, bool IsOwner, DateTimeOffset CreatedAt, DateTimeOffset? ClosesAt, bool Closed,
+    IReadOnlyList<string?> Posters, int Members, int Voted, bool YouVoted, string? Winner);
+
 /// <summary>Someone you've already recommended a title to, and when (the latest time).</summary>
 public record RecommendedBefore(string UserName, DateTimeOffset At);
 
@@ -1006,6 +1023,7 @@ public record ForYouDto(IReadOnlyList<ForYouItem> Top, IReadOnlyList<ForYouGroup
 public record NotificationDto(Guid Id, MediaType Type, int TmdbId, int? SeasonNumber, int? EpisodeNumber, string Title, string? Detail,
     string? PosterPath, DateOnly Day, bool Read, bool Recommendation = false,   // Recommendation: Title is "Sam recommends Heat", Detail their note
     bool RecommendationWatched = false,    // "Sam watched Heat": someone watched a title you recommended them
+    Guid? PollId = null,                   // a movie night poll you're in (opens polls/{id})
     EpisodeMark Mark = EpisodeMark.None);
 public record NotificationsDto(IReadOnlyList<NotificationDto> Items, int Unread);
 /// <summary>Push notifications: whether the server can send them, and the key a browser subscribes with.</summary>

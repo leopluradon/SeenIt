@@ -2018,3 +2018,21 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .challenge { display: flex; flex-direction: column; gap: 6px; margin: 0; }
 .challenge.done { border-color: var(--ok); }
 .challenge-slots .chip { font-size: .75rem; padding: 3px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Movie night polls */
+.poll-picked { display: flex; flex-wrap: wrap; gap: 6px; }
+.poll-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 2px; }
+.poll-chip img { width: 20px; height: 30px; object-fit: cover; border-radius: 3px; }
+.poll-chip .icon-btn { padding: 2px; }
+.poll-row .poll-posters { display: flex; flex-shrink: 0; }
+.poll-row .poll-posters img { width: 34px; height: 51px; margin-right: -14px; border: 2px solid var(--surface); }
+.poll-row .poll-posters img:last-child { margin-right: 0; }
+.poll-option.on { border-color: var(--accent); }
+.poll-option.winner { border-color: var(--ok); background: var(--ok-soft); }
+.poll-bar { height: 6px; border-radius: 3px; background: var(--surface-3); margin: 6px 0 4px; overflow: hidden; }
+.poll-bar > span { display: block; height: 100%; background: var(--accent); }
+.poll-winner { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
+.poll-winner img { width: 92px; border-radius: var(--radius-sm); }
+.poll-winner h2 { margin: 0; }
+.poll-members { flex-wrap: wrap; gap: 6px; }
+.poll-members .pill { display: inline-flex; align-items: center; gap: 5px; }

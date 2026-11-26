@@ -1,0 +1,177 @@
+@page "/movie-night"
+@attribute [Authorize]
+@* Movie night polls you started or were asked to vote on, and a form to start one. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+<PageTitle>Movie night · SeenIt</PageTitle>
+
+<div class="page-head">
+    <h1>Movie night</h1>
+    @if (!creating) { <button class="btn btn-primary" @onclick="StartCreate"><Icon Name="plus" Size="16" /> New poll</button> }
+</div>
+<p class="muted small">Pick a few titles and ask friends who follow you to vote. Everyone ticks every one they'd watch; the most votes wins when you close the poll (or when its time runs out).</p>
+
+@if (creating)
+{
+    <section class="card stack poll-create">
+        <label class="stack-tight">
+            <span class="small">Name <span class="muted">(optional)</span></span>
+            <input type="text" maxlength="100" placeholder="Friday movie night" @bind="title" />
+        </label>
+
+        <div class="stack-tight">
+            <span class="small">Titles <span class="muted">(@options.Count of @Max, at least 2)</span></span>
+            @if (options.Count > 0)
+            {
+                <div class="poll-picked">
+                    @foreach (var o in options)
+                    {
+                        <span class="pill poll-chip" @key="(o.Type, o.TmdbId)">
+                            @if (o.PosterPath is not null) { <img src="@Img.Poster(o.PosterPath, "w92")" alt="" /> }
+                            @o.Title
+                            <button type="button" class="icon-btn" aria-label="@($"Remove {o.Title}")" @onclick="() => options.Remove(o)"><Icon Name="x" Size="14" /></button>
+                        </span>
+                    }
+                </div>
+            }
+            @if (options.Count < Max)
+            {
+                <TitlePicker OnPick="Pick" />
+                @if (watchlist is { Count: > 0 })
+                {
+                    <span class="muted tiny">From your watchlist</span>
+                    <div class="pw-picks">
+                        @foreach (var w in watchlist.Where(w => !options.Any(o => o.Type == w.Media.Type && o.TmdbId == w.Media.TmdbId)).Take(12))
+                        {
+                            <button type="button" class="suggest-item" @onclick="() => Add(w.Media)" @key="(w.Media.Type, w.Media.TmdbId)">
+                                <span class="suggest-img">@if (w.Media.PosterPath is not null) { <img src="@Img.Poster(w.Media.PosterPath, "w92")" alt="" /> }</span>
+                                <span class="suggest-text"><span class="suggest-title">@w.Media.Title</span><span class="suggest-sub">@w.Media.Year · @(w.Media.Type == MediaType.Movie ? "Movie" : "TV")</span></span>
+                            </button>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="stack-tight">
+            <span class="small">Who to ask</span>
+            @if (people is null) { <Spinner /> }
+            else if (people.Count == 0) { <p class="muted small">You can only ask people who follow you, and nobody does yet. Find friends on the <a href="friends?tab=find">Friends</a> page.</p> }
+            else
+            {
+                <div class="recipient-list" role="group" aria-label="Who to ask">
+                    @foreach (var u in people)
+                    {
+                        <label class="recipient @(invite.Contains(u.UserName) ? "on" : "")" @key="u.UserName">
+                            <input type="checkbox" checked="@invite.Contains(u.UserName)" @onchange="e => { if (e.Value is true) invite.Add(u.UserName); else invite.Remove(u.UserName); }" />
+                            <Avatar Name="@u.Name" Url="@u.Avatar" Class="avatar-sm" />
+                            <span class="recipient-name">@u.Name</span>
+                        </label>
+                    }
+                </div>
+            }
+        </div>
+
+        <label class="pref-inline">
+            <span class="small">Closes</span>
+            <select class="fit-select" @bind="closeIn" aria-label="When voting closes">
+                <option value="0">When I close it</option>
+                <option value="1">In 1 hour</option>
+                <option value="3">In 3 hours</option>
+                <option value="6">In 6 hours</option>
+                <option value="24">In a day</option>
+                <option value="72">In 3 days</option>
+            </select>
+        </label>
+
+        <div class="inline">
+            <button class="btn btn-primary" disabled="@(busy || options.Count < 2 || invite.Count == 0)" @onclick="Create"><Icon Name="send" Size="16" /> Start poll</button>
+            <button class="btn btn-ghost" @onclick="() => creating = false">Cancel</button>
+        </div>
+    </section>
+}
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (polls is null && error is null) { <Spinner /> }
+else if (polls is { Count: 0 } && !creating) { <Empty Title="No polls yet.">Start one and your friends get an alert to vote.</Empty> }
+else if (polls is not null)
+{
+    @foreach (var group in new[] { ("Open", polls.Where(p => !p.Closed).ToList()), ("Closed", polls.Where(p => p.Closed).ToList()) })
+    {
+        if (group.Item2.Count == 0) continue;
+        <div class="section-head"><h2>@group.Item1</h2></div>
+        <div class="mini-list">
+            @foreach (var p in group.Item2)
+            {
+                <a class="mini-item poll-row" href="@($"polls/{p.Id}")" @key="p.Id">
+                    <span class="poll-posters">
+                        @foreach (var poster in p.Posters.Take(4)) { <img src="@(poster is null ? "" : Img.Poster(poster, "w92"))" alt="" loading="lazy" /> }
+                    </span>
+                    <span class="recent-body">
+                        <span class="mini-title">@(p.Title ?? "Movie night")</span>
+                        <span class="muted small">
+                            @(p.IsOwner ? "Yours" : $"From {p.OwnerName}") · @p.Voted of @p.Members voted
+                            @if (p.Winner is { } w) { <text> · <b>@w</b> won</text> }
+                            else if (!p.Closed && p.ClosesAt is { } c) { <text> · closes @c.ToLocalTime().ToString(Fmt.DateShort) @c.ToLocalTime().ToString(Fmt.TimeOnly)</text> }
+                        </span>
+                    </span>
+                    @if (!p.Closed && !p.YouVoted) { <span class="pill pill-sm pill-bad">Vote</span> }
+                </a>
+            }
+        </div>
+    }
+}
+<ReloadOnMenu OnChange="Load" />
+@code {
+    private const int Max = 8;
+    private List<PollSummary>? polls;
+    private string? error, title;
+    private bool creating, busy;
+    private readonly List<MediaSummary> options = [];
+    private readonly HashSet<string> invite = new(StringComparer.OrdinalIgnoreCase);
+    private List<UserCard>? people;
+    private List<WatchlistEntry>? watchlist;
+    private int closeIn;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try { polls = await Api.PollsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task StartCreate()
+    {
+        creating = true;
+        try
+        {
+            people ??= await Api.RecommendRecipientsAsync();
+            watchlist ??= await Api.WatchlistAsync();
+        }
+        catch (Exception ex) { Toasts.Error(ex); people ??= []; }
+    }
+
+    private void Pick(Suggestion s) => Add(new MediaSummary(s.Kind == "movie" ? MediaType.Movie : MediaType.Show, s.Id, s.Title, s.Year, s.Image, null, null, null));
+
+    private void Add(MediaSummary m)
+    {
+        if (options.Count >= Max || options.Any(o => o.Type == m.Type && o.TmdbId == m.TmdbId)) return;
+        options.Add(m);
+    }
+
+    private async Task Create()
+    {
+        busy = true;
+        try
+        {
+            var id = await Api.CreatePollAsync(new PollRequest(title, options.Select(o => new MediaRef(o.Type, o.TmdbId)).ToList(), invite.ToList(),
+                closeIn > 0 ? DateTimeOffset.UtcNow.AddHours(closeIn) : null));
+            Nav.NavigateTo($"polls/{id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

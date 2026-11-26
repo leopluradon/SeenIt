@@ -12,6 +12,25 @@ public static class FeatureEndpoints
     public static void Map(RouteGroupBuilder api)
     {
         // ----- Goals -----
+        // Movie night polls: yours and ones you're asked to.
+        var polls = api.MapGroup("/polls");
+        polls.MapGet("", (ClaimsPrincipal p, PollService s, CancellationToken ct) => s.ListAsync(p.UserId(), ct));
+        polls.MapPost("", async (PollRequest req, ClaimsPrincipal p, PollService s, CancellationToken ct) => Results.Ok(new { id = await s.CreateAsync(p.UserId(), req, ct) }));
+        polls.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal p, PollService s, CancellationToken ct) =>
+            await s.GetAsync(p.UserId(), id, ct) is { } poll ? Results.Ok(poll) : Results.NotFound());
+        polls.MapPut("/{id:guid}/votes", async (Guid id, PollVoteRequest req, ClaimsPrincipal p, PollService s, CancellationToken ct) =>
+        {
+            await s.VoteAsync(p.UserId(), id, req, ct);
+            return Results.NoContent();
+        });
+        polls.MapPost("/{id:guid}/close", async (Guid id, ClaimsPrincipal p, PollService s, CancellationToken ct) =>
+        {
+            await s.CloseAsync(p.UserId(), id, ct);
+            return Results.NoContent();
+        });
+        polls.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal p, PollService s, CancellationToken ct) =>
+            await s.DeleteAsync(p.UserId(), id, ct) ? Results.NoContent() : Results.NotFound());
+
         // Yearly challenges (every one, worked out; Goals shows the ones you've taken on, UserPrefs.Challenges).
         api.MapGet("/challenges", (int? year, string? tz, ClaimsPrincipal p, ChallengeService c, CancellationToken ct) =>
             c.GetAsync(p.UserId(), year ?? DateTime.UtcNow.Year, tz, ct));

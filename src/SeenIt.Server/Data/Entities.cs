@@ -335,6 +335,44 @@ public class PersonCompletion
     public DateTimeOffset? CompletedAt { get; set; }
 }
 
+/// <summary>A movie night poll: friends vote on what to watch from a few titles; the owner closes it (or it closes at ClosesAt).</summary>
+public class Poll
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid OwnerId { get; set; }
+    public string? Title { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ClosesAt { get; set; }
+    public DateTimeOffset? ClosedAt { get; set; }
+    public List<PollOption> Options { get; set; } = [];
+    public List<PollMember> Members { get; set; } = [];
+    public List<PollVote> Votes { get; set; } = [];
+}
+
+public class PollOption
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PollId { get; set; }
+    public MediaType Type { get; set; }
+    public int TmdbId { get; set; }
+    public int Position { get; set; }
+}
+
+/// <summary>Someone in a poll (the owner too): they can see it and vote.</summary>
+public class PollMember
+{
+    public Guid PollId { get; set; }
+    public Guid UserId { get; set; }
+}
+
+/// <summary>One "I'd watch this" for an option.</summary>
+public class PollVote
+{
+    public Guid PollId { get; set; }
+    public Guid UserId { get; set; }
+    public Guid OptionId { get; set; }
+}
+
 public class ShowAlert
 {
     public Guid UserId { get; set; }
@@ -577,6 +615,8 @@ public class Notification
     public Guid? RecommendationId { get; set; }
     /// <summary>Set when someone watched (or started) a title you recommended them: this is that recommendation.</summary>
     public Guid? WatchedRecommendationId { get; set; }
+    /// <summary>Set for a movie night poll you're asked to (or that picked its winner): opens polls/{id}.</summary>
+    public Guid? PollId { get; set; }
     /// <summary>Which kind of alert this is; each kind has its own delivery setting (alert list, push, both, off).</summary>
     public AlertKind Kind { get; set; }
     /// <summary>When it went out as a push notification (or was skipped: no devices, too old). Null = not yet.</summary>

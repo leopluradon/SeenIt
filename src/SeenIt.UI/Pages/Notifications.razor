@@ -44,11 +44,11 @@ else if (data is not null)
             <div class="mini-list">
                 @foreach (var n in day)
                 {
-                    <a class="mini-item @(n.Read ? "" : "unread")" href="@(n.Recommendation ? "recommendations" : n.Type == MediaType.Episode ? Fmt.EpisodeHref(n.TmdbId, n.SeasonNumber, n.EpisodeNumber) : Fmt.Href(n.Type, n.TmdbId))" @key="n.Id">
+                    <a class="mini-item @(n.Read ? "" : "unread")" href="@(n.PollId is { } pid ? $"polls/{pid}" : n.Recommendation ? "recommendations" : n.Type == MediaType.Episode ? Fmt.EpisodeHref(n.TmdbId, n.SeasonNumber, n.EpisodeNumber) : Fmt.Href(n.Type, n.TmdbId))" @key="n.Id">
                         <img src="@Img.Poster(n.PosterPath, "w92")" alt="" loading="lazy" />
                         <div>
                             <div class="mini-title"><TitleLink Href="@(n.Type == MediaType.Episode && !n.Recommendation ? $"show/{n.TmdbId}" : null)">@n.Title</TitleLink></div>
-                            <div class="muted small">@if (n.RecommendationWatched) { <span>@n.Detail</span> } else if (n.Recommendation) { <span>@(n.Detail ?? "Recommended to you")</span> } else if (n.Type == MediaType.Episode) { <Spoiler>@n.Detail</Spoiler> <EpisodeBadge Mark="n.Mark" /> } else { <span>@(n.Detail is { Length: > 0 } d && d != "Out today" ? d : "Movie release")</span> }</div>
+                            <div class="muted small">@if (n.PollId is not null) { <span>@n.Detail</span> } else if (n.RecommendationWatched) { <span>@n.Detail</span> } else if (n.Recommendation) { <span>@(n.Detail ?? "Recommended to you")</span> } else if (n.Type == MediaType.Episode) { <Spoiler>@n.Detail</Spoiler> <EpisodeBadge Mark="n.Mark" /> } else { <span>@(n.Detail is { Length: > 0 } d && d != "Out today" ? d : "Movie release")</span> }</div>
                         </div>
                         @if (!n.Read) { <span class="pill pill-sm">New</span> }
                     </a>
@@ -63,11 +63,11 @@ else if (data is not null)
 
     // Filters: a kind of alert, only new ones, a title.
     private static readonly (string Key, string Label)[] Kinds =
-        [("", "All"), ("episode", "Episodes"), ("movie", "Movies"), ("show", "New series"), ("rec", "Recommended to me"), ("recwatched", "Friends watched my picks")];
+        [("", "All"), ("episode", "Episodes"), ("movie", "Movies"), ("show", "New series"), ("rec", "Recommended to me"), ("recwatched", "Friends watched my picks"), ("poll", "Movie nights")];
     private string kind = "";
     private bool newOnly;
     private string find = "";
-    private static string KindOf(NotificationDto n) => n.RecommendationWatched ? "recwatched" : n.Recommendation ? "rec"
+    private static string KindOf(NotificationDto n) => n.PollId is not null ? "poll" : n.RecommendationWatched ? "recwatched" : n.Recommendation ? "rec"
         : n.Type switch { MediaType.Episode => "episode", MediaType.Movie => "movie", _ => "show" };
     private bool Matches(NotificationDto n) => (kind == "" || KindOf(n) == kind) && (!newOnly || !n.Read)
         && (find.Trim() is not { Length: > 0 } f || n.Title.Contains(f, StringComparison.OrdinalIgnoreCase) || n.Detail?.Contains(f, StringComparison.OrdinalIgnoreCase) == true);

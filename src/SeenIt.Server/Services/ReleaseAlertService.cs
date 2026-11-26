@@ -31,7 +31,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
         var marker = await EpisodeMarker.LoadAsync(db, rows.Where(n => n.Type == MediaType.Episode).Select(n => n.TmdbId), ct);
         return new NotificationsDto(rows.Select(n => new NotificationDto(n.Id, n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber,
             n.Title, n.Detail, n.PosterPath, n.Day, n.ReadAt is not null, n.RecommendationId is not null, n.WatchedRecommendationId is not null,
-            n.Type == MediaType.Episode ? marker.Of(n.TmdbId, n.SeasonNumber, n.EpisodeNumber) : EpisodeMark.None)).ToList(), unread);
+            n.PollId, n.Type == MediaType.Episode ? marker.Of(n.TmdbId, n.SeasonNumber, n.EpisodeNumber) : EpisodeMark.None)).ToList(), unread);
     }
 
     public async Task<int> UnreadAsync(Guid userId, CancellationToken ct)
@@ -57,7 +57,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
             .Except(await db.ShowAlerts.AsNoTracking().Where(a => a.UserId == user.Id && a.On).Select(a => a.ShowTmdbId).ToListAsync(ct)).ToHashSet();
         var releases = (await tracking.GetCalendarAsync(user.Id, today, 1, ct))
             .Where(e => !e.Watched && !(e.Type == MediaType.Episode && quiet.Contains(e.TmdbId))).ToList();
-        var existing = (await db.Notifications.Where(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.Day >= today.AddDays(-1))
+        var existing = (await db.Notifications.Where(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.PollId == null && n.Day >= today.AddDays(-1))
                 .Select(n => new { n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber }).ToListAsync(ct))
             .Select(n => (n.Type, n.TmdbId, n.SeasonNumber, n.EpisodeNumber)).ToHashSet();
         var added = 0;
@@ -65,7 +65,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
         {
             if (!existing.Add((r.Type, r.TmdbId, r.SeasonNumber, r.EpisodeNumber))) continue;
             // An episode that already had an alert on an earlier day (date moved) keeps that one.
-            if (await db.Notifications.AnyAsync(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.Type == r.Type && n.TmdbId == r.TmdbId
+            if (await db.Notifications.AnyAsync(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.PollId == null && n.Type == r.Type && n.TmdbId == r.TmdbId
                                                      && n.SeasonNumber == r.SeasonNumber && n.EpisodeNumber == r.EpisodeNumber, ct)) continue;
             db.Notifications.Add(new Notification
             {
@@ -88,7 +88,7 @@ public class ReleaseAlertService(AppDbContext db, TrackingService tracking, Emai
             // Kinds turned off in Settings → Alerts stay out of the email too.
             var prefs = UserPrefsStore.Read(user.PrefsJson);
             var emailed = Enum.GetValues<AlertKind>().Where(k => prefs.DeliveryFor(k) != AlertDelivery.Off).ToList();
-            var todays = await db.Notifications.AsNoTracking().Where(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.Day == today && emailed.Contains(n.Kind))
+            var todays = await db.Notifications.AsNoTracking().Where(n => n.UserId == user.Id && n.RecommendationId == null && n.WatchedRecommendationId == null && n.PollId == null && n.Day == today && emailed.Contains(n.Kind))
                 .OrderBy(n => n.Title).ThenBy(n => n.SeasonNumber).ThenBy(n => n.EpisodeNumber).ToListAsync(ct);
             if (todays.Count > 0)
             {

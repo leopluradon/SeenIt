@@ -20,6 +20,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ShowState> ShowStates => Set<ShowState>();
     public DbSet<ShowAlert> ShowAlerts => Set<ShowAlert>();
     public DbSet<PersonCompletion> PersonCompletions => Set<PersonCompletion>();
+    public DbSet<Poll> Polls => Set<Poll>();
+    public DbSet<PollOption> PollOptions => Set<PollOption>();
+    public DbSet<PollMember> PollMembers => Set<PollMember>();
+    public DbSet<PollVote> PollVotes => Set<PollVote>();
     public DbSet<CheckIn> CheckIns => Set<CheckIn>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<FollowRequest> FollowRequests => Set<FollowRequest>();
@@ -138,6 +142,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         b.Entity<ShowState>(e => e.HasKey(x => new { x.UserId, x.ShowTmdbId }));
         b.Entity<ShowAlert>(e => e.HasKey(x => new { x.UserId, x.ShowTmdbId }));
         b.Entity<PersonCompletion>(e => e.HasKey(x => new { x.UserId, x.PersonId, x.Role }));
+        // A poll's options, members and votes go with it; it goes with its owner, and a member's place and votes with them.
+        b.Entity<Poll>(e =>
+        {
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Options).WithOne().HasForeignKey(x => x.PollId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Members).WithOne().HasForeignKey(x => x.PollId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Votes).WithOne().HasForeignKey(x => x.PollId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<PollMember>(e => { e.HasKey(x => new { x.PollId, x.UserId }); e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade); });
+        b.Entity<PollVote>(e => { e.HasKey(x => new { x.PollId, x.UserId, x.OptionId }); e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade); });
         b.Entity<CheckIn>(e =>
         {
             e.HasKey(x => x.UserId);

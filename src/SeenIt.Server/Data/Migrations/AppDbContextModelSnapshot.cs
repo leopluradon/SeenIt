@@ -1045,6 +1045,9 @@ namespace SeenIt.Server.Data.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("PollId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PosterPath")
                         .HasColumnType("text");
 
@@ -1191,6 +1194,92 @@ namespace SeenIt.Server.Data.Migrations
                     b.HasIndex("Date");
 
                     b.ToTable("PersonUpcoming");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Poll", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ClosesAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("Polls");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PollMember", b =>
+                {
+                    b.Property<Guid>("PollId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("PollId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PollMembers");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PollOption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PollId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PollId");
+
+                    b.ToTable("PollOptions");
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PollVote", b =>
+                {
+                    b.Property<Guid>("PollId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OptionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("PollId", "UserId", "OptionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PollVotes");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.PushSubscription", b =>
@@ -2049,6 +2138,54 @@ namespace SeenIt.Server.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SeenIt.Server.Data.Poll", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PollMember", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.Poll", null)
+                        .WithMany("Members")
+                        .HasForeignKey("PollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PollOption", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.Poll", null)
+                        .WithMany("Options")
+                        .HasForeignKey("PollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.PollVote", b =>
+                {
+                    b.HasOne("SeenIt.Server.Data.Poll", null)
+                        .WithMany("Votes")
+                        .HasForeignKey("PollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SeenIt.Server.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SeenIt.Server.Data.PushSubscription", b =>
                 {
                     b.HasOne("SeenIt.Server.Data.AppUser", null)
@@ -2240,6 +2377,15 @@ namespace SeenIt.Server.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SeenIt.Server.Data.Poll", b =>
+                {
+                    b.Navigation("Members");
+
+                    b.Navigation("Options");
+
+                    b.Navigation("Votes");
                 });
 
             modelBuilder.Entity("SeenIt.Server.Data.UserList", b =>
