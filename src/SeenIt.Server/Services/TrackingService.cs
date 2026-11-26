@@ -900,6 +900,15 @@ public class TrackingService(AppDbContext db, CatalogService catalog)
         return progress.Select(marker.Mark).ToList();
     }
 
+    /// <summary>Where you are in one show (what Progress and Up next show for it), or null if you haven't started it.</summary>
+    public async Task<ShowProgressDto?> ProgressForAsync(Guid userId, int showId, CancellationToken ct)
+    {
+        var progress = (await new ProgressCalculator(db).ForUserAsync(userId, [showId], ct)).FirstOrDefault();
+        if (progress is null) return null;
+        var marker = await EpisodeMarker.LoadAsync(db, progress.NextEpisode is null ? [] : [showId], ct);
+        return marker.Mark(progress);
+    }
+
     /// <summary>How long away from a show before its page offers a "previously on" recap.</summary>
     public static readonly TimeSpan RecapAfter = TimeSpan.FromDays(30);
 

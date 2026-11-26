@@ -27,7 +27,7 @@ else if (m is not null)
         <Actions>
             @if (m.User is { } u)
             {
-                <SplitButton Class="@(u.Plays > 0 ? "btn-watched" : "btn-primary")" Disabled="busy" OnClick="() => { askWhen = false; watchOpen = true; }">
+                <SplitButton Class="@(u.Plays > 0 ? "btn-watched" : "btn-primary")" Disabled="busy" OnClick="QuickWatch">
                     <ChildContent><Icon Name="check" Size="18" /> @* Seen already: tapping it logs another viewing, so say so. *@@(u.Plays switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })</ChildContent>
                     <Menu>
                         <button type="button" role="menuitem" @onclick="() => { askWhen = true; watchOpen = true; }"><Icon Name="calendar" Size="16" /> Watched on another day…</button>
@@ -154,9 +154,9 @@ else if (m is not null)
             </div>
         </section>
     }
-    <CastRow Cast="m.Cast" />
-    <Trailers Videos="m.Videos" />
-    <PosterRow Title="You might also like" Items="m.Recommendations" EmptyText="No recommendations yet." />
+    <Frozen Key="Id"><CastRow Cast="m.Cast" /></Frozen>
+    <Frozen Key="Id"><Trailers Videos="m.Videos" /></Frozen>
+    <Frozen Key="Id"><PosterRow Title="You might also like" Items="m.Recommendations" EmptyText="No recommendations yet." /></Frozen>
 
     @if (m.User is { } user)
     {
@@ -208,6 +208,15 @@ else if (m is not null)
         }
         catch (Exception ex) { Toasts.Error(ex); }
         busy = false;
+    }
+
+    /// <summary>The main button: straight to recording when your setting doesn't ask, else the dialog.</summary>
+    private Task QuickWatch()
+    {
+        askWhen = false;
+        if (m is not null && Fmt.InstantWatch(m.ReleaseDate) is { } c) return Watch(c);
+        watchOpen = true;
+        return Task.CompletedTask;
     }
 
     private async Task Watch(WatchChoice c)

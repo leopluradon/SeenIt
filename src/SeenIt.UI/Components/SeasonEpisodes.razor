@@ -69,7 +69,15 @@
     [Parameter] public EventCallback OnChanged { get; set; }
     private EpisodeDto? pending;
     private bool busy, pendingThrough;
-    private void Open(EpisodeDto e, bool through, bool ask = false) { pending = e; pendingThrough = through; askWhen = ask; }
+    /// <summary>Marking one episode goes straight to recording when your setting doesn't ask; "up to here" and the
+    /// calendar button always open the dialog.</summary>
+    private Task Open(EpisodeDto e, bool through, bool ask = false)
+    {
+        pending = e;
+        pendingThrough = through;
+        askWhen = ask;
+        return !through && !ask && Fmt.InstantWatch(e.AirDate) is { } c ? Watch(c) : Task.CompletedTask;
+    }
     private bool askWhen;
     private int selected = -1;
     private SeasonDetail? season;

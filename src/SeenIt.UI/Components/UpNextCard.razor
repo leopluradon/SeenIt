@@ -18,7 +18,7 @@
         @if (Progress.NextEpisode is { } next)
         {
             <WhenButton Small="true" Disabled="busy" What="@Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)" OnClick="() => { askWhen = true; dialogOpen = true; }" />
-            <button class="btn btn-sm btn-check" disabled="@busy" @onclick="() => { askWhen = false; dialogOpen = true; }" aria-label="Mark @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber) watched">
+            <button class="btn btn-sm btn-check" disabled="@busy" @onclick="() => Quick(next)" aria-label="Mark @Fmt.Ep(next.SeasonNumber, next.EpisodeNumber) watched">
                 <Icon Name="check" Size="16" />
             </button>
         }
@@ -32,7 +32,18 @@
     private bool askWhen;
     [Parameter, EditorRequired] public ShowProgressDto Progress { get; set; } = default!;
     [Parameter] public EventCallback OnWatched { get; set; }
+    /// <summary>Where you are in the show now, straight from marking it: the page can update this card before reloading the rest.</summary>
+    [Parameter] public EventCallback<ShowProgressDto> OnProgress { get; set; }
     private bool busy, dialogOpen;
+
+    /// <summary>The check: straight to recording when your setting doesn't ask, else the dialog.</summary>
+    private Task Quick(EpisodeRef next)
+    {
+        askWhen = false;
+        if (Fmt.InstantWatch(next.AirDate) is { } c) return Watch(next, c);
+        dialogOpen = true;
+        return Task.CompletedTask;
+    }
 
     private async Task Watch(EpisodeRef ep, WatchChoice c)
     {
@@ -44,6 +55,7 @@
             var onWatched = OnWatched;   // this card may be gone (the next show moved up) by the time Undo is tapped
             Toasts.Show($"Watched {Progress.Name} {Fmt.Ep(ep.SeasonNumber, ep.EpisodeNumber)}{Fmt.When(c)}",
                 undo: undo is null ? null : async () => { await undo(); await onWatched.InvokeAsync(); });
+            if (r?.Progress is { } fresh) await OnProgress.InvokeAsync(fresh);
             await OnWatched.InvokeAsync();
         }
         catch (Exception ex) { Toasts.Error(ex); }

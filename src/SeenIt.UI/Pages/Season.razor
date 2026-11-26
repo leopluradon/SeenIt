@@ -193,7 +193,15 @@ else if (season is not null)
     };
     private EpisodeDto? pending;
     private bool pendingThrough, seasonThrough;
-    private void Open(EpisodeDto e, bool through, bool ask = false) { pending = e; pendingThrough = through; askWhen = ask; }
+    /// <summary>Marking one episode goes straight to recording when your setting doesn't ask; "up to here" and the
+    /// calendar button always open the dialog.</summary>
+    private Task Open(EpisodeDto e, bool through, bool ask = false)
+    {
+        pending = e;
+        pendingThrough = through;
+        askWhen = ask;
+        return !through && !ask && Fmt.InstantWatch(e.AirDate) is { } c ? Watch(c) : Task.CompletedTask;
+    }
     private WatchOrdersDto? orders;
     private WatchOrderDto? order;
     private int ordersFor;

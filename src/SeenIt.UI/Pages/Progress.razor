@@ -50,7 +50,7 @@
                         @if (Mine && f.Next is { } next)
                         {
                             <WhenButton Small="true" What="@next.Title" OnClick="() => { askWhen = true; pendingMovie = next; }" />
-                            <button class="btn btn-sm btn-check" @onclick="() => { askWhen = false; pendingMovie = next; }" aria-label="@($"Mark {next.Title} watched")"><Icon Name="check" Size="16" /></button>
+                            <button class="btn btn-sm btn-check" @onclick="() => { askWhen = false; pendingMovie = next; return Fmt.InstantWatch(null) is { } c ? WatchMovie(c) : Task.CompletedTask; }" aria-label="@($"Mark {next.Title} watched")"><Icon Name="check" Size="16" /></button>
                         }
                     </div>
                 </div>
@@ -146,7 +146,7 @@ else if (items is not null)
                         @if (p.NextEpisode is { } next && p.Status != ShowTrackStatus.Dropped)
                         {
                             <WhenButton Small="true" What="@($"{p.Name} {Fmt.Ep(next.SeasonNumber, next.EpisodeNumber)}")" OnClick="() => { askWhen = true; pending = (p, next); }" />
-                            <button class="btn btn-sm btn-check" @onclick="() => { askWhen = false; pending = (p, next); }" aria-label="Mark next episode watched"><Icon Name="check" Size="16" /></button>
+                            <button class="btn btn-sm btn-check" @onclick="() => { askWhen = false; pending = (p, next); return Fmt.InstantWatch(next.AirDate) is { } c ? Watch(c) : Task.CompletedTask; }" aria-label="Mark next episode watched"><Icon Name="check" Size="16" /></button>
                         }
                         <button class="icon-btn" @onclick="() => menuFor = menuFor == p.ShowTmdbId ? null : p.ShowTmdbId" aria-label="More options for @p.Name" aria-expanded="@(menuFor == p.ShowTmdbId)"><Icon Name="more" Size="18" /></button>
                     </div>
@@ -428,6 +428,12 @@ else if (items is not null)
             var r = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, p.ShowTmdbId, c, n.SeasonNumber, n.EpisodeNumber));
             var undo = Api.UndoFor(r, MediaType.Show, p.ShowTmdbId);
             Toasts.Show($"Watched {p.Name} {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}", undo: undo is null ? null : async () => { await undo(); await InvokeAsync(async () => { await Load(); StateHasChanged(); }); });
+            // Its row updates straight away; the rest reloads behind it.
+            if (r?.Progress is { } fresh && items is not null)
+            {
+                items = items.Select(x => x.ShowTmdbId == fresh.ShowTmdbId ? fresh : x).ToList();
+                StateHasChanged();
+            }
             await Load();
         }
         catch (Exception ex) { Toasts.Error(ex); }

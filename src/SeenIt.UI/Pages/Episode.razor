@@ -45,7 +45,7 @@ else if (e is not null)
             <div class="actions">
                 @if (e.Plays is { } plays)
                 {
-                    <SplitButton Class="@(plays.Count > 0 ? "btn-watched" : "btn-primary")" Disabled="@(busy || !aired)" OnClick="() => { through = false; askWhen = false; watchOpen = true; }">
+                    <SplitButton Class="@(plays.Count > 0 ? "btn-watched" : "btn-primary")" Disabled="@(busy || !aired)" OnClick="QuickWatch">
                         <ChildContent><Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })</ChildContent>
                         <Menu>
                             <button type="button" role="menuitem" @onclick="() => { through = false; askWhen = true; watchOpen = true; }"><Icon Name="calendar" Size="16" /> Watched on another day…</button>
@@ -248,6 +248,16 @@ else if (e is not null)
         }
         catch (Exception ex) { Toasts.Error(ex); }
         busy = false;
+    }
+
+    /// <summary>The main button: straight to recording when your setting doesn't ask, else the dialog.</summary>
+    private Task QuickWatch()
+    {
+        through = false;
+        askWhen = false;
+        if (e is not null && Fmt.InstantWatch(e.AirDate) is { } c) return Watch(c);
+        watchOpen = true;
+        return Task.CompletedTask;
     }
 
     private async Task Watch(WatchChoice c)

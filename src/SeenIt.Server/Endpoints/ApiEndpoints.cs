@@ -147,6 +147,7 @@ public static class ApiEndpoints
             var with = req.Type is MediaType.Movie or MediaType.Episode && req.With is { Count: > 0 }
                 ? await WatchedWith.LogAsync(db, t, p.UserId(), req, before.Since, ct) : ((List<Guid> Ids, List<string> Names)?)null;
             var result = await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct);
+            if (req.Type is MediaType.Episode or MediaType.Show) result = result with { Progress = await t.ProgressForAsync(p.UserId(), req.TmdbId, ct) };
             await a.LogAsync(p, ActivityKind.Watch, req.Type, req.TmdbId, req.SeasonNumber, req.EpisodeNumber,
                 string.Join(", ", new[] { what, ActivityService.When(req.When, req.WatchedAt), with is { Names.Count: > 0 } ? "with " + string.Join(", ", with.Value.Names) : null }.OfType<string>()) is { Length: > 0 } d ? d : null,
                 result.PlayIds.Count > 0 ? new UndoData(PlayIds: result.PlayIds) : null);
@@ -162,6 +163,7 @@ public static class ApiEndpoints
             var before = await WatchedResults.BeforeAsync(db, p.UserId(), MediaType.Show, req.ShowTmdbId, ct);
             var added = await t.BulkWatchAsync(p.UserId(), req, ct);
             var result = await WatchedResults.AfterAsync(db, p.UserId(), before, added, ct);
+            result = result with { Progress = await t.ProgressForAsync(p.UserId(), req.ShowTmdbId, ct) };
             await a.LogAsync(p, ActivityKind.BulkWatch, MediaType.Show, req.ShowTmdbId, req.SeasonNumber, null,
                 $"{added} episode{(added == 1 ? "" : "s")}" + (ActivityService.When(req.When, req.WatchedAt) is { } w ? ", " + w : ""),
                 result.PlayIds.Count > 0 ? new UndoData(PlayIds: result.PlayIds) : null);

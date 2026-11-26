@@ -1,0 +1,20 @@
+@* Draws its content again only when Key changes. For the parts of a page that marking something watched can't
+   change (cast, trailers, recommendations): the page redraws twice for every tap (buttons greyed out while it's
+   saving, then the fresh data), and on a phone redrawing those parts every time made marking feel slow. *@
+@ChildContent
+@code {
+    [Parameter, EditorRequired] public object? Key { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private object? drawn;
+    private bool drawnOnce;
+
+    protected override void OnInitialized() { drawnOnce = true; drawn = Key; }
+
+    protected override bool ShouldRender()
+    {
+        if (drawnOnce && Equals(Key, drawn)) return false;
+        drawnOnce = true;
+        drawn = Key;
+        return true;
+    }
+}

@@ -20,7 +20,7 @@ else if (s is not null)
                 @* The everyday action leads: the next episode (S01E01 for a show you haven't started); the rest is under ▾. *@
                 @if (NextUp is { } up)
                 {
-                    <SplitButton Class="btn-primary" Disabled="busy" OnClick="() => { askWhen = false; pendingEpisode = up; }">
+                    <SplitButton Class="btn-primary" Disabled="busy" OnClick="() => QuickEpisode(up)">
                         <ChildContent><Icon Name="check" Size="18" /> Mark @(up.SeasonNumber == 0 ? $"Special {up.EpisodeNumber}" : Fmt.Ep(up.SeasonNumber, up.EpisodeNumber)) watched</ChildContent>
                         <Menu>
                             <button type="button" role="menuitem" @onclick="() => { askWhen = true; pendingEpisode = up; }"><Icon Name="calendar" Size="16" /> Mark @Fmt.Ep(up.SeasonNumber, up.EpisodeNumber) watched on another day…</button>
@@ -226,9 +226,10 @@ else if (s is not null)
         </div>
     </section>
 
-    <CastRow Cast="s.Cast" BlurEpisodeCounts="@Fmt.BlurCounts(s.Progress is { Watched: > 0 } pr && pr.Watched < pr.Aired, s.Progress is { Aired: > 0 } fin && fin.Watched >= fin.Aired)" />
-    <Trailers Videos="s.Videos" />
-    <PosterRow Title="You might also like" Items="s.Recommendations" EmptyText="No recommendations yet." />
+    var blurCounts = Fmt.BlurCounts(s.Progress is { Watched: > 0 } pr && pr.Watched < pr.Aired, s.Progress is { Aired: > 0 } fin && fin.Watched >= fin.Aired);
+    <Frozen Key="@((Id, blurCounts))"><CastRow Cast="s.Cast" BlurEpisodeCounts="blurCounts" /></Frozen>
+    <Frozen Key="Id"><Trailers Videos="s.Videos" /></Frozen>
+    <Frozen Key="Id"><PosterRow Title="You might also like" Items="s.Recommendations" EmptyText="No recommendations yet." /></Frozen>
 
     @if (s.User is { } user)
     {
@@ -427,11 +428,25 @@ else if (s is not null)
             : Act(async () => undo = Api.UndoFor(await Api.BulkWatchAsync(new BulkWatchRequest(Id, season.SeasonNumber, c.At, When: c.When)), MediaType.Show, Id), $"Marked {season.Name} watched{Fmt.When(c)}");
     }
 
+    /// <summary>The main button: straight to recording when your setting doesn't ask, else the dialog.</summary>
+    private Task QuickEpisode(EpisodeRef up)
+    {
+        askWhen = false;
+        pendingEpisode = up;
+        return Fmt.InstantWatch(up.AirDate) is { } c ? WatchEpisode(c) : Task.CompletedTask;
+    }
+
     private Task WatchEpisode(WatchChoice c)
     {
         if (pendingEpisode is not { } n) return Task.CompletedTask;
         pendingEpisode = null;
-        return Act(async () => undo = Api.UndoFor(await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, n.SeasonNumber, n.EpisodeNumber)), MediaType.Show, Id), $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
+        return Act(async () =>
+        {
+            var r = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, n.SeasonNumber, n.EpisodeNumber));
+            undo = Api.UndoFor(r, MediaType.Show, Id);
+            // The button moves on to the next episode straight away; the rest of the page reloads behind it.
+            if (r?.Progress is { } fresh && s is not null) { s = s with { Progress = fresh }; busy = false; StateHasChanged(); }
+        }, $"Watched {Fmt.Ep(n.SeasonNumber, n.EpisodeNumber)}{Fmt.When(c)}");
     }
 
     private Task ToggleNotInterested() => s!.User!.NotInterested

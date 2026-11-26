@@ -131,7 +131,7 @@
                             else
                             {
                                 <div class="card-scroller">
-                                    @foreach (var p in dash.UpNext) { <UpNextCard Progress="p" OnWatched="LoadDashboard" @key="p.ShowTmdbId" /> }
+                                    @foreach (var p in dash.UpNext) { <UpNextCard Progress="p" OnProgress="UpdateUpNext" OnWatched="LoadDashboard" @key="p.ShowTmdbId" /> }
                                 </div>
                             }
                         </section>
@@ -145,9 +145,9 @@
                                 <h2>To rate</h2>
                                 <div class="section-tools"><a href="settings#ratings" class="section-more" title="Choose what shows up here">Choose <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("torate")' /></div>
                             </div>
-                            <div class="card-scroller torate-scroller">
+                            <Frozen Key="toRate"><div class="card-scroller torate-scroller">
                                 @foreach (var r in toRate) { <ToRateCard Item="r" OnRate="RateSuggestion" OnSkip="SkipSuggestion" OnRecommend="i => recommending = i" @key="(r.Kind, r.TmdbId, r.SeasonNumber, r.EpisodeNumber)" /> }
-                            </div>
+                            </div></Frozen>
                         </section>
                     }
                     break;
@@ -162,7 +162,7 @@
                                     <h2>Coming up</h2>
                                     <div class="section-tools"><a href="calendar" class="section-more">Calendar <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("upcoming")' /></div>
                                 </div>
-                                <div class="mini-list">
+                                <Frozen Key="dash.Upcoming"><div class="mini-list">
                                     @foreach (var c in dash.Upcoming)
                                     {
                                         <a class="mini-item" href="@Fmt.CalHref(c)" data-ctx="@Menu.Cal(c)">
@@ -174,7 +174,7 @@
                                             <span class="mini-date">@Fmt.Day(c.Date)@if (c.AirsAt is { } cat) { <span> · @cat.ToLocalTime().ToString(Fmt.TimeOnly)</span> }@if (Soon(c) is { } cd) { <span class="countdown"> · @cd</span> }</span>
                                         </a>
                                     }
-                                </div>
+                                </div></Frozen>
                             </section>
                         }
                     }
@@ -187,6 +187,7 @@
                                 <h2>Friends' activity</h2>
                                 <div class="section-tools"><a href="friends?tab=feed" class="section-more">Friends <Icon Name="chevron-right" Size="16" /></a><HideButton OnHide='() => Hide("friends")' /></div>
                             </div>
+                            <Frozen Key="f">
                             @foreach (var w in f.WatchingNow) { <NowWatchingCard Item="w.Item" Who="@w.User.Name" WhoUser="@w.User.UserName" @key="w.User.UserName" /> }
                             <div class="poster-scroller">
                                 @foreach (var a in f.Activity)
@@ -198,6 +199,7 @@
                                                 ShowScore="false" @key="h.Id" />
                                 }
                             </div>
+                            </Frozen>
                         </section>
                     }
                     break;
@@ -216,7 +218,7 @@
                             }
                             else
                             {
-                                <div class="poster-scroller">
+                                <Frozen Key="dash.RecentHistory"><div class="poster-scroller">
                                     @foreach (var h in dash.RecentHistory)
                                     {
                                         <PosterCard Media="@(new MediaSummary(h.Type == MediaType.Movie ? MediaType.Movie : MediaType.Show, h.TmdbId, h.Title, null, h.PosterPath, null, null, null))"
@@ -224,7 +226,7 @@
                                                     Sub="@(h.Type == MediaType.Episode ? $"{Fmt.Ep(h.SeasonNumber, h.EpisodeNumber)} · {Fmt.Relative(h.WatchedAt)}" : Fmt.Relative(h.WatchedAt))" SubTitle="@Fmt.Exact(h.WatchedAt)"
                                                     ShowScore="false" @key="h.Id" />
                                     }
-                                </div>
+                                </div></Frozen>
                             }
                         </section>
                     }
@@ -232,20 +234,20 @@
                 case "foryou":
                     @if (forYou is not { Count: 0 })
                     {
-                        <PosterRow Title="Picked for you" Items="forYou" MoreHref="for-you" OnHide='EventCallback.Factory.Create(this, () => Hide("foryou"))' OnDismiss="Dismiss" />
+                        <Frozen Key="@Fmt.RowKey(forYou)"><PosterRow Title="Picked for you" Items="forYou" MoreHref="for-you" OnHide='EventCallback.Factory.Create(this, () => Hide("foryou"))' OnDismiss="Dismiss" /></Frozen>
                     }
                     break;
                 case "trending-movies":
-                    <PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-movies"))' OnDismiss="Dismiss" />
+                    <Frozen Key="@Fmt.RowKey(trendingMovies)"><PosterRow Title="Trending movies" Items="trendingMovies" MoreHref="discover?type=Movie" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-movies"))' OnDismiss="Dismiss" /></Frozen>
                     break;
                 case "trending-shows":
-                    <PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-shows"))' OnDismiss="Dismiss" />
+                    <Frozen Key="@Fmt.RowKey(trendingShows)"><PosterRow Title="Trending shows" Items="trendingShows" MoreHref="discover?type=Show" OnHide='EventCallback.Factory.Create(this, () => Hide("trending-shows"))' OnDismiss="Dismiss" /></Frozen>
                     break;
                 case "w-month" or "w-heatmap" or "w-genres" or "w-records" when Session.Me is not null:
                     @* The same widgets as on profiles. *@
                     <section class="pw home-pw" @key="key">
                         <div class="home-pw-hide"><HideButton OnHide="() => Hide(key)" /></div>
-                        <ProfileWidgetView Widget="HomeWidgets[key]" P="Me" D="widgetData" />
+                        <Frozen Key="@((key, widgetData))"><ProfileWidgetView Widget="HomeWidgets[key]" P="Me" D="widgetData" /></Frozen>
                     </section>
                     break;
             }
@@ -396,6 +398,13 @@
         await LoadNowCast();
         try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); } catch { }
         await widgets;
+    }
+
+    /// <summary>A card's show, fresh from marking an episode: shown straight away, before the dashboard reloads.</summary>
+    private void UpdateUpNext(ShowProgressDto fresh)
+    {
+        if (dash is null) return;
+        dash = dash with { UpNext = dash.UpNext.Select(x => x.ShowTmdbId == fresh.ShowTmdbId ? fresh : x).ToList() };
     }
 
     private async Task LoadDashboard()

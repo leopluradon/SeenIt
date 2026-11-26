@@ -89,6 +89,22 @@ public static class Fmt
     public static string CalKind(CalendarEntry c) => (c.Type == MediaType.Show ? "New series" : "Movie release") + (c.Via is { } v ? " · " + v : "");
 
     /// <summary>Request body for a single play from a dialog choice.</summary>
+    /// <summary>
+    /// What a quick "mark watched" records straight away (Settings → Tracking: right now, or the release date once it's
+    /// out), or null when that setting asks. Buttons record it themselves rather than opening the dialog first: opening
+    /// it redraws the whole page before anything is sent.
+    /// </summary>
+    /// <summary>What a row of posters shows, for Frozen: the titles, and which you've seen or have on your watchlist.</summary>
+    public static string RowKey(IEnumerable<MediaSummary>? items) => items is null ? "" :
+        string.Join(',', items.Select(m => $"{(int)m.Type}{m.TmdbId}{(m.Watched == true ? "w" : "")}{(m.OnWatchlist == true ? "l" : "")}"));
+
+    public static WatchChoice? InstantWatch(DateOnly? released) => Prefs.WatchDefault switch
+    {
+        WatchDefault.Ask => null,
+        WatchDefault.ReleaseDate when released is { } rd && rd <= DateOnly.FromDateTime(DateTime.Today) => new WatchChoice(WatchTime.ReleaseDate),
+        _ => new WatchChoice(WatchTime.Now),
+    };
+
     public static WatchRequest Watch(MediaType type, int id, WatchChoice c, int? season = null, int? episode = null) =>
         new(type, id, season, episode, c.At, c.When, c.With);
 

@@ -716,7 +716,8 @@ public record BulkWatchRequest(int ShowTmdbId, int? SeasonNumber = null, DateTim
 /// <summary>What marking something watched did, so it can be undone: the plays it added, and whether that took the title off the watchlist.</summary>
 public record WatchedResult(int Added, IReadOnlyList<Guid> PlayIds, bool LeftWatchlist = false,
     IReadOnlyList<Guid>? WithPlayIds = null,     // plays logged for friends who watched with you (undone through api/watch/with/undo)
-    IReadOnlyList<string>? WithNames = null);    // their names, for the toast; anyone left out isn't a friend
+    IReadOnlyList<string>? WithNames = null,     // their names, for the toast; anyone left out isn't a friend
+    ShowProgressDto? Progress = null);           // an episode or show: where you are in it now, so a card can update without reloading everything
 
 /// <summary>Plays recorded with "unknown date" are stored at the Unix epoch.</summary>
 public static class WatchDates
