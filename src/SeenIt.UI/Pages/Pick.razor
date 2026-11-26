@@ -5,6 +5,7 @@
 
 <div class="page-head">
     <h1>Pick something for me</h1>
+    <button class="btn btn-sm" disabled="@busy" @onclick="Roll" title="Pick something else with the same choices"><Icon Name="shuffle" Size="16" /> Re-roll</button>
 </div>
 
 <div class="pick-filters">
@@ -17,9 +18,23 @@
         <span class="muted small">I have</span>
         @foreach (var (mins, label) in Lengths)
         {
-            <button class="chip @(maxMinutes == mins ? "on" : "")" @onclick="() => Set(() => maxMinutes = mins)" @key="label">@label</button>
+            <button class="chip @(maxMinutes == mins && !Custom ? "on" : "")" @onclick="() => Set(() => { maxMinutes = mins; customOpen = false; })" @key="label">@label</button>
         }
+        <button class="chip @(Custom || customOpen ? "on" : "")" aria-expanded="@customOpen" @onclick="() => customOpen = !customOpen">
+            @(Custom && maxMinutes is { } cm ? $"Custom: {Fmt.Runtime(cm)}" : "Custom…")
+        </button>
     </div>
+    @if (customOpen)
+    {
+        @* Your own amount of time, or a time to be done by (tonight's 11:30, or tomorrow's if that's passed). *@
+        <form class="pick-custom" @onsubmit="ApplyCustom" @onsubmit:preventDefault>
+            <label class="pick-custom-field"><input type="number" min="0" max="12" inputmode="numeric" @bind="customHours" @bind:event="oninput" @bind:after="ClearUntil" aria-label="Hours" /> h</label>
+            <label class="pick-custom-field"><input type="number" min="0" max="59" step="5" inputmode="numeric" @bind="customMins" @bind:event="oninput" @bind:after="ClearUntil" aria-label="Minutes" /> min</label>
+            <span class="muted small">or done by</span>
+            <input type="time" @bind="until" @bind:format="HH:mm" aria-label="Done by" />
+            <button class="btn btn-sm btn-primary" type="submit" disabled="@(CustomMinutes is not > 0)">Use @(CustomMinutes is > 0 and var c ? Fmt.Runtime(c) : "")</button>
+        </form>
+    }
     @if (friends is { Count: > 0 })
     {
         <div class="chips pick-who" role="group" aria-label="Who's watching">
@@ -92,7 +107,7 @@ else if (pick is { } p)
                     </div>
                 }
                 <div class="inline pick-actions">
-                    <button class="btn btn-primary" disabled="@busy" @onclick="Roll"><Icon Name="shuffle" Size="16" /> Pick again</button>
+                    <button class="btn btn-primary" disabled="@busy" @onclick="Roll"><Icon Name="shuffle" Size="16" /> Re-roll</button>
                     <CheckInButton Request="@(m.Type == MediaType.Movie ? new CheckInRequest(MediaType.Movie, m.TmdbId)
                                               : p.NextEpisode is { } ne ? new CheckInRequest(MediaType.Episode, m.TmdbId, ne.SeasonNumber, ne.EpisodeNumber)
                                               : new CheckInRequest(MediaType.Movie, m.TmdbId))" />
@@ -118,6 +133,37 @@ else if (pick is { } p)
         var range = count == 1 || p.FitThrough is not { } last ? Fmt.Ep(first.SeasonNumber, first.EpisodeNumber)
             : $"{Fmt.Ep(first.SeasonNumber, first.EpisodeNumber)}–{Fmt.Ep(last.SeasonNumber, last.EpisodeNumber)}";
         return $"Time for {count} episode{(count == 1 ? "" : "s")} ({range}) · {Fmt.Runtime(mins)} · {done}";
+    }
+
+    // Custom time: an amount, or a time to be done by (that wins when it's filled in).
+    private bool customOpen;
+    private int customHours = 1, customMins = 30;
+    private TimeOnly? until;
+    private bool Custom => maxMinutes is not null && Lengths.All(l => l.Minutes != maxMinutes);
+    private int? CustomMinutes
+    {
+        get
+        {
+            if (until is { } t)
+            {
+                var now = DateTime.Now;
+                var end = now.Date + t.ToTimeSpan();
+                if (end <= now) end = end.AddDays(1);   // already passed today: tomorrow's
+                return (int)(end - now).TotalMinutes;
+            }
+            var mins = Math.Clamp(customHours, 0, 24) * 60 + Math.Clamp(customMins, 0, 59);
+            return mins > 0 ? mins : null;
+        }
+    }
+
+    /// <summary>Typing an amount means the amount, not a "done by" time left from before.</summary>
+    private void ClearUntil() => until = null;
+
+    private Task ApplyCustom()
+    {
+        if (CustomMinutes is not { } mins) return Task.CompletedTask;
+        customOpen = false;
+        return Set(() => maxMinutes = mins);
     }
 
     private PickKind kind = PickKind.Any;

@@ -14,8 +14,8 @@
         {
             <span class="chip saved-view @(Same(v.Query, Current) ? "on" : "")" @key="(v.Page, v.Name)">
                 <button type="button" class="saved-view-star @(v.Default ? "is-default" : "")" @onclick="() => ToggleDefault(v)" aria-pressed="@v.Default"
-                        title="@(v.Default ? "Opens with this view. Tap to stop." : $"Open {Where(v)} with this view")"
-                        aria-label="@(v.Default ? $"Stop opening with {v.Name}" : $"Open {Where(v)} with {v.Name}")"><Icon Name="star" Size="12" /></button>
+                        title="@(v.Default ? $"The default view for {Where(v)}. Tap to stop." : $"Make this the default view for {Where(v)}")"
+                        aria-label="@(v.Default ? $"Stop using {v.Name} as the default" : $"Make {v.Name} the default view")"><Icon Name="star" Size="12" /></button>
                 <a href="@Href(v)">@v.Name</a>
                 @if (Scope is not null && v.Page == Scope) { <span class="muted tiny" title="Saved for this list only">this list</span> }
                 <button type="button" @onclick="() => Remove(v)" aria-label="@($"Remove saved view {v.Name}")"><Icon Name="x" Size="12" /></button>
@@ -24,11 +24,15 @@
         @if (naming)
         {
             <form class="saved-view-name" @onsubmit="Save">
-                <input @ref="nameBox" @bind="name" @bind:event="oninput" maxlength="40" placeholder="Name this view" aria-label="Name this view" />
-                <label class="check small"><input type="checkbox" @bind="asDefault" /> Open with it</label>
-                @if (Scope is not null) { <label class="check small"><input type="checkbox" @bind="scoped" /> @(ScopeLabel ?? "Only here")</label> }
-                <button class="btn btn-sm btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(name)">Save</button>
-                <button class="btn btn-sm btn-ghost" type="button" @onclick="() => naming = false">Cancel</button>
+                <input class="saved-view-input" @ref="nameBox" @bind="name" @bind:event="oninput" maxlength="40" placeholder="Name this view" aria-label="Name this view" />
+                <div class="saved-view-options">
+                    <label class="check small saved-view-check"><input type="checkbox" @bind="asDefault" /><span>Make it the default<span class="muted saved-view-hint">@(scoped ? "This list" : Scope is not null ? "Every list" : "This page") opens with these filters</span></span></label>
+                    @if (Scope is not null) { <label class="check small"><input type="checkbox" @bind="scoped" /> @(ScopeLabel ?? "Only here")</label> }
+                </div>
+                <div class="saved-view-actions">
+                    <button class="btn btn-sm btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(name)">Save</button>
+                    <button class="btn btn-sm btn-ghost" type="button" @onclick="() => naming = false">Cancel</button>
+                </div>
             </form>
         }
         else if (CanSave)
@@ -103,16 +107,15 @@
         var view = new SavedView(scoped && Scope is not null ? Scope : Page, name.Trim(), Current);
         await PagePrefs.AddViewAsync(Session, Api, view);
         if (asDefault) await PagePrefs.SetDefaultAsync(Session, Api, view, true);
-        Toasts.Show(asDefault ? $"Saved “{view.Name}”. {Capital(Where(view))} opens with it now." : $"Saved “{view.Name}”");
+        Toasts.Show(asDefault ? $"Saved “{view.Name}” as the default for {Where(view)}" : $"Saved “{view.Name}”");
     }
 
     private async Task ToggleDefault(SavedView v)
     {
         await PagePrefs.SetDefaultAsync(Session, Api, v, !v.Default);
-        Toasts.Show(v.Default ? $"{Capital(Where(v))} opens unfiltered again" : $"{Capital(Where(v))} opens with “{v.Name}” now");
+        Toasts.Show(v.Default ? $"No default view for {Where(v)} now" : $"“{v.Name}” is the default for {Where(v)} now");
     }
 
-    private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     private Task Remove(SavedView v) => PagePrefs.RemoveViewAsync(Session, Api, v);
 }
