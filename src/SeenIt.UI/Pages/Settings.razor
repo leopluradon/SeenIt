@@ -1698,7 +1698,7 @@ else { <h1>Settings</h1> }
         [("home", "Home"), ("progress", "Progress"), ("calendar", "Calendar"), ("watchlist", "Watchlist"), ("discover", "Discover")];
     private static readonly (ProfilePart, string)[] Parts =
         [(ProfilePart.History, "History and progress"), (ProfilePart.Ratings, "Ratings"), (ProfilePart.Stats, "Stats and month/year in review"), (ProfilePart.WatchingNow, "Watching now"),
-         (ProfilePart.Favorites, "Favorites"), (ProfilePart.Watchlist, "Watchlist"), (ProfilePart.Library, "Library"),
+         (ProfilePart.Favorites, "Favorites"), (ProfilePart.Watchlist, "Watchlist"), (ProfilePart.Library, "Library"), (ProfilePart.People, "People you follow (actors, directors…)"),
          (ProfilePart.Sources, "Where you watched (Jellyfin, Plex, Letterboxd…)"), (ProfilePart.WatchingApp, "Which app you're watching on")];
     private static string VisibilityName(ProfileVisibility v) => v switch { ProfileVisibility.Public => "everyone", ProfileVisibility.Private => "only me", _ => "friends" };
 

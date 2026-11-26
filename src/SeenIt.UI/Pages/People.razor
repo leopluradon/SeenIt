@@ -1,20 +1,26 @@
 @page "/people"
-@attribute [Authorize]
+@page "/u/{UserName}/people"
+@* No [Authorize]: someone's shared page follows their "People you follow" privacy; your own needs signing in. *@
 @inject ApiClient Api
 @inject Toasts Toasts
-<PageTitle>People you follow · SeenIt</PageTitle>
+@inject SessionState Session
+<PageTitle>@(Other is { } on ? $"People {on} follows" : "People you follow") · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
 <div class="page-head">
-    <h1>People you follow</h1>
+    <h1>@(Other is { } o ? $"People {o} follows" : "People you follow")</h1>
 </div>
-<p class="muted small">Actors, directors and writers you follow. Their new movies and shows go on your <a href="calendar">calendar</a> and, on release day, your <a href="notifications">alerts</a>.</p>
+@if (Mine)
+{
+    <p class="muted small">Actors, directors and writers you follow. Their new movies and shows go on your <a href="calendar">calendar</a> and, on release day, your <a href="notifications">alerts</a>.</p>
+}
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (people is null && error is null) { <Spinner Shape="list" /> }
 else if (people is { Count: 0 })
 {
-    <Empty Title="You're not following anyone yet.">
-        <span>Open someone's page from a movie's or show's cast and tap <b>Follow</b>.</span>
+    <Empty Title="@(Mine ? "You're not following anyone yet." : "Not following anyone yet.")">
+        @if (Mine) { <span>Open someone's page from a movie's or show's cast and tap <b>Follow</b>.</span> }
     </Empty>
 }
 else if (people is not null)
@@ -41,7 +47,7 @@ else if (people is not null)
         @{ var departments = people.Select(x => x.Department).OfType<string>().Distinct().Order().ToList(); }
         <FilterBar Query="@find" QueryChanged="q => Set(() => find = q)" Placeholder="Find someone" Label="Find someone you follow"
                    Active="@(department is null ? 0 : 1)" Chips="@(department is { } dep ? [new FilterChip(dep, () => Set(() => department = null))] : null)" OnClear='() => Set(() => { find = ""; department = null; })'
-                   ViewPage="people" ViewQuery="@UrlState.Query(State)">
+                   ViewPage="@(Mine ? "people" : null)" ViewQuery="@UrlState.Query(State)">
             @if (departments.Count > 1)
             {
                 <div class="field">
@@ -77,7 +83,7 @@ else if (people is not null)
                             else { <span class="muted">Nothing announced</span> }
                         </div>
                     </div>
-                    <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Unfollow(p)">Unfollow</button>
+                    @if (Mine) { <button class="btn btn-sm btn-ghost" disabled="@busy" @onclick="() => Unfollow(p)">Unfollow</button> }
                 </div>
             }
         </div>
@@ -99,12 +105,28 @@ else if (people is not null)
     private void Set(Action change) { change(); UrlState.Write(Nav, State); }
     protected override void OnParametersSet() { find = UrlState.Find(QParam, find); department = DeptParam; }
 
-    protected override Task OnInitializedAsync() => Load();
+    /// <summary>Someone else's (read-only), shared at u/{name}/people.</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? loadedFor = "\0";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
+        if (loadedFor != Other) { loadedFor = Other; people = null; await Load(); }
+    }
 
     private async Task Load()
     {
         error = null;
-        try { people = await Api.FollowedPeopleAsync(); }
+        try { people = await Api.FollowedPeopleAsync(Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"Who {Other} follows is private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
 

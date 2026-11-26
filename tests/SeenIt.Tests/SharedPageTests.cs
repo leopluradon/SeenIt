@@ -36,13 +36,27 @@ public class SharedPageTests
     [InlineData("watchlist", ProfilePart.Watchlist)]
     [InlineData("library", ProfilePart.Library)]
     [InlineData("favorites", ProfilePart.Favorites)]
+    [InlineData("goals/2025", ProfilePart.Stats)]
+    [InlineData("completionist", ProfilePart.Stats)]
+    [InlineData("people?dept=Directing", ProfilePart.People)]
     public void The_share_button_shares_your_own_pages_under_your_profile(string path, ProfilePart part) =>
-        Assert.Equal(part, SeenIt.UI.Services.UiLayout.SharedPage(path));
+        Assert.Equal(part, SeenIt.UI.Services.UiLayout.SharedPage(path)?.Part);
+
+    [Fact]
+    public void Your_lists_are_shared_but_saved_and_browsed_ones_are_not()
+    {
+        Assert.NotNull(SeenIt.UI.Services.UiLayout.SharedPage("lists"));
+        Assert.Null(SeenIt.UI.Services.UiLayout.SharedPage("lists")!.Part);   // each list has its own public switch
+        Assert.Null(SeenIt.UI.Services.UiLayout.SharedPage("lists?tab=saved"));
+        Assert.Null(SeenIt.UI.Services.UiLayout.SharedPage("lists?tab=browse"));
+    }
 
     [Theory]
     [InlineData("show/1396")]
     [InlineData("")]
     [InlineData("settings")]
     [InlineData("u/sam/progress")]
+    [InlineData("person/380")]
+    [InlineData("recommendations")]
     public void Other_pages_are_shared_as_they_are(string path) => Assert.Null(SeenIt.UI.Services.UiLayout.SharedPage(path));
 }

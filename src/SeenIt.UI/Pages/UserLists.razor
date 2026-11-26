@@ -1,0 +1,37 @@
+@page "/u/{UserName}/lists"
+@* Someone's own lists, shared: the public ones (and friends-only ones for friends), the same as on their profile. *@
+@inject ApiClient Api
+<PageTitle>@($"{UserName}'s lists") · SeenIt</PageTitle>
+<nav class="crumbs"><a href="@Fmt.UserHref(UserName)"><Icon Name="chevron-left" Size="16" /> @UserName</a></nav>
+
+<div class="page-head"><h1>@(p?.User.Name ?? UserName)'s lists</h1></div>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (p is null && error is null) { <Spinner Shape="grid" /> }
+else if (p is { Lists.Count: 0 }) { <Empty Title="No public lists yet." /> }
+else if (p is not null)
+{
+    <div class="list-grid">@foreach (var l in p.Lists) { <ListCard List="l" @key="l.Id" /> }</div>
+}
+@code {
+    [Parameter] public string UserName { get; set; } = "";
+    private ProfileDto? p;
+    private string? error;
+    private string? loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedFor == UserName) return;
+        loadedFor = UserName;
+        p = null;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        try { p = await Api.ProfileAsync(UserName); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no such member."; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

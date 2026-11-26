@@ -72,7 +72,7 @@ public class SocialService(AppDbContext db, TrackingService tracking, ListServic
         var pinned = See(ProfilePart.Stats) ? await badges.PinnedAsync(owner, prefs, ct) : [];
         // Their own pages shared under the profile, as far as this viewer may see each (the profile links them).
         List<ProfilePart> pages = [.. new[] { ProfilePart.History, ProfilePart.Ratings, ProfilePart.Watchlist, ProfilePart.Library,
-            ProfilePart.Favorites, ProfilePart.Stats }.Where(See)];
+            ProfilePart.Favorites, ProfilePart.Stats, ProfilePart.People }.Where(See)];
         if (!canView)
             return new ProfileDto(card, owner.CreatedAt, isMe, owner.Visibility, false, followers, followingCount, null, null, [], [], publicLists, Layout: layout,
                 Banner: banner, Accent: prefs.Accent, Pages: pages);

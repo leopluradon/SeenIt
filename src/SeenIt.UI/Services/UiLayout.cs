@@ -27,24 +27,32 @@ public static class UiLayout
 
     /// <summary>
     /// Your own pages that have a shared copy under your profile (u/{you}/progress, …), with the privacy part that
-    /// decides who can open it; null for any other page.
+    /// decides who can open it (none for your lists: each list has its own public switch); null for any other page.
     /// </summary>
-    public static ProfilePart? SharedPage(string path)
+    public static SharedTarget? SharedPage(string path)
     {
-        var page = path.Split('?', '#')[0].Trim('/');
+        var parts = path.Split('#')[0].Split('?', 2);
+        var page = parts[0].Trim('/');
         var first = page.Split('/')[0];
-        return first switch
+        // Lists: only your own (not the saved or browse tabs, which aren't yours).
+        if (page == "lists") return parts.Length > 1 && parts[1].Split('&').Any(q => q is "tab=saved" or "tab=browse") ? null : new SharedTarget(null);
+        ProfilePart? part = first switch
         {
             "progress" or "history" => ProfilePart.History,
             "ratings" => ProfilePart.Ratings,
-            "stats" or "review" => ProfilePart.Stats,
+            "stats" or "review" or "goals" or "completionist" => ProfilePart.Stats,
             "favorites" => ProfilePart.Favorites,
             "watchlist" => ProfilePart.Watchlist,
             "library" => ProfilePart.Library,
+            "people" => ProfilePart.People,
             _ => null,
         };
+        return part is null ? null : new SharedTarget(part);
     }
 }
+
+/// <summary>A page of yours that has a shared copy under your profile, and the privacy part deciding who can open it.</summary>
+public sealed record SharedTarget(ProfilePart? Part);
 
 /// <summary>Titles you've seen on Discover and lists: shown as usual, faded, or left out.</summary>
 public enum SeenMode { Show, Fade, Hide }

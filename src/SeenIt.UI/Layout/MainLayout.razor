@@ -69,7 +69,22 @@
             </AuthorizeView>
             <SearchBox Class="topsearch" IconSize="16" Placeholder="Search titles, people, members  ( / )" ClearAfter="true" />
             <a href="search" class="icon-btn only-mobile" aria-label="Search"><Icon Name="search" /></a>
-            <button type="button" class="icon-btn topbar-share" @onclick="SharePage" aria-label="Share this page" title="Share this page"><Icon Name="share" /></button>
+            <div class="topbar-share-wrap">
+                <button type="button" class="icon-btn topbar-share" @onclick="SharePage" aria-label="Share this page" title="Share this page" aria-expanded="@shareChoice"><Icon Name="share" /></button>
+                @if (shareChoice && personal is { } mine)
+                {
+                    @* The app: your own copy of this page, or the page itself. *@
+                    <div class="menu-backdrop" @onclick="() => shareChoice = false"></div>
+                    <div class="menu share-menu" role="menu">
+                        <button type="button" role="menuitem" @onclick="() => Share((mine.Path, mine.Title, mine.Audience))">
+                            <Icon Name="user" Size="16" /><span>Share mine<br /><span class="muted small">@mine.Title · @mine.Audience</span></span>
+                        </button>
+                        <button type="button" role="menuitem" @onclick="() => Share((general.Path, general.Title, null))">
+                            <Icon Name="external" Size="16" /><span>Share this page<br /><span class="muted small">Shows whoever opens it their own @general.Title.ToLowerInvariant()</span></span>
+                        </button>
+                    </div>
+                }
+            </div>
             <AuthorizeView>
                 <Authorized>
                     <NotificationBell />
@@ -194,7 +209,8 @@
     /// <summary>
     /// Shares the page you're on: its public link (it opens in the app for people who have it) and its title. Your
     /// own pages (progress, ratings, stats…) go out as u/{you}/…, which others can open as far as your privacy
-    /// settings allow; the toast says who that is.
+    /// settings allow; the toast says who that is. In the app, those pages ask first: yours, or the page itself
+    /// (which shows whoever opens it their own).
     /// </summary>
     private async Task SharePage()
     {
@@ -204,21 +220,35 @@
         catch { title = "SeenIt"; }
         // Page titles end in "· SeenIt"; the shared text reads better without it.
         if (title.EndsWith(" · SeenIt", StringComparison.Ordinal)) title = title[..^" · SeenIt".Length];
-        string? audience = null;
-        if (Session.Me is { } me && UiLayout.SharedPage(path) is { } part)
+        if (string.IsNullOrWhiteSpace(title)) title = "SeenIt";
+        general = (path, title);
+        personal = null;
+        if (Session.Me is { } me && UiLayout.SharedPage(path) is { } target)
         {
-            path = $"{Fmt.UserHref(me.UserName)}/{path}";
-            title = $"{me.DisplayName ?? me.UserName}'s {title.ToLowerInvariant()}";
-            audience = Fmt.Prefs.For(part, me.Visibility) switch
-            {
-                ProfileVisibility.Public => "anyone can open it",
-                ProfileVisibility.Friends => "friends who follow you back can open it",
-                _ => "only you can open it (Settings → Privacy)",
-            };
+            var audience = target.Part is { } part
+                ? Fmt.Prefs.For(part, me.Visibility) switch
+                {
+                    ProfileVisibility.Public => "anyone can open it",
+                    ProfileVisibility.Friends => "friends who follow you back can open it",
+                    _ => "only you can open it (Settings → Privacy)",
+                }
+                : "others see your public lists";
+            personal = ($"{Fmt.UserHref(me.UserName)}/{path}", $"{me.DisplayName ?? me.UserName}'s {title.ToLowerInvariant()}", audience);
         }
-        switch (await Platform.ShareLinkAsync(string.IsNullOrWhiteSpace(title) ? "SeenIt" : title, Platform.PublicUrl(path)))
+        if (personal is not null && Platform.AppVersion is not null) { shareChoice = true; return; }
+        await Share(personal is { } mine ? (mine.Path, mine.Title, mine.Audience) : (path, title, null));
+    }
+
+    private bool shareChoice;
+    private (string Path, string Title) general;
+    private (string Path, string Title, string Audience)? personal;
+
+    private async Task Share((string Path, string Title, string? Audience) what)
+    {
+        shareChoice = false;
+        switch (await Platform.ShareLinkAsync(what.Title, Platform.PublicUrl(what.Path)))
         {
-            case "copied": Toasts.Show(audience is null ? "Link copied" : $"Link copied · {audience}"); break;
+            case "copied": Toasts.Show(what.Audience is null ? "Link copied" : $"Link copied · {what.Audience}"); break;
             case "failed": Toasts.Show("Couldn't share this page", error: true); break;
         }
     }

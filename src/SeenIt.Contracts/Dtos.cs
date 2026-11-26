@@ -113,7 +113,7 @@ public enum ExportFormat { Both, Json, Csv }
 /// <param name="Sources">Where you watched: the Jellyfin/Plex/Letterboxd tag on your plays (and filtering by it).</param>
 /// <param name="WatchingApp">Which app you're watching on ("watching on Jellyfin"), separately from what.</param>
 /// <summary>History also covers Progress (it's made of your plays); Stats covers month/year in review and goals.</summary>
-public enum ProfilePart { History, Ratings, Stats, WatchingNow, Favorites, Sources, WatchingApp, Watchlist, Library }
+public enum ProfilePart { History, Ratings, Stats, WatchingNow, Favorites, Sources, WatchingApp, Watchlist, Library, People }
 
 /// <summary>
 /// Display, tracking, home and privacy choices, kept together. Defaults reproduce how SeenIt

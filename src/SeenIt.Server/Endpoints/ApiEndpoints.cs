@@ -900,6 +900,20 @@ public static class ApiEndpoints
                 // The friends panel is other people's activity: not theirs to share.
                 return more with { Friends = more.Friends with { Rows = [], TopTitle = null } };
             }, ct));
+        // Completionist, goals and the challenges they've taken on count as stats; the actors and directors they follow
+        // have their own part.
+        shared.MapGet("/completionist", (string name, ClaimsPrincipal p, SocialService s, CompletionService c, UserDataCache cache, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Stats, (o, _) => cache.GetAsync(o.Id, "completionist", () => c.GetAsync(o.Id, ct), ct), ct));
+        shared.MapGet("/goals", (string name, int? year, ClaimsPrincipal p, SocialService s, GoalService g, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Stats, (o, _) => g.GetAsync(o.Id, year ?? DateTime.UtcNow.Year, o.TimeZone, ct), ct));
+        shared.MapGet("/challenges", (string name, int? year, ClaimsPrincipal p, SocialService s, ChallengeService c, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.Stats, async (o, _) =>
+            {
+                var taken = o.Prefs().Challenges ?? [];
+                return (await c.GetAsync(o.Id, year ?? DateTime.UtcNow.Year, o.TimeZone, ct)).Where(x => taken.Contains(x.Key)).ToList();
+            }, ct));
+        shared.MapGet("/people/following", (string name, ClaimsPrincipal p, SocialService s, PersonService people, CancellationToken ct) =>
+            Shared(name, p, s, ProfilePart.People, (o, _) => people.FollowedAsync(o.Id, ct), ct));
         shared.MapGet("/review/periods", (string name, ClaimsPrincipal p, SocialService s, ReviewService r, UserDataCache c, CancellationToken ct) =>
             Shared(name, p, s, ProfilePart.Stats, (o, _) => c.GetAsync(o.Id, $"periods:{o.TimeZone}", () => r.GetPeriodsAsync(o.Id, o.TimeZone, ct), ct), ct));
         Task<IResult> SharedReview(string name, int year, int? month, ReviewNew? mode, string? type, ClaimsPrincipal p, SocialService s, ReviewService r, UserDataCache c, CancellationToken ct) =>

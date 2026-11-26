@@ -1,20 +1,24 @@
 @page "/goals"
 @page "/goals/{Year:int}"
-@attribute [Authorize]
+@page "/u/{UserName}/goals"
+@page "/u/{UserName}/goals/{Year:int}"
+@* No [Authorize]: someone's shared goals follow their Stats privacy; your own need signing in. *@
 @inject ApiClient Api
 @inject Toasts Toasts
 @inject SessionState Session
-<PageTitle>Goals · SeenIt</PageTitle>
+@inject NavigationManager Nav
+<PageTitle>@(Other is { } on ? $"{on}'s goals" : "Goals") · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
 <div class="page-head">
     <div>
-        <h1>Goals</h1>
-        <p class="muted small">Yearly targets, counted the way your year in review counts them.</p>
+        <h1>@(Other is { } o ? $"{o}'s goals" : "Goals")</h1>
+        <p class="muted small">Yearly targets, counted the way @(Mine ? "your" : "their") year in review counts them.</p>
     </div>
     <div class="inline">
-        <a class="icon-btn" href="@($"goals/{ShownYear - 1}")" aria-label="Previous year"><Icon Name="chevron-left" Size="18" /></a>
+        <a class="icon-btn" href="@($"{Base}/{ShownYear - 1}")" aria-label="Previous year"><Icon Name="chevron-left" Size="18" /></a>
         <b>@ShownYear</b>
-        <a class="icon-btn" href="@($"goals/{ShownYear + 1}")" aria-label="Next year"><Icon Name="chevron-right" Size="18" /></a>
+        <a class="icon-btn" href="@($"{Base}/{ShownYear + 1}")" aria-label="Next year"><Icon Name="chevron-right" Size="18" /></a>
     </div>
 </div>
 
@@ -24,15 +28,18 @@ else if (goals is not null)
 {
     @if (goals.Count == 0)
     {
-        <Empty Title="@($"No goals for {ShownYear} yet.")">Set one below, like 100 movies or 500 hours.</Empty>
+        <Empty Title="@($"No goals for {ShownYear} yet.")">@if (Mine) { <text>Set one below, like 100 movies or 500 hours.</text> }</Empty>
     }
     <div class="goal-grid">
         @foreach (var g in goals)
         {
-            <GoalCard Goal="g" OnEdit="() => Edit(g)" OnDelete="() => Delete(g)" @key="g.Id" />
+            @if (Mine) { <GoalCard Goal="g" OnEdit="() => Edit(g)" OnDelete="() => Delete(g)" @key="g.Id" /> }
+            else { <GoalCard Goal="g" Theirs="true" @key="g.Id" /> }
         }
     </div>
 
+    @if (Mine)
+    {
     <section class="panel goal-form">
         <h2>@(editing is null ? "Add a goal" : $"Change your {GoalKinds.Label(editing.Kind).ToLowerInvariant()} goal")</h2>
         <div class="inline">
@@ -52,6 +59,7 @@ else if (goals is not null)
         </div>
         <p class="muted small">@GoalKinds.Hint(editing?.Kind ?? kind)@(Suggestion is { } s ? $" Last year you got {s}." : "")</p>
     </section>
+    }
 }
 
 @* Yearly challenges: optional, taken on from the list below and ticked off by themselves from what you watch. *@
@@ -60,9 +68,10 @@ else if (goals is not null)
     @if (challenges is null) { <Spinner /> }
     else
     {
-        var chosen = Fmt.Prefs.Challenges ?? [];
+        // Someone else's come already narrowed to the ones they've taken on.
+        var chosen = Mine ? Fmt.Prefs.Challenges ?? [] : challenges.Select(c => c.Key).ToList();
         var mine = challenges.Where(c => chosen.Contains(c.Key)).ToList();
-        @if (mine.Count == 0) { <p class="muted small">Take one on below: they fill in from what you watch, no logging needed.</p> }
+        @if (mine.Count == 0) { <p class="muted small">@(Mine ? "Take one on below: they fill in from what you watch, no logging needed." : "None taken on this year.")</p> }
         <div class="challenge-grid">
             @foreach (var c in mine)
             {
@@ -70,7 +79,7 @@ else if (goals is not null)
                 <div class="panel challenge @(done ? "done" : "")" @key="c.Key">
                     <div class="inline spread">
                         <b>@(done ? "✓ " : "")@c.Title</b>
-                        <button class="icon-btn" @onclick="() => SetChallenge(c.Key, false)" aria-label="@($"Drop {c.Title}")" title="Drop this challenge"><Icon Name="x" Size="14" /></button>
+                        @if (Mine) { <button class="icon-btn" @onclick="() => SetChallenge(c.Key, false)" aria-label="@($"Drop {c.Title}")" title="Drop this challenge"><Icon Name="x" Size="14" /></button> }
                     </div>
                     <span class="muted small">@c.Description</span>
                     <div class="inline"><ProgressBar Value="Math.Min(c.Count, c.Target)" Max="c.Target" /><span class="small nowrap">@Math.Min(c.Count, c.Target)/@c.Target</span></div>
@@ -88,7 +97,7 @@ else if (goals is not null)
             }
         </div>
         var rest = challenges.Where(c => !chosen.Contains(c.Key)).ToList();
-        @if (rest.Count > 0)
+        @if (Mine && rest.Count > 0)
         {
             <label class="sort-pick">
                 <span class="muted small">Take on a challenge</span>
@@ -112,7 +121,22 @@ else if (goals is not null)
     private int target = 100;
     private bool busy;
 
-    protected override Task OnParametersSetAsync() => Load();
+    /// <summary>Someone else's (read-only), shared at u/{name}/goals.</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    private string Base => Other is { } o ? $"{Fmt.UserHref(o)}/goals" : "goals";
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
+        await Load();
+    }
 
     private async Task SetChallenge(string key, bool on)
     {
@@ -128,12 +152,13 @@ else if (goals is not null)
         editing = null;
         try
         {
-            goals = await Api.GoalsAsync(ShownYear);
-            try { lastYear = await Api.GoalsAsync(ShownYear - 1); } catch { lastYear = null; }
+            goals = await Api.GoalsAsync(ShownYear, Other);
+            try { lastYear = Mine ? await Api.GoalsAsync(ShownYear - 1) : null; } catch { lastYear = null; }
             kind = Enum.GetValues<GoalKind>().FirstOrDefault(k => goals.All(g => g.Kind != k));
         }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s goals are private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
-        try { challenges = await Api.ChallengesAsync(ShownYear); } catch { challenges = []; }
+        try { challenges = await Api.ChallengesAsync(ShownYear, Other); } catch { challenges = []; }
     }
 
     private string? Suggestion =>

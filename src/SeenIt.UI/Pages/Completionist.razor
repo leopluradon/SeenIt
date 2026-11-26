@@ -1,15 +1,19 @@
 @page "/completionist"
-@attribute [Authorize]
-@* Whose movies you're closest to having seen every one of: directors, actors and writers from what you've watched. *@
+@page "/u/{UserName}/completionist"
+@* Whose movies you're closest to having seen every one of: directors, actors and writers from what you've watched.
+   No [Authorize]: someone's shared page follows their Stats privacy; your own needs signing in. *@
 @inject ApiClient Api
-<PageTitle>Completionist · SeenIt</PageTitle>
+@inject SessionState Session
+@inject NavigationManager Nav
+<PageTitle>@(Other is { } on ? $"{on}'s completionist" : "Completionist") · SeenIt</PageTitle>
+@if (Other is { } owner) { <nav class="crumbs"><a href="@Fmt.UserHref(owner)"><Icon Name="chevron-left" Size="16" /> @owner</a></nav> }
 
-<div class="page-head"><h1>Completionist</h1></div>
-<p class="muted small">Directors, actors and writers whose movies you watch most, and how many of each one's you've seen. Released movies count, apart from obscure ones (under @Filmography.MinVotes votes on TMDB) you haven't seen; talk shows and appearances as themselves don't. Finishing someone earns the Completionist badge.</p>
+<div class="page-head"><h1>@(Other is { } o ? $"{o}'s completionist" : "Completionist")</h1></div>
+<p class="muted small">Directors, actors and writers whose movies @(Mine ? "you watch" : "they watch") most, and how many of each one's @(Mine ? "you've" : "they've") seen. Released movies count, apart from obscure ones (under @Filmography.MinVotes votes on TMDB) not seen; talk shows and appearances as themselves don't. Finishing someone earns the Completionist badge.</p>
 
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (items is null && error is null) { <Spinner /> <p class="muted small center">Looking up filmographies… the first time takes a little while.</p> }
-else if (items is { Count: 0 }) { <Empty Title="Nobody yet.">Watch a few movies by the same director or with the same actors and they'll show up here.</Empty> }
+else if (items is { Count: 0 }) { <Empty Title="Nobody yet.">@if (Mine) { <text>Watch a few movies by the same director or with the same actors and they'll show up here.</text> }</Empty> }
 else if (items is not null)
 {
     var done = items.Where(i => i.Seen >= i.Total).ToList();
@@ -40,12 +44,28 @@ else if (items is not null)
     private string? error;
     private string role = "";
 
-    protected override Task OnInitializedAsync() => Load();
+    /// <summary>Someone else's (read-only), shared at u/{name}/completionist.</summary>
+    [Parameter] public string? UserName { get; set; }
+    private string? Other => UserName is { Length: > 0 } n && !string.Equals(n, Session.Me?.UserName, StringComparison.OrdinalIgnoreCase) ? n : null;
+    private bool Mine => Other is null;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? loadedFor = "\0";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Mine && AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri)), replace: true);
+            return;
+        }
+        if (loadedFor != Other) { loadedFor = Other; items = null; await Load(); }
+    }
 
     private async Task Load()
     {
         error = null;
-        try { items = await Api.CompletionistAsync(); }
+        try { items = await Api.CompletionistAsync(Other); }
+        catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound && Other is not null) { error = $"{Other}'s completionist page is private, or there's no such member."; }
         catch (Exception ex) { error = ex.Message; }
     }
 

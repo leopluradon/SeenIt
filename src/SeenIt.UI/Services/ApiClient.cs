@@ -313,7 +313,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     // ---------- People you follow ----------
 
-    public Task<List<FollowedPerson>> FollowedPeopleAsync() => GetAsync<List<FollowedPerson>>("api/people/following");
+    public Task<List<FollowedPerson>> FollowedPeopleAsync(string? user = null) => GetAsync<List<FollowedPerson>>(Of(user, "people/following"));
     public Task FollowPersonAsync(int id, bool follow) => SendAsync(HttpMethod.Put, $"api/people/{id}/follow", new PersonFollowRequest(follow));
 
     /// <summary>"Previously on": null unless you're coming back to this show after a long break.</summary>
@@ -376,7 +376,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
 
     // ---------- Goals ----------
 
-    public Task<List<GoalDto>> GoalsAsync(int year) => GetAsync<List<GoalDto>>($"api/goals?year={year}&tz={Tz}");
+    public Task<List<GoalDto>> GoalsAsync(int year, string? user = null) => GetAsync<List<GoalDto>>(Of(user, "goals") + $"?year={year}&tz={Tz}");
     public Task SetGoalAsync(GoalRequest r) => SendAsync(HttpMethod.Put, "api/goals", r);
     public Task DeleteGoalAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/goals/{id}");
 
@@ -431,8 +431,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task ClosePollAsync(Guid id) => SendAsync(HttpMethod.Post, $"api/polls/{id}/close", null);
     public Task DeletePollAsync(Guid id) => SendAsync(HttpMethod.Delete, $"api/polls/{id}");
     private sealed record CreatedId(Guid Id);
-    public Task<List<CompletionDto>> CompletionistAsync() => GetAsync<List<CompletionDto>>("api/completionist");
-    public Task<List<ChallengeDto>> ChallengesAsync(int year) => GetAsync<List<ChallengeDto>>($"api/challenges?year={year}&tz={Tz}");
+    public Task<List<CompletionDto>> CompletionistAsync(string? user = null) => GetAsync<List<CompletionDto>>(Of(user, "completionist"));
+    public Task<List<ChallengeDto>> ChallengesAsync(int year, string? user = null) => GetAsync<List<ChallengeDto>>(Of(user, "challenges") + $"?year={year}&tz={Tz}");
     public Task<List<RecentAction>> RecentActionsAsync() => GetAsync<List<RecentAction>>("api/activity/recent");
     public Task UndoActionAsync(long id) => SendAsync(HttpMethod.Post, $"api/activity/{id}/undo", null);
     public Task<ShowAlertState> ShowAlertsAsync(int showId) => GetAsync<ShowAlertState>($"api/shows/{showId}/alerts")!;
