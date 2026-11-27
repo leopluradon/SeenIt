@@ -17,26 +17,22 @@ else if (s is not null)
         <Actions>
             @if (s.User is { } u)
             {
-                @* The everyday action leads: the next episode (S01E01 for a show you haven't started); the rest is under ▾. *@
+                @* The everyday action leads: the next episode (S01E01 for a show you haven't started), with the calendar for
+                   another day beside it; the whole show, and unwatching, are in ⋯. *@
                 @if (NextUp is { } up)
                 {
-                    <SplitButton Class="btn-primary" Disabled="busy" OnClick="() => QuickEpisode(up)">
-                        <ChildContent><Icon Name="check" Size="18" /> Mark @(up.SeasonNumber == 0 ? $"Special {up.EpisodeNumber}" : Fmt.Ep(up.SeasonNumber, up.EpisodeNumber)) watched</ChildContent>
-                        <Menu>
-                            <button type="button" role="menuitem" @onclick="() => { askWhen = true; pendingEpisode = up; }"><Icon Name="calendar" Size="16" /> Mark @Fmt.Ep(up.SeasonNumber, up.EpisodeNumber) watched on another day…</button>
-                            <button type="button" role="menuitem" @onclick="() => watchAllOpen = true"><Icon Name="check" Size="16" /> Mark the whole show watched…</button>
-                            @if (u.Plays > 0) { <button type="button" role="menuitem" @onclick="() => unwatchOpen = true"><Icon Name="x" Size="16" /> Mark unwatched…</button> }
-                        </Menu>
-                    </SplitButton>
+                    <span class="watch-btns">
+                        <button type="button" class="btn btn-primary" disabled="@busy" @onclick="() => QuickEpisode(up)"><Icon Name="check" Size="18" /> Mark @(up.SeasonNumber == 0 ? $"Special {up.EpisodeNumber}" : Fmt.Ep(up.SeasonNumber, up.EpisodeNumber)) watched</button>
+                        <WhenButton Class="btn-primary" What="@Fmt.Ep(up.SeasonNumber, up.EpisodeNumber)" Disabled="busy" OnClick="() => { askWhen = true; pendingEpisode = up; }" />
+                    </span>
+                }
+                else if (s.Progress?.Completed == true)
+                {
+                    <span class="btn btn-watched watch-status"><Icon Name="check" Size="18" /> All caught up</span>
                 }
                 else
                 {
-                    <SplitButton Class="@(s.Progress?.Completed == true ? "btn-watched" : "btn-primary")" Disabled="busy" OnClick="() => watchAllOpen = true" OpensMenu="@(s.Progress?.Completed == true)">
-                        <ChildContent><Icon Name="check" Size="18" /> @(s.Progress?.Completed == true ? "All caught up" : "Mark all watched")</ChildContent>
-                        <Menu>
-                            @if (u.Plays > 0) { <button type="button" role="menuitem" @onclick="() => unwatchOpen = true"><Icon Name="x" Size="16" /> Mark unwatched…</button> }
-                        </Menu>
-                    </SplitButton>
+                    <button type="button" class="btn btn-primary" disabled="@busy" @onclick="() => watchAllOpen = true"><Icon Name="check" Size="18" /> Mark all watched</button>
                 }
                 <div class="hero-rate"><span>Rate</span><RatingPicker Compact="true" Value="u.Rating" ValueChanged="Rate" /></div>
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
@@ -237,15 +233,6 @@ else if (s is not null)
             <WatchOrderPicker Orders="orders" Disabled="busy" OnChange="SetOrder"
                               Hint="@(orders?.SelectedId is null ? "Recorded in season order." : "Recorded in this order (with release dates, each one keeps its own air date).")" />
         </WatchDialog>
-        <Modal @bind-Open="unwatchOpen" Title="@($"Mark {s.Name} unwatched?")">
-            <div class="stack">
-                <p>This removes all @user.Plays episode play@(user.Plays == 1 ? "" : "s") of @s.Name from your history. Your ratings, watchlist and lists stay. You can undo it straight after.</p>
-                <div class="inline">
-                    <button class="btn btn-danger" disabled="@busy" @onclick="UnwatchAll"><Icon Name="x" Size="16" /> Mark unwatched</button>
-                    <button class="btn btn-ghost" @onclick="() => unwatchOpen = false">Cancel</button>
-                </div>
-            </div>
-        </Modal>
         <WatchDialog Open="pendingEpisode is not null" OpenChanged="o => { if (!o) pendingEpisode = null; }"
                      What="@(pendingEpisode is { } pe ? Fmt.Ep(pe.SeasonNumber, pe.EpisodeNumber) : "")" ReleaseDate="pendingEpisode?.AirDate" OnPick="WatchEpisode"  AskWhen="askWhen" />
         <WatchDialog Open="pendingSeason is not null" OpenChanged="o => { if (!o) pendingSeason = null; }" What="@(pendingSeason?.Name ?? "")" Bulk="true" OnPick="WatchSeason"
@@ -332,7 +319,7 @@ else if (s is not null)
     private ShowDetail? s;
     private string? error;
     private bool notFound;
-    private bool busy, watchAllOpen, unwatchOpen, listOpen, fixOpen, ownOpen, recommendOpen, askWhen;
+    private bool busy, watchAllOpen, listOpen, fixOpen, ownOpen, recommendOpen, askWhen;
     private async Task Reload() { s = await Api.ShowAsync(Id); StateHasChanged(); }
     private EpisodeRef? pendingEpisode;
     private SeasonSummary? pendingSeason;
@@ -399,16 +386,6 @@ else if (s is not null)
         }
         catch (Exception ex) { Toasts.Error(ex); }
         busy = false;
-    }
-
-    private Task UnwatchAll()
-    {
-        unwatchOpen = false;
-        return Act(async () =>
-        {
-            var removed = await Api.UnwatchAsync(MediaType.Show, Id);
-            undo = () => Api.RestorePlaysAsync(removed.Plays);
-        }, $"Marked {s!.Name} unwatched");
     }
 
     private Task WatchAll(WatchChoice c) =>

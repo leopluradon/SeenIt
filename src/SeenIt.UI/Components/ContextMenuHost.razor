@@ -264,6 +264,11 @@
         {
             <button type="button" class="ctx-item" role="menuitem" @onclick="() => Unwatch(t)"><Icon Name="x" Size="16" /> <span>Mark unwatched</span><span class="ctx-hint">@(s.Plays > 1 ? $"all {s.Plays} plays" : "")</span></button>
         }
+        else if (isShow && s is { Watched: > 0 })
+        {
+            @* Every play of every episode, with Undo on the toast. *@
+            <button type="button" class="ctx-item" role="menuitem" @onclick="() => Unwatch(t)"><Icon Name="x" Size="16" /> <span>Mark the whole show unwatched</span><span class="ctx-hint">@s.Watched episode@(s.Watched == 1 ? "" : "s")</span></button>
+        }
 
         @if (t.Play is { } playId)
         {

@@ -27,13 +27,11 @@ else if (m is not null)
         <Actions>
             @if (m.User is { } u)
             {
-                <SplitButton Class="@(u.Plays > 0 ? "btn-watched" : "btn-primary")" Disabled="busy" OnClick="QuickWatch">
-                    <ChildContent><Icon Name="check" Size="18" /> @* Seen already: tapping it logs another viewing, so say so. *@@(u.Plays switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })</ChildContent>
-                    <Menu>
-                        <button type="button" role="menuitem" @onclick="() => { askWhen = true; watchOpen = true; }"><Icon Name="calendar" Size="16" /> Watched on another day…</button>
-                        @if (u.Plays > 0) { <button type="button" role="menuitem" @onclick="UnwatchAll"><Icon Name="x" Size="16" /> Mark unwatched (remove @(u.Plays == 1 ? "the play" : $"all {u.Plays} plays"))</button> }
-                    </Menu>
-                </SplitButton>
+                <span class="watch-btns">
+                    <button type="button" class="btn @(u.Plays > 0 ? "btn-watched" : "btn-primary")" disabled="@busy" @onclick="QuickWatch"><Icon Name="check" Size="18" /> @* Seen already: tapping it logs another viewing, so say so. *@@(u.Plays switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })</button>
+                    @* Another day: straight to the date picker (unwatching is in ⋯). *@
+                    <WhenButton Class="@(u.Plays > 0 ? "btn-watched" : "btn-primary")" What="@m.Title" Disabled="busy" OnClick="() => { askWhen = true; watchOpen = true; }" />
+                </span>
                 <div class="hero-rate"><span>Rate</span><RatingPicker Compact="true" Value="u.Rating" ValueChanged="Rate" /></div>
                 <button class="btn @(u.InWatchlist ? "btn-on" : "")" disabled="@busy" @onclick="ToggleWatchlist">
                     <Icon Name="bookmark" Size="18" /> @(u.InWatchlist ? "On watchlist" : "Watchlist")

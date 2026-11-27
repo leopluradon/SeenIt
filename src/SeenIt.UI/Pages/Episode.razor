@@ -45,20 +45,11 @@ else if (e is not null)
             <div class="actions">
                 @if (e.Plays is { } plays)
                 {
-                    <SplitButton Class="@(plays.Count > 0 ? "btn-watched" : "btn-primary")" Disabled="@(busy || !aired)" OnClick="QuickWatch">
-                        <ChildContent><Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })</ChildContent>
-                        <Menu>
-                            <button type="button" role="menuitem" @onclick="() => { through = false; askWhen = true; watchOpen = true; }"><Icon Name="calendar" Size="16" /> Watched on another day…</button>
-                            @if (plays.Count == 0 && e.Next is { } nx)
-                            {
-                                <button type="button" role="menuitem" @onclick="WatchAndNext"><Icon Name="chevron-right" Size="16" /> Watched, go to @Fmt.Ep(nx.SeasonNumber, nx.EpisodeNumber)</button>
-                            }
-                            @if (plays.Count == 0 && Fmt.CanThrough(Season, Number))
-                            {
-                                <button type="button" role="menuitem" @onclick="() => { through = true; watchOpen = true; }"><Icon Name="check" Size="16" /> Mark up to here…</button>
-                            }
-                        </Menu>
-                    </SplitButton>
+                    <span class="watch-btns">
+                        <button type="button" class="btn @(plays.Count > 0 ? "btn-watched" : "btn-primary")" disabled="@(busy || !aired)" @onclick="QuickWatch"><Icon Name="check" Size="18" /> @(plays.Count switch { 0 => "Mark watched", 1 => "Watched · watch again", var n => $"Watched {n}× · watch again" })</button>
+                        @* Another day: straight to the date picker ("up to here" and unwatching are in ⋯). *@
+                        <WhenButton Class="@(plays.Count > 0 ? "btn-watched" : "btn-primary")" What="@Fmt.Ep(e.SeasonNumber, e.EpisodeNumber)" Disabled="@(busy || !aired)" OnClick="() => { through = false; askWhen = true; watchOpen = true; }" />
+                    </span>
                     <div class="hero-rate"><span>Rate</span><RatingPicker Compact="true" Value="e.Rating" ValueChanged="Rate" /></div>
                     <button class="btn" @onclick="() => recommendOpen = true" title="Recommend the show to friends"><Icon Name="send" Size="18" /> Recommend</button>
                     <RecommendDialog @bind-Open="recommendOpen" Type="MediaType.Show" TmdbId="Id" Title="@e.ShowName" />
@@ -270,21 +261,6 @@ else if (e is not null)
         var unrated = e?.Rating is null;
         await Act(async () => undo = Api.UndoFor(await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, c, Season, Number)), MediaType.Show, Id), $"Watched {Fmt.Ep(Season, Number)}{Fmt.When(c)}");
         if (unrated && e is { Rating: null, Plays.Count: > 0 } && Fmt.Prefs.RatesOnHome("episode")) ratePrompt = true;   // offer a rating while it's fresh, for the kinds picked under Settings → Ratings
-    }
-
-    /// <summary>One tap: mark this watched now and go to the next episode.</summary>
-    private async Task WatchAndNext()
-    {
-        if (e?.Next is not { } next) return;
-        busy = true;
-        try
-        {
-            var r = await Api.WatchAsync(Fmt.Watch(MediaType.Episode, Id, new WatchChoice(WatchTime.Now), Season, Number));
-            Toasts.Show($"Watched {Fmt.Ep(Season, Number)}", undo: Api.UndoFor(r, MediaType.Show, Id));
-            Nav.NavigateTo(Fmt.EpisodeHref(Id, next.SeasonNumber, next.EpisodeNumber));
-        }
-        catch (Exception ex) { Toasts.Error(ex); }
-        finally { busy = false; }
     }
 
     private Task RemovePlay(PlayDto p) => Act(async () =>

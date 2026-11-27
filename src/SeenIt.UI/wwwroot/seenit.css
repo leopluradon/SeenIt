@@ -2108,3 +2108,8 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .pick-custom-field { display: inline-flex; align-items: center; gap: 4px; }
 .pick-custom input[type=number] { width: 4.2em; }
 .pick-custom input[type=time] { width: auto; }
+/* Mark watched as a split button: the calendar half opens the date picker straight away. */
+.watch-btns { display: inline-flex; align-items: stretch; }
+.watch-btns > .btn:first-child:not(:only-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.watch-btns > .when-btn { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 1px; padding-left: 10px; padding-right: 10px; }
+.watch-status { cursor: default; }
