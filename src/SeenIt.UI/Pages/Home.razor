@@ -1,5 +1,6 @@
 @page "/"
 @inject ApiClient Api
+@inject IJSRuntime Js
 @inject NavigationManager Nav
 @inject SessionState Session
 @inject Toasts Toasts
@@ -32,9 +33,11 @@
             </section>
         }
         @* Sections in the order the user chose (Customize home); one spinner while the dashboard loads. *@
-        @{ var waiting = false; }
         @foreach (var key in UiPrefs.HomeOrder(Session.Me?.HomeOrder).Where(Visible))
         {
+            @* Not loaded yet: its skeleton, in its own shape (see Skeleton). *@
+            @if (Skeleton(key)) { <HomeSkeleton Section="@key" @key="key" /> }
+            else {
             @switch (key)
             {
                 case "now":
@@ -116,8 +119,7 @@
                     }
                     break;
                 case "upnext":
-                    @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
-                    else if (dash is not null && !Fresh)
+                    @if (dash is not null && !Fresh)
                     {
                         <section class="row-section">
                             <div class="section-head">
@@ -152,8 +154,7 @@
                     }
                     break;
                 case "upcoming":
-                    @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
-                    else if (dash is not null)
+                    @if (dash is not null)
                     {
                         @if (dash.Upcoming.Count > 0)
                         {
@@ -204,8 +205,7 @@
                     }
                     break;
                 case "recent":
-                    @if (dash is null && error is null) { if (!waiting) { waiting = true; <Spinner /> } }
-                    else if (dash is not null && !Fresh)
+                    @if (dash is not null && !Fresh)
                     {
                         <section class="row-section">
                             <div class="section-head">
@@ -250,6 +250,7 @@
                         <Frozen Key="@((key, widgetData))"><ProfileWidgetView Widget="HomeWidgets[key]" P="Me" D="widgetData" /></Frozen>
                     </section>
                     break;
+            }
             }
         }
     </Authorized>
@@ -346,6 +347,43 @@
     private bool signedIn, customizeOpen;
     private HashSet<string> hidden = [];
     private List<(string Href, string Text)> reviewLinks = [];
+    private bool reviewLoaded, nowLoaded, nowCastLoaded;
+
+    // Skeletons. Sections that hide when empty (To rate, On this day, Friends…) only get one if they had something
+    // last time Home opened on this device, so an empty one doesn't flash up and vanish. Up next always does.
+    private const string FilledKey = "seenit.home.filled";
+    private static readonly string[] FilledFirstTime = ["upnext", "recent"];
+    private HashSet<string> filledBefore = [.. FilledFirstTime];
+
+    private bool Loaded(string key) => key switch
+    {
+        "upnext" or "upcoming" or "recent" => dash is not null || error is not null,
+        "now" => nowLoaded,
+        "now-cast" => nowCastLoaded,
+        "review" => reviewLoaded,
+        "torate" => toRate is not null,
+        "friends" => feed is not null,
+        "onthisday" => onThisDay is not null,
+        "goals" => goals is not null,
+        _ => true,   // poster rows and widgets draw their own placeholders
+    };
+
+    private bool Skeleton(string key) => signedIn && !Loaded(key) && (key == "upnext" || filledBefore.Contains(key));
+
+    /// <summary>Which sections had something this time, for next time's skeletons.</summary>
+    private IEnumerable<string> Filled()
+    {
+        yield return "upnext";
+        if (now is not null) yield return "now";
+        if (nowCast is { Count: > 0 } || nowGuests is { Count: > 0 }) yield return "now-cast";
+        if (reviewLinks.Count > 0) yield return "review";
+        if (toRate is { Count: > 0 }) yield return "torate";
+        if (dash is { Upcoming.Count: > 0 }) yield return "upcoming";
+        if (dash is { RecentHistory.Count: > 0 }) yield return "recent";
+        if (feed is { } f && (f.Activity.Count > 0 || f.WatchingNow.Count > 0)) yield return "friends";
+        if (onThisDay is { Count: > 0 }) yield return "onthisday";
+        if (goals is { Count: > 0 }) yield return "goals";
+    }
     private ServerFeatures? features;
     private List<OnThisDayItem>? onThisDay;
     private List<GoalDto>? goals;
@@ -372,10 +410,17 @@
         if (!signedIn) { try { features = await Api.FeaturesAsync(); } catch { } }
         if (signedIn)
         {
+            try { if (await Js.InvokeAsync<string?>("localStorage.getItem", FilledKey) is { Length: > 0 } saved) filledBefore = [.. saved.Split(',')]; }
+            catch (JSException) { }
             loads.AddRange([Drawn(LoadDashboard()), Drawn(LoadToRate()), Drawn(LoadWidgets()), Drawn(LoadForYou()), Drawn(LoadReviewLinks())]);
             loads.AddRange(LoadExtras().Select(Drawn));
         }
         await Task.WhenAll(loads);
+        if (signedIn)
+        {
+            try { await Js.InvokeVoidAsync("localStorage.setItem", FilledKey, string.Join(',', Filled())); }
+            catch (JSException) { }
+        }
     }
 
     /// <summary>Draws the page once this part has loaded, without waiting for the rest.</summary>
@@ -490,8 +535,10 @@
         async Task NowAndCast()
         {
             try { if (!hidden.Contains("now") || !hidden.Contains("now-cast")) now = await Api.CheckInAsync(); } catch { }
+            nowLoaded = true;
             StateHasChanged();   // Watching now shows before its cast row has loaded
             await LoadNowCast();
+            nowCastLoaded = true;
         }
         static async Task Try(Func<Task> load) { try { await load(); } catch { } }
     }
@@ -542,9 +589,10 @@
     /// <summary>Early in a month, point at last month's review (and in January, last year's); otherwise this month so far.</summary>
     private async Task LoadReviewLinks()
     {
-        if (hidden.Contains("review")) return;
+        if (hidden.Contains("review")) { reviewLoaded = true; return; }
         List<ReviewYear> periods;
-        try { periods = await Api.ReviewPeriodsAsync(); } catch { return; }
+        try { periods = await Api.ReviewPeriodsAsync(); } catch { reviewLoaded = true; return; }
+        reviewLoaded = true;
         bool Has(int y, int m) => periods.Any(p => p.Year == y && p.Months.Any(x => x.Month == m && x.Plays > 0));
 
         var today = DateTime.Today;

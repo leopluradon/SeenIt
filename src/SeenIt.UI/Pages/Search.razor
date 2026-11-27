@@ -40,7 +40,7 @@
         </ul>
     </section>
 }
-@if (loading) { <Spinner /> }
+@if (loading) { <Spinner Shape="grid" /> }
 else if (!string.IsNullOrWhiteSpace(Q))
 {
     var all = Type is null;

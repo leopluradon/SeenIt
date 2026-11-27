@@ -1,6 +1,13 @@
 @* Streaming / rent / buy options for the viewer's country, from TMDB (data by JustWatch). *@
 @inject ApiClient Api
-@if (data is { IsEmpty: false } d && !Fmt.Prefs.HideWhereToWatch)
+@if (data is null && loading && !Fmt.Prefs.HideWhereToWatch)
+{
+    <section class="panel where-to-watch" aria-busy="true">
+        <div class="section-head"><h2>Where to watch</h2></div>
+        <div class="provider-logos">@for (var i = 0; i < 4; i++) { <span class="skeleton ww-skel-logo"></span> }</div>
+    </section>
+}
+else if (data is { IsEmpty: false } d && !Fmt.Prefs.HideWhereToWatch)
 {
     <section class="panel where-to-watch">
         <div class="section-head">
@@ -34,6 +41,7 @@ else if (data is { IsEmpty: true } && ShowEmpty)
     [Parameter, EditorRequired] public int TmdbId { get; set; }
     [Parameter] public bool ShowEmpty { get; set; }
     private WatchProvidersDto? data;
+    private bool loading;
     private (MediaType, int)? loaded;
 
     protected override async Task OnParametersSetAsync()
@@ -42,8 +50,10 @@ else if (data is { IsEmpty: true } && ShowEmpty)
         if (loaded == (Type, TmdbId)) return;
         loaded = (Type, TmdbId);
         data = null;
+        loading = true;
         try { data = await Api.ProvidersAsync(Type, TmdbId); }
         catch { /* optional extra; leave it out if TMDB is slow */ }
+        loading = false;
     }
 
     private RenderFragment Logos(WatchProvidersDto d, IEnumerable<ProviderDto> items) => __builder =>

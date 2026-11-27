@@ -17,7 +17,7 @@
             </label>
         }
     </div>
-    @if (loading && season is null) { <Spinner /> }
+    @if (loading && season is null) { <Spinner Shape="list" /> }
     else if (season is not null)
     {
         <ol class="ep-list @(loading ? "is-loading" : "")">

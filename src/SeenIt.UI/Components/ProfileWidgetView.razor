@@ -25,7 +25,7 @@
                     <div class="stat"><span class="stat-value">@pt.Ratings.ToString("N0")</span><span class="stat-label">ratings</span></div>
                 </div>
             }
-            else if (D is null) { <Spinner /> }
+            else if (D is null) { <Spinner Shape="block" /> }
             break;
 
         case "tiles":
@@ -229,7 +229,7 @@
                 </a>
             }
             else if (Widget.Media is null) { <Nothing Text="@(Editing ? "Pick a movie or show (Edit)." : "")" /> }
-            else if (D is null) { <Spinner /> }
+            else if (D is null) { <Spinner Shape="block" /> }
             break;
 
         case "pinned-list":
@@ -241,12 +241,12 @@
                 </div>
             }
             else if (Widget.ListId is null) { <Nothing Text="@(Editing ? "Pick one of your lists (Edit)." : "")" /> }
-            else if (D is null) { <Spinner /> }
+            else if (D is null) { <Spinner Shape="block" /> }
             else if (Editing) { <Nothing Text="This list is private or was deleted, so nobody else sees it." /> }
             break;
 
         default:
-            @if (D is null && kind is not null) { <Spinner /> }
+            @if (D is null && kind is not null) { <Spinner Shape="block" /> }
             break;
     }
 </div>

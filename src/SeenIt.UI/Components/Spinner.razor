@@ -1,5 +1,6 @@
 @* Loading. With a Shape, a placeholder shaped like what's coming (so the page doesn't jump when it arrives):
-   "grid" poster tiles, "list" rows with a thumbnail, "title" a title page's hero. Otherwise a spinner. *@
+   "grid" poster tiles, "list" rows with a thumbnail, "title" a title page's hero, "cards" list cards, "panels" stat
+   panels, "block" one box. Otherwise a spinner. *@
 @switch (Shape)
 {
     case "grid":
@@ -17,6 +18,15 @@
             <span class="skel-poster skeleton"></span>
             <span class="skel-lines"><span class="skeleton skel-h"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton skel-btn"></span></span>
         </div>
+        break;
+    case "cards":   // list cards (Lists)
+        <div class="list-grid" role="status" aria-label="Loading">@for (var i = 0; i < 4; i++) { <div class="skeleton skel-card"></div> }</div>
+        break;
+    case "panels":   // stat panels (Stats)
+        <div class="skel-panels" role="status" aria-label="Loading">@for (var i = 0; i < 3; i++) { <div class="skeleton skel-panel"></div> }</div>
+        break;
+    case "block":   // one box (a widget, a pick)
+        <div class="skeleton skel-block" role="status" aria-label="Loading"></div>
         break;
     default:
         <div class="spinner-wrap"><div class="spinner" role="status" aria-label="Loading"></div></div>

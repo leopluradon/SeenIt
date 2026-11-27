@@ -18,7 +18,7 @@
 @if (Tab == "saved")
 {
     <p class="muted small">Other people's public lists you saved.</p>
-    @if (saved is null) { <Spinner /> }
+    @if (saved is null) { <Spinner Shape="cards" /> }
     else if (saved.Count == 0) { <Empty Title="No saved lists yet.">Open someone's public list and tap <b>Save</b>, or find some under <a href="lists?tab=browse">Browse</a>.</Empty> }
     else { <div class="list-grid">@foreach (var l in saved) { <ListCard List="l" @key="l.Id" /> }</div> }
 }
@@ -32,7 +32,7 @@ else if (Tab == "browse")
         <button class="chip @(recent ? "" : "on")" @onclick="() => SetSort(false)">Most saved</button>
         <button class="chip @(recent ? "on" : "")" @onclick="() => SetSort(true)">Recently updated</button>
     </div>
-    @if (browse is null) { <Spinner /> }
+    @if (browse is null) { <Spinner Shape="cards" /> }
     else if (browse.Count == 0) { <Empty Title="No public lists found." /> }
     else { <div class="list-grid">@foreach (var l in browse) { <ListCard List="l" @key="l.Id" /> }</div> }
 }
@@ -45,7 +45,7 @@ else
 <ErrorBox Message="@error" OnRetry="Load" />
 @if (!string.IsNullOrWhiteSpace(query))
 {
-    @if (hits is null) { <Spinner /> }
+    @if (hits is null) { <Spinner Shape="list" /> }
     else if (hits.Count == 0) { <Empty Title="@($"Nothing called “{query.Trim()}”.")">It isn't on your watchlist or in any of your lists.</Empty> }
     else
     {

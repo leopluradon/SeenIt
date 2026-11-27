@@ -65,7 +65,7 @@
 </div>
 
 <ErrorBox Message="@error" OnRetry="Roll" />
-@if (busy && pick is null) { <Spinner /> }
+@if (busy && pick is null) { <Spinner Shape="block" /> }
 else if (nothing)
 {
     <Empty Title="Nothing matches.">

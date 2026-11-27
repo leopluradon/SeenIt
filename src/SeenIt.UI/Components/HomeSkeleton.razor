@@ -1,0 +1,52 @@
+@* A Home section that hasn't loaded yet, in its own shape (heading included), so the page keeps its layout and
+   fills in rather than jumping as each section arrives. *@
+<section class="@(Section == "review" ? "home-skel-banner skeleton" : "row-section home-skel")" aria-busy="true" aria-label="@($"Loading {Title ?? "section"}")">
+    @if (Section != "review")
+    {
+        @if (Title is not null) { <div class="section-head"><h2>@Title</h2></div> }
+        @switch (Section)
+        {
+            case "now":
+                <div class="skeleton home-skel-now"></div>
+                break;
+            case "now-cast":
+                <div class="cast-scroller">@for (var i = 0; i < 6; i++) { <div class="cast"><div class="skeleton home-skel-cast"></div><div class="skel-lines"><span class="skeleton"></span></div></div> }</div>
+                break;
+            case "upnext":
+                <div class="card-scroller">@for (var i = 0; i < 3; i++) { <div class="skeleton home-skel-upnext"></div> }</div>
+                break;
+            case "torate":
+                <div class="card-scroller torate-scroller">@for (var i = 0; i < 3; i++) { <div class="skeleton home-skel-torate"></div> }</div>
+                break;
+            case "upcoming":
+                <div class="skel-list">@for (var i = 0; i < 3; i++) { <div class="skel-row"><span class="skel-img skeleton"></span><span class="skel-lines"><span class="skeleton"></span><span class="skeleton"></span></span></div> }</div>
+                break;
+            case "onthisday":
+                <div class="otd-list">@for (var i = 0; i < 2; i++) { <div class="skeleton home-skel-otd"></div> }</div>
+                break;
+            case "goals":
+                <div class="home-goals">@for (var i = 0; i < 2; i++) { <div class="skeleton home-skel-goal"></div> }</div>
+                break;
+            default:   // recent, friends: a row of posters
+                <div class="poster-scroller">@for (var i = 0; i < 6; i++) { <div class="poster-card skeleton"></div> }</div>
+                break;
+        }
+    }
+</section>
+@code {
+    /// <summary>The Home section key (UiPrefs.HomeSections).</summary>
+    [Parameter, EditorRequired] public string Section { get; set; } = "";
+
+    private string? Title => Section switch
+    {
+        "upnext" => "Up next",
+        "recent" => "Recently watched",
+        "upcoming" => "Coming up",
+        "torate" => "To rate",
+        "friends" => "Friends' activity",
+        "onthisday" => "On this day",
+        "goals" => $"{DateTime.Today.Year} goals",
+        "now-cast" => "Cast",
+        _ => null,
+    };
+}

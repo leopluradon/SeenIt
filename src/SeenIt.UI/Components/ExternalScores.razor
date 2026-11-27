@@ -1,6 +1,6 @@
 @* Scores from IMDb, Rotten Tomatoes, Metacritic, Letterboxd... loaded after the page itself. *@
 @inject ApiClient Api
-@if (Shown is { Count: > 0 } || TmdbScore is > 0)
+@if (Shown is { Count: > 0 } || TmdbScore is > 0 || Loading)
 {
     var shown = Shown ?? [];
     <div class="ext-scores">
@@ -10,6 +10,7 @@
             <a class="ext-score src-tmdb" href="@TmdbUrl" target="_blank" rel="noopener noreferrer"
                title="@($"TMDB: {tmdb:0.0} out of 10{(TmdbVotes is > 0 and var v ? $" · {v:N0} votes" : "")}{(TmdbNote is { } note ? $" · {note}" : "")}")"><b>@tmdb.ToString("0.0")</b> <span>TMDB</span></a>
         }
+        @if (Loading) { <span class="ext-score ext-skel skeleton" aria-label="Loading scores"></span><span class="ext-score ext-skel skeleton"></span> }
         @foreach (var s in shown)
         {
             var text = s.Percent ? $"{s.Value:0}%" : s.Max == 100 ? $"{s.Value:0}" : $"{s.Value:0.0#}";
@@ -48,14 +49,18 @@
     private List<ExternalScore>? Shown => scores?.Where(s => Fmt.ShowsScore(s.Source, Type, IsSeason))
         .OrderBy(s => Fmt.Prefs.Scores is { } pick ? pick.ToList().IndexOf(s.Source) : 0).ToList();
     private (MediaType, int, int, int) loadedFor;
+    /// <summary>Still asking the other sites, and some are wanted here (Settings → Display → Scores).</summary>
+    private bool Loading => scores is null && !failed && (Fmt.Prefs.Scores is null || Fmt.Prefs.Scores.Any(x => x is not ("tmdb" or "friends")));
+    private bool failed;
 
     protected override async Task OnParametersSetAsync()
     {
         if (loadedFor == (Type, TmdbId, Season, IsSeason ? -1 : Episode)) return;
         loadedFor = (Type, TmdbId, Season, IsSeason ? -1 : Episode);
         scores = null;
+        failed = false;
         try { scores = IsSeason ? await Api.SeasonScoresAsync(TmdbId, Season)
                 : Type == MediaType.Episode ? await Api.EpisodeScoresAsync(TmdbId, Season, Episode) : await Api.ScoresAsync(Type, TmdbId); }
-        catch { scores = null; }   // extra scores are a nicety; the page is fine without them
+        catch { scores = null; failed = true; }   // extra scores are a nicety; the page is fine without them
     }
 }

@@ -28,7 +28,7 @@
 @if (Session.Me is not null) { <SeenModePicker Value="seenMode" ValueChanged="m => seenMode = m" /> }
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (items.Count == 0 && loading) { <Spinner /> }
+@if (items.Count == 0 && loading) { <Spinner Shape="grid" /> }
 <div class="poster-grid">
     @foreach (var m in items.Where(m => seenMode != SeenMode.Hide || m.Watched != true))
     {

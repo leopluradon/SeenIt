@@ -23,7 +23,7 @@
 </div>
 
 <ErrorBox Message="@error" OnRetry="Load" />
-@if (goals is null && error is null) { <Spinner /> }
+@if (goals is null && error is null) { <Spinner Shape="panels" /> }
 else if (goals is not null)
 {
     @if (goals.Count == 0)
@@ -65,7 +65,7 @@ else if (goals is not null)
 @* Yearly challenges: optional, taken on from the list below and ticked off by themselves from what you watch. *@
 <section class="row-section challenges">
     <div class="section-head"><h2>Challenges <span class="muted small">@ShownYear</span></h2></div>
-    @if (challenges is null) { <Spinner /> }
+    @if (challenges is null) { <Spinner Shape="panels" /> }
     else
     {
         // Someone else's come already narrowed to the ones they've taken on.

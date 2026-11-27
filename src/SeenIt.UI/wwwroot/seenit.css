@@ -2123,3 +2123,21 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .cast-more .cast-fallback { color: var(--accent-hover); }
 .cast-more-btn { margin-top: 16px; }
 .skel-inline { width: 7em; }
+
+/* Home sections still loading (HomeSkeleton): each in its own shape. */
+.home-skel-banner { height: 54px; border-radius: var(--radius); margin: 4px 0 8px; }
+.home-skel-now { height: 104px; border-radius: var(--radius); }
+.home-skel-cast { width: 112px; height: 140px; border-radius: var(--radius); }
+.home-skel .cast .skel-lines { margin-top: 8px; }
+.home-skel-upnext { height: 252px; border-radius: var(--radius); }
+.home-skel-torate { height: 150px; border-radius: var(--radius); }
+.home-skel-otd { height: 112px; border-radius: var(--radius); }
+.home-skel-goal { height: 128px; border-radius: var(--radius); }
+.home-skel .section-head h2 { color: var(--muted); }
+/* More loading shapes (Spinner Shape=cards|panels|block), and the bits of a title page that load after it. */
+.skel-card { height: 190px; border-radius: var(--radius); }
+.skel-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 12px; }
+.skel-panel { height: 160px; border-radius: var(--radius); }
+.skel-block { height: 150px; border-radius: var(--radius); }
+.ext-skel { width: 76px; min-height: 30px; border-color: transparent; }
+.ww-skel-logo { display: inline-block; width: 44px; height: 44px; border-radius: 10px; }
