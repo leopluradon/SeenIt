@@ -77,9 +77,11 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 return new PersonCreditDto(type, c.Id, (type == MediaType.Movie ? c.Title : c.Name) ?? "",
                     TmdbDates.Parse(type == MediaType.Movie ? c.ReleaseDate : c.FirstAirDate),
                     string.Join(", ", g.Select(x => x.Job).Where(x => x is not null).Distinct()),
-                    type == MediaType.Show ? g.Sum(x => x.EpisodeCount ?? 0) : null,
+                    // Each job has its own count (Director 2, Consulting Producer 7): the most of them, not their sum.
+                    type == MediaType.Show ? g.Max(x => x.EpisodeCount ?? 0) : null,
                     c.PosterPath, g.Max(x => x.VoteCount ?? 0), Watched(type, c.Id),
-                    Jobs: g.Where(x => !string.IsNullOrWhiteSpace(x.Job)).Select(x => new CrewJob(x.Job!, x.Department)).Distinct().ToList(),
+                    Jobs: g.Where(x => !string.IsNullOrWhiteSpace(x.Job)).GroupBy(x => (x.Job!, x.Department))
+                        .Select(j => new CrewJob(j.Key.Item1, j.Key.Department, type == MediaType.Show ? j.Max(x => x.EpisodeCount) : null)).ToList(),
                     PartlySeen: Partly(type, c.Id), Watching: type == MediaType.Show && watching.Contains(c.Id), InLibrary: owned.Contains((type, c.Id)));
             }).OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
 
@@ -271,9 +273,9 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
         Dictionary<int, Dictionary<(int, int), int>> watchedEpisodes, CancellationToken ct)
     {
         var result = new List<WatchedWith>();
-        // Behind the camera: any job on a movie, but on a show only creating it (an episode director isn't in every episode).
-        var crewByTitle = crewCredits.Where(c => c.MediaType == "movie" || c.Job == "Creator")
-            .GroupBy(c => (c.MediaType, c.Id)).ToDictionary(g => g.Key, g => g.ToList());
+        // Behind the camera: any job on a movie; on a show, creating it means all of it, and any other job (directing,
+        // writing, producing) the episodes or seasons TMDB lists for it.
+        var crewByTitle = crewCredits.GroupBy(c => (c.MediaType, c.Id)).ToDictionary(g => g.Key, g => g.ToList());
         string? Jobs(string mediaType, int id) => crewByTitle.TryGetValue((mediaType, id), out var g)
             && string.Join(", ", g.Select(x => x.Job).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct()) is { Length: > 0 } s ? s : null;
 
@@ -309,30 +311,44 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
             // regular, then six season 4 episodes).
             var episodes = new HashSet<(int, int)>();
             var seasons = new HashSet<int>();
-            foreach (var credit in g.Where(c => c.CreditId is not null && c.Job is null))   // cast credits only
+            // Crew: a job credited per episode (a director's), or for whole seasons (a producer's: every episode in them).
+            var crewEpisodes = new HashSet<(int, int)>();
+            var crewSeasons = new HashSet<int>();
+            var created = g.Any(c => c.Job == "Creator");
+            foreach (var credit in g.Where(c => c.CreditId is not null && c.Job != "Creator"))
             {
+                var (eps, ss) = credit.Job is null ? (episodes, seasons) : (crewEpisodes, crewSeasons);
                 try
                 {
                     var d = await tmdb.GetCreditAsync(credit.CreditId!, ct);
-                    foreach (var e in d?.Media?.Episodes ?? []) episodes.Add((e.SeasonNumber, e.EpisodeNumber));
-                    foreach (var se in d?.Media?.Seasons ?? []) seasons.Add(se.SeasonNumber);
+                    foreach (var e in d?.Media?.Episodes ?? []) eps.Add((e.SeasonNumber, e.EpisodeNumber));
+                    foreach (var se in d?.Media?.Seasons ?? []) ss.Add(se.SeasonNumber);
                 }
                 catch (HttpRequestException ex) { log.LogInformation(ex, "Credit {Id} lookup failed", credit.CreditId); }
             }
             var mine = watchedEpisodes[g.Key];
-            var created = Jobs("tv", g.Key) is not null;
             int InSeason(int season) => episodeMeta.Keys.Count(e => e.ShowTmdbId == g.Key && e.SeasonNumber == season);
-            var guest = episodes.Count > 0 && seasons.Count == 0 && !created;   // their own show: all of it
+            // Just some episodes (a guest, an episode's director): those are listed by name.
+            var guest = !created && seasons.Count == 0 && crewSeasons.Count == 0 && (episodes.Count > 0 || crewEpisodes.Count > 0);
             List<(int, int)> keys;
-            if (created || !g.Any(c => c.Job is null)) keys = mine.Keys.ToList();
-            else if (guest) keys = mine.Keys.Where(episodes.Contains).ToList();
-            else if (episodes.Count > 0)
+            if (created) keys = mine.Keys.ToList();   // their own show: all of it
+            else
             {
-                // Both: their listed episodes, and the seasons they're a regular in (checked like any regular's).
-                var regular = await RegularEpisodesAsync(personId, g.Key, mine.Keys.Where(k => seasons.Contains(k.Item1)), InSeason, ct);
-                keys = mine.Keys.Where(episodes.Contains).Union(regular).ToList();
+                List<(int, int)> acting = [];
+                if (g.Any(c => c.Job is null))
+                {
+                    if (episodes.Count > 0 && seasons.Count == 0) acting = mine.Keys.Where(episodes.Contains).ToList();
+                    else if (episodes.Count > 0)
+                    {
+                        // Both: their listed episodes, and the seasons they're a regular in (checked like any regular's).
+                        var regular = await RegularEpisodesAsync(personId, g.Key, mine.Keys.Where(k => seasons.Contains(k.Item1)), InSeason, ct);
+                        acting = mine.Keys.Where(episodes.Contains).Union(regular).ToList();
+                    }
+                    else acting = await RegularEpisodesAsync(personId, g.Key, mine.Keys, InSeason, ct);
+                }
+                var crew = mine.Keys.Where(k => crewEpisodes.Contains(k) || crewSeasons.Contains(k.Item1));
+                keys = acting.Union(crew).ToList();
             }
-            else keys = await RegularEpisodesAsync(personId, g.Key, mine.Keys, InSeason, ct);
             return (Show: g.Key, Credits: g, Guest: guest, Keys: keys);
         }));
 

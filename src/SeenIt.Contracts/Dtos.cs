@@ -785,7 +785,8 @@ public record PersonCreditDto(
                                             // BlurEpisodeCounts setting on, its episode count is blurred (it gives away who stays)
     bool InLibrary = false);                // you own it (Library), in any format
 
-public record CrewJob(string Job, string? Department);
+/// <param name="Episodes">On a show, how many episodes this job was (TMDB's count for it alone).</param>
+public record CrewJob(string Job, string? Department, int? Episodes = null);
 
 /// <summary>A title the viewer has watched this person in.</summary>
 public record WatchedWith(

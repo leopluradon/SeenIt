@@ -367,12 +367,17 @@ else if (p is not null)
     {
         if (p is null) return [];
         var acting = groups.Contains(Acting) ? p.Cast.Where(c => !c.Appearance).ToList() : [];
-        var crew = p.Crew.Select(c => (Credit: c, Jobs: JobsOf(c).Where(j => groups.Contains(GroupOf(j))).Select(j => j.Job).Distinct().ToList()))
+        var crew = p.Crew.Select(c => (Credit: c, Jobs: JobsOf(c).Where(j => groups.Contains(GroupOf(j))).DistinctBy(j => j.Job).ToList()))
             .Where(x => x.Jobs.Count > 0).ToList();
         var crewOnly = groups.All(g => g != Acting);
         var rows = new Dictionary<(MediaType, int), PersonCreditDto>();
+        // A show's episode count is the shown jobs' own (directing 2 of 7, not every job added up).
         foreach (var (c, jobs) in crew)
-            rows[(c.Type, c.TmdbId)] = c with { Role = string.Join(", ", jobs) };
+            rows[(c.Type, c.TmdbId)] = c with
+            {
+                Role = string.Join(", ", jobs.Select(j => j.Job)),
+                EpisodeCount = c.Type == MediaType.Show && jobs.Max(j => j.Episodes) is > 0 and var n ? n : c.EpisodeCount,
+            };
         foreach (var c in acting)
         {
             var key = (c.Type, c.TmdbId);
