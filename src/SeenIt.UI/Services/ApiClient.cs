@@ -230,10 +230,10 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<List<OnThisDayItem>> OnThisDayAsync() => GetAsync<List<OnThisDayItem>>($"api/onthisday?tz={Tz}");
 
     /// <summary>A random pick, or null when nothing matches the filters.</summary>
-    public Task<PickDto?> PickAsync(PickKind kind, PickSource source, int? maxMinutes, bool streaming, IEnumerable<string> exclude, IEnumerable<string>? with = null) =>
+    public Task<PickDto?> PickAsync(PickKind kind, PickSource source, int? maxMinutes, bool streaming, IEnumerable<string> exclude, IEnumerable<string>? with = null, bool wholeShows = false) =>
         SendAsync<PickDto>(HttpMethod.Get,
             $"api/pick?kind={kind}&source={source}&streaming={(streaming ? "true" : "false")}&region={DeviceRegion}"
-            + (maxMinutes is { } m ? $"&maxMinutes={m}" : "")
+            + (maxMinutes is { } m ? $"&maxMinutes={m}" + (wholeShows ? "&whole=true" : "") : "")
             + (with?.Any() == true ? $"&with={Uri.EscapeDataString(string.Join(',', with))}" : "")
             + $"&exclude={Uri.EscapeDataString(string.Join(',', exclude))}");
 

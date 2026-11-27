@@ -61,6 +61,13 @@
         <button class="chip @(source == PickSource.Paused ? "on" : "")" @onclick="() => Set(() => source = PickSource.Paused)">Paused shows</button>
         }
         <label class="check small"><input type="checkbox" checked="@streaming" @onchange="e => Set(() => streaming = e.Value is true)" /> @(Fmt.Prefs.MyServices is { Count: > 0 } ? "On my services" : "Streaming now")</label>
+        @if (maxMinutes is not null && kind != PickKind.Movie)
+        {
+            @* On by default: with an evening to spare, a show you could actually get through. *@
+            <label class="check small" title="Every aired episode you haven't seen fits in the time you have (a show you haven't started: all of it)">
+                <input type="checkbox" checked="@wholeShows" @onchange="e => Set(() => wholeShows = e.Value is true)" /> Only shows I can finish
+            </label>
+        }
     </div>
 </div>
 
@@ -70,6 +77,10 @@ else if (nothing)
 {
     <Empty Title="Nothing matches.">
         <span>@(with.Count > 0 ? "Nothing on your watchlists that none of you has seen fits. Loosen the filters, or add to your " : "Loosen the filters, or add things to your ")<a href="watchlist">watchlist</a>.</span>
+        @if (wholeShows && maxMinutes is not null && kind != PickKind.Movie)
+        {
+            <div class="empty-actions"><button class="btn btn-sm" @onclick="() => Set(() => wholeShows = false)">Include shows I can't finish</button></div>
+        }
     </Empty>
 }
 else if (pick is { } p)
@@ -170,6 +181,7 @@ else if (pick is { } p)
     private PickSource source = PickSource.Both;
     private int? maxMinutes;
     private bool streaming, busy, nothing;
+    private bool wholeShows = true;
     private PickDto? pick;
     private string? error;
     private readonly List<string> seen = [];
@@ -200,7 +212,7 @@ else if (pick is { } p)
             if (pick is not null) seen.Add($"{pick.Media.Type}:{pick.Media.TmdbId}");
             // Don't let the "already shown" list grow without end; old picks can come round again.
             if (seen.Count > 25) seen.RemoveAt(0);
-            pick = await Api.PickAsync(kind, source, maxMinutes, streaming, seen, with);
+            pick = await Api.PickAsync(kind, source, maxMinutes, streaming, seen, with, wholeShows);
             nothing = pick is null;
         }
         catch (Exception ex) { error = ex.Message; }

@@ -345,7 +345,7 @@ public static class ApiEndpoints
         g.MapGet("/live", (HttpContext http, ClaimsPrincipal p, LiveHub hub, CancellationToken ct) => LiveHub.StreamAsync(http, p.UserId(), hub, ct));
         g.MapGet("/status/{type}/{id:int}", (MediaType type, int id, int? season, int? episode, ClaimsPrincipal p, TrackingService t, CancellationToken ct) =>
             t.ItemStatusAsync(p.UserId(), type, id, season, episode, ct));
-        g.MapGet("/pick", async (PickKind? kind, PickSource? source, int? maxMinutes, bool? streaming, string? region, string? exclude, string? with,
+        g.MapGet("/pick", async (PickKind? kind, PickSource? source, int? maxMinutes, bool? streaming, string? region, string? exclude, string? with, bool? whole,
             ClaimsPrincipal p, AppDbContext db, PickService picks, SocialService social, CancellationToken ct) =>
         {
             var uid = p.UserId();
@@ -360,7 +360,7 @@ public static class ApiEndpoints
                 if (friend.Id != uid) group.Add((friend.Id, friend.DisplayName ?? friend.UserName ?? name));
             }
             var pick = await picks.PickAsync(uid, kind ?? PickKind.Any, source ?? PickSource.Both, maxMinutes is > 0 ? maxMinutes : null,
-                streaming ?? false, code, skip, ct, group);
+                streaming ?? false, code, skip, ct, group, whole == true);
             return pick is null ? Results.NoContent() : Results.Ok(pick);
         });
         g.MapGet("/onthisday", (string? tz, ClaimsPrincipal p, OnThisDayService s, CancellationToken ct) => s.GetAsync(p.UserId(), tz, ct));

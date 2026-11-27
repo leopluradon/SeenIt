@@ -13,8 +13,11 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
 {
     internal record Candidate(MediaType Type, int TmdbId, MediaSummary Media, int? Minutes, string Reason, int Weight = 1);
 
+    /// <param name="wholeShows">With a time limit: only shows whose aired episodes you haven't seen all fit in it (a
+    /// show you haven't started: all of it), so you could finish it.</param>
     public async Task<PickDto?> PickAsync(Guid userId, PickKind kind, PickSource source, int? maxMinutes, bool streamingOnly,
-        string region, IReadOnlyCollection<string> exclude, CancellationToken ct, IReadOnlyList<(Guid Id, string Name)>? group = null)
+        string region, IReadOnlyCollection<string> exclude, CancellationToken ct, IReadOnlyList<(Guid Id, string Name)>? group = null,
+        bool wholeShows = false)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var candidates = new List<Candidate>();
@@ -60,7 +63,15 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
             candidates = candidates.Select(c => c.Minutes is null && avg.TryGetValue(c.TmdbId, out var m) && c.Type == MediaType.Show ? c with { Minutes = m } : c).ToList();
         }
 
-        if (maxMinutes is { } max) candidates = candidates.Where(c => c.Minutes is { } m && m <= max).ToList();
+        if (maxMinutes is { } max)
+        {
+            candidates = candidates.Where(c => c.Minutes is { } m && m <= max).ToList();
+            if (wholeShows)
+            {
+                var left = await MinutesLeftAsync(userId, candidates.Where(c => c.Type == MediaType.Show).ToDictionary(c => c.TmdbId, c => c.Minutes ?? 0), today, ct);
+                candidates = candidates.Where(c => c.Type != MediaType.Show || left.GetValueOrDefault(c.TmdbId) is > 0 and var m && m <= max).ToList();
+            }
+        }
         var total = candidates.Count;
         // "Pick again" skips what was just shown, unless that's all there is.
         var fresh = candidates.Where(c => !exclude.Contains($"{c.Type}:{c.TmdbId}")).ToList();
@@ -97,6 +108,26 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
             return pick;
         }
         return null;
+    }
+
+    /// <summary>
+    /// How long the aired regular episodes you haven't seen of each show run, in minutes (an episode with no length of
+    /// its own counts as the show's usual length). A show with no episode list yet counts as 0: it can't be timed.
+    /// </summary>
+    internal async Task<Dictionary<int, long>> MinutesLeftAsync(Guid userId, Dictionary<int, int> typical, DateOnly today, CancellationToken ct)
+    {
+        var ids = typical.Keys.ToList();
+        if (ids.Count == 0) return [];
+        var episodes = await db.Episodes.AsNoTracking()
+            .Where(e => ids.Contains(e.ShowTmdbId) && e.SeasonNumber > 0 && e.AirDate != null && e.AirDate <= today)
+            .Select(e => new { e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber, e.Runtime }).ToListAsync(ct);
+        var seen = (await db.WatchEvents.AsNoTracking()
+                .Where(w => w.UserId == userId && w.Type == MediaType.Episode && ids.Contains(w.TmdbId))
+                .Select(w => new { w.TmdbId, w.SeasonNumber, w.EpisodeNumber }).Distinct().ToListAsync(ct))
+            .Select(w => (w.TmdbId, w.SeasonNumber ?? -1, w.EpisodeNumber ?? -1)).ToHashSet();
+        return episodes.Where(e => !seen.Contains((e.ShowTmdbId, e.SeasonNumber, e.EpisodeNumber)))
+            .GroupBy(e => e.ShowTmdbId)
+            .ToDictionary(g => g.Key, g => g.Sum(e => (long)(e.Runtime is > 0 ? e.Runtime.Value : typical[g.Key])));
     }
 
     /// <summary>
