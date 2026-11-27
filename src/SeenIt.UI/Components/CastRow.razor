@@ -1,7 +1,10 @@
 @if (Cast.Count > 0)
 {
     <section class="row-section">
-        <div class="section-head"><h2>@Title <span class="muted small">@Cast.Count</span></h2></div>
+        <div class="section-head">
+            <h2>@Title <span class="muted small">@(Math.Max(Total, Cast.Count).ToString("N0"))</span></h2>
+            @if (More) { <a class="section-more" href="@AllHref">See all <Icon Name="chevron-right" Size="16" /></a> }
+        </div>
         <div class="cast-scroller">
             @foreach (var c in Cast)
             {
@@ -13,6 +16,10 @@
                     @if (c.EpisodeCount is > 0) { <div class="cast-role muted small"><Spoiler Force="BlurEpisodeCounts">@c.EpisodeCount episode@(c.EpisodeCount == 1 ? "" : "s")</Spoiler></div> }
                 </a>
             }
+            @if (More)
+            {
+                <a class="cast cast-more" href="@AllHref"><div class="cast-fallback"><Icon Name="users" Size="28" /></div><div class="cast-name">See all @Total.ToString("N0")</div></a>
+            }
         </div>
     </section>
 }
@@ -21,4 +28,8 @@
     [Parameter] public string Title { get; set; } = "Cast";
     /// <summary>For a show you're partway through, with Settings → Spoilers → episode counts on: how many episodes someone is in gives away who stays, so it's blurred until tapped.</summary>
     [Parameter] public bool BlurEpisodeCounts { get; set; }
+    /// <summary>The whole cast's size, when Cast is just the first of them; with AllHref, a "See all" link.</summary>
+    [Parameter] public int Total { get; set; }
+    [Parameter] public string? AllHref { get; set; }
+    private bool More => AllHref is not null && Total > Cast.Count;
 }

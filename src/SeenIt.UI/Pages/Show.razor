@@ -91,7 +91,7 @@ else if (s is not null)
             <DetailStats Items="@([
                 ("Seasons", s.Seasons.Count(x => x.SeasonNumber > 0).ToString()),
                 ("Episodes", s.AiredEpisodes > 0 && s.AiredEpisodes < s.NumberOfEpisodes ? $"{s.AiredEpisodes} aired of {s.NumberOfEpisodes}" : s.NumberOfEpisodes.ToString()),
-                ("Total runtime", s.TotalRuntime > 0 ? Fmt.Duration(s.TotalRuntime) : null),
+                ("Total runtime", s.TotalRuntime > 0 ? Fmt.Duration(s.TotalRuntime) : s.EpisodesPending ? "…" : null),
                 ("Per episode", s.EpisodeRuntime is > 0 ? "~" + Fmt.Runtime(s.EpisodeRuntime) : null),
                 ("You've watched", s.WatchedMinutes > 0 ? Fmt.Duration(s.WatchedMinutes) : null),
                 ("Left to watch", s.User is not null && s.WatchedMinutes > 0 ? Fmt.Duration(s.RemainingMinutes) : null),
@@ -223,7 +223,7 @@ else if (s is not null)
     </section>
 
     var blurCounts = Fmt.BlurCounts(s.Progress is { Watched: > 0 } pr && pr.Watched < pr.Aired, s.Progress is { Aired: > 0 } fin && fin.Watched >= fin.Aired);
-    <Frozen Key="@((Id, blurCounts))"><CastRow Cast="s.Cast" BlurEpisodeCounts="blurCounts" /></Frozen>
+    <Frozen Key="@((Id, blurCounts))"><CastRow Cast="s.Cast" Total="s.CastTotal" AllHref="@($"show/{Id}/cast")" BlurEpisodeCounts="blurCounts" /></Frozen>
     <Frozen Key="Id"><Trailers Videos="s.Videos" /></Frozen>
     <Frozen Key="Id"><PosterRow Title="You might also like" Items="s.Recommendations" EmptyText="No recommendations yet." /></Frozen>
 
@@ -332,12 +332,29 @@ else if (s is not null)
 
     protected override Task OnParametersSetAsync() => Load();
 
+    /// <summary>The full page once the episode list is fresh: runtimes, progress and season counts fill in.</summary>
+    private async Task LoadEpisodes(int showId)
+    {
+        try
+        {
+            var full = await Api.ShowAsync(showId);
+            if (Id == showId && !busy) { s = full; StateHasChanged(); }
+        }
+        catch (Exception) { /* the quick copy stays; a reload gets the rest */ }
+    }
+
     private async Task Load()
     {
         error = null;
         notFound = false;
         if (s?.TmdbId != Id) { s = null; orders = null; order = null; recap = null; }
-        try { s = await Api.ShowAsync(Id); }
+        try
+        {
+            // A show not opened in a while (or ever): its page shows straight away, and the episode list
+            // (every season, for a long show) refreshes behind it.
+            s = await Api.ShowAsync(Id, quick: true);
+            if (s.EpisodesPending) _ = LoadEpisodes(Id);
+        }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no show at this address on TMDB."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
         if (s?.User is not null)

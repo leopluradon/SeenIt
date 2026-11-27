@@ -505,7 +505,8 @@ public record CompletionDto(int PersonId, string Name, string? ProfilePath, stri
     IReadOnlyList<MediaSummary> Unseen, DateTimeOffset? CompletedAt);
 
 /// <summary>Two people and what they both have a credit in (acting or behind the camera), newest first.</summary>
-public record PersonPair(PersonHit A, PersonHit B, IReadOnlyList<PairCredit> Credits);
+public record PersonPair(PersonHit A, PersonHit B, IReadOnlyList<PairCredit> Credits,
+    IReadOnlyList<int>? PendingShows = null);   // quick load: shows both worked on whose seen marks are still being worked out
 /// <summary>
 /// A title both worked on, with each one's part ("as Bakta", "Director"). Watched: you've seen it (a show: seen
 /// both of them in it); PartlySeen: a show you've watched some of, but not with both of them.
@@ -515,6 +516,15 @@ public record PairCredit(MediaType Type, int TmdbId, string Title, DateOnly? Dat
     bool Appearance = false);   // talk shows, documentaries, "Self" for either of them: listed apart, it's not working together
 
 public record CastMember(int Id, string Name, string? Character, string? ProfilePath, int? EpisodeCount = null);
+
+/// <summary>A title's whole cast (its page shows the first few; a long-running show has thousands of guest stars).</summary>
+public record CastList(string Title, IReadOnlyList<CastMember> Cast);
+
+public static class CastLists
+{
+    /// <summary>How many of the cast come with a movie or show page.</summary>
+    public const int OnPage = 40;
+}
 public record CrewMember(int Id, string Name, string Job, string? ProfilePath);
 public record Video(string Key, string Name, string Site, string Type);
 
@@ -552,7 +562,8 @@ public record MovieDetail(
     IReadOnlyList<MediaSummary> Recommendations,
     UserMediaState? User,
     CollectionDto? Collection = null,
-    ReleaseStatus? Release = null);   // in theaters / coming to theaters, for the viewer's country
+    ReleaseStatus? Release = null,    // in theaters / coming to theaters, for the viewer's country
+    int CastTotal = 0);               // the whole cast; Cast holds the first CastLists.OnPage (the rest: api/catalog/movie/{id}/cast)
 
 /// <summary>Where a movie is in its release, for one country: TMDB's theatrical and digital dates there.</summary>
 /// <param name="Kind">InTheaters or ComingToTheaters.</param>
@@ -623,7 +634,9 @@ public record ShowDetail(
     ShowTrackStatus TrackStatus = ShowTrackStatus.Watching,
     IReadOnlyList<CrewMember>? Crew = null,    // created by, and who directed, wrote and scored the most episodes
     DateTimeOffset? FirstWatchedAt = null,     // your first and latest dated episode plays (rewatches included)
-    DateTimeOffset? LastWatchedAt = null);
+    DateTimeOffset? LastWatchedAt = null,
+    int CastTotal = 0,                         // the whole cast; Cast holds the first CastLists.OnPage (the rest: api/catalog/show/{id}/cast)
+    bool EpisodesPending = false);             // quick load: the episode list wasn't cached or is out of date; the full load refreshes it
 
 /// <summary>A milestone episode, shown as a badge: S01E01, a season's first or last, or the very last.</summary>
 public enum EpisodeMark { None, SeriesPremiere, SeasonPremiere, SeasonFinale, SeriesFinale }

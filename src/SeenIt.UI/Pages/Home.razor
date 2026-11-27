@@ -366,23 +366,23 @@
             }
         }
         hidden = Session.Me?.HiddenHomeSections?.ToHashSet() ?? [];
-        var trendingTask = LoadTrending();
+        // Everything at once, and each section drawn as soon as its own data is in: Blazor would otherwise draw
+        // the page only when the last of them (often a slow TMDB lookup) had finished.
+        var loads = new List<Task> { Drawn(LoadTrending()) };
         if (!signedIn) { try { features = await Api.FeaturesAsync(); } catch { } }
         if (signedIn)
         {
-            var reviewTask = LoadReviewLinks();
-            var extrasTask = LoadExtras();
-            var forYouTask = LoadForYou();
-            var widgetsTask = LoadWidgets();
-            var toRateTask = LoadToRate();
-            await LoadDashboard();
-            await widgetsTask;
-            await toRateTask;
-            await forYouTask;
-            await reviewTask;
-            await extrasTask;
+            loads.AddRange([Drawn(LoadDashboard()), Drawn(LoadToRate()), Drawn(LoadWidgets()), Drawn(LoadForYou()), Drawn(LoadReviewLinks())]);
+            loads.AddRange(LoadExtras().Select(Drawn));
         }
-        await trendingTask;
+        await Task.WhenAll(loads);
+    }
+
+    /// <summary>Draws the page once this part has loaded, without waiting for the rest.</summary>
+    private async Task Drawn(Task load)
+    {
+        await load;
+        StateHasChanged();
     }
 
     /// <summary>After a change from the menu or another device (or an episode finishing on Jellyfin): Up next,
@@ -390,14 +390,8 @@
     private async Task Refresh()
     {
         if (!signedIn) return;
-        var widgets = LoadWidgets();
-        var rate = LoadToRate();
-        await LoadDashboard();
-        await rate;
-        try { if (!hidden.Contains("now") || !hidden.Contains("now-cast")) now = await Api.CheckInAsync(); } catch { }
-        await LoadNowCast();
-        try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); } catch { }
-        await widgets;
+        // In parallel, each drawn as it arrives (as when the page opens).
+        await Task.WhenAll(Drawn(LoadWidgets()), Drawn(LoadToRate()), Drawn(LoadDashboard()), Drawn(Task.WhenAll(LoadExtras().Take(2))));
     }
 
     /// <summary>A card's show, fresh from marking an episode: shown straight away, before the dashboard reloads.</summary>
@@ -485,13 +479,21 @@
         catch { widgetData = new ProfileWidgetData(); }
     }
 
-    private async Task LoadExtras()
+    /// <summary>The smaller sections, each loading on its own (only the cast row needs the check-in first).</summary>
+    private IEnumerable<Task> LoadExtras()
     {
-        try { if (!hidden.Contains("now") || !hidden.Contains("now-cast")) now = await Api.CheckInAsync(); } catch { }
-        await LoadNowCast();
-        try { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); } catch { }
-        try { if (!hidden.Contains("onthisday")) onThisDay = await Api.OnThisDayAsync(); } catch { }
-        try { if (!hidden.Contains("goals")) goals = await Api.GoalsAsync(DateTime.Today.Year); } catch { }
+        yield return NowAndCast();
+        yield return Try(async () => { if (!hidden.Contains("friends")) feed = await Api.FeedAsync(Fmt.Prefs.Count("friends")); });
+        yield return Try(async () => { if (!hidden.Contains("onthisday")) onThisDay = await Api.OnThisDayAsync(); });
+        yield return Try(async () => { if (!hidden.Contains("goals")) goals = await Api.GoalsAsync(DateTime.Today.Year); });
+
+        async Task NowAndCast()
+        {
+            try { if (!hidden.Contains("now") || !hidden.Contains("now-cast")) now = await Api.CheckInAsync(); } catch { }
+            StateHasChanged();   // Watching now shows before its cast row has loaded
+            await LoadNowCast();
+        }
+        static async Task Try(Func<Task> load) { try { await load(); } catch { } }
     }
 
     private async Task CancelCheckIn()
@@ -568,7 +570,7 @@
         if (shown.Any(k => k.StartsWith("trending")) && trendingMovies is null) await LoadTrending();
         if (shown.Contains("foryou") && forYou is null) await LoadForYou();
         if (shown.Contains("review") && reviewLinks.Count == 0) await LoadReviewLinks();
-        if (shown.Any(k => k is "now" or "now-cast" or "friends" or "onthisday" or "goals")) await LoadExtras();
+        if (shown.Any(k => k is "now" or "now-cast" or "friends" or "onthisday" or "goals")) await Task.WhenAll(LoadExtras());
         if (shown.Any(k => k.StartsWith("w-"))) await LoadWidgets();
         if (shown.Contains("torate") && toRate is null) await LoadToRate();
     }
@@ -585,7 +587,7 @@
             if (visible && key.StartsWith("trending") && trendingMovies is null) await LoadTrending();
             if (visible && key == "foryou" && forYou is null) await LoadForYou();
             if (visible && key == "review" && reviewLinks.Count == 0) await LoadReviewLinks();
-            if (visible && key is "now" or "now-cast" or "friends" or "goals") await LoadExtras();
+            if (visible && key is "now" or "now-cast" or "friends" or "goals") await Task.WhenAll(LoadExtras());
             if (visible && key.StartsWith("w-")) await LoadWidgets();
             if (visible && key == "torate" && toRate is null) await LoadToRate();
         }

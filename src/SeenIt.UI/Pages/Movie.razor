@@ -152,7 +152,7 @@ else if (m is not null)
             </div>
         </section>
     }
-    <Frozen Key="Id"><CastRow Cast="m.Cast" /></Frozen>
+    <Frozen Key="Id"><CastRow Cast="m.Cast" Total="m.CastTotal" AllHref="@($"movie/{Id}/cast")" /></Frozen>
     <Frozen Key="Id"><Trailers Videos="m.Videos" /></Frozen>
     <Frozen Key="Id"><PosterRow Title="You might also like" Items="m.Recommendations" EmptyText="No recommendations yet." /></Frozen>
 

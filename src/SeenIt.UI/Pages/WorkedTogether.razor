@@ -24,7 +24,7 @@ else if (pair is { } pr)
     var seen = together.Count(c => c.Watched);
     var tvCount = together.Count(c => c.Type == MediaType.Show);
     <p class="muted">
-        @(together.Count == 0 ? "No movies or shows together on TMDB." : $"{Plural(together.Count - tvCount, "movie")} and {Plural(tvCount, "show")} together")@if (Session.Me is not null && together.Count > 0) { <span> · you've seen @seen</span> }
+        @(together.Count == 0 ? "No movies or shows together on TMDB." : $"{Plural(together.Count - tvCount, "movie")} and {Plural(tvCount, "show")} together")@if (Session.Me is not null && together.Count > 0) { @if (seenLoading) { <span> · <span class="skeleton skel-text skel-inline"></span></span> } else { <span> · you've seen @seen</span> } }
     </p>
     @if (pr.Credits.Count > 0)
     {
@@ -66,9 +66,31 @@ else if (pair is { } pr)
     private async Task Load()
     {
         error = null; notFound = false;
-        try { pair = await Api.PersonPairAsync(A, B); }
+        try
+        {
+            // The shared work first; which of their shows you've seen (a TMDB lookup per show) fills in after.
+            pair = await Api.PersonPairAsync(A, B, quick: true);
+            if (pair.PendingShows is { Count: > 0 }) _ = LoadSeen(A, B);
+        }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "One of these people isn't on TMDB."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    private bool seenLoading;
+
+    private async Task LoadSeen(int a, int b)
+    {
+        seenLoading = true;
+        try
+        {
+            var full = await Api.PersonPairAsync(a, b);
+            if ((A, B) == (a, b)) pair = full;
+        }
+        catch (Exception) { /* the page works without it; those shows just aren't marked */ }
+        finally
+        {
+            if ((A, B) == (a, b)) { seenLoading = false; StateHasChanged(); }
+        }
     }
 
     private RenderFragment Row(PersonPair pr, PairCredit c) => __builder =>
@@ -84,7 +106,8 @@ else if (pair is { } pr)
                                 <span>@pr.B.Name: @(c.RoleB ?? "credited")@if (c.EpisodesB is > 0 and var eb) { <text> · </text><Spoiler Force="Blur(c)">@Plural(eb, "episode")</Spoiler> }</span>
                             </span>
                         </span>
-                        @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
+                        @if (seenLoading && c.Type == MediaType.Show && pr.PendingShows?.Contains(c.TmdbId) == true) { <span class="ep-pending skeleton" title="Checking which of their episodes you've seen"></span> }
+                        else if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
                         else if (c.PartlySeen) { <span class="ep-partly" title="@($"You've watched some of {c.Title}, but not with both of them in it")" aria-label="Partly seen">◐</span> }
                     </a>
                 </li>

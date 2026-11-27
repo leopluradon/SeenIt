@@ -1,0 +1,69 @@
+@page "/show/{Id:int}/cast"
+@page "/movie/{Id:int}/cast"
+@* A title's whole cast: its page shows the first few, and a long-running show has thousands of guest stars, so this
+   loads only when asked for, with a search, and draws a batch at a time. *@
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject SessionState Session
+<PageTitle>@(list?.Title is { Length: > 0 } t ? $"{t}: cast" : "Cast") · SeenIt</PageTitle>
+<nav class="crumbs"><a href="@Back"><Icon Name="chevron-left" Size="16" /> @(list?.Title ?? "Back")</a></nav>
+<div class="page-head"><h1>Cast <span class="muted small">@(list?.Cast.Count.ToString("N0"))</span></h1></div>
+
+<ErrorBox Message="@error" OnRetry="Load" />
+@if (list is null && error is null) { <Spinner Shape="grid" /> }
+else if (list is not null)
+{
+    <FilterBar Query="@find" QueryChanged="q => { find = q; shown = Batch; }" Placeholder="Find someone or a character" />
+    var matches = list.Cast.Where(c => TextMatch.Contains(c.Name, find) || TextMatch.Contains(c.Character ?? "", find)).ToList();
+    @if (matches.Count == 0) { <Empty Title="Nobody by that name." /> }
+    <div class="cast-grid">
+        @foreach (var c in matches.Take(shown))
+        {
+            <a class="cast" href="@($"person/{c.Id}")" @key="c.Id">
+                @if (Img.Profile(c.ProfilePath) is { } src) { <img src="@src" alt="" loading="lazy" /> }
+                else { <div class="cast-fallback">@c.Name[..1]</div> }
+                <div class="cast-name">@c.Name</div>
+                <div class="cast-role muted small">@c.Character</div>
+                @if (c.EpisodeCount is > 0) { <div class="cast-role muted small"><Spoiler Force="blur">@c.EpisodeCount episode@(c.EpisodeCount == 1 ? "" : "s")</Spoiler></div> }
+            </a>
+        }
+    </div>
+    @if (matches.Count > shown)
+    {
+        <button class="btn btn-block cast-more-btn" @onclick="() => shown += Batch">Show more (@((matches.Count - shown).ToString("N0")) to go)</button>
+    }
+}
+@code {
+    [Parameter] public int Id { get; set; }
+    private const int Batch = 120;
+    private CastList? list;
+    private string? error;
+    private string find = "";
+    private int shown = Batch;
+    private bool blur;
+    private bool IsMovie => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("movie/", StringComparison.Ordinal);
+    private string Back => IsMovie ? $"movie/{Id}" : $"show/{Id}";
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        error = null;
+        try
+        {
+            var type = IsMovie ? MediaType.Movie : MediaType.Show;
+            list = await Api.CastAsync(type, Id);
+            // Episode counts give away who stays: blurred the same way as on the show's page (Settings → Spoilers).
+            if (type == MediaType.Show && Session.Me is not null)
+            {
+                try
+                {
+                    var st = await Api.ItemStatusAsync(MediaType.Show, Id);
+                    blur = Fmt.BlurCounts(st.Watched > 0 && st.Watched < st.Aired, st.Aired > 0 && st.Watched >= st.Aired);
+                }
+                catch { blur = Fmt.BlurCounts(false, false); }
+            }
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

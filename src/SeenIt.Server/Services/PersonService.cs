@@ -125,9 +125,14 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
     /// What two people both worked on: their filmographies (acting and crew, talk-show appearances included)
     /// put side by side. Null if either isn't on TMDB.
     /// </summary>
-    public async Task<PersonPair?> PairAsync(int a, int b, Guid? userId, CancellationToken ct)
+    /// <param name="quick">Leave the per-show episode checks for later (PendingShows): the page shows straight away.</param>
+    public async Task<PersonPair?> PairAsync(int a, int b, Guid? userId, CancellationToken ct, bool quick = false)
     {
-        var (pa, pb) = (await GetAsync(a, userId, ct), await GetAsync(b, userId, ct));
+        // Ask TMDB for both at once; the second GetAsync then finds it cached.
+        var second = tmdb.GetPersonAsync(b, ct);
+        var pa = await GetAsync(a, userId, ct, quick);
+        await second;
+        var pb = await GetAsync(b, userId, ct, quick);
         if (pa is null || pb is null) return null;
         static Dictionary<(MediaType, int), (PersonCreditDto Credit, string? Role)> Works(PersonDetail p) =>
             p.Cast.Select(c => (c, Role: c.Role is { Length: > 0 } r ? $"as {r}" : "Cast"))
@@ -149,7 +154,9 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 ca.Appearance || cb.Appearance);
         }).OrderByDescending(c => c.Date is null).ThenByDescending(c => c.Date).ToList();
         static PersonHit Brief(PersonDetail p) => new(p.Id, p.Name, p.ProfilePath, p.KnownFor, []);
-        return new PersonPair(Brief(pa), Brief(pb), credits);
+        var pending = (pa.PendingShows ?? []).Concat(pb.PendingShows ?? [])
+            .Where(id => credits.Any(c => c.Type == MediaType.Show && c.TmdbId == id)).Distinct().ToList();
+        return new PersonPair(Brief(pa), Brief(pb), credits, pending.Count > 0 ? pending : null);
     }
 
     /// <summary>

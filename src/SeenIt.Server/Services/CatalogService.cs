@@ -421,14 +421,23 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             m.Id, m.Title, NullIfEmpty(m.Tagline), m.Overview, TmdbDates.Parse(m.ReleaseDate), m.Runtime,
             m.Genres?.Select(g => g.Name).ToList() ?? [],
             m.PosterPath, m.BackdropPath, m.VoteAverage, m.VoteCount, m.ImdbId, m.Status,
-            Cast(m.Credits?.Cast),
+            Cast(m.Credits?.Cast).Take(CastLists.OnPage).ToList(),
             (m.Credits?.Crew ?? []).Where(c => c.Job is "Director" or "Screenplay" or "Writer" or "Original Music Composer" or "Director of Photography")
                 .Take(12).Select(c => new CrewMember(c.Id, c.Name, c.Job, c.ProfilePath)).ToList(),
             PickVideos(m.Videos),
             (m.Recommendations?.Results ?? []).Take(18).Select(r => ToSummary(r, MediaType.Movie)).ToList(),
             user,
             collection,
-            Release(m, region));
+            Release(m, region),
+            Cast(m.Credits?.Cast).Count);
+    }
+
+    /// <summary>A movie's or show's whole cast, for the "See all" page.</summary>
+    public async Task<CastList?> CastAsync(MediaType type, int id, CancellationToken ct)
+    {
+        if (type == MediaType.Movie)
+            return await tmdb.GetMovieAsync(id, full: true, ct) is { } m ? new CastList(m.Title ?? "", Cast(m.Credits?.Cast)) : null;
+        return await tmdb.GetShowAsync(id, full: true, ct) is { } s ? new CastList(s.Name ?? "", Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast)) : null;
     }
 
     /// <summary>In theaters / coming to theaters in this country (or the US when TMDB has nothing for it).</summary>
@@ -514,13 +523,16 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
             ? new TmdbEpisodeDetail(e.TmdbId ?? 0, e.SeasonNumber, e.EpisodeNumber, e.Name, e.Overview, e.AirDate?.ToString("yyyy-MM-dd"), e.Runtime, e.StillPath, e.VoteAverage, null, null, null)
             : null;
 
-    public async Task<ShowDetail?> GetShowAsync(int id, Guid? userId, CancellationToken ct)
+    /// <param name="quick">Don't wait for the episode list when it isn't cached or is out of date (EpisodesPending):
+    /// fetching every season of a long show takes a while, and the page can show without it.</param>
+    public async Task<ShowDetail?> GetShowAsync(int id, Guid? userId, CancellationToken ct, bool quick = false)
     {
         var s = await tmdb.GetShowAsync(id, full: true, ct) ?? await RemovedShowAsync(id, ct);
         if (s is null) return null;
 
         // The page shows per-season progress, which needs the episode list cached.
-        await EnsureShowAsync(id, ct);
+        var pending = quick && !IsFresh(await db.Shows.AsNoTracking().FirstOrDefaultAsync(x => x.TmdbId == id, ct));
+        if (!pending) await EnsureShowAsync(id, ct);
 
         var totals = await ShowTotalsAsync(id, userId, ct);
         UserMediaState? user = null;
@@ -577,13 +589,14 @@ public class CatalogService(AppDbContext db, TmdbClient tmdb, IHttpClientFactory
                 .Select(x => new SeasonSummary(x.SeasonNumber, x.Name ?? $"Season {x.SeasonNumber}", x.EpisodeCount, TmdbDates.Parse(x.AirDate), x.PosterPath,
                     watchedPerSeason.GetValueOrDefault(x.SeasonNumber),
                     completedPerSeason.TryGetValue(x.SeasonNumber, out var done) ? done : null)).ToList(),
-            Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast),
+            Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast).Take(CastLists.OnPage).ToList(),
             PickVideos(s.Videos),
             (s.Recommendations?.Results ?? []).Take(18).Select(x => ToSummary(x, MediaType.Show)).ToList(),
             s.NextEpisodeToAir is { } n ? marker.Mark(id, new EpisodeRef(n.SeasonNumber, n.EpisodeNumber, n.Name, nextDay ?? TmdbDates.Parse(n.AirDate), AirsAt: nextAt, Network: nextNetwork)) : null,
             user,
             progress,
-            totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus, ShowCrew(s), firstWatched, lastWatched);
+            totals.Total, totals.Aired, totals.Watched, totals.Remaining, trackStatus, ShowCrew(s), firstWatched, lastWatched,
+            Cast(s.AggregateCredits?.Cast ?? s.Credits?.Cast).Count, pending);
     }
 
     /// <summary>Running time of the whole show from the cached episode list (regular seasons only).</summary>

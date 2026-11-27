@@ -97,7 +97,7 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     /// <summary>An IMDb/TMDB id or link; null when the query isn't one.</summary>
     public Task<LookupResult?> LookupAsync(string q) => SendAsync<LookupResult>(HttpMethod.Get, $"api/catalog/lookup?q={Uri.EscapeDataString(q)}");
 
-    public Task<PersonPair> PersonPairAsync(int a, int b) => GetAsync<PersonPair>($"api/catalog/person/{a}/with/{b}")!;
+    public Task<PersonPair> PersonPairAsync(int a, int b, bool quick = false) => GetAsync<PersonPair>($"api/catalog/person/{a}/with/{b}" + (quick ? "?quick=true" : ""));
     public Task<PagedResult<PersonHit>> SearchPeopleAsync(string q, int page = 1) =>
         GetAsync<PagedResult<PersonHit>>($"api/catalog/search/people?q={Uri.EscapeDataString(q)}&page={page}");
 
@@ -106,7 +106,8 @@ public class ApiClient(HttpClient http, TokenManager tokens, IOfflineStore offli
     public Task<PagedResult<MediaSummary>> BrowseAsync(MediaType type, string list, int page = 1) =>
         GetAsync<PagedResult<MediaSummary>>($"api/catalog/browse/{type}/{list}?page={page}&region={DeviceRegion}");
     public Task<MovieDetail> MovieAsync(int id) => GetAsync<MovieDetail>($"api/catalog/movie/{id}?region={DeviceRegion}");
-    public Task<ShowDetail> ShowAsync(int id) => GetAsync<ShowDetail>($"api/catalog/show/{id}");
+    public Task<ShowDetail> ShowAsync(int id, bool quick = false) => GetAsync<ShowDetail>($"api/catalog/show/{id}" + (quick ? "?quick=true" : ""));
+    public Task<CastList> CastAsync(MediaType type, int id) => GetAsync<CastList>($"api/catalog/{(type == MediaType.Movie ? "movie" : "show")}/{id}/cast");
     public Task<SeasonDetail> SeasonAsync(int id, int season) => GetAsync<SeasonDetail>($"api/catalog/show/{id}/season/{season}");
     public Task<PersonDetail> PersonAsync(int id, bool quick = false) => GetAsync<PersonDetail>($"api/catalog/person/{id}" + (quick ? "?quick=true" : ""));
     public Task<PersonSeen> PersonSeenAsync(int id) => GetAsync<PersonSeen>($"api/catalog/person/{id}/seen");

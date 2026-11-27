@@ -100,9 +100,10 @@ public static class ApiEndpoints
             return Results.Ok(m with { Recommendations = await UserMarks.ApplyAsync(db, p.OptionalUserId(), recs, ct) });
         });
 
-        g.MapGet("/show/{id:int}", async (int id, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
+        // quick=true: don't wait for an uncached or out-of-date episode list (EpisodesPending); the full load refreshes it.
+        g.MapGet("/show/{id:int}", async (int id, bool? quick, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
         {
-            if (await c.GetShowAsync(id, p.OptionalUserId(), ct) is not { } s) return Results.NotFound();
+            if (await c.GetShowAsync(id, p.OptionalUserId(), ct, quick == true) is not { } s) return Results.NotFound();
             var hidden = await c.NotInterestedAsync(p.OptionalUserId(), ct);
             var recs = hidden.Count == 0 ? s.Recommendations : s.Recommendations.Where(r => !hidden.Contains((r.Type, r.TmdbId))).ToList();
             return Results.Ok(s with { Recommendations = await UserMarks.ApplyAsync(db, p.OptionalUserId(), recs, ct) });
@@ -111,14 +112,19 @@ public static class ApiEndpoints
         g.MapGet("/show/{id:int}/season/{season:int}", async (int id, int season, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
             await c.GetSeasonAsync(id, season, p.OptionalUserId(), ct) is { } s ? Results.Ok(s) : Results.NotFound());
 
+        // A title's whole cast (its page has the first CastLists.OnPage).
+        g.MapGet("/movie/{id:int}/cast", async (int id, CatalogService c, CancellationToken ct) =>
+            await c.CastAsync(MediaType.Movie, id, ct) is { } list ? Results.Ok(list) : Results.NotFound());
+        g.MapGet("/show/{id:int}/cast", async (int id, CatalogService c, CancellationToken ct) =>
+            await c.CastAsync(MediaType.Show, id, ct) is { } list ? Results.Ok(list) : Results.NotFound());
         // quick=true: without the per-show episode checks (PendingShows), which /seen then fills in.
         g.MapGet("/person/{id:int}", async (int id, bool? quick, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
             await people.GetAsync(id, p.OptionalUserId(), ct, quick == true) is { } person ? Results.Ok(person) : Results.NotFound());
         g.MapGet("/person/{id:int}/seen", async (int id, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
             p.OptionalUserId() is { } me && await people.SeenAsync(id, me, ct) is { } seen ? Results.Ok(seen) : Results.NotFound());
         // What two people both worked on (person/{id}/with/{other}).
-        g.MapGet("/person/{id:int}/with/{other:int}", async (int id, int other, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
-            await people.PairAsync(id, other, p.OptionalUserId(), ct) is { } pair ? Results.Ok(pair) : Results.NotFound());
+        g.MapGet("/person/{id:int}/with/{other:int}", async (int id, int other, bool? quick, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
+            await people.PairAsync(id, other, p.OptionalUserId(), ct, quick == true) is { } pair ? Results.Ok(pair) : Results.NotFound());
 
         g.MapGet("/providers/{type}/{id:int}", async (MediaType type, int id, string? region, ClaimsPrincipal p, AppDbContext db, CatalogService c, CancellationToken ct) =>
         {
