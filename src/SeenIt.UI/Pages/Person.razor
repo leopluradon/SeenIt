@@ -24,7 +24,8 @@ else if (p is not null)
                     </button>
                 }
             </div>
-            @if (p.Watched is not null && SeenLine(p) is { } seenLine) { <p class="person-seen">@seenLine</p> }
+            @if (seenLoading) { <p class="person-seen" aria-label="Checking what you've seen them in"><span class="skeleton skel-text"></span></p> }
+            else if (p.Watched is not null && SeenLine(p) is { } seenLine) { <p class="person-seen">@seenLine</p> }
             <DetailStats Items="@([
                 ("Known for", p.KnownFor),
                 ("Born", p.Birthday is { } b ? $"{(b).ToString(Fmt.DateFull)}" + (p.Deathday is null ? $" (age {Age(b, DateOnly.FromDateTime(DateTime.Today))})" : "") : null),
@@ -64,7 +65,18 @@ else if (p is not null)
         </div>
     </div>
 
-    @if (p.Watched is { } watched)
+    @if (seenLoading)
+    {
+        @* Still checking which of their episodes you've seen (a TMDB lookup per show): placeholders meanwhile. *@
+        <section class="row-section" aria-busy="true">
+            <div class="section-head"><h2>You've watched them in</h2></div>
+            <p class="muted small"><span class="skeleton skel-text"></span></p>
+            <div class="watched-with">
+                @for (var i = 0; i < Math.Min(4, p.PendingShows?.Count ?? 2); i++) { <div class="ww-item"><span class="skeleton ww-skel-poster"></span><div class="ww-body skel-lines"><span class="skeleton"></span><span class="skeleton"></span></div></div> }
+            </div>
+        </section>
+    }
+    else if (p.Watched is { } watched)
     {
         <section class="row-section">
             <div class="section-head"><h2>You've watched them in</h2></div>
@@ -226,7 +238,8 @@ else if (p is not null)
                             <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")@(c.Role is { Length: > 0 } r ? " · " + r : "")@if (c.EpisodeCount is > 0) { <text> · </text><Spoiler Force="HideCount(c)">@Plural(c.EpisodeCount.Value, "episode")</Spoiler> }</span>
                         </span>
                         @if (c.InLibrary) { <span class="ep-owned" title="In your library" aria-label="In your library"><Icon Name="download" Size="15" /></span> }
-                        @if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
+                        @if (seenLoading && c.Type == MediaType.Show && p.PendingShows?.Contains(c.TmdbId) == true) { <span class="ep-pending skeleton" title="Checking which of their episodes you've seen"></span> }
+                        else if (c.Watched) { <span class="ep-check" title="You've watched this"><Icon Name="check" Size="16" /></span> }
                         else if (c.PartlySeen) { <span class="ep-partly" title="@($"You've watched some of {c.Title}, but not the episodes {p.Name} is in")" aria-label="Partly seen: not their episodes">◐</span> }
                     </a>
                 </li>
@@ -498,13 +511,46 @@ else if (p is not null)
         }
     }
 
+    /// <summary>The quick part of the page arrived; which of their episodes you've seen is still being worked out.</summary>
+    private bool seenLoading;
+
     private async Task Load()
     {
         error = null;
         notFound = false;
-        try { p = await Api.PersonAsync(Id); }
+        try
+        {
+            p = await Api.PersonAsync(Id, quick: true);
+            if (p.PendingShows is { Count: > 0 }) _ = LoadSeen(p.Id);
+        }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { error = "There's no one at this address on TMDB."; notFound = true; }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    /// <summary>Fills in what you've seen them in once it's worked out, without holding up the rest of the page.</summary>
+    private async Task LoadSeen(int personId)
+    {
+        seenLoading = true;
+        try
+        {
+            var seen = await Api.PersonSeenAsync(personId);
+            if (p?.Id != personId) return;   // moved on to someone else
+            var mine = seen.SeenShows.ToHashSet();
+            var partly = seen.PartlyShows.ToHashSet();
+            PersonCreditDto Fill(PersonCreditDto c) => c.Type == MediaType.Show && p.PendingShows?.Contains(c.TmdbId) == true
+                ? c with { Watched = mine.Contains(c.TmdbId), PartlySeen = partly.Contains(c.TmdbId) } : c;
+            p = p with
+            {
+                Watched = seen.Watched, WatchedMovies = seen.WatchedMovies, WatchedEpisodes = seen.WatchedEpisodes,
+                WatchedShows = seen.WatchedShows, WatchedMinutes = seen.WatchedMinutes,
+                Cast = p.Cast.Select(Fill).ToList(), Crew = p.Crew.Select(Fill).ToList(), PendingShows = null,
+            };
+        }
+        catch (Exception) { /* the page works without it; those shows just aren't marked */ }
+        finally
+        {
+            if (p?.Id == personId) { seenLoading = false; StateHasChanged(); }
+        }
     }
 
     private static int Age(DateOnly born, DateOnly at) => at.Year - born.Year - (at < born.AddYears(at.Year - born.Year) ? 1 : 0);

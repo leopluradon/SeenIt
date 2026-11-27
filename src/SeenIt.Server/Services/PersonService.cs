@@ -11,10 +11,12 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
     private static readonly HashSet<int> AppearanceGenres = [10767, 10763]; // Talk, News
     private const int Documentary = 99;
 
-    public async Task<PersonDetail?> GetAsync(int id, Guid? userId, CancellationToken ct)
+    /// <param name="quick">Skip the per-show episode checks when there are any (PendingShows lists those shows;
+    /// SeenAsync does them): the page shows straight away and fills that part in.</param>
+    public async Task<PersonDetail?> GetAsync(int id, Guid? userId, CancellationToken ct, bool quick = false)
     {
-        var p = await tmdb.GetPersonAsync(id, ct);
-        if (p is null) return null;
+        // TMDB first, while the database work below runs.
+        var fetch = tmdb.GetPersonAsync(id, ct);
 
         var watchedMovies = new Dictionary<int, int>();
         var watchedEpisodes = new Dictionary<int, Dictionary<(int, int), int>>();
@@ -28,16 +30,22 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
                 .GroupBy(x => x.TmdbId)
                 .ToDictionary(g => g.Key, g => g.ToDictionary(x => (x.SeasonNumber ?? -1, x.EpisodeNumber ?? -1), x => x.N));
         }
+        var p = await fetch;
+        if (p is null) return null;
         var castCredits = (p.CombinedCredits?.Cast ?? []).Where(c => c.MediaType is "movie" or "tv").ToList();
         var crewCredits = (p.CombinedCredits?.Crew ?? []).Where(c => c.MediaType is "movie" or "tv").ToList();
 
         // What you've actually seen them in: for a show that means one of *their* episodes (a guest role is
         // checked episode by episode against TMDB), not just any episode of it. A show you've watched some of
         // without seeing theirs is "partly seen", shown apart.
-        var watched = userId is null ? null : await WatchedWithAsync(id, castCredits, crewCredits, watchedMovies, watchedEpisodes, ct);
+        // Quick: leave those checks for later if there are any to do (movies alone need no TMDB lookups).
+        var pending = quick && userId is not null
+            ? castCredits.Concat(crewCredits).Where(c => c.MediaType == "tv" && watchedEpisodes.ContainsKey(c.Id)).Select(c => c.Id).Distinct().ToHashSet()
+            : [];
+        var watched = userId is null || pending.Count > 0 ? null : await WatchedWithAsync(id, castCredits, crewCredits, watchedMovies, watchedEpisodes, ct);
         var seenShows = watched?.Where(w => w.Type == MediaType.Show).Select(w => w.TmdbId).ToHashSet() ?? [];
         bool Watched(MediaType t, int tmdbId) => t == MediaType.Movie ? watchedMovies.ContainsKey(tmdbId) : seenShows.Contains(tmdbId);
-        bool Partly(MediaType t, int tmdbId) => t == MediaType.Show && !seenShows.Contains(tmdbId) && watchedEpisodes.ContainsKey(tmdbId);
+        bool Partly(MediaType t, int tmdbId) => t == MediaType.Show && !pending.Contains(tmdbId) && !seenShows.Contains(tmdbId) && watchedEpisodes.ContainsKey(tmdbId);
         var owned = userId is { } ownerId
             ? (await db.Library.AsNoTracking().Where(l => l.UserId == ownerId).Select(l => new { l.Type, l.TmdbId }).Distinct().ToListAsync(ct))
                 .Select(l => (l.Type, l.TmdbId)).ToHashSet()
@@ -100,7 +108,17 @@ public class PersonService(AppDbContext db, TmdbClient tmdb, ILogger<PersonServi
             watched?.Where(w => w.Type == MediaType.Show).Sum(w => w.Episodes.Count > 0 ? w.Episodes.Count : w.Plays) ?? 0,
             watched?.Count(w => w.Type == MediaType.Show) ?? 0,
             watched?.Sum(w => w.Minutes) ?? 0,
-            following, avg, rated, p.ExternalIds?.WikidataId);
+            following, avg, rated, p.ExternalIds?.WikidataId, pending.Count > 0 ? [.. pending] : null);
+    }
+
+    /// <summary>What you've seen them in, worked out in full: the part GetAsync's quick load leaves for later.</summary>
+    public async Task<PersonSeen?> SeenAsync(int id, Guid userId, CancellationToken ct)
+    {
+        if (await GetAsync(id, userId, ct) is not { Watched: { } watched } d) return null;
+        var shows = d.Cast.Concat(d.Crew).Where(c => c.Type == MediaType.Show).ToList();
+        return new PersonSeen(watched, d.WatchedMovies, d.WatchedEpisodes, d.WatchedShows, d.WatchedMinutes,
+            shows.Where(c => c.Watched).Select(c => c.TmdbId).Distinct().ToList(),
+            shows.Where(c => c.PartlySeen).Select(c => c.TmdbId).Distinct().ToList());
     }
 
     /// <summary>

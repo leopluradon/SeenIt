@@ -807,7 +807,15 @@ public record PersonDetail(
     bool Following = false,      // you follow this person (their new work goes on your calendar)
     double? AvgRating = null,    // your average rating of their movies and shows
     int Rated = 0,
-    string? WikidataId = null);  // e.g. Q23547: Wikidata redirects that to their Wikipedia article
+    string? WikidataId = null,   // e.g. Q23547: Wikidata redirects that to their Wikipedia article
+    IReadOnlyList<int>? PendingShows = null);   // quick load: shows of theirs you've watched some of, whose episodes are still being checked (PersonSeen fills them in)
+
+/// <summary>
+/// The slow part of a person's page, loaded after the rest: what you've seen them in. Checking which of a show's
+/// episodes they're in takes a TMDB lookup per show, so the page shows first and this fills in.
+/// </summary>
+public record PersonSeen(IReadOnlyList<WatchedWith> Watched, int WatchedMovies, int WatchedEpisodes, int WatchedShows, long WatchedMinutes,
+    IReadOnlyList<int> SeenShows, IReadOnlyList<int> PartlyShows);
 
 /// <summary>Someone you follow on the People page, with what they have coming.</summary>
 public record FollowedPerson(int Id, string Name, string? ProfilePath, string? Department, DateTimeOffset Since, IReadOnlyList<UpcomingWork> Upcoming);

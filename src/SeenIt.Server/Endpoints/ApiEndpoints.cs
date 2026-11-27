@@ -111,8 +111,11 @@ public static class ApiEndpoints
         g.MapGet("/show/{id:int}/season/{season:int}", async (int id, int season, ClaimsPrincipal p, CatalogService c, CancellationToken ct) =>
             await c.GetSeasonAsync(id, season, p.OptionalUserId(), ct) is { } s ? Results.Ok(s) : Results.NotFound());
 
-        g.MapGet("/person/{id:int}", async (int id, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
-            await people.GetAsync(id, p.OptionalUserId(), ct) is { } person ? Results.Ok(person) : Results.NotFound());
+        // quick=true: without the per-show episode checks (PendingShows), which /seen then fills in.
+        g.MapGet("/person/{id:int}", async (int id, bool? quick, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
+            await people.GetAsync(id, p.OptionalUserId(), ct, quick == true) is { } person ? Results.Ok(person) : Results.NotFound());
+        g.MapGet("/person/{id:int}/seen", async (int id, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
+            p.OptionalUserId() is { } me && await people.SeenAsync(id, me, ct) is { } seen ? Results.Ok(seen) : Results.NotFound());
         // What two people both worked on (person/{id}/with/{other}).
         g.MapGet("/person/{id:int}/with/{other:int}", async (int id, int other, ClaimsPrincipal p, PersonService people, CancellationToken ct) =>
             await people.PairAsync(id, other, p.OptionalUserId(), ct) is { } pair ? Results.Ok(pair) : Results.NotFound());

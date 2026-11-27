@@ -2113,3 +2113,7 @@ img.avatar.avatar-img.more-avatar { width: 48px; height: 48px; }
 .watch-btns > .btn:first-child:not(:only-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .watch-btns > .when-btn { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 1px; padding-left: 10px; padding-right: 10px; }
 .watch-status { cursor: default; }
+/* Person page while "what you've seen them in" is still being worked out. */
+.skel-text { display: inline-block; width: 60%; max-width: 320px; height: .9em; border-radius: 6px; vertical-align: middle; }
+.ww-skel-poster { width: 56px; height: 84px; border-radius: var(--radius-sm); flex-shrink: 0; }
+.ep-pending { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
