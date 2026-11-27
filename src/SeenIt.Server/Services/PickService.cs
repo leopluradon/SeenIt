@@ -9,9 +9,14 @@ namespace SeenIt.Server.Services;
 /// friends along ("who's watching"), it picks from everyone's watchlists instead, leaving out anything any of
 /// you has watched (or started, for shows), and favoring titles that are on more than one of your lists.
 /// </summary>
-public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickService> log)
+public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickService> log, RecommendationService? recommendations = null)
 {
-    internal record Candidate(MediaType Type, int TmdbId, MediaSummary Media, int? Minutes, string Reason, int Weight = 1);
+    /// <param name="Lazy">A suggestion whose details may not be cached yet: looked up (and checked against the time
+    /// you have) only when it comes up, so a pick doesn't wait on fetching every suggestion.</param>
+    internal record Candidate(MediaType Type, int TmdbId, MediaSummary Media, int? Minutes, string Reason, int Weight = 1, bool Lazy = false);
+
+    /// <summary>How many suggestions are considered, and how many may be looked up for one pick.</summary>
+    private const int SuggestionsConsidered = 30, LookupsPerPick = 15;
 
     /// <param name="wholeShows">With a time limit: only shows whose aired episodes you haven't seen all fit in it (a
     /// show you haven't started: all of it), so you could finish it.</param>
@@ -24,6 +29,33 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
 
         if (group is { Count: > 0 })
             candidates = await GroupCandidatesAsync(userId, group, kind, today, ct);
+        else if (source == PickSource.Suggested && recommendations is not null)
+        {
+            // "Picked for you", best first: the top third come up three times as often as the bottom third.
+            var forYou = (await recommendations.ForYouAsync(userId, ct)).Top
+                .Where(i => kind switch { PickKind.Movie => i.Media.Type == MediaType.Movie, PickKind.Show => i.Media.Type == MediaType.Show, _ => true })
+                .Take(SuggestionsConsidered).ToList();
+            // Ones already in the cache are checked like any other title; only new ones are looked up as they come up.
+            var movieIds = forYou.Where(i => i.Media.Type == MediaType.Movie).Select(i => i.Media.TmdbId).ToList();
+            var showIds = forYou.Where(i => i.Media.Type == MediaType.Show).Select(i => i.Media.TmdbId).ToList();
+            var movies = await db.Movies.AsNoTracking().Where(m => movieIds.Contains(m.TmdbId)).ToDictionaryAsync(m => m.TmdbId, ct);
+            var shows = await db.Shows.AsNoTracking().Where(s => showIds.Contains(s.TmdbId)).ToDictionaryAsync(s => s.TmdbId, ct);
+            foreach (var (i, rank) in forYou.Select((i, rank) => (i, rank)))
+            {
+                var c = new Candidate(i.Media.Type, i.Media.TmdbId, i.Media, null, $"Because you liked {i.Because}", 3 - rank * 3 / forYou.Count, Lazy: true);
+                if (i.Media.Type == MediaType.Movie && movies.TryGetValue(i.Media.TmdbId, out var m))
+                {
+                    if (m.ReleaseDate is not { } released || released > today) continue;
+                    c = c with { Media = CatalogService.ToSummary(m), Minutes = m.Runtime, Lazy = false };
+                }
+                else if (i.Media.Type == MediaType.Show && shows.TryGetValue(i.Media.TmdbId, out var s))
+                {
+                    if (s.FirstAirDate is not { } first || first > today) continue;
+                    c = c with { Media = CatalogService.ToSummary(s), Minutes = s.EpisodeRuntime, Lazy = false };
+                }
+                candidates.Add(c);
+            }
+        }
         else if (source is PickSource.Watchlist or PickSource.Both)
         {
             var list = await db.Watchlist.Where(w => w.UserId == userId).ToListAsync(ct);
@@ -65,11 +97,11 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
 
         if (maxMinutes is { } max)
         {
-            candidates = candidates.Where(c => c.Minutes is { } m && m <= max).ToList();
+            candidates = candidates.Where(c => c.Lazy || c.Minutes is { } m && m <= max).ToList();
             if (wholeShows)
             {
-                var left = await MinutesLeftAsync(userId, candidates.Where(c => c.Type == MediaType.Show).ToDictionary(c => c.TmdbId, c => c.Minutes ?? 0), today, ct);
-                candidates = candidates.Where(c => c.Type != MediaType.Show || left.GetValueOrDefault(c.TmdbId) is > 0 and var m && m <= max).ToList();
+                var left = await MinutesLeftAsync(userId, candidates.Where(c => c.Type == MediaType.Show && !c.Lazy).ToDictionary(c => c.TmdbId, c => c.Minutes ?? 0), today, ct);
+                candidates = candidates.Where(c => c.Lazy || c.Type != MediaType.Show || left.GetValueOrDefault(c.TmdbId) is > 0 and var m && m <= max).ToList();
             }
         }
         var total = candidates.Count;
@@ -82,8 +114,26 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
         var shuffled = candidates.OrderByDescending(c => Math.Pow(Random.Shared.NextDouble(), 1.0 / c.Weight)).ToList();
         // "Streaming now" means on your services when you've said which you have (Settings → Where to watch).
         var mine = UserPrefsStore.Read(await db.Users.Where(u => u.Id == userId).Select(u => u.PrefsJson).FirstOrDefaultAsync(ct)).MyServices;
-        foreach (var c in shuffled.Take(streamingOnly ? 30 : 1))
+        var lookups = 0;
+        foreach (var picked in shuffled.Take(streamingOnly ? 30 : shuffled.Any(c => c.Lazy) ? LookupsPerPick : 1))
         {
+            var c = picked;
+            if (c.Lazy)
+            {
+                // A suggestion: its details now (cached for next time), then the same time checks as the rest.
+                if (lookups++ >= LookupsPerPick) break;
+                if (await LookUpAsync(c, today, ct) is not { } found) continue;
+                c = found;
+                if (maxMinutes is { } limit)
+                {
+                    if (c.Minutes is not { } each || each > limit) continue;
+                    if (wholeShows && c.Type == MediaType.Show)
+                    {
+                        var left = (await MinutesLeftAsync(userId, new() { [c.TmdbId] = each }, today, ct)).GetValueOrDefault(c.TmdbId);
+                        if (left <= 0 || left > limit) continue;
+                    }
+                }
+            }
             List<ProviderDto> streaming = [];
             try
             {
@@ -108,6 +158,32 @@ public class PickService(AppDbContext db, CatalogService catalog, ILogger<PickSe
             return pick;
         }
         return null;
+    }
+
+    /// <summary>A suggestion's details (fetched from TMDB the first time), with its length; null if it isn't out yet or is gone.</summary>
+    private async Task<Candidate?> LookUpAsync(Candidate c, DateOnly today, CancellationToken ct)
+    {
+        try
+        {
+            if (c.Type == MediaType.Movie)
+                return await catalog.EnsureMovieAsync(c.TmdbId, ct) is { ReleaseDate: { } released } m && released <= today
+                    ? c with { Media = CatalogService.ToSummary(m), Minutes = m.Runtime, Lazy = false } : null;
+            if (await catalog.EnsureShowAsync(c.TmdbId, ct) is not { FirstAirDate: { } first } s || first > today) return null;
+            var length = s.EpisodeRuntime;
+            if (length is null)
+            {
+                // TMDB often leaves a show's episode length empty: the average of its episodes instead.
+                var avg = await db.Episodes.Where(e => e.ShowTmdbId == c.TmdbId && e.SeasonNumber > 0 && e.Runtime > 0)
+                    .Select(e => (double?)e.Runtime!.Value).AverageAsync(ct);
+                if (avg is { } a) length = (int)Math.Round(a);
+            }
+            return c with { Media = CatalogService.ToSummary(s), Minutes = length, Lazy = false };
+        }
+        catch (HttpRequestException ex)
+        {
+            log.LogInformation(ex, "Couldn't look up suggestion {Type} {Id}", c.Type, c.TmdbId);
+            return null;
+        }
     }
 
     /// <summary>

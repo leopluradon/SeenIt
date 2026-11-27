@@ -1484,7 +1484,8 @@ public record CompareItem(MediaSummary Media, double? A, double? B, IReadOnlyLis
 
 // ---------- Pick for me ----------
 
-public enum PickSource { Watchlist, Paused, Both }
+/// <summary>Where Pick for me picks from. Suggested: "Picked for you" (titles like the ones you love that you haven't seen).</summary>
+public enum PickSource { Watchlist, Paused, Both, Suggested }
 public enum PickKind { Any, Movie, Show }
 public record PickDto(
     MediaSummary Media,

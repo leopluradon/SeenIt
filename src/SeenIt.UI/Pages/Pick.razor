@@ -59,6 +59,7 @@
         <button class="chip @(source == PickSource.Both ? "on" : "")" @onclick="() => Set(() => source = PickSource.Both)">Watchlist + paused</button>
         <button class="chip @(source == PickSource.Watchlist ? "on" : "")" @onclick="() => Set(() => source = PickSource.Watchlist)">Watchlist</button>
         <button class="chip @(source == PickSource.Paused ? "on" : "")" @onclick="() => Set(() => source = PickSource.Paused)">Paused shows</button>
+        <button class="chip @(source == PickSource.Suggested ? "on" : "")" @onclick="() => Set(() => source = PickSource.Suggested)" title="Picked for you: like what you love, and not seen yet">Suggested for you</button>
         }
         <label class="check small"><input type="checkbox" checked="@streaming" @onchange="e => Set(() => streaming = e.Value is true)" /> @(Fmt.Prefs.MyServices is { Count: > 0 } ? "On my services" : "Streaming now")</label>
         @if (maxMinutes is not null && kind != PickKind.Movie)
@@ -76,7 +77,14 @@
 else if (nothing)
 {
     <Empty Title="Nothing matches.">
-        <span>@(with.Count > 0 ? "Nothing on your watchlists that none of you has seen fits. Loosen the filters, or add to your " : "Loosen the filters, or add things to your ")<a href="watchlist">watchlist</a>.</span>
+        @if (with.Count == 0 && source == PickSource.Suggested)
+        {
+            <span>Suggestions come from what you rate highly and what you've watched lately: rate a few favorites, or loosen the filters. See them all under <a href="for-you">For you</a>.</span>
+        }
+        else
+        {
+            <span>@(with.Count > 0 ? "Nothing on your watchlists that none of you has seen fits. Loosen the filters, or add to your " : "Loosen the filters, or add things to your ")<a href="watchlist">watchlist</a>.</span>
+        }
         @if (wholeShows && maxMinutes is not null && kind != PickKind.Movie)
         {
             <div class="empty-actions"><button class="btn btn-sm" @onclick="() => Set(() => wholeShows = false)">Include shows I can't finish</button></div>
