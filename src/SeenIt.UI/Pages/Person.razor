@@ -235,7 +235,21 @@ else if (p is not null)
                         <span class="film-year">@(c.Date?.Year.ToString() ?? "—")</span>
                         <span class="film-main">
                             <b>@c.Title</b>
-                            <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")@(c.Role is { Length: > 0 } r ? " · " + r : "")@if (c.EpisodeCount is > 0) { <text> · </text><Spoiler Force="HideCount(c)">@Plural(c.EpisodeCount.Value, "episode")</Spoiler> }</span>
+                            @{ var parts = Parts(c); }
+                            <span class="muted small">@(c.Type == MediaType.Movie ? "Movie" : "TV")@if (parts.Count == 1)
+                                {
+                                    var (label, eps) = parts[0];
+                                    @(label is { Length: > 0 } ? " · " + label : "")@if (eps is > 0) { <text> · </text><Spoiler Force="HideCount(c)">@Plural(eps.Value, "episode")</Spoiler> }
+                                }
+                                else if (parts.Count > 1)
+                                {
+                                    @* Several jobs (or a job and a role) shown: each with its own count, "Director (2 episodes), Writer (1 episode)". *@
+                                    <text> · </text>@for (var i = 0; i < parts.Count; i++)
+                                    {
+                                        var (label, eps) = parts[i];
+                                        @label@if (eps is > 0) { <text> (</text><Spoiler Force="HideCount(c)">@Plural(eps.Value, "episode")</Spoiler><text>)</text> }@(i < parts.Count - 1 ? ", " : "")
+                                    }
+                                }</span>
                         </span>
                         @if (c.InLibrary) { <span class="ep-owned" title="In your library" aria-label="In your library"><Icon Name="download" Size="15" /></span> }
                         @if (seenLoading && c.Type == MediaType.Show && p.PendingShows?.Contains(c.TmdbId) == true) { <span class="ep-pending skeleton" title="Checking which of their episodes you've seen"></span> }
@@ -387,6 +401,26 @@ else if (p is not null)
             else rows[key] = groups.Count > 1 && c.Role is { Length: > 0 } r ? c with { Role = "as " + r } : c;
         }
         return rows.Values.OrderByDescending(x => x.Date is null).ThenByDescending(x => x.Date).ToList();
+    }
+
+    /// <summary>
+    /// What a filmography row says they did, for the roles picked above, each with its own episode count on a show:
+    /// "Director" and 2, or "Director", 2 / "Writer", 1 / "as Kambei", 12 when several show at once.
+    /// </summary>
+    private List<(string Label, int? Episodes)> Parts(PersonCreditDto row)
+    {
+        var parts = new List<(string, int?)>();
+        if (p is null) return parts;
+        foreach (var c in p.Crew.Where(x => x.Type == row.Type && x.TmdbId == row.TmdbId))
+        {
+            var jobs = JobsOf(c).Where(j => shown.Contains(GroupOf(j))).DistinctBy(j => j.Job).ToList();
+            foreach (var j in jobs)
+                parts.Add((j.Job, row.Type != MediaType.Show ? null : j.Episodes ?? (jobs.Count == 1 ? c.EpisodeCount : null)));
+        }
+        if (shown.Contains(Acting))
+            foreach (var c in p.Cast.Where(x => x.Type == row.Type && x.TmdbId == row.TmdbId && !x.Appearance))
+                parts.Add((c.Role is { Length: > 0 } r ? (parts.Count > 0 || shown.Count > 1 ? "as " + r : r) : "Cast", row.Type == MediaType.Show ? c.EpisodeCount : null));
+        return parts;
     }
 
     /// <summary>How many episodes someone is in gives away who sticks around: blurred until tapped for a show you're partway through
